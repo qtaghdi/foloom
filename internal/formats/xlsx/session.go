@@ -20,6 +20,15 @@ const maxWorkbookBytes = 100 << 20
 const maxHistoryEntries = 10
 const maxHistorySnapshotBytes = 32 << 20
 
+type historyLimits struct {
+	entries       int
+	snapshotBytes int
+}
+
+func defaultHistoryLimits() historyLimits {
+	return historyLimits{entries: maxHistoryEntries, snapshotBytes: maxHistorySnapshotBytes}
+}
+
 func Open(path string) (*Session, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -44,6 +53,7 @@ func Open(path string) (*Session, error) {
 		return nil, fmt.Errorf("read workbook: %w", err)
 	}
 	packageLimits := defaultPackageLimits()
+	historyLimits := defaultHistoryLimits()
 	if err := validateWorkbookBytes(current, packageLimits); err != nil {
 		return nil, err
 	}
@@ -80,6 +90,7 @@ func Open(path string) (*Session, error) {
 		historyStore:  historyStore,
 		hasFormulas:   hasFormulas,
 		packageLimits: packageLimits,
+		historyLimits: historyLimits,
 	}, nil
 }
 
@@ -226,7 +237,7 @@ func (s *Session) Apply(baseRevision uint64, actor string, operations []Operatio
 	if err != nil {
 		return Snapshot{}, err
 	}
-	nextUndo := appendBoundedHistory(append([][]byte(nil), s.undoHistory...), previous)
+	nextUndo := appendBoundedHistory(append([][]byte(nil), s.undoHistory...), previous, s.historyLimits)
 	nextRedo := [][]byte(nil)
 	if err := s.historyStore.prepare(nextRevision, nextContent, nextUndo, nextRedo); err != nil {
 		return Snapshot{}, err
@@ -331,7 +342,7 @@ func (s *Session) RestoreHistory(baseRevision uint64, actor, direction string) (
 		}
 	}()
 	nextSource := append([][]byte(nil), (*source)[:targetIndex]...)
-	nextDestination := appendBoundedHistory(append([][]byte(nil), (*destination)...), current)
+	nextDestination := appendBoundedHistory(append([][]byte(nil), (*destination)...), current, s.historyLimits)
 	nextRevision := s.revision + 1
 	var nextUndo, nextRedo [][]byte
 	if direction == "undo" {
@@ -361,13 +372,13 @@ func (s *Session) RestoreHistory(baseRevision uint64, actor, direction string) (
 	return s.snapshotLocked(), nil
 }
 
-func appendBoundedHistory(history [][]byte, snapshot []byte) [][]byte {
-	if len(snapshot) > maxHistorySnapshotBytes {
+func appendBoundedHistory(history [][]byte, snapshot []byte, limits historyLimits) [][]byte {
+	if len(snapshot) > limits.snapshotBytes {
 		return history
 	}
 	history = append(history, snapshot)
-	if len(history) > maxHistoryEntries {
-		history = append([][]byte(nil), history[len(history)-maxHistoryEntries:]...)
+	if len(history) > limits.entries {
+		history = append([][]byte(nil), history[len(history)-limits.entries:]...)
 	}
 	return history
 }

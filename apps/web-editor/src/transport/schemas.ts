@@ -111,6 +111,8 @@ const eventBase = {
   sequence: z.number().int().nonnegative(),
   revision: z.number().int().nonnegative(),
   actor: z.string(),
+  canUndo: z.boolean().optional(),
+  canRedo: z.boolean().optional(),
 };
 
 export const workbookEventSchema = z.discriminatedUnion('type', [

@@ -143,8 +143,11 @@ revision. The session validates the entire batch before mutation, persists it
 atomically, advances the revision once, and then publishes ordered events.
 
 The session retains up to ten revision snapshots. Individual snapshots larger
-than 32 MB are not retained. The `.xlsx-viewer-history` directory name remains
-stable for upgrade compatibility even though the product has been renamed.
+than 32 MiB are not retained, while the document commit still succeeds. Durable
+commit and reload events carry current undo and redo availability so every
+client can disable unavailable history actions after local or remote changes.
+The `.xlsx-viewer-history` directory name remains stable for upgrade
+compatibility even though the product has been renamed.
 
 Initial worksheet data loads in bounded ranges. The browser requests aligned
 tiles as the viewport moves, while Univer keeps the grid virtualized.

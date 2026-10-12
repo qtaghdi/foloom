@@ -515,6 +515,9 @@ func TestBrowserAndMCPShareRevisionedWorkbookSession(t *testing.T) {
 	if events[4].Actor != "ai" || events[4].Type != "presence.update" || events[6].Type != "cell.commit" || events[6].Revision != 3 {
 		t.Fatalf("AI write events = %#v", events[4:])
 	}
+	if events[6].CanUndo == nil || !*events[6].CanUndo || events[6].CanRedo == nil || *events[6].CanRedo {
+		t.Fatalf("AI commit history availability = %#v", events[6])
+	}
 
 	reopened, err := excelize.OpenFile(path)
 	if err != nil {

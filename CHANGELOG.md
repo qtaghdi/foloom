@@ -19,6 +19,9 @@ and this project intends to follow Semantic Versioning when releases begin.
 - Added event sequence checkpoints, replay-gap resync, and slow-subscriber
   disconnects, plus browser recovery that pauses writes without blind retries.
 - Added failure-injection, HTTP/SSE, and frontend recovery regression tests.
+- Added regression tests for the ten-entry and 32 MiB history retention limits,
+  restart boundaries, monotonic undo and redo revisions, and disabled browser
+  controls when history actions are unavailable.
 - Isolated XLSX mutations and history restoration in candidates so failed
   persistence retains authoritative memory, revisions, and undo/redo state.
 - Added an evidence-based XLSX stable release checklist with recovery, native
@@ -156,6 +159,8 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Fixed
 
+- Kept browser undo and redo availability synchronized after local edits,
+  remote AI commits, history restoration, reload, and recovery transitions.
 - Updated the browser revision after AI formatting and merge operations so the
   next human edit does not submit a stale base revision.
 - Loaded worksheet data in bounded range chunks using server-reported sheet

@@ -70,7 +70,7 @@ export class WorkbookController {
         });
       }
       this.view.showWarnings(warnings);
-      this.view.setHistoryState(snapshot.canUndo, snapshot.canRedo);
+      this.setHistoryState(snapshot.canUndo, snapshot.canRedo);
       this.view.onHistoryAction((direction) => this.queueHistoryAction(direction));
       this.view.showRevision(
         initialRanges.truncated ? 'Ready with a bounded initial data window' : 'Ready',
@@ -112,7 +112,7 @@ export class WorkbookController {
         if (this.recoveryRequired) return;
         this.revision = response.workbook.revision;
         this.snapshot = response.workbook;
-        this.view.setHistoryState(response.workbook.canUndo, response.workbook.canRedo);
+        this.setHistoryState(response.workbook.canUndo, response.workbook.canRedo);
         this.recoveryRequired = true;
         window.location.reload();
       } catch (error) {
@@ -157,7 +157,7 @@ export class WorkbookController {
         if (this.recoveryRequired) return;
         this.revision = response.workbook.revision;
         this.snapshot = response.workbook;
-        this.view.setHistoryState(response.workbook.canUndo, response.workbook.canRedo);
+        this.setHistoryState(response.workbook.canUndo, response.workbook.canRedo);
         if (operation.type === 'insert_rows' || operation.type === 'delete_rows' || operation.type === 'insert_columns' || operation.type === 'delete_columns') {
           this.loadedRanges.delete(operation.sheet);
         }
@@ -268,8 +268,18 @@ export class WorkbookController {
     if (event.revision > this.revision && commitsWorkbook) {
       this.revision = event.revision;
     }
+    if (commitsWorkbook && event.canUndo !== undefined && event.canRedo !== undefined) {
+      this.setHistoryState(event.canUndo, event.canRedo);
+    }
     this.engine?.applyRemoteEvent(event);
     this.view.showAIPresence(event, this.revision);
+  }
+
+  private setHistoryState(canUndo: boolean, canRedo: boolean): void {
+    if (this.snapshot) {
+      this.snapshot = { ...this.snapshot, canUndo, canRedo };
+    }
+    this.view.setHistoryState(canUndo, canRedo);
   }
 
   private requireRecovery(error: unknown): void {

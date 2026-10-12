@@ -167,6 +167,8 @@ type Event struct {
 	Format   *CellFormat  `json:"format,omitempty"`
 	Index    int          `json:"index,omitempty"`
 	Count    int          `json:"count,omitempty"`
+	CanUndo  *bool        `json:"canUndo,omitempty"`
+	CanRedo  *bool        `json:"canRedo,omitempty"`
 }
 
 type Presence struct {
@@ -224,4 +226,5 @@ type Session struct {
 	historyStore  *historyStore
 	hasFormulas   bool
 	packageLimits workbookPackageLimits
+	historyLimits historyLimits
 }
