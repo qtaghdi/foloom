@@ -9,6 +9,8 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Added
 
+- Added deterministic XLSX transaction tests for mixed-batch rejection and
+  concurrent same-revision writes across memory, disk, history, and events.
 - Added a structured XLSX formula policy that identifies cached or unavailable
   formula values, treats browser calculations as previews, and requests full
   native recalculation after formula-affecting edits.
