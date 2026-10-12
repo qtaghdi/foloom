@@ -35,7 +35,7 @@ run_gate() {
   printf ' %s' "$@"
   printf '\n'
   "$@"
-  append "| $gate | $description | Pass |"
+  append "| $gate | $description | Pass | Pass |"
 }
 
 candidate_commit=$(git rev-parse HEAD)
@@ -71,8 +71,8 @@ done
 append ""
 append "## Results"
 append ""
-append "| Gate | Focus | Observed result |"
-append "| --- | --- | --- |"
+append "| Gate | Focus | Expected result | Observed result |"
+append "| --- | --- | --- | --- |"
 
 run_gate X-01 "OOXML input and package boundaries" \
   go test -race ./internal/formats/xlsx \
@@ -108,6 +108,37 @@ run_gate X-06 "Bounded durable undo and redo history" \
   go test -race ./internal/formats/xlsx \
   -run '^(TestUndoAndRedoRestoreCommittedWorkbookRevisions|TestUndoAndRedoHistorySurvivesSessionRestart|TestHistoryEntryLimitSurvivesRestartAndKeepsRevisionsMonotonic|TestOversizedHistorySnapshotDoesNotBlockCommit)$' \
   -count=1
+
+append ""
+append "## Commands"
+append ""
+append "### X-01"
+append ""
+append '`go test -race ./internal/formats/xlsx -run '\''^(TestOpenRejectsInvalidInputsWithoutMutation|TestWorkbookPackageBoundaries|TestOpenAcceptsGeneratedWorkbookAfterPackageValidation|TestSaveRejectsCandidateOutsidePackageLimitsWithoutMutation)$'\'' -count=1`'
+append ""
+append "### X-02"
+append ""
+append '`go test -race ./internal/formats/xlsx -run '\''^(TestMixedBatchRejectsAllChangesAcrossTransactionBoundaries|TestConcurrentSameRevisionWritesCommitExactlyOneTransaction)$'\'' -count=1`'
+append ""
+append "### X-03"
+append ""
+append '`go test -race ./internal/formats/xlsx -run '\''^(TestPersistenceFailuresPreserveSessionAndDisk|TestPendingHistoryRecoveryAfterManifestFailure)$'\'' -count=1`'
+append ""
+append "### X-04"
+append ""
+append '`go test -race ./internal/formats/xlsx -run '\''^(TestExternalChangesBlockApplyAndRestore|TestLateExternalChangePreservesAuthoritativeMemory|TestWriterLockAndStaleSession|TestRestoredIdenticalBytesStillRejectStaleSession|TestExternalWorkbookReplacementResetsDurableHistory)$'\'' -count=1`'
+append ""
+append "### X-05"
+append ""
+append '`go test -race ./internal/formats/xlsx ./internal/transport/httpapi -run '\''^(TestReplayGapsAndSlowSubscribersRequireResync|TestLostResponseCannotRepeatStructuralWrite|TestExternalReplacementReturnsHTTPConflict|TestSSESessionMismatchRequiresResync)$'\'' -count=1`'
+append ""
+append "### X-05/X-06"
+append ""
+append '`node --test apps/web-editor/tests/recovery.test.mjs apps/web-editor/tests/history-controls.test.mjs`'
+append ""
+append "### X-06"
+append ""
+append '`go test -race ./internal/formats/xlsx -run '\''^(TestUndoAndRedoRestoreCommittedWorkbookRevisions|TestUndoAndRedoHistorySurvivesSessionRestart|TestHistoryEntryLimitSurvivesRestartAndKeepsRevisionsMonotonic|TestOversizedHistorySnapshotDoesNotBlockCommit)$'\'' -count=1`'
 
 append ""
 append "## Remaining boundaries"
