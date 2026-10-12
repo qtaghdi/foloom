@@ -73,6 +73,11 @@ make build
 `open_workbook` returns a single-use, two-minute `browserUrl` when the host does
 not render the MCP App. Disable that fallback with `-stdio-browser=false`.
 
+For a release-style build from a clean checkout, run `make package-verify`.
+This installs the frozen pnpm lockfile, builds and validates both UI bundles,
+compiles the executable, and runs its absolute-path smoke test. See
+[packaging verification](docs/packaging.md) for the artifact boundary.
+
 Current workbook tools remain stable during the platform transition:
 
 - `open_workbook`
