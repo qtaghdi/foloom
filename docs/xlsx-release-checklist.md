@@ -44,6 +44,8 @@ Run `make xlsx-safety-verify` to produce the focused automated evidence for
 X-01 through X-06. The command records the commit, environment, lockfile and
 fixture hashes, exact focused checks, observed results, and remaining boundaries.
 It runs in pull request and main-branch CI as `Verify XLSX safety gates`.
+The first clean local baseline is recorded in
+[XLSX automated safety evidence](release-evidence/xlsx-safety-2026-10-12.md).
 
 Existing evidence means a test or historical record exists, not that this
 release candidate has passed it. Every checkbox remains open until evidence is
