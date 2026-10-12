@@ -25,6 +25,8 @@ and this project intends to follow Semantic Versioning when releases begin.
 - Added a negative browser and MCP authorization matrix, rejected-origin
   no-mutation checks, credential and document-content non-disclosure tests, and
   a documented local credential-delivery boundary.
+- Added clean-checkout package CI, generated bundle validation with failure-path
+  tests, and an executable smoke test for absolute workbook paths with spaces.
 - Isolated XLSX mutations and history restoration in candidates so failed
   persistence retains authoritative memory, revisions, and undo/redo state.
 - Added an evidence-based XLSX stable release checklist with recovery, native

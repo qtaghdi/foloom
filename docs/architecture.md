@@ -237,6 +237,11 @@ versions, tenant isolation, audit storage, quotas, and background processing.
 
 - Open a user-selected document through a supported format adapter.
 - Bind browser and MCP HTTP endpoints to loopback by default.
+
+The packaging gate builds and validates the browser and self-contained MCP App
+interfaces before Go embeds them. It then opens a disposable workbook through
+the compiled executable using an absolute path containing spaces. See
+[packaging verification](packaging.md).
 - Support stdio launch by desktop MCP hosts.
 - Persist changes to the local source document.
 
