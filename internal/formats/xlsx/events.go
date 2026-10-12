@@ -44,6 +44,12 @@ func (s *Session) Subscribe(after uint64) (<-chan Event, func()) {
 }
 
 func (s *Session) publishLocked(event Event) {
+	if event.Type != "presence.update" && event.Type != "cell.typing" {
+		canUndo := len(s.undoHistory) > 0
+		canRedo := len(s.redoHistory) > 0
+		event.CanUndo = &canUndo
+		event.CanRedo = &canRedo
+	}
 	s.sequence++
 	event.Sequence = s.sequence
 	s.history = append(s.history, event)

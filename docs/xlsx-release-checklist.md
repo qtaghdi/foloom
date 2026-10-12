@@ -55,6 +55,13 @@ memory, source bytes, revision, history, or events. A synchronized concurrent
 same-revision test proves that exactly one writer commits across those same
 boundaries while the other receives a revision conflict.
 
+History limit tests now retain only the newest ten snapshots, preserve that
+boundary across restart, omit snapshots above the 32 MiB retention limit
+without failing the committed edit, and keep revisions increasing through all
+available undo and redo operations. Browser tests verify disabled controls for
+unavailable actions and updated availability after local, remote AI, history,
+reload, and recovery transitions.
+
 | Gate | Requirements | Existing evidence | Remaining closure condition |
 | --- | --- | --- | --- |
 | X-01 Input boundaries | DOC-01 | Regular-file and OOXML package preflight; compressed, expanded, part-count, duplicate-name, unsafe-path, encryption, corrupt-input, and no-mutation tests | Candidate run and review of supported restricted or encrypted input messaging |
@@ -62,7 +69,7 @@ boundaries while the other receives a revision conflict.
 | X-03 Persistence failures | SAVE-01, REC-01 | Same-directory temporary write and rename | Inject temporary creation, write, sync, and rename failures; verify disk and memory recovery; no false committed event |
 | X-04 External writers | REC-01 | History reset test after external replacement | Detect changes during a live session before overwrite; define remaining race and single-writer policy |
 | X-05 Disconnect and retry | REC-01 | Bounded event replay | Test lost response after commit, exhausted replay, slow consumer, and reconnect; reconcile before retry without duplicating edits |
-| X-06 History | HIST-01 | Undo/redo, restart, and replacement tests | Test snapshot size/count limits and unavailable history in UI; confirm monotonically increasing revision |
+| X-06 History | HIST-01 | Undo/redo, restart, replacement, snapshot size/count limit, monotonic revision, event availability, and disabled-control tests | Candidate run and review of the recorded invariants |
 | X-07 Native fidelity | COMP-01 | Generated and LibreOffice corpus; object round-trip tests | Add provenance-recorded Excel fixture; verify native reopen and unrelated content across all supported edit families |
 | X-08 Formula expectations | COMP-01 | Formula storage, value-status, structured-policy, warning, and native-recalculation property tests | Verify changed formulas, dependencies, unsupported functions, external references, and stale caches in native Excel |
 | X-09 Host workflows | HOST-01, AUTH-01 | Historical tools and Codex browser fallback records | Candidate-level Claude and Codex tests with explicit mode, versions, permissions, human/AI edits, conflict, and native reopen |
@@ -112,7 +119,8 @@ record any remediation needed before publishing a release binary.
 
 Known configured bounds are 100 MiB input size, 10,000 cells per bounded range,
 1,000 operations per batch, 512 retained events, ten history snapshots, and
-32 MiB per retained history snapshot. These are code limits, not demonstrated
+32 MiB per retained history snapshot. History tests enforce the configured
+retention behavior, but these remain limits rather than demonstrated
 performance capacity. Benchmark representative files and record open latency,
 edit latency, peak memory, fixture hash, and machine details before making
 performance claims. Establish acceptable budgets before evaluating the results.

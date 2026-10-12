@@ -181,6 +181,8 @@ interface EventBase {
   sequence: number;
   revision: number;
   actor: string;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export type WorkbookEvent =
