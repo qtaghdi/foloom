@@ -28,6 +28,9 @@ The CI profile runs on every pull request and main push as
 on every shared CI runner. Run it on the intended release machine and retain the
 report before making performance claims.
 
+The first clean release-profile baseline is recorded in
+[XLSX performance evidence](release-evidence/xlsx-performance-2026-10-12.md).
+
 ## Commands
 
 Run the required CI profile:
