@@ -27,10 +27,30 @@ class FakeElement {
     this.classList = new FakeClassList();
     this.children = [];
     this.textContent = '';
+    this.dataset = {};
+    this.attributes = new Map();
+    this.focused = false;
   }
 
   append(child) {
     this.children.push(child);
+  }
+
+  replaceChildren(...children) {
+    this.children = children;
+    this.textContent = '';
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, value);
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+
+  focus() {
+    this.focused = true;
   }
 }
 
@@ -119,6 +139,37 @@ test('history controls reflect availability and recovery disables both actions',
   view.showRecovery('Connection lost.', 7);
   assert.equal(undo.disabled, true);
   assert.equal(redo.disabled, true);
+
+  view.dispose();
+});
+
+test('revision, failure, and conflict states are visible and accessible', () => {
+  const document = createDocument();
+  const window = { clearTimeout() {}, setTimeout: () => 1, location: { reload() {} } };
+  const AppView = loadAppView(window);
+  const view = new AppView(document);
+  const revision = document.getElementById('revision-status');
+  const spreadsheet = document.getElementById('spreadsheet');
+  const error = document.getElementById('fatal-error');
+
+  view.showRevision('Saving Sheet1!A1…', 2, 'pending');
+  assert.equal(revision.dataset.state, 'pending');
+  assert.equal(spreadsheet.getAttribute('aria-busy'), 'true');
+
+  view.showRevision('Saved', 3, 'success');
+  assert.equal(revision.dataset.state, 'success');
+  assert.equal(spreadsheet.getAttribute('aria-busy'), 'false');
+
+  view.showError(new Error('Network unavailable'), 3);
+  assert.equal(revision.dataset.state, 'error');
+  assert.equal(error.children[0].textContent, 'Operation failed');
+  assert.equal(error.focused, true);
+
+  error.focused = false;
+  view.showRecovery('Revision conflict with a newer workbook.', 4);
+  assert.equal(revision.dataset.state, 'conflict');
+  assert.equal(error.children[0].textContent, 'Conflict detected');
+  assert.equal(error.focused, true);
 
   view.dispose();
 });

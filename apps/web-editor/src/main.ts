@@ -13,4 +13,10 @@ const controller = new WorkbookController(
 );
 
 void controller.start();
-window.addEventListener('beforeunload', () => controller.dispose());
+window.addEventListener('beforeunload', (event) => {
+  if (controller.shouldWarnBeforeUnload()) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
+});
+window.addEventListener('pagehide', () => controller.dispose(), { once: true });

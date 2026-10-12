@@ -114,6 +114,14 @@ throttling, conflicts, and subscription lifecycle. HTTP and MCP App clients
 implement one `WorkbookClient` contract. Zod validates incoming payloads before
 they enter application state.
 
+The browser and MCP App entries share an accessible responsive shell. Univer
+owns grid keyboard editing and clipboard behavior, while the controller maps
+confirmed edits, rectangular paste, and undo or redo into server-authoritative
+operations. Live status regions expose pending, saved, failed, conflict, and
+recovery states. The shell preserves focus visibility, reduced motion, safe
+areas, and a mobile fallback without hiding workbook identity or history
+controls. See [UI verification](ui-verification.md).
+
 A future non-spreadsheet editor may be another application or a format surface
 selected by a shared shell. The current code is not renamed to a generic editor
 until that second surface exists.

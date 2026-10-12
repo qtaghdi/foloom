@@ -1,5 +1,7 @@
 import type { FeatureWarning, HistoryDirection, WorkbookEvent } from '../contracts';
 
+type RevisionState = 'ready' | 'pending' | 'success' | 'error' | 'conflict' | 'recovery';
+
 export class AppView {
   readonly spreadsheet: HTMLElement;
   private readonly workbookName: HTMLElement;
@@ -49,8 +51,10 @@ export class AppView {
     this.workbookName.textContent = name;
   }
 
-  showRevision(message: string, revision: number): void {
+  showRevision(message: string, revision: number, state: RevisionState = 'ready'): void {
     this.revisionStatus.textContent = revision > 0 ? `${message} · revision ${revision}` : message;
+    this.revisionStatus.dataset.state = state;
+    this.spreadsheet.setAttribute('aria-busy', state === 'pending' ? 'true' : 'false');
   }
 
   showAIPresence(event: WorkbookEvent, revision: number): void {
@@ -76,7 +80,7 @@ export class AppView {
         ? 'committed'
         : 'updated';
       this.presenceText.textContent = `AI ${action} ${location}`;
-      this.showRevision('AI change saved', revision);
+      this.showRevision('AI change saved', revision, 'success');
       this.presenceTimer = window.setTimeout(() => {
         this.presence.classList.add('hidden');
         this.presence.classList.remove('flex');
@@ -86,22 +90,27 @@ export class AppView {
 
   showError(error: unknown, revision: number): void {
     const message = error instanceof Error ? error.message : String(error);
-    this.errorPanel.textContent = message;
+    const details = `${message} Check the connection and workbook access, then try again.`;
+    this.errorPanel.replaceChildren(this.createErrorHeading('Operation failed'), this.createErrorMessage(details));
     this.errorPanel.classList.remove('hidden');
-    this.showRevision('Save failed', revision);
+    this.showRevision('Operation failed', revision, 'error');
+    this.errorPanel.focus({ preventScroll: true });
   }
 
   showRecovery(message: string, revision: number): void {
-    this.errorPanel.textContent = `${message} Editing is paused. Copy any unsaved drafts before reloading. Do not repeat an uncertain write until you have checked the saved workbook. `;
+    const conflict = /conflict|changed|external|newer|busy/i.test(message);
+    const status = conflict ? 'Conflict detected' : 'Recovery required';
+    const details = `${message} Editing is paused. Copy any unsaved drafts before reloading. Do not repeat an uncertain write until you have checked the saved workbook.`;
     const reload = this.errorPanel.ownerDocument.createElement('button');
     reload.type = 'button';
-    reload.className = 'rounded border px-3 py-1 font-semibold underline';
+    reload.className = 'mt-3 min-h-11 touch-manipulation rounded border border-red-700 bg-white px-3 py-2 font-semibold underline hover:bg-red-100 active:bg-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700';
     reload.textContent = 'Reload saved workbook';
     reload.onclick = () => window.location.reload();
-    this.errorPanel.append(reload);
+    this.errorPanel.replaceChildren(this.createErrorHeading(status), this.createErrorMessage(details), reload);
     this.errorPanel.classList.remove('hidden');
     this.setHistoryState(false, false);
-    this.showRevision('Recovery required', revision);
+    this.showRevision(status, revision, conflict ? 'conflict' : 'recovery');
+    this.errorPanel.focus({ preventScroll: true });
   }
 
   dispose(): void {
@@ -112,6 +121,20 @@ export class AppView {
 
   private readonly handleUndo = (): void => this.historyListener?.('undo');
   private readonly handleRedo = (): void => this.historyListener?.('redo');
+
+  private createErrorHeading(message: string): HTMLElement {
+    const heading = this.errorPanel.ownerDocument.createElement('strong');
+    heading.className = 'block text-sm font-bold';
+    heading.textContent = message;
+    return heading;
+  }
+
+  private createErrorMessage(message: string): HTMLElement {
+    const details = this.errorPanel.ownerDocument.createElement('p');
+    details.className = 'mt-1 text-sm leading-5';
+    details.textContent = message;
+    return details;
+  }
 }
 
 function requiredElement(document: Document, id: string): HTMLElement {
