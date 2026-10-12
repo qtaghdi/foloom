@@ -46,6 +46,10 @@ fixture hashes, exact focused checks, observed results, and remaining boundaries
 It runs in pull request and main-branch CI as `Verify XLSX safety gates`.
 The first clean local baseline is recorded in
 [XLSX automated safety evidence](release-evidence/xlsx-safety-2026-10-12.md).
+Performance profiles, budgets, commands, and evidence boundaries are defined in
+[XLSX performance verification](xlsx-performance.md). The manual fixture and
+reopen workflow is defined in
+[native Microsoft Excel verification](xlsx-native-excel-verification.md).
 
 Existing evidence means a test or historical record exists, not that this
 release candidate has passed it. Every checkbox remains open until evidence is
@@ -130,10 +134,11 @@ record any remediation needed before publishing a release binary.
 Known configured bounds are 100 MiB input size, 10,000 cells per bounded range,
 1,000 operations per batch, 512 retained events, ten history snapshots, and
 32 MiB per retained history snapshot. History tests enforce the configured
-retention behavior, but these remain limits rather than demonstrated
-performance capacity. Benchmark representative files and record open latency,
-edit latency, peak memory, fixture hash, and machine details before making
-performance claims. Establish acceptable budgets before evaluating the results.
+retention behavior, but these remain limits rather than performance promises.
+Run `make xlsx-performance-verify` for the 25,000-cell CI regression profile.
+Before a release, run the 400,000-cell release profile on the intended machine
+and retain its report with the candidate evidence. The generated workload does
+not replace feature-rich or producer-specific fixtures.
 
 ## Sign-Off Record
 

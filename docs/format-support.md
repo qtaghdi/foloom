@@ -71,7 +71,9 @@ Evidence anchors: [XLSX corpus](../testdata/xlsx/compatibility/README.md),
 [corpus tests](../internal/formats/xlsx/compatibility_test.go),
 [operation contracts](../internal/formats/xlsx/types.go),
 [transport tests](../internal/transport/httpapi/server_test.go), and
-[host certification](host-compatibility.md).
+[host certification](host-compatibility.md). Performance guardrails and native
+Excel evidence are tracked in [XLSX performance verification](xlsx-performance.md)
+and [native Microsoft Excel verification](xlsx-native-excel-verification.md).
 
 ## Conversion Policy
 
