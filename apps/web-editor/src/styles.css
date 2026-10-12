@@ -8,3 +8,98 @@
 @import "@univerjs/sheets-numfmt-ui/lib/index.css";
 @import "@univerjs/sheets-formula-ui/lib/index.css";
 @import "@univerjs/sheets-data-validation-ui/lib/index.css";
+
+:root {
+  color-scheme: light;
+}
+
+.app-toolbar {
+  padding: env(safe-area-inset-top) max(0.875rem, env(safe-area-inset-right)) 0 max(0.875rem, env(safe-area-inset-left));
+}
+
+.status-panel {
+  right: max(1rem, env(safe-area-inset-right));
+  left: max(1rem, env(safe-area-inset-left));
+}
+
+#feature-warnings {
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+#fatal-error {
+  top: max(4rem, calc(env(safe-area-inset-top) + 4rem));
+}
+
+.skip-link {
+  position: fixed;
+  top: max(0.5rem, env(safe-area-inset-top));
+  left: max(0.5rem, env(safe-area-inset-left));
+  z-index: 50;
+  translate: 0 -200%;
+  border-radius: 0.375rem;
+  background: white;
+  padding: 0.625rem 0.875rem;
+  color: #064e3b;
+  font-weight: 700;
+}
+
+.skip-link:focus-visible {
+  translate: 0;
+  outline: 2px solid #064e3b;
+  outline-offset: 2px;
+}
+
+.revision-status::before {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.375rem;
+  border-radius: 9999px;
+  background: currentColor;
+  content: '';
+}
+
+.revision-status[data-state='pending']::before {
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.revision-status[data-state='error'],
+.revision-status[data-state='conflict'],
+.revision-status[data-state='recovery'] {
+  color: #fef2f2;
+}
+
+@keyframes status-pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (max-width: 640px) {
+  .app-toolbar {
+    align-content: center;
+    padding-bottom: 0.5rem;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .ai-presence {
+    max-width: min(62vw, 24rem);
+  }
+
+  #fatal-error {
+    top: max(7rem, calc(env(safe-area-inset-top) + 7rem));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -26,7 +26,7 @@ const loadModule = (path, globals) => {
 };
 
 const fixture = async (overrides = {}, snapshotOverrides = {}) => {
-  const state = { writes: 0, reloads: 0, recoveries: [], statuses: [], historyStates: [], callbacks: {}, subscriptionClosed: false };
+  const state = { writes: 0, reloads: 0, recoveries: [], statuses: [], revisionStates: [], operations: [], historyDirections: [], historyStates: [], callbacks: {}, subscriptionClosed: false };
   const snapshot = { id: 'session', sequence: 5, name: 'book.xlsx', sheets: ['Sheet1'],
     sheetDimensions: [{ name: 'Sheet1', rows: 1, columns: 1 }], canUndo: true, canRedo: false, revision: 2,
     ...snapshotOverrides };
@@ -36,8 +36,8 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     connect: async () => {}, getWorkbook: async () => snapshot,
     readRange: async () => ({ sheet: 'Sheet1', ref: 'A1', rows: [] }),
     readSheetObjects: async () => ({ sheet: 'Sheet1' }),
-    applyOperations: async () => { state.writes++; return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
-    restoreHistory: async () => { state.writes++; return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
+    applyOperations: async (_revision, operations) => { state.writes++; state.operations.push(...operations); return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
+    restoreHistory: async (_revision, direction) => { state.writes++; state.historyDirections.push(direction); return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
     subscribe: (handler, checkpoint) => {
       state.onEvent = handler; state.checkpoint = checkpoint;
       state.subscription = { onerror: null, close: () => { state.subscriptionClosed = true; } };
@@ -48,7 +48,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
   const view = { spreadsheet: {}, setWorkbookName() {}, showWarnings() {},
     setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
     onHistoryAction: (handler) => { state.history = handler; },
-    showRevision: (message) => state.statuses.push(message),
+    showRevision: (message, revision, status) => { state.statuses.push(message); state.revisionStates.push([message, revision, status]); },
     showRecovery: (message) => state.recoveries.push(message), showError: (error) => { throw error; },
     showAIPresence() {}, dispose() {},
   };
@@ -64,7 +64,7 @@ const edit = { type: 'set_cell', sheet: 'Sheet1', cell: 'A1', value: 'draft' };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test('lost response blocks queued edits and reconciles without retry or reload', async () => {
-  const { state, client } = await fixture();
+  const { state, client, controller } = await fixture();
   client.applyOperations = async () => { state.writes++; throw new Error('response lost'); };
   state.callbacks.onOperation(edit);
   state.callbacks.onOperation(edit);
@@ -73,6 +73,7 @@ test('lost response blocks queued edits and reconciles without retry or reload',
   assert.equal(state.reloads, 0);
   assert.ok(state.recoveries.length > 0);
   assert.equal(state.subscriptionClosed, true);
+  assert.equal(controller.shouldWarnBeforeUnload(), true);
   state.callbacks.onOperation(edit);
   state.history('undo');
   await flush();
@@ -102,7 +103,7 @@ test('subscription starts at the snapshot checkpoint and resync is not ignored',
 });
 
 test('a successful queued write still commits normally', async () => {
-  const { state, client, snapshot } = await fixture({}, { canUndo: false, canRedo: false });
+  const { state, client, snapshot, controller } = await fixture({}, { canUndo: false, canRedo: false });
   client.applyOperations = async () => {
     state.writes++;
     return { workbook: { ...snapshot, revision: 3, canUndo: true, canRedo: false }, applied: 1 };
@@ -112,7 +113,39 @@ test('a successful queued write still commits normally', async () => {
   assert.equal(state.writes, 1);
   assert.ok(state.statuses.includes('Saved'));
   assert.equal(state.recoveries.length, 0);
+  assert.equal(controller.shouldWarnBeforeUnload(), false);
   assert.deepEqual(state.historyStates.at(-1), [true, false]);
+  assert.ok(state.revisionStates.some(([message, , status]) => message === 'Saving Sheet1!A1…' && status === 'pending'));
+  assert.ok(state.revisionStates.some(([message, , status]) => message === 'Saved' && status === 'success'));
+});
+
+test('keyboard-confirmed cell editing becomes a persisted cell operation', async () => {
+  const { state } = await fixture();
+  state.callbacks.onCellEdit({ sheet: 'Sheet1', cell: 'B2', value: 'keyboard value' });
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.operations.at(-1))), {
+    type: 'set_cell', sheet: 'Sheet1', cell: 'B2', value: 'keyboard value',
+  });
+});
+
+test('clipboard paste becomes one atomic rectangular range operation', async () => {
+  const { state } = await fixture();
+  state.callbacks.onRangeEdit({
+    sheet: 'Sheet1', range: 'B2:C3', cells: [[{ value: 'A' }, { value: 'B' }], [{ value: 1 }, { value: 2 }]],
+  });
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.operations.at(-1))), {
+    type: 'paste_range', sheet: 'Sheet1', range: 'B2:C3',
+    cells: [[{ value: 'A' }, { value: 'B' }], [{ value: 1 }, { value: 2 }]],
+  });
+});
+
+test('spreadsheet keyboard undo delegates to server-owned history', async () => {
+  const { state } = await fixture();
+  state.callbacks.onHistoryAction('undo');
+  await flush();
+  assert.deepEqual(state.historyDirections, ['undo']);
+  assert.equal(state.reloads, 1);
 });
 
 test('unavailable history remains disabled and never calls the server', async () => {

@@ -106,7 +106,7 @@ export class WorkbookController {
     }
     this.saveQueue = this.saveQueue.then(async () => {
       if (this.recoveryRequired) return;
-      this.view.showRevision(direction === 'undo' ? 'Undoing change' : 'Redoing change', this.revision);
+      this.view.showRevision(direction === 'undo' ? 'Undoing change…' : 'Redoing change…', this.revision, 'pending');
       try {
         const response = await this.client.restoreHistory(this.revision, direction);
         if (this.recoveryRequired) return;
@@ -127,6 +127,10 @@ export class WorkbookController {
     this.eventSubscription?.close();
     this.engine?.dispose();
     this.view.dispose();
+  }
+
+  shouldWarnBeforeUnload(): boolean {
+    return this.pendingWrites > 0 || this.recoveryRequired;
   }
 
   private queueCellEdit(edit: CellEdit): void {
@@ -151,7 +155,7 @@ export class WorkbookController {
     const target = operationTarget(operation);
     this.saveQueue = this.saveQueue.then(async () => {
       if (this.recoveryRequired) { this.pendingWrites--; return; }
-      this.view.showRevision(`Saving ${operation.sheet}!${target}`, this.revision);
+      this.view.showRevision(`Saving ${operation.sheet}!${target}…`, this.revision, 'pending');
       try {
         const response = await this.client.applyOperations(this.revision, [operation]);
         if (this.recoveryRequired) return;
@@ -161,7 +165,7 @@ export class WorkbookController {
         if (operation.type === 'insert_rows' || operation.type === 'delete_rows' || operation.type === 'insert_columns' || operation.type === 'delete_columns') {
           this.loadedRanges.delete(operation.sheet);
         }
-        this.view.showRevision('Saved', this.revision);
+        this.view.showRevision('Saved', this.revision, 'success');
       } catch (error) {
         this.requireRecovery(error);
       } finally {
