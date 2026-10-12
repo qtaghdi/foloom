@@ -53,6 +53,7 @@ HTTP conflict and SSE session mismatch. Frontend tests exercise lost responses,
 blocked queues, reconnect failure, resync, and undo sequencing.
 
 Run `make compatibility-test` and `make verify` for changes to this behavior.
+Run `make xlsx-safety-verify` for the focused X-01 through X-06 evidence record.
 The generated and LibreOffice fixtures provide bounded fidelity evidence;
 Microsoft Excel-produced fixtures and native desktop checks remain separate.
 These tests do not certify power-loss durability, network filesystems, an

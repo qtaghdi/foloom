@@ -40,6 +40,13 @@ injection, source hash guards, cooperating writer locks, replay reset, and pause
 browser queues. They remain candidate sign-off gates, with the external-writer
 race and crash-durability limits documented in that guide.
 
+Run `make xlsx-safety-verify` to produce the focused automated evidence for
+X-01 through X-06. The command records the commit, environment, lockfile and
+fixture hashes, exact focused checks, observed results, and remaining boundaries.
+It runs in pull request and main-branch CI as `Verify XLSX safety gates`.
+The first clean local baseline is recorded in
+[XLSX automated safety evidence](release-evidence/xlsx-safety-2026-10-12.md).
+
 Existing evidence means a test or historical record exists, not that this
 release candidate has passed it. Every checkbox remains open until evidence is
 recorded against the candidate commit. A documentation-only change does not
@@ -66,9 +73,9 @@ reload, and recovery transitions.
 | --- | --- | --- | --- |
 | X-01 Input boundaries | DOC-01 | Regular-file and OOXML package preflight; compressed, expanded, part-count, duplicate-name, unsafe-path, encryption, corrupt-input, and no-mutation tests | Candidate run and review of supported restricted or encrypted input messaging |
 | X-02 Transactions | EDIT-01, EDIT-03, SAVE-01 | Mixed-batch atomicity and synchronized same-revision writer tests across memory, disk, history, revision, and events | Candidate run and review of the recorded invariants |
-| X-03 Persistence failures | SAVE-01, REC-01 | Same-directory temporary write and rename | Inject temporary creation, write, sync, and rename failures; verify disk and memory recovery; no false committed event |
-| X-04 External writers | REC-01 | History reset test after external replacement | Detect changes during a live session before overwrite; define remaining race and single-writer policy |
-| X-05 Disconnect and retry | REC-01 | Bounded event replay | Test lost response after commit, exhausted replay, slow consumer, and reconnect; reconcile before retry without duplicating edits |
+| X-03 Persistence failures | SAVE-01, REC-01 | Temporary creation, write, short-write, sync, close, rename, rollback, and pending-history failure tests for edits and history restores; no false committed event | Candidate run and review of the recorded invariants |
+| X-04 External writers | REC-01 | Source checks before mutation and replacement, cooperating writer lock, external replacement, late-change, stale-session, and history-reset tests | Candidate run and acceptance of the documented single-writer boundary and final check-to-rename race |
+| X-05 Disconnect and retry | REC-01 | Replay-gap, slow-subscriber, session-mismatch, HTTP conflict, lost-response, paused-queue, reconnect, resync, and history sequencing tests | Candidate run and review of the conservative no-blind-retry behavior |
 | X-06 History | HIST-01 | Undo/redo, restart, replacement, snapshot size/count limit, monotonic revision, event availability, and disabled-control tests | Candidate run and review of the recorded invariants |
 | X-07 Native fidelity | COMP-01 | Generated and LibreOffice corpus; object round-trip tests | Add provenance-recorded Excel fixture; verify native reopen and unrelated content across all supported edit families |
 | X-08 Formula expectations | COMP-01 | Formula storage, value-status, structured-policy, warning, and native-recalculation property tests | Verify changed formulas, dependencies, unsupported functions, external references, and stale caches in native Excel |
@@ -99,7 +106,10 @@ record any remediation needed before publishing a release binary.
 
 ## Candidate Verification Procedure
 
-1. Record commit, OS, Go and pnpm versions, dependency lockfile, and build mode.
+1. Run `make xlsx-safety-verify` to record commit, OS, Go, Node.js, pnpm,
+   dependency lockfile and fixture hashes, build mode, and X-01 through X-06
+   focused results. Set `REPORT=/absolute/path/to/report.md` to retain a Markdown
+   copy outside the repository.
 2. From a clean checkout, run `make web-install`, `make verify`,
    `make compatibility-test`, and `make go-build`. The verify target builds the
    browser bundles and runs Go tests, race tests, vet, and Python regression.
