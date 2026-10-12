@@ -29,7 +29,7 @@ type historyInput struct {
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	if token := r.URL.Query().Get("token"); token != "" {
-		if token != s.browserToken {
+		if !tokenMatches(token, s.browserToken) {
 			http.Error(w, "invalid session token", http.StatusUnauthorized)
 			return
 		}

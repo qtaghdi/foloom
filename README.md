@@ -56,9 +56,12 @@ make web-install
 make dev FILE=/absolute/path/to/workbook.xlsx
 ```
 
-The process prints separate browser and MCP credentials. The browser URL must
-be opened exactly as printed. MCP clients connect to
+The process prints separate browser and MCP credentials through an intentional
+startup credential-delivery channel. Treat that terminal output as sensitive
+and open the browser URL exactly as printed. MCP clients connect to
 `http://127.0.0.1:8765/mcp` with the separately printed bearer token.
+See the [local security model](docs/security.md) for the tested boundary and
+hosted-mode exclusions.
 
 For a local desktop host using stdio:
 

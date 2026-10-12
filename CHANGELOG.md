@@ -22,6 +22,9 @@ and this project intends to follow Semantic Versioning when releases begin.
 - Added regression tests for the ten-entry and 32 MiB history retention limits,
   restart boundaries, monotonic undo and redo revisions, and disabled browser
   controls when history actions are unavailable.
+- Added a negative browser and MCP authorization matrix, rejected-origin
+  no-mutation checks, credential and document-content non-disclosure tests, and
+  a documented local credential-delivery boundary.
 - Isolated XLSX mutations and history restoration in candidates so failed
   persistence retains authoritative memory, revisions, and undo/redo state.
 - Added an evidence-based XLSX stable release checklist with recovery, native
@@ -170,6 +173,8 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Security
 
+- Compared credentials through fixed-length hashes and added framing, resource,
+  capability, base URI, object, and form restrictions to browser responses.
 - Added XLSX package preflight limits for expanded bytes, individual parts, and
   entry count, with rejection of encrypted, duplicate, and unsafe ZIP entries.
 - Updated Univer to 1.0.2 after dependency audit and verified that the installed
