@@ -2,7 +2,7 @@ GO ?= go
 GO_TOOLCHAIN ?= go1.25.0
 GO_CACHE ?= /tmp/document-workspace-go-cache
 
-.PHONY: audit build compatibility-test dev go-build go-test package-check package-smoke package-test package-verify test verify web-build web-install web-test
+.PHONY: audit build compatibility-test dev go-build go-test package-check package-smoke package-test package-verify test verify web-build web-install web-test xlsx-safety-verify
 
 web-install:
 	CI=true pnpm install --frozen-lockfile
@@ -35,6 +35,9 @@ package-smoke: package-check go-build
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./internal/transport/httpapi -run 'TestEmbeddedUIRequiresSessionAndServesAssets|TestMCPAppToolAndResource' -count=1
 
 package-verify: web-install web-build package-test package-smoke
+
+xlsx-safety-verify: web-install
+	REPORT="$(REPORT)" sh scripts/verify-xlsx-safety.sh
 
 test: web-test go-test
 

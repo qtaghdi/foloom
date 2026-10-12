@@ -9,6 +9,8 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Added
 
+- Added a reproducible X-01 through X-06 XLSX safety verification command and
+  required CI check with environment, lockfile, fixture, and focused test evidence.
 - Added deterministic XLSX transaction tests for mixed-batch rejection and
   concurrent same-revision writes across memory, disk, history, and events.
 - Added a structured XLSX formula policy that identifies cached or unavailable
