@@ -216,7 +216,11 @@ occur at operation or batch granularity, never once per displayed character.
 Documents, formulas, names, values, MCP inputs, and browser inputs are
 untrusted. Local mode uses separate random browser and MCP credentials, strict
 cookies, same-origin write checks, bounded requests, and loopback-only fallback
-listeners. Stdio stdout remains protocol-only.
+listeners. Credential comparison uses fixed-length hashes. Browser responses
+deny framing and external connections by default. Stdio stdout remains
+protocol-only. HTTP startup output is the deliberate local credential-delivery
+channel and must be treated as sensitive; routine responses and diagnostics do
+not repeat those credentials. See the [local security model](security.md).
 
 Before parsing an XLSX file, the adapter requires a regular OOXML ZIP package
 and rejects encrypted entries, unsafe or duplicate part names, more than 10,000

@@ -74,7 +74,7 @@ reload, and recovery transitions.
 | X-08 Formula expectations | COMP-01 | Formula storage, value-status, structured-policy, warning, and native-recalculation property tests | Verify changed formulas, dependencies, unsupported functions, external references, and stale caches in native Excel |
 | X-09 Host workflows | HOST-01, AUTH-01 | Historical tools and Codex browser fallback records | Candidate-level Claude and Codex tests with explicit mode, versions, permissions, human/AI edits, conflict, and native reopen |
 | X-10 UI and limits | EDIT-02, COMP-01 | Virtualized loading, presence, compatibility notices | Keyboard editing, paste, history, reduced motion, laptop viewport, and mobile fallback; visible pending/conflict/failure states |
-| X-11 Access and diagnostics | AUTH-01 | Separate tokens, loopback, origin checks | Negative access tests and review of logs, limits, external resources, and launch-token handling |
+| X-11 Access and diagnostics | AUTH-01 | Negative browser and MCP credential matrix, cross-role rejection, foreign-origin no-mutation, fixed-length token comparison, response non-disclosure, security headers, loopback, and bounded single-use launch links | Candidate run and review of the recorded invariants |
 | X-12 Packaging | HOST-01 | Build and transport tests | Fresh checkout build; release binary serves both bundles; absolute-path host configuration works |
 
 Source anchors: [session tests](../internal/formats/xlsx/session_test.go),
