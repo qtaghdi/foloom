@@ -3,7 +3,7 @@ GO_TOOLCHAIN ?= go1.25.0
 GO_CACHE ?= /tmp/document-workspace-go-cache
 XLSX_PERFORMANCE_PROFILE ?= ci
 
-.PHONY: audit build compatibility-test dev go-build go-test package-check package-smoke package-test package-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-safety-verify
+.PHONY: audit build compatibility-test dev go-build go-test package-check package-smoke package-test package-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
 
 web-install:
 	CI=true pnpm install --frozen-lockfile
@@ -42,6 +42,9 @@ xlsx-safety-verify: web-install
 
 xlsx-performance-verify:
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) run ./cmd/xlsx-performance -profile "$(XLSX_PERFORMANCE_PROFILE)" -report "$(REPORT)"
+
+xlsx-pre-excel-verify:
+	REPORT="$(REPORT)" EVIDENCE_DIR="$(EVIDENCE_DIR)" sh scripts/verify-xlsx-pre-excel.sh
 
 test: web-test go-test
 
