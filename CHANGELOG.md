@@ -9,6 +9,10 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Added
 
+- Added CI and release XLSX performance profiles with explicit latency and Go
+  heap guardrails, temporary generated workloads, and Markdown evidence reports.
+- Added a native Microsoft Excel fixture, edit, formula, and reopen procedure
+  with a reusable evidence template for the remaining X-07 and X-08 gates.
 - Added a reproducible X-01 through X-06 XLSX safety verification command and
   required CI check with environment, lockfile, fixture, and focused test evidence.
 - Added deterministic XLSX transaction tests for mixed-batch rejection and
