@@ -51,6 +51,19 @@ Performance profiles, budgets, commands, and evidence boundaries are defined in
 reopen workflow is defined in
 [native Microsoft Excel verification](xlsx-native-excel-verification.md).
 
+Run `make xlsx-pre-excel-verify` before native Excel testing to execute every
+candidate check available without Excel or a visible desktop host session. Set
+`REPORT=/absolute/path/to/report.md` and
+`EVIDENCE_DIR=/absolute/path/to/evidence` to retain the aggregate record plus
+the focused safety and release-performance reports. The aggregate command runs
+the safety gates, generated and LibreOffice compatibility corpus, complete
+frontend and Go verification, clean package verification, and the 400,000-cell
+release performance profile. It leaves native Excel and visible-host results
+explicitly manual.
+The complete regression suite also runs on pull requests and main-branch pushes
+as `Verify full XLSX regression suite`. Existing focused safety, performance,
+and clean-package workflows remain separate so their failure domains stay clear.
+
 Existing evidence means a test or historical record exists, not that this
 release candidate has passed it. Every checkbox remains open until evidence is
 recorded against the candidate commit. A documentation-only change does not
@@ -110,13 +123,14 @@ record any remediation needed before publishing a release binary.
 
 ## Candidate Verification Procedure
 
-1. Run `make xlsx-safety-verify` to record commit, OS, Go, Node.js, pnpm,
-   dependency lockfile and fixture hashes, build mode, and X-01 through X-06
-   focused results. Set `REPORT=/absolute/path/to/report.md` to retain a Markdown
-   copy outside the repository.
-2. From a clean checkout, run `make web-install`, `make verify`,
-   `make compatibility-test`, and `make go-build`. The verify target builds the
-   browser bundles and runs Go tests, race tests, vet, and Python regression.
+1. Run `make xlsx-pre-excel-verify` to execute and record every automated
+   pre-Excel candidate gate. Retain its aggregate, safety, and performance
+   reports outside the repository while the candidate is under review.
+2. Review the focused safety report, which records the commit, environment,
+   lockfile and fixture hashes, build mode, and X-01 through X-06 results. The
+   aggregate command also builds the browser bundles, runs the complete Go and
+   frontend suites with race and vet checks, executes the Python regression,
+   verifies a clean package, and runs the release performance profile.
 3. Exercise missing failure scenarios in the gate table with reproducible
    tests. Record failures as open gates, not as expected passes.
 4. On disposable corpus copies, perform human and AI edits and reopen the saved

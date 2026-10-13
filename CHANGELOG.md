@@ -9,6 +9,11 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Added
 
+- Added a single pre-Excel XLSX candidate verification command that records
+  safety, compatibility, full-suite, packaging, and release-performance results
+  while keeping native Excel and visible-host claims explicitly manual.
+- Added a required full-regression CI job for frontend tests, Go tests, race
+  detection, static analysis, and the preserved Python regression suite.
 - Added CI and release XLSX performance profiles with explicit latency and Go
   heap guardrails, temporary generated workloads, and Markdown evidence reports.
 - Added a native Microsoft Excel fixture, edit, formula, and reopen procedure
