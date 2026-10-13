@@ -63,6 +63,10 @@ explicitly manual.
 The complete regression suite also runs on pull requests and main-branch pushes
 as `Verify full XLSX regression suite`. Existing focused safety, performance,
 and clean-package workflows remain separate so their failure domains stay clear.
+The clean pre-Excel run for implementation commit `88965f1` is recorded in
+[XLSX pre-Excel candidate evidence](release-evidence/xlsx-pre-excel-2026-10-13.md),
+with linked focused safety and release-performance records. All automated steps
+passed. Native Excel and visible-host boundaries remain open as listed there.
 
 Existing evidence means a test or historical record exists, not that this
 release candidate has passed it. Every checkbox remains open until evidence is
