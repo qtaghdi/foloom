@@ -41,6 +41,7 @@ and this project intends to follow Semantic Versioning when releases begin.
 - Added keyboard edit, rectangular paste, and server-owned history UI tests,
   accessible live save and conflict states, reduced-motion and safe-area rules,
   and responsive shell evidence from desktop, laptop, and mobile viewports.
+
 - Isolated XLSX mutations and history restoration in candidates so failed
   persistence retains authoritative memory, revisions, and undo/redo state.
 - Added an evidence-based XLSX stable release checklist with recovery, native
@@ -178,6 +179,8 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Fixed
 
+- Pinned and installed the legacy Python regression dependencies in CI so the
+  complete verification suite works on a clean runner.
 - Kept browser undo and redo availability synchronized after local edits,
   remote AI commits, history restoration, reload, and recovery transitions.
 - Updated the browser revision after AI formatting and merge operations so the

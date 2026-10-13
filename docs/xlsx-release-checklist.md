@@ -63,6 +63,9 @@ explicitly manual.
 The complete regression suite also runs on pull requests and main-branch pushes
 as `Verify full XLSX regression suite`. Existing focused safety, performance,
 and clean-package workflows remain separate so their failure domains stay clear.
+The workflow installs the pinned Python dependencies in
+`legacy/xlsx-python/requirements.txt` before running the preserved MVP
+regression, so a clean runner does not depend on preinstalled Python packages.
 The clean pre-Excel run for implementation commit `88965f1` is recorded in
 [XLSX pre-Excel candidate evidence](release-evidence/xlsx-pre-excel-2026-10-13.md),
 with linked focused safety and release-performance records. All automated steps
