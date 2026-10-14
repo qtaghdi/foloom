@@ -12,12 +12,11 @@ and this project intends to follow Semantic Versioning when releases begin.
 - Added unsigned alpha archive generation for macOS, Linux, and Windows on
   AMD64 and ARM64, with SHA-256 manifests, archive content checks, and a
   current-platform executable smoke test.
-- Added a manual and tag-triggered release workflow that uploads verified build
-  artifacts and blocks public prerelease publication until distribution terms
-  are recorded in a `LICENSE` file.
+- Added a manually dispatched private-alpha workflow that uploads verified build
+  artifacts inside the repository without permission to publish a GitHub Release.
 - Added CLI build metadata, positional workbook paths, and a workbook preflight
   that validates compatibility without starting a transport or printing cells.
-- Added a public XLSX alpha guide covering checksums, unsigned application
+- Added a private XLSX alpha guide covering checksums, unsigned application
   warnings, local browser use, Claude Desktop, Codex, approvals, and backups.
 - Added a single pre-Excel XLSX candidate verification command that records
   safety, compatibility, full-suite, packaging, and release-performance results
@@ -154,6 +153,12 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Changed
 
+- Restricted the project to a private local alpha until native Excel evidence,
+  repeated invited-tester use, distribution terms, and an explicit owner
+  decision support public source or binary distribution.
+- Added a CI policy check that rejects automatic release triggers, repository
+  contents write permission, and known GitHub Release publishers while the
+  private-alpha policy is active.
 - Required every repository change to use an issue-numbered branch and linked
   pull request, with templates and automated metadata policy checks.
 - Renamed the product and repository architecture to `document-workspace` and

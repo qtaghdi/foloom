@@ -31,9 +31,10 @@ go-build:
 
 package-check:
 	node scripts/check-embedded-assets.mjs
+	node scripts/check-private-alpha-policy.mjs
 
 package-test:
-	node --test scripts/check-embedded-assets.test.mjs
+	node --test scripts/check-embedded-assets.test.mjs scripts/check-private-alpha-policy.test.mjs
 
 package-smoke: package-check go-build
 	sh scripts/package-smoke.sh
