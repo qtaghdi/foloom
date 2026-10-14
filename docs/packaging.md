@@ -33,10 +33,48 @@ outputs. The browser `index.html` remains tracked so source changes that alter
 its hashed references are visible in review. A package must always run
 `web-build` before the Go compiler snapshots the embedded directory.
 
-## Supported Local Artifact
+## Alpha Release Archives
 
-The current artifact is a platform-specific executable built by Go for the
-host operating system and architecture. It accepts absolute workbook paths,
-including paths containing spaces. This gate does not yet produce signed macOS
-or Windows installers, cross-compiled archives, container images, checksums, or
-a public release manifest.
+Run the current-platform release test after the embedded interfaces are built:
+
+```bash
+make release-package-test VERSION=0.1.0-alpha.local
+```
+
+The command creates one archive, verifies its SHA-256 checksum and required
+contents, extracts it, checks its embedded version, and validates a disposable
+XLSX fixture without starting a transport.
+
+Run the complete cross-platform archive build with:
+
+```bash
+make release-verify VERSION=0.1.0-alpha.local
+```
+
+The output in `dist/` contains unsigned archives for macOS, Linux, and Windows
+on AMD64 and ARM64, plus `SHA256SUMS`. Each archive contains the executable,
+README, format support matrix, host compatibility guide, and local security
+guide. The Go binary embeds the previously built browser and MCP App bundles.
+
+The Release package workflow supports a manual artifact build and tagged
+prerelease publication. A manual run only uploads private workflow artifacts.
+A tag build verifies the same matrix and refuses to publish a GitHub prerelease
+unless a repository `LICENSE` file exists. This enforces an explicit owner
+decision instead of silently assigning distribution terms.
+
+The alpha artifacts are not signed or notarized. They do not include macOS or
+Windows installers, automatic updates, a file picker, or a hosted service. The
+[getting-started guide](getting-started.md) explains the supported command-line
+and MCP-host flow without recommending global operating system security bypasses.
+
+## Build Metadata and Preflight
+
+Release builds embed the requested version, source commit, and commit date.
+Users can record them with `document-workspace -version`. Existing integrations
+can continue using `-file`, while interactive users can pass one workbook path
+positionally.
+
+`document-workspace -check workbook.xlsx` opens the workbook through the same
+XLSX session boundary used by the service, reports structural compatibility and
+formula policy metadata, then exits. It does not start HTTP or stdio transport
+and does not print cell contents.

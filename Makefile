@@ -3,7 +3,11 @@ GO_TOOLCHAIN ?= go1.25.0
 GO_CACHE ?= /tmp/document-workspace-go-cache
 XLSX_PERFORMANCE_PROFILE ?= ci
 
-.PHONY: audit build compatibility-test dev go-build go-test package-check package-smoke package-test package-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
+.PHONY: audit build compatibility-test dev go-build go-test package-check package-smoke package-test package-verify release-build release-package-test release-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
+
+VERSION ?= 0.1.0-alpha.local
+HOST_OS := $(shell $(GO) env GOOS)
+HOST_ARCH := $(shell $(GO) env GOARCH)
 
 web-install:
 	CI=true pnpm install --frozen-lockfile
@@ -36,6 +40,17 @@ package-smoke: package-check go-build
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./internal/transport/httpapi -run 'TestEmbeddedUIRequiresSessionAndServesAssets|TestMCPAppToolAndResource' -count=1
 
 package-verify: web-install web-build package-test package-smoke
+
+release-build: web-build
+	GO_TOOLCHAIN=$(GO_TOOLCHAIN) GO_CACHE=$(GO_CACHE) sh scripts/build-release.sh "$(VERSION)"
+
+release-verify: release-build
+	sh scripts/check-release-artifacts.sh
+
+release-package-test: web-build
+	GO_TOOLCHAIN=$(GO_TOOLCHAIN) GO_CACHE=$(GO_CACHE) RELEASE_TARGETS=$(HOST_OS)_$(HOST_ARCH) sh scripts/build-release.sh "$(VERSION)"
+	RELEASE_TARGETS=$(HOST_OS)_$(HOST_ARCH) sh scripts/check-release-artifacts.sh
+	sh scripts/release-smoke.sh "$(VERSION)"
 
 xlsx-safety-verify: web-install
 	REPORT="$(REPORT)" sh scripts/verify-xlsx-safety.sh
