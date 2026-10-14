@@ -1,129 +1,47 @@
-# MCP Host Compatibility
+# MCP 호스트 호환성
 
-This document records the supported connection modes and the evidence required
-before a host is marked as certified. A successful protocol connection does not
-by itself prove that a host renders and operates the MCP App UI correctly.
+이 문서는 지원 연결 모드와 호스트 인증에 필요한 증거를 기록합니다. 프로토콜
+연결 성공만으로 MCP App UI가 실제로 표시되고 동작한다고 판단하지 않습니다.
 
-## Connection Modes
+## 지원 모드
 
-| Mode | Intended use | Authentication | UI delivery |
-| --- | --- | --- | --- |
-| Stdio | Local Claude Desktop and Codex installations | Process ownership and local file permissions | Self-contained MCP App resource |
-| Streamable HTTP | Local browser development and remote deployment | Bearer token in local mode, OAuth for hosted mode | Self-contained MCP App resource |
+| 호스트 | 전송 | 구조화 MCP 도구 | native MCP App | 인증된 browser fallback | 상태 |
+| --- | --- | --- | --- | --- | --- |
+| Claude Desktop | stdio | 구현됨 | 수동 확인 필요 | 구현됨 | candidate 인증 대기 |
+| Codex Desktop | stdio | 구현됨 | 확인되지 않음 | 2026-09-30 확인 | fallback만 역사적 인증 |
+| 일반 HTTP MCP client | Streamable HTTP | 구현됨 | 호스트별 | 별도 viewer URL | 프로토콜 테스트 있음 |
 
-Stdio is the preferred local desktop path because the host starts the Go binary
-and the optional browser fallback binds only to an ephemeral loopback port.
-Streamable HTTP remains the production transport for a hosted service. Remote
-Claude and ChatGPT connectors cannot reach a server bound only to `127.0.0.1`.
+host version, OS, transport, UI mode, fixture, 사람 및 AI 편집, conflict, native
+reopen을 같은 candidate에서 기록해야 인증됩니다. browser fallback 통과를 native
+embedded UI 통과로 표현하지 않습니다.
 
-## Current Certification Matrix
+## Codex browser fallback 기록, 2026-09-30
 
-| Target | Tools | Resource metadata | Embedded UI | Browser fallback | Bidirectional edits | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| Go in-memory client | Passed | Passed | Bundle inspected | Launch exchange passed | Passed through tool calls | Automated |
-| Go subprocess over stdio | Passed | Passed | Resource readable | Real listener passed | Workbook read passed | Automated |
-| Streamable HTTP with bearer token | Passed | Passed | Resource readable | Not applicable | API and tool tests passed | Automated |
-| Claude Desktop 2.7032.0 with Code 2.1.280 | Passed | Advertised, not rendered | Not rendered | Pending | Tool writes passed, UI path pending | Tools certified, UI pending |
-| Codex Desktop 26.924.22138 | Passed | Advertised, not surfaced by CLI | Not rendered | Passed in Browser panel | Human and AI edits passed | Tools and browser fallback certified |
+- 호스트: Codex Desktop production 26.924.22138, build 11645
+- 운영체제: macOS 26.5.1, build 25F80
+- 전송: release binary의 stdio MCP와 같은 process의 임시 `127.0.0.1` UI
+- fixture: A1과 B2에 값이 있는 disposable XLSX
+- 실행: `open_workbook`의 일회용 URL을 Browser panel에서 열어 HTTP-only cookie로
+  교환하고 token이 없는 통합 문서 root로 redirect
+- 렌더링: 이름, revision 1, sheet tab, A1 `Browser fallback`, B2
+  `Live workbook session` 표시
+- 사람 편집: F15에 `Human committed`, revision 1에서 2로 증가
+- AI 편집: `update_presence`로 C3 선택 후 `apply_operations`로 `AI committed`,
+  화면과 revision 3에 반영
+- 재열기: stdio 종료 뒤 XLSX를 다시 열어 F15와 C3 모두 보존 확인
+- 범위: fallback의 실행, 렌더링, browser 저장, MCP presence, AI event 동기화만
+  인증하며 native MCP App은 미확인
 
-Do not change a pending host row to passed without recording the application
-version, operating system, transport, workbook fixture, and observed result.
-
-## Certification Records
-
-### Claude Desktop and Code, 2026-09-30
-
-- Host: Claude Desktop 2.7032.0 with its integrated Claude Code 2.1.280 local
-  session.
-- Operating system: macOS 26.5.1, build 25F80.
-- Transport: local stdio using a project-scoped temporary MCP configuration
-  and the absolute release binary path.
-- Fixture: a disposable XLSX workbook containing a formula, style, merged
-  range, and list validation.
-- Read result: `get_workbook` and `read_range` completed successfully and
-  returned workbook metadata, formulas, styles, and merged-cell data.
-- Permission result: Claude Desktop Auto mode allowed the host to decide tool
-  execution. Manual mode displayed Deny, Always allow, and Allow once for both
-  read and write tool calls. Certification selected Allow once only. No
-  persistent allow rule was created.
-- Write result: approved writes advanced revisions 1 to 2 and 2 to 3. A write
-  using stale revision 2 was rejected with the expected revision 3 conflict,
-  and the rejected value was not persisted.
-- Reopen result: Excel-compatible package reopening preserved both committed
-  values, the formula, style, merge, and validation. The rejected cell remained
-  empty.
-- UI result: `open_workbook` returned structured workbook metadata, but Claude
-  Desktop Code did not render the MCP App resource in this run. Keep embedded
-  UI and direct UI editing pending until the spreadsheet is visibly rendered.
-
-### Codex Desktop and CLI, 2026-09-29
-
-- Host: Codex Desktop production release 26.924.22138, build 11645.
-- CLI: `codex-cli 0.145.0`, which shares the desktop `config.toml` MCP
-  configuration.
-- Operating system: macOS 26.5.1, build 25F80.
-- Transport: local stdio using the absolute release binary path.
-- Fixture: a disposable XLSX workbook containing a formula, style, merged
-  range, and list validation.
-- Read result: `get_workbook`, `read_range`, and `open_workbook` completed
-  successfully with structured content.
-- Safety result: Codex recognized the destructive tool annotation and required
-  approval before `apply_operations`.
-- Write result: an approved cell write advanced revision 1 to revision 2 once.
-  A second write using revision 1 was rejected, and no partial cell change was
-  persisted.
-- Reopen result: Excel-compatible package reopening preserved the committed
-  value, formula, style, merge, and validation.
-- UI result: the Codex CLI returned the `open_workbook` structured result but
-  did not render the MCP App resource. The current OpenAI UI documentation
-  describes iframe rendering in ChatGPT and portable behavior in compatible MCP
-  Apps hosts, but does not establish Codex Desktop iframe support. Keep the
-  Codex embedded UI row pending until it is visibly rendered and edited in the
-  desktop host.
-
-### Codex Browser Fallback, 2026-09-30
-
-- Host: Codex Desktop production release 26.924.22138, build 11645.
-- Operating system: macOS 26.5.1, build 25F80.
-- Transport: the release binary served MCP over stdio and an authenticated UI
-  on an ephemeral `127.0.0.1` listener owned by the same process.
-- Fixture: a disposable XLSX workbook with visible values in cells A1 and B2.
-- Launch result: `open_workbook` returned a single-use launch URL. The Codex
-  Browser panel exchanged it for an HTTP-only session cookie and redirected to
-  the workbook root.
-- Render result: the Browser panel visibly rendered the workbook name, revision
-  1, the worksheet tab, the value `Browser fallback` in A1, and the value
-  `Live workbook session` in B2.
-- Human edit result: a direct Browser panel edit wrote `Human committed` to F15
-  and advanced the shared session from revision 1 to revision 2.
-- AI edit result: `update_presence` selected C3, then `apply_operations` wrote
-  `AI committed`. The Browser panel displayed the new value and reported
-  `AI change saved` at revision 3.
-- Reopen result: reopening the XLSX package after the stdio process exited
-  preserved both the human value in F15 and the AI value in C3.
-- Scope: this certifies launch, rendering, browser-originated persistence, MCP
-  presence, and committed AI event synchronization through the loopback browser
-  fallback. Native MCP App rendering remains a separate pending check.
-
-References:
-
-- [OpenAI MCP server and UI quickstart](https://developers.openai.com/plugins/build/app-quickstart)
-- [OpenAI MCP App UI guidance](https://developers.openai.com/plugins/build/chatgpt-ui)
-
-## Build the Local Host Binary
+## 로컬 호스트 binary 빌드
 
 ```bash
 make build
 ```
 
-The binary is written to `bin/document-workspace`. Use absolute paths in host
-configuration because desktop applications do not inherit the shell working
-directory.
+binary는 `bin/document-workspace`에 생성됩니다. desktop 앱은 shell 작업 디렉터리를
+상속하지 않으므로 설정에 절대 경로를 사용합니다.
 
-## Claude Desktop Stdio Configuration
-
-Add an entry to the local Claude Desktop MCP configuration. Replace both paths
-with absolute paths on the current machine.
+## Claude Desktop stdio 설정
 
 ```json
 {
@@ -141,15 +59,11 @@ with absolute paths on the current machine.
 }
 ```
 
-Fully quit and reopen Claude Desktop after changing its configuration. The
-server writes MCP messages only to stdout. Diagnostics are written to stderr.
-When native MCP App rendering is unavailable, ask Claude to call
-`open_workbook` and open its single-use `browserUrl` in the Browser panel.
+설정 뒤 Claude Desktop을 완전히 종료하고 다시 실행합니다. MCP message는 stdout,
+진단은 stderr로 출력합니다. native MCP App이 없으면 `open_workbook`을 호출하고
+일회용 `browserUrl`을 Browser panel에서 엽니다.
 
-## Codex Stdio Configuration
-
-Add the following to the applicable Codex `config.toml`. Replace both paths
-with absolute paths.
+## Codex stdio 설정
 
 ```toml
 [mcp_servers.document_workspace]
@@ -157,59 +71,48 @@ command = "/absolute/path/to/document-workspace/bin/document-workspace"
 args = ["-transport", "stdio", "-file", "/absolute/path/to/workbook.xlsx"]
 ```
 
-Start a new Codex session after changing MCP configuration. Existing sessions
-may keep their previously discovered tool list.
-When native MCP App rendering is unavailable, ask Codex to call
-`open_workbook` and open its single-use `browserUrl` in the in-app browser.
+설정 뒤 새 Codex session을 시작합니다. native MCP App이 없으면
+`open_workbook`의 일회용 URL을 앱 내 browser에서 엽니다.
 
-## Host Approval Modes
+## 호스트 승인 모드
 
-The MCP server classifies workbook reads as read-only, presence updates as
-non-destructive, and workbook writes as destructive. These annotations give a
-host the information it needs to choose an approval policy. They do not grant
-permission and cannot force a host to display a particular button.
+서버는 통합 문서 읽기를 read-only, presence update를 non-destructive, 쓰기를
+destructive로 표시합니다. 이는 호스트가 승인 정책을 정할 정보이며 특정 버튼을
+강제하지 않습니다.
 
-For normal workbook editing, prefer the host's manual approval mode and choose
-Allow once after reviewing the complete operation batch. Always allow is a
-host-side persistent rule for the selected tool or scope. Use it only when the
-workbook, server command, and future operation scope are all trusted. Auto mode
-lets the host decide whether each call needs confirmation and can execute a
-write without showing a prompt.
+일반 편집은 작업 batch 전체를 확인한 뒤 `이번 작업만 허용`을 권장합니다.
+`항상 허용`은 선택한 도구 또는 범위의 영속 host rule이므로 통합 문서, server
+command, 이후 작업 범위를 모두 신뢰할 때만 사용합니다. 자동 모드는 호스트가
+호출별 확인 여부를 정하므로 prompt 없이 쓰기가 실행될 수 있습니다.
 
-An approval applies only to the operation request that was shown. The server
-still validates the base revision, complete batch, workbook limits, and atomic
-persistence after approval. A revision conflict requires a refreshed proposal
-instead of reusing an older approved write.
+호스트 승인은 표시된 요청 하나에만 적용됩니다. 서버는 승인 뒤에도 기준 리비전,
+전체 batch, 통합 문서 제한, 원자적 저장을 검증합니다. conflict가 나면 오래된
+승인을 재사용하지 않고 새 proposal을 검토해야 합니다.
 
-## Manual Certification Procedure
+## 수동 인증 절차
 
-Use a disposable copy of a representative workbook.
+대표 통합 문서의 복사본만 사용합니다.
 
-1. Start a new host conversation with only `document-workspace` enabled.
-2. Confirm that initialization succeeds and server instructions are visible to
-   the client.
-3. Call `get_workbook` and `read_range` without opening the UI.
-4. Call `open_workbook` and confirm the spreadsheet renders in an iframe. If
-   the host lacks MCP App rendering, open the returned `browserUrl` in its local
-   browser panel and confirm the redirect removes the launch token from the
-   address bar.
-5. Edit one cell in the UI and verify that the revision advances exactly once.
-6. Ask the model to call `update_presence`, then `apply_operations`, and confirm
-   that the AI selection and committed value appear in the UI.
-7. Submit a stale revision and confirm that the write is rejected without a
-   partial workbook change.
-8. Close and reopen the workbook file with Excel or LibreOffice and verify the
-   committed value and unaffected surrounding formatting.
-9. Record host version, operating system, transport, result, and any deviation
-   in this document.
+1. `document-workspace`만 활성화한 새 호스트 대화를 시작합니다.
+2. 초기화와 server instruction 노출을 확인합니다.
+3. UI 없이 `get_workbook`, `read_range`를 호출합니다.
+4. `open_workbook`을 호출해 native iframe 또는 일회용 browser fallback을 엽니다.
+5. UI에서 셀 하나를 편집하고 리비전이 정확히 한 번 증가하는지 확인합니다.
+6. AI가 `update_presence`, `apply_operations`를 호출하게 하고 선택과 값 반영을
+   확인합니다.
+7. stale revision을 제출해 부분 변경 없이 거부되는지 확인합니다.
+8. Excel 또는 LibreOffice에서 다시 열어 값과 주변 서식을 확인합니다.
+9. host version, OS, transport, mode, 결과, 차이를 이 문서에 기록합니다.
 
-## Known Constraints
+## 알려진 제약
 
-- A local host configuration points to one workbook path. Workbook selection
-  will move into a trusted launcher or session creation flow later.
-- A hosted service requires OAuth, per-workbook authorization, stable HTTPS,
-  and durable storage. The local bearer token is not a hosted identity system.
-- Host support for inline MCP Apps can differ from support for ordinary MCP
-  tools. Headless tools remain usable when the UI is unavailable.
-- The stdio browser fallback requires a host that can reach the same machine's
-  loopback interface. Remote MCP connectors cannot use its launch URL.
+- 로컬 host 설정은 통합 문서 경로 하나를 가리킵니다. 이후 trusted launcher 또는
+  session 생성 흐름으로 파일 선택을 이동합니다.
+- hosted service에는 OAuth, 문서별 authorization, stable HTTPS, 영속 storage가
+  필요합니다. 로컬 bearer token은 hosted identity가 아닙니다.
+- inline MCP App 지원과 일반 MCP tool 지원은 다를 수 있습니다.
+- stdio browser fallback은 같은 machine의 loopback에 접근 가능한 host가
+  필요합니다. 원격 connector는 launch URL을 사용할 수 없습니다.
+
+참고: [OpenAI MCP server quickstart](https://developers.openai.com/plugins/build/app-quickstart),
+[OpenAI MCP App UI 안내](https://developers.openai.com/plugins/build/chatgpt-ui)

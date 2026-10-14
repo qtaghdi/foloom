@@ -1,89 +1,89 @@
-# Native Microsoft Excel Evidence
+# 실제 Microsoft Excel 증거
 
-Status: Not run. Copy this template to a dated Markdown file before use.
+상태: 미실행. 사용 전에 날짜가 포함된 Markdown 파일로 복사하세요.
 
-## Candidate and Environment
+## Candidate와 환경
 
 - Candidate commit:
-- Working tree clean:
-- Recorded at:
-- Reviewer:
-- Operating system and architecture:
-- Excel product version and build:
-- Excel license channel and architecture:
+- Clean working tree:
+- 기록 시각:
+- 검토자:
+- 운영체제와 architecture:
+- Excel 제품 version과 build:
+- Excel license channel과 architecture:
 - Locale:
-- Calculation mode:
-- External-link policy:
+- 계산 mode:
+- 외부 link 정책:
 - document-workspace binary SHA-256:
-- Product entry point and transport:
+- 제품 진입점과 transport:
 
-## Fixture Provenance
+## Fixture 출처
 
 - Fixture filename:
-- Source application and version:
+- 원본 application과 version:
 - Original source:
-- Creation or Save As date:
-- Redistribution permission:
-- Sensitive-data review:
-- Source size and SHA-256:
-- Excel-produced size and SHA-256:
-- Pre-existing Excel warnings or normalizations:
+- 생성 또는 Save As 날짜:
+- 재배포 권한:
+- 민감 데이터 검토:
+- 원본 크기와 SHA-256:
+- Excel 생성 파일 크기와 SHA-256:
+- 기존 Excel warning 또는 normalization:
 
-## Feature Inventory
+## 기능 목록
 
-| Feature | Before Excel Save As | After Excel Save As and reopen | Notes |
+| 기능 | Excel Save As 전 | Excel Save As와 reopen 후 | 메모 |
 | --- | --- | --- | --- |
-| Formulas and external reference | Not run | Not run | |
-| Styles and number formats | Not run | Not run | |
-| Merged cells | Not run | Not run | |
-| Data validation | Not run | Not run | |
-| Conditional formatting | Not run | Not run | |
-| Chart | Not run | Not run | |
-| Image | Not run | Not run | |
-| Hyperlink | Not run | Not run | |
-| Defined name | Not run | Not run | |
-| Comment | Not run | Not run | |
-| Excel repair or compatibility prompt | Not run | Not run | |
+| 수식과 외부 reference | 미실행 | 미실행 | |
+| Style과 number format | 미실행 | 미실행 | |
+| 병합 셀 | 미실행 | 미실행 | |
+| Data validation | 미실행 | 미실행 | |
+| Conditional formatting | 미실행 | 미실행 | |
+| Chart | 미실행 | 미실행 | |
+| Image | 미실행 | 미실행 | |
+| Hyperlink | 미실행 | 미실행 | |
+| Defined name | 미실행 | 미실행 | |
+| Comment | 미실행 | 미실행 | |
+| Excel repair 또는 compatibility prompt | 미실행 | 미실행 | |
 
-## Edit and Reopen Results
+## 편집과 reopen 결과
 
-| Case | Source hash | Operation and revisions | Expected | Observed in Excel | Status | Evidence |
+| 사례 | Source hash | 작업과 revision | 예상 | Excel 관찰 | 상태 | 증거 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Cell | | | | Not run | Blocked | |
-| Formula | | | | Not run | Blocked | |
-| Dependency | | | | Not run | Blocked | |
-| Paste | | | | Not run | Blocked | |
-| Format | | | | Not run | Blocked | |
-| Merge and unmerge | | | | Not run | Blocked | |
-| Rows | | | | Not run | Blocked | |
-| Columns | | | | Not run | Blocked | |
-| Image | | | | Not run | Blocked | |
-| Chart | | | | Not run | Blocked | |
-| Undo and redo | | | | Not run | Blocked | |
-| External conflict | | | | Not run | Blocked | |
+| 셀 | | | | 미실행 | Blocked | |
+| 수식 | | | | 미실행 | Blocked | |
+| 의존성 | | | | 미실행 | Blocked | |
+| 붙여넣기 | | | | 미실행 | Blocked | |
+| 서식 | | | | 미실행 | Blocked | |
+| 병합과 해제 | | | | 미실행 | Blocked | |
+| 행 | | | | 미실행 | Blocked | |
+| 열 | | | | 미실행 | Blocked | |
+| 이미지 | | | | 미실행 | Blocked | |
+| 차트 | | | | 미실행 | Blocked | |
+| Undo와 redo | | | | 미실행 | Blocked | |
+| 외부 충돌 | | | | 미실행 | Blocked | |
 
-## Formula Results
+## 수식 결과
 
-| Case | Formula text | Cached status before | Browser preview | Excel prompt and recalculation | Excel result | Status |
+| 사례 | 수식 text | 이전 cache 상태 | Browser preview | Excel prompt와 재계산 | Excel 결과 | 상태 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Existing formula | | | | Not run | Not run | Blocked |
-| Changed formula | | | | Not run | Not run | Blocked |
-| Changed dependency | | | | Not run | Not run | Blocked |
-| Browser-unsupported function | | | | Not run | Not run | Blocked |
-| External reference unavailable | | | | Not run | Not run | Blocked |
-| Stale cached value | | | | Not run | Not run | Blocked |
+| 기존 수식 | | | | 미실행 | 미실행 | Blocked |
+| 변경 수식 | | | | 미실행 | 미실행 | Blocked |
+| 변경 의존성 | | | | 미실행 | 미실행 | Blocked |
+| Browser 미지원 함수 | | | | 미실행 | 미실행 | Blocked |
+| 사용할 수 없는 외부 reference | | | | 미실행 | 미실행 | Blocked |
+| Stale cached value | | | | 미실행 | 미실행 | Blocked |
 
-## Differences and Restrictions
+## 차이와 제한
 
-- Repair prompts:
-- Unrelated feature differences:
-- Expected producer normalizations:
-- Accepted restrictions and linked issue:
-- Unresolved failures:
+- Repair prompt:
+- 관련 없는 기능 차이:
+- 예상 producer normalization:
+- 승인한 제한과 연결 이슈:
+- 미해결 실패:
 
-## Sign-Off
+## 승인
 
 - X-07 native fidelity: Blocked
-- X-08 formula expectations: Blocked
-- Reviewer conclusion:
-- Follow-up issues:
+- X-08 수식 기대값: Blocked
+- 검토자 결론:
+- 후속 이슈:
