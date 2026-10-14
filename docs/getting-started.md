@@ -1,17 +1,21 @@
-# XLSX Alpha Getting Started
+# Private XLSX Alpha Getting Started
 
 document-workspace currently runs as a local process for one existing XLSX
 workbook. It can connect to Claude Desktop or Codex over stdio and can provide
 the spreadsheet UI through an MCP App or an authenticated loopback browser
 fallback.
 
-The alpha is not a Microsoft Excel replacement or a hosted collaboration
-service. Use a disposable copy of an important workbook until the native Excel
-release gates are complete.
+The alpha is restricted to the repository owner and explicitly invited testers.
+It is not a Microsoft Excel replacement or a hosted collaboration service. Use
+a disposable copy of an important workbook until the native Excel release gates
+are complete.
 
 ## Choose an Archive
 
-Release artifacts use these names:
+An authorized maintainer can run the `Private alpha package` GitHub Actions
+workflow or build locally with `make release-verify`. Workflow artifacts remain
+inside the private repository and are not GitHub Releases. Archives use these
+names:
 
 | Operating system | Processor | Archive suffix |
 | --- | --- | --- |
@@ -33,6 +37,10 @@ The current alpha archives are unsigned. macOS or Windows can therefore show an
 unverified developer warning. Review the downloaded file and checksum, then use
 the operating system's one-time approval flow if you trust the artifact. Do not
 disable operating system protection globally.
+
+Do not repost an archive or grant repository access as a substitute for a
+distribution decision. Public source or binary distribution requires the exit
+criteria in the [product plan](product-plan.md).
 
 ## Check a Workbook
 

@@ -8,10 +8,10 @@ conflict detection, undo, and safe persistence. XLSX is the first production
 format adapter. DOCX, PPTX, HWPX, and PDF are planned as separate adapters
 because each format has different editing and fidelity requirements.
 
-Status: local XLSX public-alpha preparation. Automated pre-Excel safety,
-compatibility, packaging, and performance gates pass. Native Microsoft Excel
-fidelity and formula reopening remain release blockers, and no public binary is
-published until distribution terms are selected.
+Status: private local XLSX alpha. Automated pre-Excel safety, compatibility,
+packaging, and performance gates pass. Source and binaries are not currently
+distributed publicly. Native Microsoft Excel evidence, repeated external use,
+distribution terms, and an explicit owner decision remain public-release gates.
 
 ## Current Support
 
@@ -54,12 +54,12 @@ Format logic belongs in `internal/formats/<format>`. Transport and UI packages
 must not own format persistence rules. Shared document abstractions will be
 introduced only when a second real adapter demonstrates the common contract.
 
-## Try the XLSX Adapter
+## Run the Private XLSX Alpha
 
-Downloadable alpha archives are prepared for macOS, Linux, and Windows on Intel
-and ARM64. Each artifact contains the executable, user documentation, and a
-SHA-256 checksum manifest. Public tag publication remains disabled until the
-repository owner selects distribution terms.
+Maintainers can build private alpha archives for macOS, Linux, and Windows on
+Intel and ARM64. Each artifact contains the executable, user documentation, and
+a SHA-256 checksum manifest. The repository does not publish GitHub Releases or
+offer public downloads during the private-alpha phase.
 
 After extracting an artifact, validate a disposable workbook without starting
 a server:
@@ -74,9 +74,9 @@ Then start the local browser editor:
 ./document-workspace /absolute/path/to/workbook.xlsx
 ```
 
-See the [XLSX alpha getting-started guide](docs/getting-started.md) for artifact
-selection, checksum verification, unsigned application warnings, and Claude
-Desktop and Codex configuration.
+See the [private XLSX alpha guide](docs/getting-started.md) for artifact
+selection, checksum verification, unsigned application warnings, and local
+Claude Desktop and Codex configuration.
 
 ## Build from Source
 
@@ -143,7 +143,7 @@ implementation detail and does not define the product name.
 ## Documentation
 
 - [Shared product specification](docs/product-spec.md)
-- [XLSX alpha getting started](docs/getting-started.md)
+- [Private XLSX alpha getting started](docs/getting-started.md)
 - [Format support matrix](docs/format-support.md)
 - [XLSX stable release checklist](docs/xlsx-release-checklist.md)
 - [XLSX recovery operations](docs/xlsx-recovery.md)
