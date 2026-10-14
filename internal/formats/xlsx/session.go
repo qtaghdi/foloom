@@ -25,43 +25,27 @@ type historyLimits struct {
 	snapshotBytes int
 }
 
+type workbookSource struct {
+	path          string
+	content       []byte
+	packageLimits workbookPackageLimits
+}
+
 func defaultHistoryLimits() historyLimits {
 	return historyLimits{entries: maxHistoryEntries, snapshotBytes: maxHistorySnapshotBytes}
 }
 
 func Open(path string) (*Session, error) {
-	abs, err := filepath.Abs(path)
+	source, err := loadWorkbookSource(path)
 	if err != nil {
-		return nil, fmt.Errorf("resolve workbook path: %w", err)
+		return nil, err
 	}
-	abs, err = filepath.EvalSymlinks(abs)
-	if err != nil {
-		return nil, fmt.Errorf("resolve workbook target: %w", err)
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return nil, fmt.Errorf("inspect workbook: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("workbook must be a regular file")
-	}
-	if info.Size() > maxWorkbookBytes {
-		return nil, fmt.Errorf("workbook exceeds %d bytes", maxWorkbookBytes)
-	}
-	current, err := os.ReadFile(abs)
-	if err != nil {
-		return nil, fmt.Errorf("read workbook: %w", err)
-	}
-	packageLimits := defaultPackageLimits()
 	historyLimits := defaultHistoryLimits()
-	if err := validateWorkbookBytes(current, packageLimits); err != nil {
-		return nil, err
-	}
-	historyStore, revision, undoHistory, redoHistory, err := loadHistoryStore(abs, current)
+	historyStore, revision, undoHistory, redoHistory, err := loadHistoryStore(source.path, source.content)
 	if err != nil {
 		return nil, err
 	}
-	f, err := excelize.OpenReader(bytes.NewReader(current))
+	f, err := excelize.OpenReader(bytes.NewReader(source.content))
 	if err != nil {
 		return nil, fmt.Errorf("open workbook: %w", err)
 	}
@@ -70,16 +54,16 @@ func Open(path string) (*Session, error) {
 		_ = f.Close()
 		return nil, err
 	}
-	warnings, hasFormulas, err := inspectFeatureWarnings(abs)
+	warnings, hasFormulas, err := inspectFeatureWarnings(source.path)
 	if err != nil {
 		_ = f.Close()
 		return nil, err
 	}
 	return &Session{
-		currentHash:   hashBytes(current),
+		currentHash:   hashBytes(source.content),
 		persistence:   diskPersistence(),
 		id:            randomID(),
-		path:          abs,
+		path:          source.path,
 		file:          f,
 		revision:      revision,
 		subscribers:   make(map[chan Event]struct{}),
@@ -89,9 +73,63 @@ func Open(path string) (*Session, error) {
 		redoHistory:   redoHistory,
 		historyStore:  historyStore,
 		hasFormulas:   hasFormulas,
-		packageLimits: packageLimits,
+		packageLimits: source.packageLimits,
 		historyLimits: historyLimits,
 	}, nil
+}
+
+// Inspect validates and describes a workbook without creating history state or
+// acquiring a writer lock. It is intended for read-only installation checks.
+func Inspect(path string) (Inspection, error) {
+	source, err := loadWorkbookSource(path)
+	if err != nil {
+		return Inspection{}, err
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(source.content))
+	if err != nil {
+		return Inspection{}, fmt.Errorf("open workbook: %w", err)
+	}
+	defer f.Close()
+	warnings, _, err := inspectFeatureWarnings(source.path)
+	if err != nil {
+		return Inspection{}, err
+	}
+	return Inspection{
+		Name:          filepath.Base(source.path),
+		Sheets:        append([]string(nil), f.GetSheetList()...),
+		Warnings:      warnings,
+		FormulaPolicy: currentFormulaPolicy(),
+	}, nil
+}
+
+func loadWorkbookSource(path string) (workbookSource, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return workbookSource{}, fmt.Errorf("resolve workbook path: %w", err)
+	}
+	abs, err = filepath.EvalSymlinks(abs)
+	if err != nil {
+		return workbookSource{}, fmt.Errorf("resolve workbook target: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return workbookSource{}, fmt.Errorf("inspect workbook: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return workbookSource{}, errors.New("workbook must be a regular file")
+	}
+	if info.Size() > maxWorkbookBytes {
+		return workbookSource{}, fmt.Errorf("workbook exceeds %d bytes", maxWorkbookBytes)
+	}
+	current, err := os.ReadFile(abs)
+	if err != nil {
+		return workbookSource{}, fmt.Errorf("read workbook: %w", err)
+	}
+	packageLimits := defaultPackageLimits()
+	if err := validateWorkbookBytes(current, packageLimits); err != nil {
+		return workbookSource{}, err
+	}
+	return workbookSource{path: abs, content: current, packageLimits: packageLimits}, nil
 }
 
 func (s *Session) Close() error {
@@ -452,12 +490,16 @@ func (s *Session) snapshotLocked() Snapshot {
 		CanUndo:         len(s.undoHistory) > 0,
 		CanRedo:         len(s.redoHistory) > 0,
 		Revision:        s.revision,
-		FormulaPolicy: FormulaPolicy{
-			Storage:             "preserved",
-			ServerCalculation:   "none",
-			BrowserCalculation:  "preview",
-			NativeRecalculation: "requested_after_formula_affecting_edits",
-		},
+		FormulaPolicy:   currentFormulaPolicy(),
+	}
+}
+
+func currentFormulaPolicy() FormulaPolicy {
+	return FormulaPolicy{
+		Storage:             "preserved",
+		ServerCalculation:   "none",
+		BrowserCalculation:  "preview",
+		NativeRecalculation: "requested_after_formula_affecting_edits",
 	}
 }
 

@@ -8,6 +8,11 @@ conflict detection, undo, and safe persistence. XLSX is the first production
 format adapter. DOCX, PPTX, HWPX, and PDF are planned as separate adapters
 because each format has different editing and fidelity requirements.
 
+Status: local XLSX public-alpha preparation. Automated pre-Excel safety,
+compatibility, packaging, and performance gates pass. Native Microsoft Excel
+fidelity and formula reopening remain release blockers, and no public binary is
+published until distribution terms are selected.
+
 ## Current Support
 
 The XLSX adapter currently provides:
@@ -49,7 +54,31 @@ Format logic belongs in `internal/formats/<format>`. Transport and UI packages
 must not own format persistence rules. Shared document abstractions will be
 introduced only when a second real adapter demonstrates the common contract.
 
-## Run the XLSX Adapter
+## Try the XLSX Adapter
+
+Downloadable alpha archives are prepared for macOS, Linux, and Windows on Intel
+and ARM64. Each artifact contains the executable, user documentation, and a
+SHA-256 checksum manifest. Public tag publication remains disabled until the
+repository owner selects distribution terms.
+
+After extracting an artifact, validate a disposable workbook without starting
+a server:
+
+```bash
+./document-workspace -check /absolute/path/to/workbook.xlsx
+```
+
+Then start the local browser editor:
+
+```bash
+./document-workspace /absolute/path/to/workbook.xlsx
+```
+
+See the [XLSX alpha getting-started guide](docs/getting-started.md) for artifact
+selection, checksum verification, unsigned application warnings, and Claude
+Desktop and Codex configuration.
+
+## Build from Source
 
 ```bash
 make web-install
@@ -77,6 +106,9 @@ For a release-style build from a clean checkout, run `make package-verify`.
 This installs the frozen pnpm lockfile, builds and validates both UI bundles,
 compiles the executable, and runs its absolute-path smoke test. See
 [packaging verification](docs/packaging.md) for the artifact boundary.
+
+Maintainers can run `make release-package-test` for the current platform or
+`make release-verify VERSION=0.1.0-alpha.local` for the complete archive matrix.
 
 Current workbook tools remain stable during the platform transition:
 
@@ -111,6 +143,7 @@ implementation detail and does not define the product name.
 ## Documentation
 
 - [Shared product specification](docs/product-spec.md)
+- [XLSX alpha getting started](docs/getting-started.md)
 - [Format support matrix](docs/format-support.md)
 - [XLSX stable release checklist](docs/xlsx-release-checklist.md)
 - [XLSX recovery operations](docs/xlsx-recovery.md)
