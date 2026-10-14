@@ -1,175 +1,142 @@
-# Shared Product Specification
+# 공통 제품 명세
 
-Status: target product contract, with implementation status recorded below.
-Baseline: 2026-10-08, implementation commit `4a6cfeb`.
+상태: 목표 제품 계약. 현재 구현 상태는 아래에 따로 표시합니다.
+기준: 2026-10-08, 구현 commit `4a6cfeb`.
 
-This specification defines observable behavior across document formats. It is
-not a claim that every requirement is implemented, a new API schema, or a
-commitment to reproduce every feature of desktop office applications.
-[Format support](format-support.md) defines the supported scope per format.
-[Architecture](architecture.md) defines ownership and implementation boundaries.
-[Product plan](product-plan.md) defines delivery order.
+이 명세는 문서 형식을 가로지르는 관찰 가능한 동작을 정의합니다. 모든 요구사항이
+이미 구현되었다는 뜻도, 새 API schema도, 데스크톱 office 앱의 모든 기능을
+복제한다는 약속도 아닙니다. 형식별 범위는 [형식별 지원표](format-support.md),
+구현 경계는 [아키텍처](architecture.md), 순서는 [제품 계획](product-plan.md)을
+따릅니다.
 
-## Users and Primary Workflows
+## 사용자와 주요 흐름
 
-A person opens or creates a document, inspects it, edits directly, and asks an
-AI agent to make changes. Both work against the same server-owned revision.
-The person can see where the agent is working and whether a change is pending,
-committed, conflicted, or failed. The saved result can be reopened in its
-intended application and checked against the declared compatibility scope.
+사람이 문서를 열거나 만들고 직접 편집하며 AI에게 변경을 요청합니다. 둘은 서버가
+소유한 같은 리비전을 사용합니다. 사용자는 AI가 작업하는 위치와 변경의 대기,
+저장, 충돌, 실패 상태를 볼 수 있어야 합니다. 저장 결과는 대상 애플리케이션에서
+다시 열리고 선언된 호환 범위 안에서 검증되어야 합니다.
 
-The first delivery is local and single-document. Multi-document navigation,
-hosted accounts, and simultaneous multi-user collaboration are later scope.
-Creation, editing an existing source, and conversion are separate workflows.
+첫 제공 범위는 로컬 단일 문서입니다. 여러 문서 탐색, 호스팅 계정, 여러 사람의
+동시 협업은 이후 범위입니다. 새 문서 생성, 기존 원본 편집, 변환은 서로 다른
+workflow입니다.
 
-## Requirement Status
+## 요구사항 상태
 
-- Implemented scope: available within the current XLSX implementation only.
-- Partial: some behavior exists, but the complete requirement is not met.
-- Planned: a requirement for future work, not an available capability.
+- 구현 범위: 현재 XLSX 구현의 제한된 범위에서 사용 가능
+- 일부 구현: 일부 동작만 있으며 전체 요구사항은 미충족
+- 계획: 이후 작업이며 현재 사용할 수 없음
 
-| ID | Requirement | Current status |
+| ID | 요구사항 | 현재 상태 |
 | --- | --- | --- |
-| DOC-01 | Open a supported source and expose its capabilities and limits | Partial: existing XLSX at process startup; no generic discovery |
-| DOC-02 | Create a blank or template-based document at an explicit destination | Planned: no public creation workflow |
-| EDIT-01 | Human and AI edits use one validated, revisioned commit path | Implemented scope: supported XLSX operations |
-| EDIT-02 | Show AI location, intent, and commit progress | Partial: XLSX presence and events; host-dependent presentation |
-| EDIT-03 | Reject stale writes without partial mutation | Implemented scope: XLSX base-revision checks |
-| SAVE-01 | Persist accepted batches safely and report the durable result | Implemented scope: atomic local XLSX replacement |
-| SAVE-02 | Save a copy, export, or convert with explicit destination and limits | Planned: no general export or conversion workflow |
-| HIST-01 | Restore available history as a new revision | Implemented scope: bounded local XLSX undo and redo |
-| AUTH-01 | Respect host tool permissions and server access controls | Partial: host-managed approvals and local tokens; no shared approval store |
-| AUTH-02 | Review a proposed change before committing when requested | Planned: no generic staged proposal or review UI |
-| COMP-01 | Report preservation, rendering, and editing limits separately | Partial: XLSX notices and corpus; no complete capability report |
-| HOST-01 | Work through MCP, with an embedded editor or browser fallback | Partial: transports implemented; certification varies by host and mode |
-| REC-01 | Recover safely from disconnects, retries, and external file changes | Partial: candidate rollback, source hash guards, writer lock, replay resync, and paused browser write queues; external-writer races and durable receipts remain limited |
+| DOC-01 | 지원 원본을 열고 기능과 제한 제공 | 일부 구현: 시작 시 기존 XLSX 하나 |
+| DOC-02 | 명시한 목적지에 빈 문서 또는 template 생성 | 계획 |
+| EDIT-01 | 사람과 AI 편집이 하나의 검증 및 리비전 commit 경로 사용 | XLSX 지원 작업에서 구현 |
+| EDIT-02 | AI 위치, 의도, commit 진행 표시 | 일부 구현: XLSX presence와 event |
+| EDIT-03 | 오래된 쓰기를 부분 변경 없이 거부 | XLSX 기준 리비전 검사 구현 |
+| SAVE-01 | 승인 batch를 안전하게 저장하고 영속 결과 보고 | 로컬 XLSX 원자적 교체 구현 |
+| SAVE-02 | 명시한 목적지에 복사, export, convert | 계획 |
+| HIST-01 | 사용 가능한 이력을 새 리비전으로 복원 | XLSX 제한 이력 구현 |
+| AUTH-01 | 호스트 권한과 서버 접근 제어 준수 | 일부 구현: 호스트 승인과 로컬 token |
+| AUTH-02 | 요청 시 적용 전 제안 검토 | 계획 |
+| COMP-01 | 보존, 렌더링, 편집 한계를 별도로 보고 | 일부 구현: XLSX 안내와 corpus |
+| HOST-01 | MCP 도구와 내장 editor 또는 브라우저 대체 화면 | 일부 구현, 호스트별 인증 필요 |
+| REC-01 | 연결, 재시도, 외부 파일 변경에서 안전하게 복구 | 일부 구현, 비협조 외부 writer race와 영속 receipt는 제한 |
 
-## Document Lifecycle
+## 문서 수명 주기
 
-### Opening and Creation
+### 열기와 생성
 
-DOC-01 requires validating the format and file limits before opening a writable
-session. Unsupported, corrupt, encrypted, or otherwise restricted inputs must
-produce an actionable result without modifying the source. An extension alone
-must not establish compatibility. A session must identify its document, format,
-revision, supported operations, and detected limitations.
+DOC-01은 쓰기 세션을 열기 전에 형식과 크기를 검증해야 합니다. 미지원, 손상,
+암호화, 제한된 입력은 원본을 바꾸지 않고 해결 가능한 결과를 반환합니다. 확장자만
+보고 호환된다고 판단하지 않습니다. 세션은 문서, 형식, 리비전, 지원 작업, 발견한
+제한을 식별합니다.
 
-DOC-02 requires an explicit format and destination. Blank creation and creation
-from a template must be tested separately. An existing destination must never
-be silently replaced. A template remains unchanged. A newly created document
-must reopen successfully in the target application before creation is declared
-supported. Internal fixture generators do not establish product support.
+DOC-02는 형식과 목적지를 명시합니다. 빈 문서와 template 기반 생성을 별도로
+검증하고 기존 목적지를 조용히 덮어쓰지 않습니다. template은 바뀌지 않아야 하며,
+새 문서는 대상 앱에서 다시 열린 뒤에만 지원으로 선언합니다.
 
-### Editing and Persistence
+### 편집과 저장
 
-EDIT-01 and SAVE-01 require every batch to identify its base revision and actor.
-The server validates the complete batch, applies it as one logical transaction,
-persists it, advances the revision once, and publishes ordered commit events.
-An invalid operation rejects the batch. A persistence failure must not produce
-a success response or a committed UI state.
+EDIT-01과 SAVE-01에 따라 모든 batch는 기준 리비전과 actor를 포함합니다. 서버는
+전체 batch를 검증하고 하나의 transaction으로 적용 및 저장한 뒤 리비전을 한 번만
+증가시키고 순서 있는 commit event를 보냅니다. 작업 하나라도 잘못되거나 저장이
+실패하면 성공 응답이나 committed UI 상태를 만들지 않습니다.
 
-The current supported edit workflow saves each accepted batch automatically.
-Explicit review is a future mode, not an additional confirmation on every
-ordinary edit. A pending animation or browser draft is not a saved change.
-Closing an editor must distinguish committed work from unsent drafts.
+현재 지원 편집은 승인 batch마다 자동 저장됩니다. 대기 animation과 브라우저
+초안은 저장된 변경이 아닙니다. editor 종료 시 committed 작업과 미전송 초안을
+구분해야 합니다.
 
-SAVE-02 distinguishes saving the native format, saving a separate copy, and
-exporting another format. Each conversion is a directed capability, such as
-DOCX to PDF. Supporting both endpoints does not imply a converter between them.
-Outputs must include relevant fidelity limits and retain the original source.
-A failed export must not leave a partial file presented as a successful output.
+SAVE-02는 native 저장, 별도 복사, 다른 형식 export를 구분합니다. DOCX에서 PDF와
+같은 변환은 방향별 기능입니다. 양쪽 형식을 지원한다고 서로 변환할 수 있는 것은
+아닙니다. 실패한 export를 성공한 부분 파일로 제시하면 안 됩니다.
 
-## Collaboration and Recovery
+## 협업과 복구
 
-EDIT-02 requires an actor label and a format-specific location: a cell range,
-text selection, slide object, or PDF page region. Cursor and typing events are
-ephemeral and must not advance the document revision. Reduced-motion settings
-must suppress unnecessary animation without hiding commit status.
+EDIT-02는 actor label과 형식별 위치를 요구합니다. 위치는 셀 범위, text 선택,
+slide object, PDF page 영역일 수 있습니다. 커서와 입력 event는 일시 상태이며
+리비전을 늘리지 않습니다. reduced motion은 commit 상태를 숨기지 않고 불필요한
+animation만 줄입니다.
 
-EDIT-03 requires stale edits to return a conflict and the current revision.
-The client must refresh and deliberately reapply or revise the intended edit.
-It must not overwrite newer human work through an automatic blind retry.
-Real-time visibility does not imply character-level collaborative merging.
+EDIT-03은 stale edit에 conflict와 현재 리비전을 반환합니다. client는 새 상태를
+읽고 의도한 편집을 다시 검토해야 하며 새 사람 작업을 blind retry로 덮으면 안
+됩니다. 실시간 표시가 문자 단위 공동 merge를 뜻하지 않습니다.
 
-HIST-01 restores document content as a new revision rather than moving the
-revision counter backward. History limits and unavailable restoration must be
-visible. Current XLSX history is bounded to ten snapshots, with snapshots over
-32 MB excluded; it is not an unlimited backup or audit archive.
+HIST-01은 리비전 숫자를 되돌리지 않고 내용을 새 리비전으로 복원합니다. 현재
+XLSX는 snapshot 10개, snapshot당 32 MiB로 제한됩니다. backup이나 audit archive가
+아닙니다.
 
-REC-01 requires resuming ordered events when possible and loading an
-authoritative snapshot when a replay gap cannot be filled. A lost response
-after persistence must be resolved before retrying a write. A future retry
-contract must distinguish already-committed operations from new operations.
-External file replacement must be detected before overwriting newer external
-content. Current behavior uses explicit reload after uncertain outcomes, with
-no automatic write retry. Source hash guards and cooperating writer locks are
-implemented, but non-cooperating applications can still race final replacement.
-See [recovery operations](xlsx-recovery.md) for the tested boundary and remaining
-limits. Durable operation receipts remain future work.
+REC-01은 가능한 경우 event를 이어 받고 gap이 있으면 기준 snapshot을 다시
+읽습니다. 저장 뒤 응답을 잃었다면 다시 쓰기 전에 영속 상태를 확인합니다. 외부
+파일 교체는 overwrite 전에 감지해야 합니다. 현재 source hash와 협조 writer lock은
+구현됐지만 Excel 같은 비협조 앱과 마지막 replacement race가 남습니다.
+[복구 절차](xlsx-recovery.md)를 따릅니다.
 
-## Permissions and Review
+## 권한과 검토
 
-AUTH-01 distinguishes host permission from document validation. Claude and
-Codex own their tool approval controls; the service must not promise identical
-permission labels or durations across hosts. Authentication and authorization
-must still be checked on the server. Permission to call a tool does not bypass
-revision checks or authorize unrelated paths or destructive conversion.
+AUTH-01에서 호스트 승인은 문서 검증과 별개입니다. Claude와 Codex가 자체 도구
+승인을 관리하며 서비스가 호스트별 버튼 이름이나 유지 시간을 약속하지 않습니다.
+도구 호출 권한이 리비전 검사, 경로 범위, 파괴적 변환 제한을 우회하지 않습니다.
 
-AUTH-02 applies when a user asks to review changes before application. A future
-proposal must record its document, base revision, operations, and affected
-content. Approval authorizes that proposal, not future unrelated changes.
-Rejection leaves the document unchanged. A newer revision invalidates the
-proposal until it is refreshed and reviewed again. Until this workflow exists,
-the product must not advertise staged approval or infer it from host approval.
-See [host compatibility](host-compatibility.md) for current host behavior.
+AUTH-02의 future proposal은 문서, 기준 리비전, 작업, 영향 내용을 기록합니다.
+승인은 그 proposal 하나에만 적용되고 거부 시 문서는 바뀌지 않습니다. 새 리비전이
+생기면 다시 검토해야 합니다. 구현 전에는 staged approval을 광고하지 않습니다.
 
-## Compatibility and Host Experience
+## 호환성과 호스트 경험
 
-COMP-01 evaluates source preservation, visual rendering, editable features,
-calculation, and conversion independently. Unsupported content must remain
-intact during unrelated edits when preservation is claimed. Known destructive
-edits must be blocked or offered as an explicitly accepted derived copy.
-Unknown fidelity must be identified as unverified, not described as lossless.
+COMP-01은 원본 보존, 시각 렌더링, 편집 기능, 계산, 변환을 각각 평가합니다.
+미지원 내용 보존을 주장한다면 관련 없는 편집 뒤에도 그대로 남아야 합니다. 손실이
+예상되는 native overwrite는 막거나 명시적으로 승인한 파생 복사본으로 제공합니다.
+검증하지 않은 fidelity를 lossless라고 표현하지 않습니다.
 
-HOST-01 requires useful structured MCP results even without an embedded editor.
-A supported host may show the MCP App; another may use the authenticated local
-browser fallback. Certification must record host version, connection mode, and
-the workflow tested. Passing a protocol test does not certify embedded UI.
-The editor must support keyboard access and a usable small-screen fallback.
+HOST-01은 내장 UI가 없어도 유용한 구조화 MCP 결과를 요구합니다. 지원 호스트는
+MCP App을 표시하거나 인증된 로컬 브라우저 대체 화면을 사용합니다. 인증 기록에는
+호스트 버전, 연결 모드, 실제 workflow를 남깁니다. 프로토콜 테스트 통과만으로
+내장 UI를 인증하지 않습니다.
 
-Document contents are untrusted data. Opening a file must not execute macros,
-scripts, embedded programs, or arbitrary external resource requests. Source
-contents and credentials must not appear in routine logs. Format-specific
-resource limits must be defined and exercised before adapter release.
+문서 내용은 신뢰하지 않는 데이터입니다. macro, script, embedded program, 임의
+외부 리소스를 실행하지 않고 일반 로그에 원문이나 인증 정보를 기록하지 않습니다.
 
-## Acceptance Scenarios
+## 인수 시나리오
 
-These are release criteria, not claims about tests already implemented.
-
-| Scenario | Required observable result |
+| 시나리오 | 필수 결과 |
 | --- | --- |
-| Open an unsupported or malformed file | Actionable error; source bytes unchanged |
-| Create a document or use a template | New native file reopens; template and existing destinations remain intact |
-| Commit a human edit, then an AI batch | Both surfaces converge on the same revision and saved content |
-| Submit two writes at the same base revision | One commits; stale write conflicts without partial changes |
-| Submit a batch containing one invalid edit | Entire batch fails; content and revision remain unchanged |
-| Fail persistence | No committed success; last durable document remains recoverable |
-| Disconnect during a commit | Reconcile durable state before retry; no duplicate edit |
-| Replace the source externally | Detect conflict before an overwrite |
-| Undo, redo, and reopen | Restored content persists; revisions increase; limits are reported |
-| Reject or approve a staged proposal | Rejection changes nothing; approval applies only a current reviewed proposal |
-| Edit beside an unsupported feature | Claimed preserved content survives save and reopen |
-| Open through a host without embedded UI | Structured tools remain usable; supported fallback reaches the same session |
-| Export or convert | Separate valid output; original retained; limitations disclosed |
+| 미지원 또는 손상 파일 열기 | 해결 가능한 오류, 원본 byte 무변경 |
+| 문서 또는 template 생성 | 새 native 파일 재열기 성공, template과 기존 목적지 무변경 |
+| 사람 편집 뒤 AI batch | 두 화면이 같은 리비전과 저장 내용으로 수렴 |
+| 같은 기준 리비전으로 두 번 쓰기 | 하나만 commit, stale 쓰기는 부분 변경 없이 conflict |
+| invalid 작업이 포함된 batch | 전체 실패, 내용과 리비전 무변경 |
+| 저장 실패 | 성공 상태 없음, 마지막 영속 문서 복구 가능 |
+| commit 중 연결 끊김 | 재시도 전 영속 상태 조정, 중복 편집 없음 |
+| 외부에서 원본 교체 | overwrite 전에 conflict 감지 |
+| undo, redo, 재열기 | 복원 내용 저장, 리비전 증가, 제한 표시 |
+| staged proposal 거부 또는 승인 | 거부는 무변경, 승인은 현재 검토한 proposal만 적용 |
+| 미지원 기능 옆 편집 | 보존을 주장한 내용이 저장 및 재열기 뒤 유지 |
+| 내장 UI 없는 호스트 | 구조화 도구와 같은 세션의 지원 대체 화면 사용 가능 |
+| export 또는 convert | 별도 유효 출력, 원본 유지, 제한 공개 |
 
-## Delivery Boundaries
+## 제공 경계
 
-The XLSX stable milestone uses the applicable implemented subset, with explicit
-exclusions for creation, conversion, generic proposals, and other pending
-capabilities. Its release checklist must resolve or explicitly bound remaining
-recovery gaps. It must not be presented as completion of this entire spec.
-
-DOCX is the second adapter. Its first prototype must prove an unrelated edit
-can survive native save and reopen before selecting a broad editing surface.
-Only then should shared runtime contracts be extracted from both adapters.
-No additional runtime framework or paid editor dependency is selected here.
+XLSX 안정 milestone은 생성, 변환, 일반 proposal 등 미구현 기능을 제외한 subset만
+사용합니다. 이는 전체 명세의 완료가 아닙니다. DOCX가 두 번째 adapter이며 관련
+없는 편집의 native save 및 reopen 보존을 먼저 입증해야 합니다. 두 실제 adapter가
+공통 계약을 보여준 뒤에만 shared runtime을 추출합니다.

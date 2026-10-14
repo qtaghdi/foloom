@@ -1,23 +1,21 @@
-# Private XLSX Alpha Getting Started
+# 비공개 XLSX 알파 시작 안내
 
-document-workspace currently runs as a local process for one existing XLSX
-workbook. It can connect to Claude Desktop or Codex over stdio and can provide
-the spreadsheet UI through an MCP App or an authenticated loopback browser
-fallback.
+document-workspace는 현재 기존 XLSX 통합 문서 하나를 여는 로컬 프로세스로
+동작합니다. stdio로 Claude Desktop 또는 Codex에 연결하고, MCP App이나 인증된
+loopback 브라우저 대체 화면으로 스프레드시트 UI를 제공합니다.
 
-The alpha is restricted to the repository owner and explicitly invited testers.
-It is not a Microsoft Excel replacement or a hosted collaboration service. Use
-a disposable copy of an important workbook until the native Excel release gates
-are complete.
+알파는 저장소 소유자와 명시적으로 초대한 테스터만 사용할 수 있습니다.
+Microsoft Excel 대체품이나 호스팅 협업 서비스가 아닙니다. 실제 Excel 릴리스
+검증이 끝날 때까지 중요한 통합 문서는 복사본으로 테스트하세요.
 
-## Choose an Archive
+## 압축 파일 선택
 
-An authorized maintainer can run the `Private alpha package` GitHub Actions
-workflow or build locally with `make release-verify`. Workflow artifacts remain
-inside the private repository and are not GitHub Releases. Archives use these
-names:
+권한 있는 관리자는 GitHub Actions의 `Private alpha package` workflow를 실행하거나
+`make release-verify`로 로컬에서 빌드할 수 있습니다. workflow artifact는 비공개
+저장소 안에만 남으며 GitHub Release가 아닙니다. 압축 파일 이름은 다음 규칙을
+사용합니다.
 
-| Operating system | Processor | Archive suffix |
+| 운영체제 | 프로세서 | 압축 파일 접미사 |
 | --- | --- | --- |
 | macOS | Apple silicon | `darwin_arm64.tar.gz` |
 | macOS | Intel | `darwin_amd64.tar.gz` |
@@ -26,53 +24,53 @@ names:
 | Windows | x86-64 | `windows_amd64.zip` |
 | Windows | ARM64 | `windows_arm64.zip` |
 
-Every artifact set includes `SHA256SUMS`. Verify the selected archive before
-extracting it:
+모든 결과물에는 `SHA256SUMS`가 포함됩니다. 압축을 풀기 전에 선택한 파일을
+검증하세요.
 
 ```bash
 shasum -a 256 -c SHA256SUMS
 ```
 
-The current alpha archives are unsigned. macOS or Windows can therefore show an
-unverified developer warning. Review the downloaded file and checksum, then use
-the operating system's one-time approval flow if you trust the artifact. Do not
-disable operating system protection globally.
+현재 알파 압축 파일은 서명되지 않았습니다. macOS 또는 Windows가 확인되지 않은
+개발자 경고를 표시할 수 있습니다. 다운로드한 파일과 체크섬을 확인하고 신뢰할 수
+있을 때 운영체제의 일회성 승인 절차를 사용하세요. 운영체제 보호 기능을 전역으로
+끄지 마세요.
 
-Do not repost an archive or grant repository access as a substitute for a
-distribution decision. Public source or binary distribution requires the exit
-criteria in the [product plan](product-plan.md).
+배포 결정을 대신해 압축 파일을 재배포하거나 저장소 접근 권한을 주지 마세요.
+소스나 바이너리를 공개하려면 [제품 계획](product-plan.md)의 종료 조건을 충족해야
+합니다.
 
-## Check a Workbook
+## 통합 문서 검사
 
-Run the preflight before configuring an MCP host:
+MCP 호스트를 설정하기 전에 사전 검사를 실행합니다.
 
 ```bash
 ./document-workspace -check /absolute/path/to/workbook.xlsx
 ```
 
-The command validates the OOXML package, supported size and archive boundaries,
-sheet metadata, compatibility warnings, and formula policy. It does not start a
-network listener and does not print cell contents.
+이 명령은 OOXML 패키지, 지원 크기와 압축 경계, 시트 메타데이터, 호환성 경고,
+수식 정책을 검증합니다. 네트워크 listener를 시작하거나 셀 내용을 출력하지
+않습니다.
 
-## Run the Browser Editor
+## 브라우저 편집기 실행
 
-Pass the workbook as a positional path:
+통합 문서를 위치 경로로 전달합니다.
 
 ```bash
 ./document-workspace /absolute/path/to/workbook.xlsx
 ```
 
-Open the exact viewer URL printed to the terminal. The URL contains a local
-session credential. Do not share terminal output or the URL. The service binds
-to `127.0.0.1:8765` by default and does not expose the workbook to the network.
+터미널에 출력된 viewer URL을 그대로 여세요. URL에는 로컬 세션 인증 정보가
+포함됩니다. 터미널 출력이나 URL을 공유하지 마세요. 서비스는 기본적으로
+`127.0.0.1:8765`에만 연결되므로 통합 문서를 네트워크에 공개하지 않습니다.
 
-Use `./document-workspace -help` for address, transport, and fallback options.
-Use `./document-workspace -version` when recording a bug report.
+주소, 전송, 대체 화면 옵션은 `./document-workspace -help`로 확인합니다. 버그를
+신고할 때는 `./document-workspace -version` 결과를 기록하세요.
 
-## Connect Claude Desktop
+## Claude Desktop 연결
 
-Use the extracted executable and an absolute workbook path in the Claude
-Desktop MCP configuration:
+Claude Desktop MCP 설정에 압축을 푼 실행 파일과 통합 문서의 절대 경로를
+사용합니다.
 
 ```json
 {
@@ -90,14 +88,13 @@ Desktop MCP configuration:
 }
 ```
 
-Fully quit and reopen Claude Desktop after changing the configuration. Ask the
-host to call `open_workbook`. If it does not render the MCP App, open the
-single-use `browserUrl` returned by that tool.
+설정을 바꾼 뒤 Claude Desktop을 완전히 종료하고 다시 실행하세요. 호스트에
+`open_workbook` 호출을 요청합니다. MCP App이 표시되지 않으면 도구가 반환한
+일회용 `browserUrl`을 여세요.
 
-## Connect Codex
+## Codex 연결
 
-Add the extracted executable and workbook to the applicable Codex
-`config.toml`:
+해당 Codex `config.toml`에 압축을 푼 실행 파일과 통합 문서를 추가합니다.
 
 ```toml
 [mcp_servers.document_workspace]
@@ -105,23 +102,21 @@ command = "/absolute/path/to/document-workspace"
 args = ["-transport", "stdio", "-file", "/absolute/path/to/workbook.xlsx"]
 ```
 
-Start a new Codex session so it discovers the tools. Ask Codex to call
-`open_workbook` and use the returned single-use URL in the in-app browser when
-native MCP App rendering is unavailable.
+Codex가 도구를 찾도록 새 세션을 시작하세요. Codex에 `open_workbook` 호출을
+요청하고, 기본 MCP App 표시를 사용할 수 없으면 반환된 일회용 URL을 앱 내
+브라우저에서 엽니다.
 
-## Approval and Safety
+## 승인과 안전
 
-Read tools are marked read-only. Workbook mutations are marked destructive so
-the MCP host can apply its own approval policy. Prefer one-time approval until
-the operation batch, workbook, and server configuration are familiar. The
-server still rejects stale revisions and invalid or oversized batches after a
-host approval.
+읽기 도구는 read-only로 표시합니다. 통합 문서를 바꾸는 도구는 destructive로
+표시해 MCP 호스트가 자체 승인 정책을 적용할 수 있게 합니다. 작업 묶음, 통합 문서,
+서버 설정에 익숙해질 때까지는 일회성 승인을 권장합니다. 호스트가 승인해도 서버는
+오래된 리비전, 잘못된 작업 묶음, 크기 제한을 넘은 작업을 거부합니다.
 
-The process writes changes directly to the selected workbook with an atomic
-same-directory replacement. It also creates bounded local undo history beside
-the workbook. Keep another editor closed while writing, and retain an external
-backup for important files.
+프로세스는 같은 디렉터리에서 원자적으로 교체하는 방식으로 선택한 통합 문서에
+직접 변경을 저장합니다. 통합 문서 옆에는 제한된 로컬 실행 취소 이력도 만듭니다.
+저장 중에는 다른 편집기를 닫고 중요한 파일은 별도 백업을 유지하세요.
 
-See [host compatibility](host-compatibility.md), [local security](security.md),
-[format support](format-support.md), and [XLSX recovery](xlsx-recovery.md) for
-the tested boundaries.
+검증된 경계는 [호스트 호환성](host-compatibility.md),
+[로컬 보안](security.md), [형식 지원](format-support.md),
+[XLSX 복구](xlsx-recovery.md)를 참고하세요.

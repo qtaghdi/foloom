@@ -1,62 +1,57 @@
-# XLSX Recovery Operations
+# XLSX 복구 절차
 
-## Save Failure or Disconnection
+## 저장 실패 또는 연결 끊김
 
-The browser pauses further writes and history actions when a save response is
-lost, a save fails, or live synchronization breaks. It reads the current server
-revision when possible and shows a recovery panel. The server revision alone
-does not prove whether a particular write committed. No write is automatically
-retried with a newer base revision.
+저장 응답이 사라지거나 저장에 실패하거나 실시간 동기화가 끊기면 브라우저는 추가
+쓰기와 이력 작업을 멈춥니다. 가능한 경우 현재 서버 리비전을 읽고 복구 panel을
+표시합니다. 서버 리비전만으로 특정 쓰기의 반영 여부를 알 수 없습니다. 더 새로운
+기준 리비전으로 쓰기를 자동 재시도하지 않습니다.
 
-Copy any unsaved draft content before choosing **Reload saved workbook**. Reload
-discards the displayed drafts and reads server state. Check the affected cells
-or objects before repeating an uncertain edit. Drafts are not durably backed up.
-If the server cannot be reached, restore the connection first. A failed MCP
-write requires the same read-and-inspect process in the host.
+**저장된 통합 문서 다시 불러오기**를 선택하기 전에 저장되지 않은 초안을
+복사하세요. 다시 불러오면 화면의 초안을 버리고 서버 상태를 읽습니다. 불확실한
+편집을 반복하기 전에 해당 셀이나 객체를 확인하세요. 초안은 영속적으로 백업되지
+않습니다. 서버에 연결할 수 없으면 먼저 연결을 복구하세요. 실패한 MCP 쓰기도
+호스트에서 같은 읽기 및 확인 절차가 필요합니다.
 
-## External Source Changes
+## 외부 원본 변경
 
-If another application changes or replaces the XLSX file, apply and undo/redo
-reject the write. The existing session retains its last authoritative in-memory
-state; refreshing the browser alone does not reopen the external file.
-Stop the document-workspace process, retain any needed drafts, inspect the
-external source, and restart the process against the intended file. Do not
-restore an older source merely to make a conflict disappear.
+다른 애플리케이션이 XLSX 파일을 변경하거나 교체하면 적용과 실행 취소 및 다시
+실행은 쓰기를 거부합니다. 기존 세션은 마지막 기준 메모리 상태를 유지하며 브라우저
+새로 고침만으로 외부 파일을 다시 열지는 않습니다. document-workspace 프로세스를
+종료하고 필요한 초안을 보관한 뒤 외부 원본을 확인하고 원하는 파일로 다시
+실행하세요. 충돌을 없애기 위해 단순히 더 오래된 원본을 복원하지 마세요.
 
-The service serializes its own writers with a sidecar lock and checks source
-hashes before mutation and again before rename. This is not a filesystem
-compare-and-swap primitive. Excel, hard-link aliases, and other applications
-can race the final check. Use one writer for a file at a time. Network storage
-and simultaneous native-application editing are not certified by these checks.
+서비스는 sidecar lock으로 자체 writer를 직렬화하고 변경 전과 rename 직전에 원본
+hash를 검사합니다. 이는 filesystem compare-and-swap 기능이 아닙니다. Excel,
+hard-link 별칭, 다른 앱이 마지막 검사와 경쟁할 수 있습니다. 한 파일에는 한 번에
+writer 하나만 사용하세요. 이 검사는 network storage나 native 앱의 동시 편집을
+보증하지 않습니다.
 
-## Interrupted Writer Lock
+## 중단된 writer lock
 
-The lock is an empty `write.lock` directory beneath the workbook-specific
-directory in `.xlsx-viewer-history`. A process crash can leave it behind.
-Opening or writing fails closed rather than stealing a potentially active lock.
+lock은 `.xlsx-viewer-history` 아래 통합 문서별 디렉터리에 있는 빈 `write.lock`
+디렉터리입니다. 프로세스가 비정상 종료되면 남을 수 있습니다. 열기나 쓰기는 사용
+중일 수 있는 lock을 빼앗지 않고 안전하게 실패합니다.
 
-Before removing a stale lock, stop all document-workspace processes using that
-workbook and confirm that no writer is active. Back up the workbook and its
-history directory. Identify the exact lock for that workbook, then remove only
-that empty lock directory. Never delete the whole history store or pending
-manifest as a shortcut. Restart the service so its pending-manifest recovery
-can compare the saved workbook hash and finalize or discard the pending entry.
-If lock ownership is uncertain, leave it in place and investigate first.
+오래된 lock을 제거하기 전에 해당 통합 문서를 사용하는 모든 document-workspace
+프로세스를 중지하고 활성 writer가 없는지 확인하세요. 통합 문서와 이력 디렉터리를
+백업하고, 정확한 lock을 식별한 뒤 그 빈 lock 디렉터리만 제거합니다. 편의를 위해
+전체 이력 저장소나 pending manifest를 삭제하면 안 됩니다. 서비스를 다시 실행해
+pending manifest 복구가 저장된 통합 문서 hash를 비교하고 대기 항목을 확정하거나
+폐기하게 하세요. lock 소유자를 확신할 수 없다면 그대로 두고 먼저 조사하세요.
 
-## Verification and Remaining Limits
+## 검증과 남은 한계
 
-`recovery_test.go` in the XLSX adapter covers temporary creation, write, short
-write, sync, close, rename, and history preparation failures for edits and undo;
-external replacement; a late external change; competing sessions; slow
-subscribers; replay gaps; and pending-manifest recovery. Transport tests cover
-HTTP conflict and SSE session mismatch. Frontend tests exercise lost responses,
-blocked queues, reconnect failure, resync, and undo sequencing.
+XLSX 어댑터의 `recovery_test.go`는 편집과 실행 취소 과정의 임시 파일 생성, write,
+short write, sync, close, rename, 이력 준비 실패를 다룹니다. 외부 교체, 늦은 외부
+변경, 경쟁 세션, 느린 subscriber, replay gap, pending manifest 복구도 검증합니다.
+전송 테스트는 HTTP 충돌과 SSE 세션 불일치를, 프론트엔드 테스트는 응답 유실,
+중단된 queue, 재연결 실패, resync, 실행 취소 순서를 다룹니다.
 
-Run `make compatibility-test` and `make verify` for changes to this behavior.
-Run `make xlsx-safety-verify` for the focused X-01 through X-06 evidence record.
-The generated and LibreOffice fixtures provide bounded fidelity evidence;
-Microsoft Excel-produced fixtures and native desktop checks remain separate.
-These tests do not certify power-loss durability, network filesystems, an
-unlimited audit log, or durable per-operation receipts across process restarts.
-A pending history-finalization failure blocks subsequent writes until recovery
-succeeds, even if the previous workbook save itself completed.
+이 동작을 바꾸면 `make compatibility-test`와 `make verify`를 실행하세요. X-01부터
+X-06까지의 집중 증거는 `make xlsx-safety-verify`로 만듭니다. 생성 fixture와
+LibreOffice fixture는 제한된 원본 보존 증거를 제공하지만 Microsoft Excel fixture와
+실제 데스크톱 검사는 별도입니다. 이 테스트는 전원 손실 내구성, network
+filesystem, 무제한 감사 로그, 프로세스 재시작을 넘는 작업별 영속 receipt를
+보증하지 않습니다. 이전 통합 문서 저장 자체가 끝났더라도 이력 확정 대기 실패가
+남아 있으면 복구할 때까지 다음 쓰기를 막습니다.

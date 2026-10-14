@@ -1,177 +1,115 @@
-# Product Plan
+# 제품 계획
 
-## Vision
+## 비전
 
-document-workspace is an AI-collaborative workspace for office documents in
-Claude, Codex, and other MCP clients. A person and an AI agent work against one
-revisioned document session with visible activity, explicit commits, conflicts,
-undo, and format-aware persistence.
+document-workspace는 Claude, Codex 등 MCP 클라이언트에서 사람과 AI가 같은 사무
+문서를 편집하는 작업 공간입니다. 하나의 리비전 세션에서 활동 표시, 명시적
+commit, conflict, undo, 형식별 안전 저장을 제공합니다.
 
-The product targets useful, safe interoperability rather than claiming that
-one editor can reproduce every proprietary desktop feature. Compatibility is
-measured separately for source preservation, rendering, and editing.
+모든 proprietary desktop 기능을 복제한다고 주장하지 않습니다. 원본 보존,
+렌더링, 편집 호환성을 별도로 측정하고 유용하고 안전한 상호운용을 목표로 합니다.
 
-## Product Principles
+## 제품 원칙
 
-1. Preserve the user's source document before adding convenience.
-2. Give every format its own typed operations and compatibility contract.
-3. Keep revision, approval, history, and presence behavior consistent.
-4. Show unsupported or potentially lossy features before saving.
-5. Keep MCP tools useful when an embedded UI is unavailable.
-6. Verify fidelity with provenance-recorded compatibility corpora.
-7. Do not execute macros, formulas, or embedded content as code.
+1. 편의 기능보다 사용자 원본 보존을 우선합니다.
+2. 형식마다 typed 작업과 호환성 계약을 둡니다.
+3. 리비전, 승인, 이력, presence 동작을 일관되게 유지합니다.
+4. 미지원 또는 손실 가능 기능을 저장 전에 알립니다.
+5. 내장 UI가 없어도 MCP 도구는 유용해야 합니다.
+6. 출처가 기록된 corpus로 fidelity를 검증합니다.
+7. macro, 수식, embedded content를 코드로 실행하지 않습니다.
 
-## Compatibility Levels
+지원은 보존, 렌더링, 편집의 세 단계로 따로 평가합니다. 한 단계 통과가 다음
+단계를 뜻하지 않습니다.
 
-See the [shared product specification](product-spec.md) for lifecycle and
-collaboration requirements and the [format support matrix](format-support.md)
-for current capabilities, target scope, and evidence gates.
+## 1단계: XLSX production adapter
 
-Each format reports progress against three independent levels:
+상태: 저장소 소유자가 통제하는 통합 문서에 사용할 수 있는 비공개 로컬 알파.
 
-1. Preservation: unsupported content survives an unrelated save.
-2. Rendering: people can inspect the document with useful visual fidelity.
-3. Editing: supported changes can be saved back to the source format.
+완료된 기반:
 
-Passing one level does not imply the next level.
+- Go 통합 문서 session, 리비전, 원자적 저장
+- Streamable HTTP와 stdio MCP
+- MCP App과 loopback browser fallback
+- 사람 편집과 순서 있는 AI event
+- 범위 붙여넣기, 서식, 병합, 행과 열 작업
+- 제한된 영속 undo와 redo
+- 큰 sheet viewport loading
+- 일반 validation 및 conditional formatting 렌더링
+- 기존 image와 chart preview 이동, 크기, 삭제, 저장
+- 생성 및 LibreOffice 호환성 fixture
+- Excel 전 자동 safety, regression, packaging, performance gate
+- 미서명 macOS, Linux, Windows 비공개 archive pipeline
 
-## Phase 1: XLSX Production Adapter
+안정 릴리스 전 남은 작업:
 
-Status: private local alpha, usable for owner-controlled workbook collaboration.
+1. 출처가 기록된 Microsoft Excel fixture와 native reopen 증거
+2. 실제 주장할 Claude 및 Codex 모드별 인증
+3. 수식 cache와 재계산의 native Excel 증거
+4. 최종 candidate의 보이는 브라우저 상호작용 재검사
+5. 초대 tester의 반복 사용, 배포 조건 선택, 공개 여부에 대한 별도 소유자 결정
 
-Completed foundations include:
+### 비공개 알파 종료 조건
 
-- Go workbook sessions with revisions and atomic saves;
-- Streamable HTTP and stdio MCP transports;
-- an embedded MCP App and loopback browser fallback;
-- direct human edits and ordered AI events;
-- range paste, styles, merges, row and column operations;
-- durable bounded undo and redo;
-- large-sheet viewport loading;
-- validation and conditional-format rendering for common rules;
-- image and chart preview movement, resize, deletion, and write-back;
-- generated and LibreOffice compatibility fixtures.
+다음을 모두 충족할 때까지 저장소와 결과물을 비공개로 유지합니다.
 
-Remaining XLSX stable release work:
+1. 의도한 candidate의 native Excel fidelity와 수식 증거가 있습니다.
+2. 소유자와 초대 tester 최소 2명이 대표 통합 문서 복사본으로 반복 작업합니다.
+3. 원본 손실, authorization, false success 결함이 남아 있지 않습니다.
+4. source 및 binary 배포 조건과 dependency 의무를 검토합니다.
+5. 저장소 소유자가 새 이슈와 Pull Request에서 공개 배포를 명시적으로 승인합니다.
 
-1. Add a provenance-recorded Microsoft Excel fixture and native reopen evidence.
-2. Certify the final claimed Claude and Codex modes, distinguishing embedded UI from
-   browser fallback rather than requiring unsupported host capabilities.
-3. Complete native Excel evidence for the implemented
-   [formula policy](xlsx-formula-policy.md), including cache and recalculation
-   behavior.
-4. Repeat the remaining visible-browser interaction check against the final
-   candidate and retain any additional claimed platform artifacts.
-5. Validate repeated use with explicitly invited testers, select distribution
-   terms, and make a separate owner decision before any public distribution.
+landing page, 결제, 호스팅 계정, signed installer, 자동 update는 반복 사용 가치가
+확인될 때까지 연기합니다. 첫 안정 범위는 [XLSX 체크리스트](xlsx-release-checklist.md)를
+따릅니다. macro 실행, 암호화 편집, 완전한 Excel 수식 engine, 모든 proprietary
+extension 보존은 약속하지 않습니다.
 
-The integrated pre-Excel verification, full regression CI, executable preflight,
-version metadata, and unsigned cross-platform archive pipeline are implemented.
-The archive workflow is manual, repository-scoped, and unable to publish a
-GitHub Release. These steps support private testing but do not close native
-Excel or public-distribution gates.
+## 2단계: 공통 문서 플랫폼
 
-### Private Alpha Exit Criteria
+상태: 저장소 경계는 마련됐고 두 번째 adapter 전까지 shared runtime 추출을
+미룹니다.
 
-Keep the repository and all generated artifacts private until every condition
-below is met:
+- 형식 adapter는 `internal/formats/<format>`에 둡니다.
+- 각 adapter는 inspect, typed operation, 저장, compatibility report를 소유합니다.
+- 전송은 format logic 없이 adapter를 호출합니다.
+- 공통 session, event, proposal 추상화는 실제 XLSX와 DOCX가 같은 계약을 입증한
+  뒤에만 만듭니다.
+- 파일 선택 및 여러 문서 탐색은 신뢰할 수 있는 launcher 또는 session 생성
+  workflow로 추가합니다.
 
-1. Native Microsoft Excel fidelity and formula evidence is recorded against the
-   intended candidate.
-2. The owner and at least two explicitly invited testers complete repeated work
-   on disposable copies of representative workbooks.
-3. No unresolved source-loss, authorization, or false-success defect remains.
-4. Source and binary distribution terms are selected and dependency obligations
-   are reviewed.
-5. The repository owner explicitly approves public source or binary distribution
-   through a new issue and pull request.
+## 3단계: DOCX
 
-A landing page, payments, hosted accounts, signed installers, and automatic
-updates remain deferred until private-alpha use demonstrates recurring value.
+첫 목표는 단순 paragraph와 table 편집, native 저장, 관련 없는 OOXML part
+보존입니다. Word 및 LibreOffice fixture와 [DOCX 보존 실험](docx-preservation-prototype.md)을
+통해 저장 방식을 먼저 결정합니다. 정확한 pagination, 복잡한 field, floating
+layout, tracked-change 작성은 초기 범위가 아닙니다.
 
-The [XLSX release checklist](xlsx-release-checklist.md) defines the first stable
-subset. Image insertion, chart type/series/axis/legend/style editing, and broader
-advanced rule coverage remain follow-up work outside that initial subset.
+## 4단계: PPTX와 HWPX
 
-The initial XLSX release does not promise macro execution, encrypted workbook
-editing, a complete Excel formula engine, or preservation of every proprietary
-extension.
+PPTX는 slide text, 단순 shape, image 위치, slide 순서를 시작점으로 하고 theme,
+master, note, relationship을 보존합니다. animation 작성과 embedded object는
+미룹니다.
 
-## Phase 2: Shared Document Platform
+HWPX는 한글 text, paragraph 속성, 단순 table, section을 우선합니다. Hancom에서
+만든 fixture와 native reopen이 필요합니다. binary HWP는 원본을 바꾸지 않는 연구
+또는 변환 경로로 별도 취급합니다.
 
-Status: repository boundaries established, shared runtime extraction pending a
-second adapter.
+## 5단계: PDF
 
-- Keep formats under `internal/formats/<format>`.
-- Keep HTTP, MCP, authentication, and UI delivery under `internal/transport`.
-- Define capability discovery for active format sessions.
-- Extract common revision, history, approval, and event contracts only after a
-  second adapter validates the model.
-- Add document-level audit records and immutable version metadata.
-- Introduce a browser shell only when two format surfaces exist.
+PDF는 page rendering, text inspection, annotation, 지원 form filling, page 구성을
+제한 범위로 봅니다. word processor식 arbitrary text reflow는 목표가 아닙니다.
+OCR, secure redaction, signature는 독립된 높은 위험 기능입니다. 시각 overlay를
+underlying content 삭제라고 표현하지 않습니다.
 
-Exit criteria:
+## 향후 호스팅
 
-- XLSX behavior remains unchanged through the new repository boundaries.
-- A second adapter reuses real session infrastructure without spreadsheet-only
-  concepts leaking into its operation model.
-- Format capabilities are discoverable and validated at transport boundaries.
+로컬 사용에서 반복 가치가 확인된 뒤에만 hosted mode를 검토합니다. identity,
+문서별 authorization, tenant 격리, encrypted object storage, immutable version,
+audit, quota, background conversion, privacy 및 retention 정책이 필요합니다.
 
-## Phase 3: DOCX Adapter
+## 배포 판단
 
-- Inventory paragraphs, runs, tables, sections, comments, headers, footers, and
-  embedded media.
-- Provide structured text and table operations.
-- Preserve unsupported OOXML parts during unrelated edits.
-- Select an OSS browser editor or a constrained custom surface after a fidelity
-  prototype.
-- Build Word and LibreOffice provenance fixtures.
-
-DOCX is the recommended second adapter because it tests the shared session
-model without requiring fixed-layout reconstruction.
-The [preservation prototype](docx-preservation-prototype.md) defines the first
-experiment. Its results are pending; no DOCX engine has been selected.
-
-## Phase 4: PPTX Adapter
-
-- Model slides, shapes, text, images, charts, notes, and ordering.
-- Provide a slide canvas with explicit object operations.
-- Preserve themes, masters, transitions, and unsupported animation metadata.
-- Build PowerPoint and LibreOffice provenance fixtures.
-
-## Phase 5: HWPX and HWP
-
-- Implement HWPX package inspection and structured editing first.
-- Build fixtures with known Hancom Office provenance.
-- Evaluate binary HWP conversion or native integration separately.
-- Never imply binary HWP round-trip support from HWPX support.
-
-## Phase 6: PDF Workflows
-
-PDF is treated as a fixed-layout document, not a normal source editor.
-
-- Inspect text, images, pages, outlines, metadata, annotations, and forms.
-- Support annotation, form filling, page organization, redaction workflows, and
-  export verification.
-- Add OCR as an explicit derived-content workflow.
-- Regenerate a new PDF for semantic edits and retain the original source.
-
-## Phase 7: Hosted Service
-
-- Add OAuth or OIDC identity.
-- Authorize document ownership on every request and tool call.
-- Store immutable document versions in object storage.
-- Store identity, metadata, revisions, and audit records in a relational
-  database.
-- Add bounded conversion workers, tracing, metrics, quotas, and recovery.
-
-## Immediate Next Work
-
-1. Use disposable workbook copies in the private local alpha and record repeated
-   owner workflows before expanding the tester group.
-2. Add Excel evidence and close final candidate host and visible UI gates. Verify
-   the implemented formula policy during native Excel reopening.
-3. Invite at least two trusted testers only after the owner workflow is stable,
-   then review the private-alpha exit criteria before selecting distribution terms.
-4. Run the DOCX preservation experiment before selecting its editor or extracting
-   a generic document session. The experiment can proceed independently on copies.
+현재는 비공개 저장소와 비공개 알파 artifact만 사용합니다. 공개 source, 공개
+binary, 상업 서비스는 서로 별도 결정입니다. 공개 전에는 license, third-party
+notice, signing, update, support, privacy, security response, 비용과 운영 책임을
+명시해야 합니다.

@@ -1,123 +1,62 @@
-# Architecture Refactor
+# 아키텍처 정리 기록
 
-## Goal
+## 목표
 
-Restructure the Go and TypeScript implementation around the repository's
-existing domain, transport, application, and spreadsheet-engine boundaries
-without changing workbook behavior, public MCP tools, HTTP routes, or visible
-UI behavior.
+통합 문서 동작, 공개 MCP 도구, HTTP route, 보이는 UI를 바꾸지 않고 기존 domain,
+transport, application, spreadsheet engine 경계에 맞춰 Go와 TypeScript 구조를
+정리합니다.
 
-## Current State
+## 당시 상태와 범위
 
-- `apps/web-editor/src/main.ts` owns startup, revision state, write serialization,
-  subscriptions, presence throttling, and status rendering.
-- `apps/web-editor/src/api.ts` branches between HTTP and MCP App transport inside one class.
-- `apps/web-editor/src/univer-engine.ts` owns Univer construction, event translation,
-  remote-event application, A1 helpers, and workbook mapping.
-- `internal/transport/httpapi/server.go` combines MCP registration, browser handlers,
-  middleware, SSE, and response helpers.
-- `internal/formats/xlsx/session.go` combines domain types, session lifecycle,
-  reads, operation validation and application, styles, events, ranges, and
-  persistence.
+- `main.ts`가 시작, 리비전, write 직렬화, subscription, presence, 상태 표시를 모두
+  담당했습니다.
+- `api.ts`가 HTTP와 MCP App transport를 한 class에서 분기했습니다.
+- `univer-engine.ts`가 Univer lifecycle, mapping, event 적용, A1 helper를 함께
+  담당했습니다.
+- Go의 `server.go`와 `session.go`도 서로 다른 책임을 한 파일에 모았습니다.
 
-## Scope
+작업은 local architecture skill 추가, TypeScript orchestration·transport·view·engine
+분리, discriminated union, 외부 입력 Zod 검증, Go 파일 책임 분리를 포함했습니다.
+시각 redesign, React, 새 작업, hosted storage, Python MVP 제거는 제외했습니다.
 
-- Add and apply the repository-local `document-workspace-architecture` skill.
-- Split TypeScript orchestration, transport, UI status, spreadsheet mapping,
-  and Univer-specific behavior into focused modules.
-- Replace optional-field operation types with discriminated unions.
-- Validate data received over HTTP, SSE, and the MCP App bridge.
-- Split Go code into focused files within existing packages.
-- Preserve behavior and existing public contracts.
+## 결정
 
-## Non-Goals
-
-- No visual redesign.
-- No React or additional state framework.
-- No new workbook operations.
-- No hosted persistence or authentication changes.
-- No removal of the Python regression implementation.
-
-## Constraints
-
-- Workbook mutations must remain atomic and revision checked.
-- Stdio stdout must remain protocol-only.
-- Univer must remain behind `SpreadsheetEngine`.
-- Generated frontend assets remain ignored.
-- Committed documentation and comments use English and contain no em dashes.
-
-## Decisions
-
-- Keep current Go package boundaries and split large files by responsibility
-  before considering new packages.
-- Use stateful classes for browser and editor resources with explicit disposal.
-- Use Zod, which is already installed, only at external TypeScript boundaries.
-- Treat function declaration versus arrow function as a local readability
-  choice, not an architecture rule.
-
-## Architecture
+- 새 package를 만들기 전에 기존 Go package 안에서 책임별 파일을 나눕니다.
+- browser와 editor resource는 명시적 dispose가 있는 stateful class를 사용합니다.
+- Zod는 외부 TypeScript 경계에서만 사용합니다.
+- function declaration과 arrow function은 architecture 규칙이 아니라 지역 가독성
+  선택입니다.
 
 ```text
 main.ts
   -> WorkbookController
       -> WorkbookClient
-          -> HTTP transport or MCP App transport
+          -> HTTP transport 또는 MCP App transport
       -> AppView
       -> SpreadsheetEngine
-          -> Univer adapter, mappers, and event application
+          -> Univer adapter, mapper, event 적용
 
 Go CLI
-  -> HTTP or stdio adapter
+  -> HTTP 또는 stdio adapter
       -> xlsx.Session
-          -> validation and operations
-          -> XLSX reads and persistence
+          -> validation과 operation
+          -> XLSX read와 persistence
           -> ordered event stream
 ```
 
-## Implementation Plan
+## 결과
 
-1. Create the repository-local architecture skill and validate it.
-2. Introduce strict TypeScript contracts and boundary schemas.
-3. Split workbook transports and application orchestration.
-4. Split Univer mapping and command translation from the engine lifecycle.
-5. Split Go HTTP and workbook files by responsibility without moving package
-   ownership.
-6. Update architecture documentation and the changelog.
-7. Run full verification and browser regression checks.
+2026-09-29 완료했습니다.
 
-## Verification
-
-- `make verify`
-- Browser startup and workbook rendering
-- Human cell edit persistence
-- AI event rendering and revision update
-- Desktop and narrow viewport smoke checks
-- `git diff --check`
-- Em dash scan
-
-## Risks / Open Questions
-
-- Strict boundary validation may expose previously accepted malformed payloads.
-- Univer callback types are inferred from vendor APIs and must not leak into the
-  application boundary.
-- Manual Claude Desktop and Codex UI certification remains separate because it
-  requires host restart and configuration.
-
-## Result
-
-Completed on 2026-09-29.
-
-- Added and validated the repository-local `document-workspace-architecture` skill.
-- Introduced `WorkbookController`, `WorkbookClient`, separate HTTP and MCP App
-  transports, `AppView`, Zod boundary schemas, and strict operation and event
-  unions.
-- Extracted A1 conversion, Univer workbook mapping, and command mapping from
-  the editor lifecycle adapter.
-- Split Go HTTP, MCP, middleware, workbook types, reads, operations, events,
-  and persistence into focused files without changing package ownership.
-- Passed `make verify`, `git diff --check`, and the em dash scan.
-- Verified the real Go HTTP entry point in the browser with workbook rendering,
-  a human edit saved at revision 2, an MCP AI edit rendered at revision 3 with
-  visible AI presence, and a 640 by 800 viewport smoke check.
-- Claude Desktop and Codex host restart certification remains a separate manual
-  check because it depends on each installed host configuration.
+- `document-workspace-architecture` skill을 추가하고 검증했습니다.
+- `WorkbookController`, `WorkbookClient`, HTTP 및 MCP App transport, `AppView`,
+  Zod boundary schema, strict operation과 event union을 도입했습니다.
+- A1 변환, Univer workbook mapping, command mapping을 engine lifecycle에서
+  분리했습니다.
+- Go HTTP, MCP, middleware, workbook type, read, operation, event, persistence를
+  package ownership 변경 없이 나눴습니다.
+- `make verify`, `git diff --check`, em dash 검사를 통과했습니다.
+- 실제 Go HTTP 진입점에서 렌더링, revision 2 사람 편집, revision 3 MCP AI 편집과
+  presence, 640 x 800 화면을 확인했습니다.
+- Claude Desktop과 Codex 재시작 인증은 설치된 host 설정이 필요한 별도 수동
+  검사로 남겼습니다.

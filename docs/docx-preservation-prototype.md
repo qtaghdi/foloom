@@ -1,149 +1,106 @@
-# DOCX Preservation Prototype Specification
+# DOCX 원본 보존 프로토타입 명세
 
-Status: experiment design. No DOCX adapter, fixture corpus, engine selection,
-or passing experiment is asserted by this document.
-Related contracts: [product specification](product-spec.md),
-[format support](format-support.md), and [architecture](architecture.md).
+상태: 실험 설계. 이 문서는 DOCX 어댑터, fixture corpus, 엔진 선택, 실험 성공을
+주장하지 않습니다. 관련 계약은 [제품 명세](product-spec.md),
+[형식별 지원표](format-support.md), [아키텍처](architecture.md)를 따릅니다.
 
-## Decision to Make
+## 확인할 결정
 
-Determine whether a bounded structured edit can be saved as DOCX while retaining
-unrelated content and reopening in Word without repair. The result should select
-a persistence strategy and establish operation boundaries before a full browser
-editor or common session abstraction is implemented.
+제한된 구조 편집을 DOCX로 저장한 뒤 관련 없는 내용을 유지하고 Word에서 복구
+메시지 없이 열 수 있는지 확인합니다. 동일한 입력으로 다음 두 방식을 비교합니다.
 
-Evaluate two strategies on identical inputs: targeted package/XML modification
-that retains untouched content, and a higher-level document model that imports
-and serializes a document. These are experimental alternatives, not selected
-libraries. Research official documentation, maintenance, license, and supported
-format variants before selecting candidates. The prototype requires no paid
-service and must not upload documents to an external converter.
+1. 손대지 않은 package/XML을 유지하는 표적 수정
+2. 문서를 가져와 다시 직렬화하는 상위 수준 document model
 
-## Bounded Operations
+두 방식은 실험 후보이며 선택된 라이브러리가 아닙니다. 유료 서비스나 외부 변환
+업로드를 사용하지 않습니다.
 
-Proposed operation names below are experimental, not registered MCP tools.
+## 제한된 작업
 
-| Operation | Accepted target | Required behavior |
+| 작업 | 대상 | 필수 동작 |
 | --- | --- | --- |
-| `replace_run_text` | One plain text run in a body paragraph | Replace explicit text; retain formatting and neighboring runs |
-| `replace_cell_text` | One plain text run inside a simple unmerged table cell | Replace text without rebuilding the table or changing cell properties |
-| `create_basic_document` | New output path | Create a paragraph and simple table; refuse existing destination |
+| `replace_run_text` | 본문 paragraph의 일반 text run 하나 | 지정 text만 교체하고 서식과 주변 run 유지 |
+| `replace_cell_text` | 병합되지 않은 단순 table cell의 text run 하나 | table과 cell 속성을 다시 만들지 않고 text 교체 |
+| `create_basic_document` | 새 출력 경로 | paragraph와 단순 table 생성, 기존 목적지는 거부 |
 
-Creation is a separate test arm. It must not be used as evidence that an existing
-complex document can be preserved. Template creation, paragraph splitting,
-cross-run replacement, lists, merged or nested table edits, tracked-change
-authoring, fields, floating images, pagination, and PDF conversion are outside
-the prototype. Unsupported structures may be present next to a supported target
-only if they remain intact. Editing inside them must be rejected explicitly.
+생성은 별도 실험입니다. template, paragraph 분할, 여러 run을 넘는 교체, list,
+병합 및 중첩 table, 변경 추적 작성, field, floating image, pagination, PDF 변환은
+제외합니다. 미지원 구조 옆의 지원 대상만 바꿀 수 있으며 미지원 구조 자체 편집은
+명시적으로 거부합니다.
 
-## Target Identity and Revision Rules
+## 대상 식별과 리비전
 
-Inspection returns session-scoped opaque identifiers for paragraphs, runs,
-tables, and cells, backed by the adapter's mapping to the source package.
-Commands carry a base revision, target ID, expected old text, and replacement.
-Never locate a target solely by matching text: repeated words are legitimate.
+검사는 paragraph, run, table, cell에 세션 범위의 opaque ID를 반환합니다. 명령은
+기준 리비전, 대상 ID, 예상 이전 text, 새 text를 포함합니다. 반복되는 text가
+정상이므로 문자열 검색만으로 대상을 찾지 않습니다.
 
-For this prototype, IDs are valid only for the inspected revision. A successful
-commit invalidates those IDs and requires a refreshed inspection; stable IDs
-across structural edits or restarts are future work. A stale revision, missing
-target, mismatched old text, or unsupported target rejects the entire batch.
-The browser will eventually consume the same operation model as MCP.
+ID는 검사한 리비전에서만 유효합니다. 성공한 commit 뒤에는 다시 검사해야 합니다.
+오래된 리비전, 없는 대상, 예상 text 불일치, 미지원 대상이 있으면 전체 batch를
+거부합니다. 이후 브라우저도 MCP와 같은 작업 model을 사용해야 합니다.
 
-## Fixture Plan
+## Fixture 계획
 
-Create a manifest under `testdata/docx/compatibility` when implementation starts.
-This specification does not create empty adapter or fixture directories.
+구현을 시작할 때 `testdata/docx/compatibility`에 manifest를 만듭니다.
 
-| Fixture | Origin requirement | Contents and purpose |
+| ID | 출처 | 내용과 목적 |
 | --- | --- | --- |
-| D-01 | Controlled generator with version | Minimal paragraph and simple table for operation and creation tests |
-| D-02 | Microsoft Word, exact version recorded | Korean and Latin text, mixed runs, whitespace, repeated text, simple table |
-| D-03 | Microsoft Word, exact version recorded | Sections, headers/footers, notes, comments, images, links, fields, tracked changes, and an isolated plain target |
-| D-04 | LibreOffice, exact version recorded | Producer variation with the same supported target types |
-| D-05 | Controlled malformed/adversarial copies | Truncated archive, duplicate or unsafe entry names, invalid relationships, excessive expansion, unsupported target |
+| D-01 | 버전이 기록된 생성기 | 최소 paragraph와 단순 table |
+| D-02 | 정확한 버전의 Microsoft Word | 한글과 Latin text, 혼합 run, 공백, 반복 text, 단순 table |
+| D-03 | 정확한 버전의 Microsoft Word | section, header/footer, note, comment, image, link, field, 변경 추적과 격리된 일반 대상 |
+| D-04 | 정확한 버전의 LibreOffice | 같은 지원 대상을 다른 producer로 검증 |
+| D-05 | 통제된 비정상 입력 | 잘린 archive, 중복 및 위험 entry, 잘못된 relationship, 과도한 확장, 미지원 대상 |
 
-Each manifest entry records SHA-256, producer/version, format variant, date,
-redistribution rights, feature inventory, intended target, expected mutation,
-and expected rejection cases. Use synthetic non-sensitive content; run only on
-copies. If Word or an authorized Word fixture is unavailable, label native
-verification blocked. Do not relabel generated output as Word-produced.
+각 항목에 SHA-256, producer와 버전, format variant, 날짜, 재배포 권리, 기능 목록,
+대상, 예상 변경, 예상 거부를 기록합니다. 비민감 합성 자료와 복사본만 사용합니다.
+Word fixture가 없으면 native 검증은 blocked로 남깁니다.
 
-## Experiment Protocol
+## 실험 절차
 
-1. Inventory the source archive entries and hashes of their uncompressed bytes,
-   relationship targets, feature counts, and selected semantic properties.
-   Record source hash and a native rendering baseline before any edit.
-2. Perform a no-op import/save to a new path. Reopen the result independently
-   and compare it with the source before attempting mutation.
-3. Independently run each supported edit on a fresh fixture copy. Use a
-   same-length text replacement to isolate preservation from expected reflow.
-   Run a separate longer-text case to document expected layout changes.
-4. Save to a separate output, reopen with the adapter and in Word, and verify
-   the intended text and all unrelated properties. Also record LibreOffice
-   results; they do not substitute for Word results.
-5. Repeat save/reopen twice to detect cumulative loss. Keep native application
-   resaves in separate files so they cannot mask the adapter's output defects.
-6. Exercise a mixed valid/invalid batch, stale target, repeated text, invalid
-   XML characters, unsupported structure, and interrupted persistence.
-   Rejected operations must not change content or revision.
-7. Record timings, peak memory, machine, versions, input/output hashes, and
-   evidence for both strategies. Do not choose an engine solely on visual appeal.
+1. 원본 archive entry와 압축 해제 byte hash, relationship, 기능 수, 선택한 의미
+   속성, 원본 hash, native 렌더링 기준을 기록합니다.
+2. 변경 없는 import/save를 새 경로로 수행하고 독립적으로 다시 열어 비교합니다.
+3. 각 지원 편집을 새 복사본에서 실행합니다. 같은 길이 교체와 긴 text 교체를
+   분리합니다.
+4. 새 출력에 저장하고 adapter와 Word에서 다시 열어 대상과 관련 없는 속성을
+   검증합니다. LibreOffice 결과는 Word 결과를 대신하지 않습니다.
+5. 저장과 다시 열기를 두 번 반복해 누적 손실을 확인합니다.
+6. valid/invalid 혼합 batch, 오래된 대상, 반복 text, 잘못된 XML 문자, 미지원 구조,
+   저장 중단을 검증합니다. 거부 시 내용과 리비전은 바뀌면 안 됩니다.
+7. 두 전략의 시간, 최대 memory, 환경, 버전, 입출력 hash와 증거를 기록합니다.
 
-## Comparison Rules
+## 비교 규칙
 
-ZIP bytes may differ because of packaging metadata, so compare uncompressed
-entry payloads separately from the entire archive hash. For untouched entries,
-require identical payload hashes. For a touched XML part, use a namespace-aware
-structural comparison with a narrow, predeclared allowlist for the intended
-text change. Preserve meaningful whitespace, run properties, element order,
-unknown attributes/elements, references, and relationships outside that change.
+ZIP metadata 때문에 전체 byte가 달라질 수 있으므로 압축 해제 entry payload를
+따로 비교합니다. 손대지 않은 entry는 payload hash가 같아야 합니다. 수정한 XML은
+namespace-aware 구조 비교와 사전에 정한 text 변경 allowlist를 사용합니다. 의미
+있는 공백, run 속성, element 순서, 알 수 없는 속성과 element, reference,
+relationship은 보존해야 합니다.
 
-A parser that only inventories known elements is insufficient evidence for
-unknown-content preservation. Missing parts, broken relationships, dropped
-extensions, or unrelated node changes fail the preservation gate. If a strategy
-rewrites unrelated XML, record the exact differences and why the stronger gate
-failed; do not silently normalize them away to obtain a pass.
+part 누락, 깨진 relationship, extension 삭제, 관련 없는 node 변경은 실패입니다.
+Word에서 repair prompt가 없어야 하며 대상 text, 주변 기능, image, 서식이
+유지되어야 합니다. no-op과 같은 길이 편집은 page 수와 대상 밖 영역이 설명 없이
+바뀌면 안 됩니다. 긴 text의 reflow는 별도로 평가합니다.
 
-For native reopen, require no repair prompt, expected target text, intact
-surrounding features, and no missing images or unexplained formatting changes.
-Compare baseline and output with the same Word version, fonts, OS, and rendering
-settings. For no-op and same-length edits require unchanged page count and no
-unexplained change outside the target region. Declare region masks and any
-raster tolerance before examining outputs. Long-text reflow is assessed
-separately for correctness, not forced into a pixel-identical comparison.
+## 보안과 저장 경계
 
-## Resource and Failure Boundaries
+입력 byte, 확장 byte, entry 수, XML 깊이, text 크기, 실행 시간 제한을 먼저
+정합니다. archive traversal, 중복 entry, 잘못된 relationship, 암호화 입력, 외부
+entity를 거부하고 외부 relationship을 가져오거나 embedded content를 실행하지
+않습니다. 실험은 새 목적지에 저장하며 기존 목적지가 있으면 바꾸지 않습니다.
 
-Before opening untrusted fixtures, choose and record hard budgets for input
-bytes, expanded bytes, entry count, XML depth, text size, and execution time.
-Reject archive traversal, ambiguous duplicate entries, invalid package
-relationships, encrypted inputs, and external entity resolution. Do not fetch
-external relationships or execute embedded content. Test budget boundaries.
+## 결정 기준과 결과물
 
-Persistence uses a new destination during the experiment. Simulate write and
-replacement failures; retain the original and do not report a committed result.
-A caller-requested destination that already exists must remain unchanged.
-Explicitly report unsupported format variants instead of guessing compatibility.
-
-## Decision Gates and Deliverables
-
-| Gate | Pass condition | Failure consequence |
+| Gate | 통과 조건 | 실패 시 조치 |
 | --- | --- | --- |
-| D-G1 Package preservation | No-op and unrelated content pass structural and hash checks | Reject strategy for native editing or narrow scope explicitly |
-| D-G2 Supported mutation | Both edit operations affect only declared targets across D-01 through D-04 | Fix targeting or reduce accepted structures before UI work |
-| D-G3 Native reopen | Word opens outputs without repair and visual/semantic checks pass | No Word compatibility claim; unavailable check stays blocked |
-| D-G4 Failure behavior | Invalid/stale batches and persistence failures leave no partial accepted change | Block writable adapter integration |
-| D-G5 Basic creation | New document reopens; destination collision is non-destructive | Keep creation unavailable even if editing passes |
-| D-G6 Integration readiness | License, limits, typed contracts, and reproducible evidence documented | Keep prototype isolated; no shared runtime extraction |
+| D-G1 package 보존 | no-op과 관련 없는 내용의 구조 및 hash 검사 통과 | native 편집 전략 거부 또는 범위 축소 |
+| D-G2 지원 변경 | D-01부터 D-04에서 선언한 대상만 변경 | 대상 지정 수정 또는 범위 축소 |
+| D-G3 native reopen | Word가 repair 없이 열리고 의미 및 시각 검사 통과 | Word 호환성 주장 금지 |
+| D-G4 실패 동작 | invalid 및 stale batch와 저장 실패가 부분 변경을 남기지 않음 | writable adapter 연동 차단 |
+| D-G5 기본 생성 | 새 문서가 열리고 목적지 충돌이 무변경 | 편집이 성공해도 생성은 미지원 유지 |
+| D-G6 연동 준비 | license, 제한, typed 계약, 재현 가능한 증거 기록 | prototype 격리 유지 |
 
-Produce a Markdown experiment report with candidate versions/licenses, fixture
-manifest, commands, expected and actual results, per-gate pass/fail/blocked
-status, structural differences, native screenshots, performance observations,
-and remaining limits. Store private artifacts outside Git; commit only safe
-fixtures and reproducible checks. No experiment results exist yet.
-
-If gates pass, write an ADR selecting persistence and a bounded editor surface,
-then implement DOCX inspection/editing through the real transport and browser
-entry points. Validate a human edit followed by an AI edit, stale-revision
-rejection, persistence, and native reopening. Extract common session behavior
-only after these real XLSX and DOCX consumers demonstrate the contract.
+Markdown 실험 보고서에는 후보 버전과 license, fixture manifest, 명령, 예상 및 실제
+결과, gate별 상태, 구조 차이, native 화면, 성능, 남은 제한을 포함합니다. 비공개
+자료는 Git 밖에 둡니다. gate가 통과하면 저장 방식과 제한된 editor를 선택하는
+ADR을 작성하고 실제 전송 및 브라우저 경로로 구현합니다. 공통 session 추상화는
+실제 XLSX와 DOCX 소비자가 계약을 입증한 뒤에만 추출합니다.

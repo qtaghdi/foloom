@@ -17,14 +17,14 @@ if (title.includes('\u2014') || body.includes('\u2014')) {
 }
 
 const requiredHeadings = [
-  '## Linked issue',
-  '## Problem',
-  '## Scope',
-  '## Out of scope',
-  '## Changes',
-  '## Verification',
-  '## Impact',
-  '## Follow-up work',
+  '## 연결된 이슈',
+  '## 문제',
+  '## 범위',
+  '## 제외 범위',
+  '## 변경 사항',
+  '## 검증',
+  '## 영향',
+  '## 후속 작업',
 ];
 for (const heading of requiredHeadings) {
   if (!body.includes(heading)) {

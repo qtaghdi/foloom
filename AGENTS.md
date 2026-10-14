@@ -81,7 +81,7 @@ a concrete requirement and a short architecture note.
 - `apps/web-editor`: current TypeScript spreadsheet editor and engine adapter.
 - `testdata/xlsx`: XLSX compatibility fixtures and provenance.
 - `legacy/xlsx-python`: preserved Python MVP and regression reference.
-- `docs`: English Markdown architecture and product documents.
+- `docs`: Korean Markdown architecture, product, and operator documents.
 
 Keep format logic out of HTTP handlers and UI code. Transport packages may
 depend on format adapters. Format adapters must not depend on HTTP, MCP, or a
@@ -189,9 +189,11 @@ Comments must explain why a decision or invariant exists. Do not narrate obvious
 syntax. Public contracts, concurrency invariants, unusual XLSX behavior, and
 security boundaries deserve comments.
 
-All committed documentation, code comments, commit messages, changelog entries,
-and user-visible product copy must use English unless a product localization
-file explicitly requires another language.
+Owner-facing repository documentation, changelog entries, GitHub issue and pull
+request templates, and user-visible product copy must use Korean. Keep
+`AGENTS.md`, `.agents/skills/**`, code comments, commit messages, API names,
+commands, and machine-readable identifiers in English. Technical terms may stay
+in English when translation would reduce precision.
 
 Temporary HTML reports shown directly to the repository owner must be written in
 Korean. Store them outside the repository, such as under `/tmp`, and never
@@ -295,4 +297,5 @@ A change is complete only when:
   criteria, and records verification results and remaining manual checks.
 - Required pull request policy checks pass.
 - No temporary HTML reports or QA artifacts are staged.
-- New text contains no em dash characters.
+- New text follows the repository language boundary and contains no em dash
+  characters.
