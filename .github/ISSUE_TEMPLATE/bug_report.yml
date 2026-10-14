@@ -1,5 +1,5 @@
-name: Bug report
-description: Report reproducible incorrect behavior or a regression.
+name: 버그 신고
+description: 재현 가능한 잘못된 동작이나 회귀를 신고합니다.
 title: "fix: "
 labels:
   - bug
@@ -7,81 +7,81 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: Describe what happened and why it is incorrect.
+      label: 문제
+      description: 발생한 현상과 잘못된 이유를 설명하세요.
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
-      label: Reproduction
-      description: Provide the smallest reliable sequence that reproduces the issue.
+      label: 재현 방법
+      description: 문제를 안정적으로 재현하는 최소 단계를 적어 주세요.
       placeholder: |
-        1. Start the service with...
-        2. Open...
-        3. Edit...
+        1. 다음과 같이 서비스를 실행합니다...
+        2. 다음을 엽니다...
+        3. 다음을 편집합니다...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
+      label: 기대 동작
     validations:
       required: true
   - type: textarea
     id: impact
     attributes:
-      label: Impact
-      description: Describe data safety, compatibility, security, or workflow consequences.
+      label: 영향
+      description: 데이터 안전성, 호환성, 보안, 작업 흐름에 미치는 영향을 설명하세요.
     validations:
       required: true
   - type: textarea
     id: acceptance
     attributes:
-      label: Acceptance criteria
-      description: List the regression checks and observable behavior required to close the bug.
+      label: 완료 조건
+      description: 버그를 닫기 위해 필요한 회귀 검사와 관찰 가능한 동작을 적으세요.
       placeholder: |
-        - [ ] A regression test fails before the fix and passes after it.
-        - [ ] Existing document content remains unchanged outside the target behavior.
+        - [ ] 회귀 테스트가 수정 전에는 실패하고 수정 후에는 통과합니다.
+        - [ ] 대상 동작 외의 기존 문서 내용은 바뀌지 않습니다.
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: Environment
-      description: Include OS, Go, Node.js, browser, MCP host, and workbook details that are safe to share.
+      label: 환경
+      description: 공유해도 안전한 OS, Go, Node.js, 브라우저, MCP 호스트, 통합 문서 정보를 적으세요.
     validations:
       required: true
   - type: dropdown
     id: area
     attributes:
-      label: Area
+      label: 영역
       options:
-        - Workbook and XLSX
-        - Browser UI
-        - MCP tools
-        - Realtime events
-        - Authentication and security
-        - Build and deployment
-        - Documentation
+        - 통합 문서 및 XLSX
+        - 브라우저 UI
+        - MCP 도구
+        - 실시간 이벤트
+        - 인증 및 보안
+        - 빌드 및 배포
+        - 문서
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Relevant logs or screenshots
-      description: Remove workbook contents, credentials, tokens, and personal data.
+      label: 관련 로그 또는 화면 캡처
+      description: 통합 문서 내용, 인증 정보, 토큰, 개인정보를 제거하세요.
   - type: textarea
     id: out_of_scope
     attributes:
-      label: Out of scope
-      description: Identify related work that should be tracked separately.
+      label: 제외 범위
+      description: 별도로 추적해야 하는 관련 작업을 적으세요.
     validations:
       required: true
   - type: checkboxes
     id: safety
     attributes:
-      label: Data safety
+      label: 데이터 안전
       options:
-        - label: I removed secrets, bearer tokens, and private workbook data.
+        - label: 비밀 정보, bearer token, 비공개 통합 문서 데이터를 제거했습니다.
           required: true

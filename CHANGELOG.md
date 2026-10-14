@@ -1,13 +1,13 @@
-# Changelog
+# 변경 이력
 
-All notable changes to this project will be documented in this file.
+이 프로젝트의 중요한 변경 사항을 이 파일에 기록합니다.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project intends to follow Semantic Versioning when releases begin.
+형식은 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)를 따르며,
+릴리스를 시작하면 Semantic Versioning을 적용할 예정입니다.
 
-## Unreleased
+## 미출시
 
-### Added
+### 추가
 
 - Added unsigned alpha archive generation for macOS, Linux, and Windows on
   AMD64 and ARM64, with SHA-256 manifests, archive content checks, and a
@@ -151,7 +151,11 @@ and this project intends to follow Semantic Versioning when releases begin.
   transforms persist to XLSX and remote object edits trigger an authoritative
   reload.
 
-### Changed
+### 변경
+
+- 저장소 소유자가 읽는 문서, GitHub 이슈 및 Pull Request 양식, 제품 문구의 기본
+  언어를 한국어로 변경했습니다. AI 전용 지침, 코드 주석, 커밋 메시지, 명령어와
+  API 식별자는 영어를 유지합니다.
 
 - Restricted the project to a private local alpha until native Excel evidence,
   repeated invited-tester use, distribution terms, and an explicit owner
@@ -192,7 +196,7 @@ and this project intends to follow Semantic Versioning when releases begin.
 - Updated compatibility notices to describe supported image and chart
   write-back controls and the remaining advanced chart editing limits.
 
-### Fixed
+### 수정
 
 - Pinned and installed the legacy Python regression dependencies in CI so the
   complete verification suite works on a clean runner.
@@ -205,7 +209,7 @@ and this project intends to follow Semantic Versioning when releases begin.
 - Kept large or unsupported sheet objects from blocking workbook startup by
   omitting them with a visible compatibility notice.
 
-### Security
+### 보안
 
 - Compared credentials through fixed-length hashes and added framing, resource,
   capability, base URI, object, and form restrictions to browser responses.

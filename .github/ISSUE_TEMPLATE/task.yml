@@ -1,69 +1,69 @@
-name: Engineering task
-description: Track documentation, maintenance, security, research, or release work.
+name: 엔지니어링 작업
+description: 문서, 유지보수, 보안, 연구, 릴리스 작업을 추적합니다.
 title: "chore: "
 labels: []
 body:
   - type: dropdown
     id: kind
     attributes:
-      label: Task type
+      label: 작업 유형
       options:
-        - Documentation
-        - Maintenance
-        - Security
-        - Compatibility evidence
-        - Research or prototype
-        - CI and release
+        - 문서
+        - 유지보수
+        - 보안
+        - 호환성 증거
+        - 연구 또는 프로토타입
+        - CI 및 릴리스
     validations:
       required: true
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: Explain why the task is needed and what is unclear or incomplete today.
+      label: 문제
+      description: 작업이 필요한 이유와 현재 불명확하거나 불완전한 점을 설명하세요.
     validations:
       required: true
   - type: textarea
     id: outcome
     attributes:
-      label: Desired outcome
-      description: Describe the durable repository or operational result.
+      label: 원하는 결과
+      description: 저장소 또는 운영에 남을 결과를 설명하세요.
     validations:
       required: true
   - type: textarea
     id: acceptance
     attributes:
-      label: Acceptance criteria
+      label: 완료 조건
       placeholder: |
-        - [ ] Repository guidance is updated.
-        - [ ] Required automated checks pass.
+        - [ ] 저장소 안내가 갱신되었습니다.
+        - [ ] 필수 자동 검사가 통과합니다.
     validations:
       required: true
   - type: textarea
     id: scope
     attributes:
-      label: Scope
-      description: Identify the documents, automation, or system boundaries included.
+      label: 범위
+      description: 포함되는 문서, 자동화, 시스템 경계를 적으세요.
     validations:
       required: true
   - type: textarea
     id: out_of_scope
     attributes:
-      label: Out of scope
-      description: Identify related work that must be tracked separately.
+      label: 제외 범위
+      description: 별도로 추적해야 하는 관련 작업을 적으세요.
     validations:
       required: true
   - type: textarea
     id: verification
     attributes:
-      label: Verification
-      description: List the commands, review evidence, or manual checks required.
+      label: 검증
+      description: 필요한 명령, 검토 증거, 수동 확인을 적으세요.
     validations:
       required: true
   - type: textarea
     id: risks
     attributes:
-      label: Risks and constraints
-      description: Note compatibility, security, cost, host, or workflow constraints.
+      label: 위험 및 제약
+      description: 호환성, 보안, 비용, 호스트, 작업 흐름 제약을 적으세요.
     validations:
       required: true

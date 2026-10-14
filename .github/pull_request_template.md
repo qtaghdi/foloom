@@ -1,52 +1,52 @@
-## Linked issue
+## 연결된 이슈
 
 Closes #
 
-## Problem
+## 문제
 
-<!-- What user or system problem does this change solve? -->
+<!-- 이 변경이 해결하는 사용자 또는 시스템 문제는 무엇인가요? -->
 
-## Scope
+## 범위
 
-<!-- What is included in this pull request? -->
+<!-- 이 Pull Request에 포함되는 것은 무엇인가요? -->
 
-## Out of scope
+## 제외 범위
 
-<!-- What related work is intentionally deferred or excluded? -->
+<!-- 의도적으로 미루거나 제외한 관련 작업은 무엇인가요? -->
 
-## Changes
+## 변경 사항
 
-<!-- Summarize the implementation and important design choices. -->
+<!-- 구현 내용과 중요한 설계 결정을 요약하세요. -->
 
-## Verification
+## 검증
 
-<!-- List each command or manual check and its observed result. -->
+<!-- 실행한 명령 또는 수동 확인과 결과를 기록하세요. -->
 
 ```text
 make verify
 ```
 
-## Impact
+## 영향
 
-- XLSX compatibility:
-- Revision or conflict behavior:
-- MCP contract:
-- Security and privacy:
-- Deployment or migration:
+- XLSX 호환성:
+- 리비전 또는 충돌 동작:
+- MCP 계약:
+- 보안 및 개인정보:
+- 배포 또는 마이그레이션:
 
-## Follow-up work
+## 후속 작업
 
-<!-- Link follow-up issues or write None. -->
+<!-- 후속 이슈를 연결하거나 없음을 기록하세요. -->
 
-## Checklist
+## 체크리스트
 
-- [ ] The pull request title follows Conventional Commits.
-- [ ] The linked issue describes the problem, scope, and acceptance criteria.
-- [ ] This pull request includes `Closes #<issue-number>`.
-- [ ] The implementation satisfies or explicitly updates the issue acceptance criteria.
-- [ ] Tests cover the changed behavior and relevant failure paths.
-- [ ] `CHANGELOG.md` contains material changes.
-- [ ] Architecture documentation is updated when boundaries changed.
-- [ ] Frontend source and generated embedded assets match.
-- [ ] No `@univerjs-pro/*` dependency was added.
-- [ ] New committed text is English and contains no em dash.
+- [ ] Pull Request 제목이 Conventional Commits를 따릅니다.
+- [ ] 연결된 이슈가 문제, 범위, 완료 조건을 설명합니다.
+- [ ] `Closes #<issue-number>`가 포함되어 있습니다.
+- [ ] 구현이 이슈의 완료 조건을 충족하거나 명시적으로 갱신합니다.
+- [ ] 변경 동작과 관련 실패 경로를 테스트했습니다.
+- [ ] 중요한 변경을 `CHANGELOG.md`에 기록했습니다.
+- [ ] 경계가 바뀌었다면 아키텍처 문서를 갱신했습니다.
+- [ ] 프론트엔드 소스와 생성된 내장 assets가 일치합니다.
+- [ ] `@univerjs-pro/*` 의존성을 추가하지 않았습니다.
+- [ ] 새 문서가 언어 정책을 따르며 em dash를 포함하지 않습니다.

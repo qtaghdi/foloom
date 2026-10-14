@@ -1,116 +1,113 @@
 # document-workspace
 
-An AI-collaborative workspace for office documents in MCP clients.
+MCP 클라이언트에서 사람과 AI가 함께 사무 문서를 편집하는 작업 공간입니다.
 
-The project provides a shared editing session where a person and an AI agent
-can inspect and modify the same document with revisions, visible presence,
-conflict detection, undo, and safe persistence. XLSX is the first production
-format adapter. DOCX, PPTX, HWPX, and PDF are planned as separate adapters
-because each format has different editing and fidelity requirements.
+사람과 AI 에이전트가 같은 문서를 확인하고 수정할 수 있는 공유 편집 세션을
+제공합니다. 리비전, 현재 위치 표시, 충돌 감지, 실행 취소, 안전한 저장을
+지원합니다. XLSX가 첫 프로덕션 형식 어댑터이며, 편집 방식과 원본 보존 조건이
+서로 다른 DOCX, PPTX, HWPX, PDF는 별도 어댑터로 개발할 예정입니다.
 
-Status: private local XLSX alpha. Automated pre-Excel safety, compatibility,
-packaging, and performance gates pass. Source and binaries are not currently
-distributed publicly. Native Microsoft Excel evidence, repeated external use,
-distribution terms, and an explicit owner decision remain public-release gates.
+상태: 비공개 로컬 XLSX 알파. Excel 실행 전 자동 안전성, 호환성, 패키징, 성능
+검사를 통과합니다. 현재 소스와 바이너리를 공개 배포하지 않습니다. Microsoft
+Excel 실사용 검증, 반복적인 외부 사용, 배포 조건, 소유자의 명시적 결정이 공개
+릴리스 전 남은 조건입니다.
 
-## Current Support
+## 현재 지원 범위
 
-The XLSX adapter currently provides:
+현재 XLSX 어댑터는 다음을 제공합니다.
 
-- a Univer-powered browser spreadsheet;
-- Streamable HTTP and stdio MCP transports;
-- an embedded MCP App and authenticated loopback fallback;
-- workbook metadata, range reads, formulas, styles, merges, and paste;
-- row and column operations;
-- human and AI presence with ordered events;
-- revision conflicts and durable server-authoritative undo and redo;
-- image and chart preview movement, resize, deletion, and XLSX write-back;
-- bounded loading for large sheets;
-- compatibility notices and atomic saves.
+- Univer 기반 브라우저 스프레드시트
+- Streamable HTTP와 stdio MCP 전송
+- 내장 MCP App과 인증된 loopback 대체 화면
+- 통합 문서 메타데이터, 범위 읽기, 수식, 스타일, 셀 병합, 붙여넣기
+- 행과 열 작업
+- 순서가 보장되는 사람 및 AI 현재 위치 이벤트
+- 리비전 충돌과 서버 기준의 영속적인 실행 취소 및 다시 실행
+- 이미지와 차트 미리보기 이동, 크기 조절, 삭제, XLSX 반영
+- 대용량 시트의 제한 기반 로딩
+- 호환성 안내와 원자적 저장
 
-Univer is used through open-source packages only. The build rejects
-`@univerjs-pro/*` dependencies.
+Univer는 오픈 소스 패키지만 사용하며, 빌드는 `@univerjs-pro/*` 의존성을
+거부합니다.
 
-## Repository Layout
+## 저장소 구조
 
 ```text
 apps/
-  web-editor/                 TypeScript browser editor
+  web-editor/                 TypeScript 브라우저 편집기
 cmd/
-  document-workspace/         Go executable
+  document-workspace/         Go 실행 파일
 internal/
   formats/
-    xlsx/                     XLSX session, operations, and persistence
+    xlsx/                     XLSX 세션, 작업, 저장
   transport/
-    httpapi/                  HTTP, SSE, MCP, and embedded UI adapters
+    httpapi/                  HTTP, SSE, MCP, 내장 UI 어댑터
 testdata/
-  xlsx/compatibility/         XLSX corpus and provenance
+  xlsx/compatibility/         XLSX 검증 자료와 출처
 legacy/
-  xlsx-python/                Preserved Python proof of concept
-docs/                         Architecture, plans, and decisions
+  xlsx-python/                보존된 Python 개념 증명
+docs/                         아키텍처, 계획, 결정
 ```
 
-Format logic belongs in `internal/formats/<format>`. Transport and UI packages
-must not own format persistence rules. Shared document abstractions will be
-introduced only when a second real adapter demonstrates the common contract.
+형식 로직은 `internal/formats/<format>`에 둡니다. 전송 계층과 UI 패키지가 형식
+저장 규칙을 소유하면 안 됩니다. 공통 문서 추상화는 두 번째 실제 어댑터가 공통
+계약을 입증한 뒤에만 도입합니다.
 
-## Run the Private XLSX Alpha
+## 비공개 XLSX 알파 실행
 
-Maintainers can build private alpha archives for macOS, Linux, and Windows on
-Intel and ARM64. Each artifact contains the executable, user documentation, and
-a SHA-256 checksum manifest. The repository does not publish GitHub Releases or
-offer public downloads during the private-alpha phase.
+관리자는 macOS, Linux, Windows용 비공개 알파 압축 파일을 Intel 및 ARM64로
+빌드할 수 있습니다. 각 결과물에는 실행 파일, 사용자 문서, SHA-256 체크섬
+목록이 포함됩니다. 비공개 알파 단계에는 GitHub Release나 공개 다운로드를
+제공하지 않습니다.
 
-After extracting an artifact, validate a disposable workbook without starting
-a server:
+압축을 푼 뒤 서버를 시작하지 않고 복사본 통합 문서를 검증합니다.
 
 ```bash
 ./document-workspace -check /absolute/path/to/workbook.xlsx
 ```
 
-Then start the local browser editor:
+그다음 로컬 브라우저 편집기를 시작합니다.
 
 ```bash
 ./document-workspace /absolute/path/to/workbook.xlsx
 ```
 
-See the [private XLSX alpha guide](docs/getting-started.md) for artifact
-selection, checksum verification, unsigned application warnings, and local
-Claude Desktop and Codex configuration.
+결과물 선택, 체크섬 검증, 서명되지 않은 앱 경고, 로컬 Claude Desktop 및 Codex
+설정은 [비공개 XLSX 알파 안내](docs/getting-started.md)를 참고하세요.
 
-## Build from Source
+## 소스에서 빌드
 
 ```bash
 make web-install
 make dev FILE=/absolute/path/to/workbook.xlsx
 ```
 
-The process prints separate browser and MCP credentials through an intentional
-startup credential-delivery channel. Treat that terminal output as sensitive
-and open the browser URL exactly as printed. MCP clients connect to
-`http://127.0.0.1:8765/mcp` with the separately printed bearer token.
-See the [local security model](docs/security.md) for the tested boundary and
-hosted-mode exclusions.
+프로세스는 시작 시 브라우저와 MCP 인증 정보를 각각 출력합니다. 해당 터미널
+출력은 민감 정보로 취급하고 표시된 브라우저 URL을 그대로 여세요. MCP
+클라이언트는 별도로 출력된 bearer token으로 `http://127.0.0.1:8765/mcp`에
+연결합니다. 검증된 경계와 호스팅 모드 제외 사항은
+[로컬 보안 모델](docs/security.md)을 참고하세요.
 
-For a local desktop host using stdio:
+stdio를 사용하는 로컬 데스크톱 호스트:
 
 ```bash
 make build
 ./bin/document-workspace -transport stdio -file /absolute/path/to/workbook.xlsx
 ```
 
-`open_workbook` returns a single-use, two-minute `browserUrl` when the host does
-not render the MCP App. Disable that fallback with `-stdio-browser=false`.
+호스트가 MCP App을 표시하지 못하면 `open_workbook`은 2분 동안 한 번만 사용할
+수 있는 `browserUrl`을 반환합니다. `-stdio-browser=false`로 이 대체 동작을
+끌 수 있습니다.
 
-For a release-style build from a clean checkout, run `make package-verify`.
-This installs the frozen pnpm lockfile, builds and validates both UI bundles,
-compiles the executable, and runs its absolute-path smoke test. See
-[packaging verification](docs/packaging.md) for the artifact boundary.
+깨끗한 checkout에서 릴리스 방식으로 빌드하려면 `make package-verify`를
+실행합니다. 고정된 pnpm lockfile을 설치하고 두 UI 번들을 빌드 및 검증한 뒤,
+실행 파일을 컴파일하고 절대 경로 smoke test를 수행합니다. 결과물 경계는
+[패키징 검증](docs/packaging.md)을 참고하세요.
 
-Maintainers can run `make release-package-test` for the current platform or
-`make release-verify VERSION=0.1.0-alpha.local` for the complete archive matrix.
+현재 플랫폼은 `make release-package-test`, 전체 압축 파일 조합은
+`make release-verify VERSION=0.1.0-alpha.local`로 검증할 수 있습니다.
 
-Current workbook tools remain stable during the platform transition:
+플랫폼 전환 중에도 다음 통합 문서 도구 계약은 유지됩니다.
 
 - `open_workbook`
 - `get_workbook`
@@ -119,10 +116,9 @@ Current workbook tools remain stable during the platform transition:
 - `restore_history`
 - `update_presence`
 
-The embedded app also uses app-only event, object, user-operation, history, and
-presence tools.
+내장 앱은 앱 전용 이벤트, 객체, 사용자 작업, 이력, 현재 위치 도구도 사용합니다.
 
-## Development
+## 개발
 
 ```bash
 make web-install
@@ -131,28 +127,28 @@ make verify
 make build
 ```
 
-JavaScript dependencies use pnpm 11.9 with a shared exact-version Univer
-catalog. The frontend uses plain TypeScript, Vite, Tailwind CSS, and Univer.
-Production output is embedded from `internal/transport/httpapi/static`.
-Generated assets and the self-contained `app.html` are not committed.
+JavaScript 의존성은 pnpm 11.9와 정확한 버전을 공유하는 Univer catalog를
+사용합니다. 프론트엔드는 TypeScript, Vite, Tailwind CSS, Univer로 구성됩니다.
+프로덕션 출력은 `internal/transport/httpapi/static`에서 내장됩니다. 생성된
+assets와 독립 실행형 `app.html`은 커밋하지 않습니다.
 
-The XLSX history store retains its existing `.xlsx-viewer-history` on-disk
-namespace so upgrades keep local undo history. This compatibility name is an
-implementation detail and does not define the product name.
+업그레이드 뒤에도 로컬 실행 취소 이력을 유지하기 위해 XLSX 이력 저장소는 기존
+`.xlsx-viewer-history` 디스크 namespace를 사용합니다. 이는 호환성을 위한 구현
+세부 사항이며 제품 이름이 아닙니다.
 
-## Documentation
+## 문서
 
-- [Shared product specification](docs/product-spec.md)
-- [Private XLSX alpha getting started](docs/getting-started.md)
-- [Format support matrix](docs/format-support.md)
-- [XLSX stable release checklist](docs/xlsx-release-checklist.md)
-- [XLSX recovery operations](docs/xlsx-recovery.md)
-- [XLSX formula policy](docs/xlsx-formula-policy.md)
-- [DOCX preservation prototype](docs/docx-preservation-prototype.md)
-- [Product plan](docs/product-plan.md)
-- [Architecture](docs/architecture.md)
-- [Host compatibility](docs/host-compatibility.md)
-- [Spreadsheet engine decision](docs/adr/0001-spreadsheet-engine.md)
-- [Contributing](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
-- [Engineering guide](AGENTS.md)
+- [공통 제품 명세](docs/product-spec.md)
+- [비공개 XLSX 알파 시작 안내](docs/getting-started.md)
+- [형식별 지원표](docs/format-support.md)
+- [XLSX 안정 릴리스 체크리스트](docs/xlsx-release-checklist.md)
+- [XLSX 복구 절차](docs/xlsx-recovery.md)
+- [XLSX 수식 정책](docs/xlsx-formula-policy.md)
+- [DOCX 원본 보존 프로토타입](docs/docx-preservation-prototype.md)
+- [제품 계획](docs/product-plan.md)
+- [아키텍처](docs/architecture.md)
+- [호스트 호환성](docs/host-compatibility.md)
+- [스프레드시트 엔진 결정](docs/adr/0001-spreadsheet-engine.md)
+- [기여 가이드](CONTRIBUTING.md)
+- [변경 이력](CHANGELOG.md)
+- [AI 엔지니어링 가이드](AGENTS.md)

@@ -1,49 +1,47 @@
-# XLSX UI Verification
+# XLSX UI 검증
 
-Date: 2026-10-12
-Scope: X-10 browser and MCP App shell, interaction boundaries, and status UI
+날짜: 2026-10-12
+범위: X-10 브라우저 및 MCP App shell, 상호작용 경계, 상태 UI
 
-## Automated Evidence
+## 자동 검증 증거
 
-The frontend tests verify that keyboard-confirmed cell edits become persisted
-cell operations, clipboard paste becomes one atomic rectangular range
-operation, and spreadsheet undo delegates to server-owned history. View tests
-cover enabled and disabled history controls plus pending, saved, failed,
-conflict, and recovery states.
+프론트엔드 테스트는 키보드로 확정한 셀 편집이 저장되는 셀 작업으로 바뀌고,
+클립보드 붙여넣기가 하나의 원자적 사각 범위 작업이 되며, 실행 취소가 서버 소유
+이력에 위임되는지 검증합니다. 화면 테스트는 이력 제어의 활성 및 비활성 상태와
+대기, 저장, 실패, 충돌, 복구 상태를 다룹니다.
 
-Both HTML entry points are checked for a skip link, keyboard-focusable workbook
-surface, live status regions, an assertive error region, toolbar semantics,
-visible focus styles, 44 px history controls, and zoom-safe viewport metadata.
-The stylesheet contract covers safe areas, small screens, and reduced motion.
+두 HTML 진입점에서 건너뛰기 링크, 키보드 focus가 가능한 통합 문서 영역, live
+상태 영역, assertive 오류 영역, toolbar 의미 구조, 보이는 focus 스타일, 44px 이력
+버튼, 확대에 안전한 viewport metadata를 검사합니다. 스타일 계약은 safe area,
+작은 화면, reduced motion을 포함합니다.
 
-## Viewport Review
+## 화면 크기 검토
 
-The production browser bundle was served by the compiled Go application with
-the LibreOffice compatibility fixture. Local headless Chrome 154.0.8037.98 was
-reviewed at these viewport sizes:
+컴파일한 Go 애플리케이션에서 LibreOffice 호환성 fixture와 프로덕션 브라우저
+번들을 제공했습니다. 로컬 headless Chrome 154.0.8037.98에서 다음 화면 크기를
+검토했습니다.
 
-| Viewport | Mode | Observed result |
+| 화면 크기 | 모드 | 확인 결과 |
 | --- | --- | --- |
-| 1440 x 900 | Desktop | Workbook identity, revision status, and history controls remained visible; status panels stayed within the viewport. |
-| 1024 x 768 | Small laptop | The toolbar stayed on one row with no hidden critical controls or horizontal page overflow. |
-| 390 x 844 | Mobile fallback | The toolbar wrapped into two rows; workbook identity and both history controls remained visible and touch-sized. |
-| 390 x 844 | Reduced motion | The same mobile layout loaded with forced reduced-motion preference and no required information depended on animation. |
+| 1440 x 900 | 데스크톱 | 통합 문서 식별 정보, 리비전 상태, 이력 버튼이 보였고 상태 panel이 화면 안에 유지되었습니다. |
+| 1024 x 768 | 작은 노트북 | toolbar가 한 줄을 유지했고 중요한 버튼이 숨거나 페이지가 가로로 넘치지 않았습니다. |
+| 390 x 844 | 모바일 대체 화면 | toolbar가 두 줄로 바뀌었고 통합 문서 정보와 이력 버튼은 보이고 터치 가능한 크기를 유지했습니다. |
+| 390 x 844 | Reduced motion | 같은 모바일 layout에서 reduced-motion을 강제해도 필수 정보가 animation에 의존하지 않았습니다. |
 
-The macOS headless renderer did not paint the complete Univer canvas, so this
-record certifies the application shell and responsive fallback rather than
-pixel fidelity of grid cells. Grid editing, paste, and history integration are
-covered at the application event boundary. A release candidate should still
-repeat native interactive checks in a visible browser before public release.
+macOS headless renderer가 Univer canvas 전체를 그리지 못했으므로 이 기록은 grid
+셀의 pixel 정확도가 아니라 애플리케이션 shell과 반응형 대체 화면을 검증합니다.
+grid 편집, 붙여넣기, 이력 연동은 애플리케이션 이벤트 경계에서 다룹니다. 공개
+릴리스 전에는 실제 보이는 브라우저에서 대화형 검사를 반복해야 합니다.
 
-## State Behavior
+## 상태 동작
 
-- Pending saves use an ellipsis, a live status region, a visible activity dot,
-  and `aria-busy` on the workbook surface.
-- Successful saves clear `aria-busy` and expose the new revision.
-- Ordinary failures focus an assertive alert with an actionable heading.
-- Conflict-like failures are labeled `Conflict detected`, pause editing, disable
-  history controls, and offer an explicit reload of saved state.
-- Recovery text preserves unsaved-draft guidance and never promises that an
-  uncertain write succeeded.
-- Navigation warns while writes are pending or recovery is required; canceled
-  navigation keeps the controller and live subscription active.
+- 저장 대기 중에는 말줄임표, live 상태 영역, 보이는 활동 점, 통합 문서 영역의
+  `aria-busy`를 사용합니다.
+- 저장이 성공하면 `aria-busy`를 해제하고 새 리비전을 표시합니다.
+- 일반 실패는 해결 가능한 제목이 있는 assertive alert에 focus합니다.
+- 충돌 계열 실패는 `충돌 감지`로 표시하고 편집을 멈추며 이력 버튼을 비활성화한
+  뒤 저장된 상태를 명시적으로 다시 불러오는 동작을 제공합니다.
+- 복구 문구는 저장되지 않은 초안 안내를 유지하며 불확실한 쓰기가 성공했다고
+  단정하지 않습니다.
+- 쓰기가 대기 중이거나 복구가 필요하면 화면 이동 전에 경고합니다. 이동을 취소하면
+  controller와 실시간 구독을 유지합니다.
