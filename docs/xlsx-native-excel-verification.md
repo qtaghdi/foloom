@@ -1,122 +1,101 @@
-# Native Microsoft Excel Verification
+# 실제 Microsoft Excel 검증
 
-## Purpose and Release Boundary
+## 목적과 릴리스 경계
 
-Use this procedure when a supported desktop version of Microsoft Excel is
-available. Until the resulting evidence is recorded, X-07 native fidelity and
-X-08 formula expectations remain blocked. Excelize or LibreOffice reopening is
-useful automated evidence, but it is not a substitute for Microsoft Excel.
+지원되는 desktop Microsoft Excel을 사용할 수 있을 때 이 절차를 수행합니다. 증거가
+기록되기 전에는 X-07 native fidelity와 X-08 수식 기대값이 blocked입니다.
+Excelize나 LibreOffice reopen은 유용하지만 Microsoft Excel을 대신하지 않습니다.
 
-Always work on disposable copies. Never run document-workspace and Excel as
-simultaneous writers to the same file. The service's source hash check cannot
-eliminate the final check-to-rename race with a non-cooperating application.
+항상 복사본을 사용하고 document-workspace와 Excel을 같은 파일의 동시 writer로
+실행하지 않습니다. source hash 검사만으로 비협조 앱과의 마지막 race를 제거할 수
+없습니다.
 
-## Before Starting
+## 시작 전 기록
 
-Record these facts in a copy of the
-[native Excel evidence template](release-evidence/xlsx-native-excel-template.md):
+[Excel 증거 양식](release-evidence/xlsx-native-excel-template.md)에 다음을 기록합니다.
 
-- candidate commit and whether the working tree is clean;
-- operating system version and architecture;
-- Microsoft Excel product version, build, license channel, and architecture;
-- locale, workbook calculation mode, and whether external links are allowed;
-- source fixture path, provenance, redistribution permission, size, and SHA-256;
-- document-workspace binary hash and transport or UI mode used for edits.
+- candidate commit과 clean working tree 여부
+- OS 버전 및 architecture
+- Excel 제품 version, build, license channel, architecture
+- locale, 계산 mode, 외부 link 허용 여부
+- fixture 경로, 출처, 재배포 권리, 크기, SHA-256
+- document-workspace binary hash와 편집 transport 또는 UI mode
 
-Use a non-sensitive fixture whose origin and redistribution rights are known.
-Do not commit a customer workbook, personal workbook, credential, external-link
-token, or workbook containing identifying metadata.
+출처와 권리가 알려진 비민감 fixture만 사용합니다. 고객 문서, 개인정보, 인증 정보,
+외부 link token, 식별 metadata를 commit하지 않습니다.
 
-## Create a Microsoft Excel Fixture
+## Microsoft Excel fixture 만들기
 
-1. Run `make verify` and `make compatibility-test` on a clean candidate.
-2. Copy `testdata/xlsx/compatibility/feature-rich.xlsx` to a temporary directory.
-   Do not open or overwrite the committed source fixture.
-3. Record the source file size and SHA-256 before opening it.
-4. Open the copy in Microsoft Excel. If Excel asks to update external links,
-   choose **Do Not Update** by default and record the prompt and choice. Do not
-   authorize an external connection merely to complete this procedure.
-5. Review the compatibility sheet before saving. Record visible formulas,
-   styles, merged cells, validation, conditional formatting, chart, image,
-   hyperlink, defined name, comment, and any Excel repair or compatibility
-   warning.
-6. Use **Save As** and select the normal `.xlsx` format. Do not enable macros,
-   encryption, or legacy compatibility mode. Use a new filename.
-7. Fully close Excel, reopen the saved file in Excel, and repeat the inventory.
-   Record every normalization, removal, repair prompt, or visible difference.
-8. Record the Excel-produced file size and SHA-256. A changed package hash is
-   expected after Save As and is not by itself a failure.
-9. If the fixture is non-sensitive and redistributable, add it under
-   `testdata/xlsx/compatibility` with a name such as
-   `excel-macos-<major-version>.xlsx`. Add its exact provenance, Excel build,
-   operating system, date, source hash, output hash, and known differences to
-   the corpus README.
-10. Add the filename to the fixture table in `compatibility_test.go`. Do not
-    weaken inventory assertions to accept an unexplained loss.
+1. clean candidate에서 `make verify`와 `make compatibility-test`를 실행합니다.
+2. `feature-rich.xlsx`를 임시 디렉터리에 복사합니다. committed fixture는 열거나
+   덮어쓰지 않습니다.
+3. 열기 전 file size와 SHA-256을 기록합니다.
+4. Excel에서 외부 link update를 물으면 기본적으로 **업데이트하지 않음**을
+   선택하고 prompt와 선택을 기록합니다.
+5. 수식, style, merge, validation, conditional formatting, chart, image, hyperlink,
+   defined name, comment와 repair 또는 compatibility warning을 기록합니다.
+6. normal `.xlsx`로 **다른 이름으로 저장**하고 macro, 암호화, legacy mode를
+   사용하지 않습니다.
+7. Excel을 완전히 닫고 저장 파일을 다시 열어 inventory와 차이를 기록합니다.
+8. Excel 출력의 size와 SHA-256을 기록합니다. package hash 변경 자체는 실패가
+   아닙니다.
+9. 재배포 가능하면 `excel-macos-<major-version>.xlsx` 같은 이름으로 corpus에
+   추가하고 정확한 출처, build, OS, 날짜, source 및 output hash, 차이를 기록합니다.
+10. `compatibility_test.go` fixture 표에 추가하며 설명되지 않은 손실을 허용하도록
+    assertion을 약화하지 않습니다.
 
-If Excel removes a source feature during the initial Save As, keep both hashes
-and the observed difference. Decide whether the Excel-produced fixture should
-represent the retained subset, just as the LibreOffice fixture does. Do not
-describe it as equivalent to the generated source.
+초기 Save As에서 Excel이 기능을 제거하면 두 hash와 차이를 모두 남기고 retained
+subset fixture로 쓸지 결정합니다. 생성 원본과 동등하다고 표현하지 않습니다.
 
-## Native Edit and Reopen Matrix
+## Native 편집 및 reopen 표
 
-Create a fresh disposable copy for each row. Inventory the workbook before the
-edit, perform only the named operation through the real product entry point,
-stop document-workspace, then reopen the file in Excel.
+각 행마다 새 복사본을 사용하고 명시한 작업 하나만 실제 제품 진입점으로 수행한 뒤
+프로세스를 종료하고 Excel에서 다시 엽니다.
 
-| Case | Product operation | Native Excel checks |
+| 사례 | 제품 작업 | Excel 확인 |
 | --- | --- | --- |
-| Cell | Set one unrelated value | Value persisted once; surrounding formula and style unchanged |
-| Formula | Set one formula | Expression preserved; calculation behavior recorded |
-| Dependency | Change a formula input | Full recalculation request observed; dependent result recorded |
-| Paste | Paste a rectangular range | Shape, values, formulas, and atomicity preserved |
-| Format | Change a basic supported format | Requested style visible; unrelated custom format unchanged |
-| Merge | Merge and unmerge a disposable range | Range state matches; unrelated merges unchanged |
-| Rows | Insert and delete rows | References, validation, rules, drawings, and surrounding data inspected |
-| Columns | Insert and delete columns | References, validation, rules, drawings, and surrounding data inspected |
-| Image | Move, resize, then delete an existing image | Placement and size persist; unrelated media remains |
-| Chart | Move, resize, and retitle an existing chart | Title and placement persist; type, series, axes, legend, and style remain |
-| History | Commit, undo, and redo | Final revision reopens to the expected state once |
-| Conflict | Modify the source externally between session operations | Product refuses the stale write; Excel's external edit remains |
+| 셀 | 관련 없는 값 하나 변경 | 한 번만 저장, 주변 수식과 style 유지 |
+| 수식 | 수식 하나 변경 | 표현식 보존, 계산 동작 기록 |
+| 의존성 | 수식 입력 변경 | 전체 재계산 요청과 결과 기록 |
+| 붙여넣기 | 사각 범위 | shape, 값, 수식, 원자성 유지 |
+| 서식 | 지원 기본 서식 변경 | 요청 style 표시, 관련 없는 custom format 유지 |
+| 병합 | 임시 범위 병합 및 해제 | 범위 상태와 관련 없는 merge 유지 |
+| 행 | 삽입 및 삭제 | reference, validation, rule, drawing, 주변 data 검사 |
+| 열 | 삽입 및 삭제 | reference, validation, rule, drawing, 주변 data 검사 |
+| 이미지 | 기존 image 이동, 크기, 삭제 | 위치와 크기 저장, 관련 없는 media 유지 |
+| 차트 | 기존 chart 이동, 크기, 제목 변경 | title과 위치 저장, type, series, axis, legend, style 유지 |
+| 이력 | commit, undo, redo | 최종 상태가 한 번 정확히 reopen |
+| 충돌 | session 사이 외부 수정 | stale write 거부, Excel 외부 변경 유지 |
 
-For every case record the source hash, saved hash, base and final revisions,
-exact operation, expected result, observed result, Excel warnings, screenshots
-or logs where appropriate, and pass, fail, or blocked status. A package parser
-reopen cannot fill the native Excel result column.
+각 사례에 source 및 saved hash, 기준과 최종 revision, 정확한 작업, 예상 및 관찰
+결과, Excel warning, 필요한 화면과 log, pass/fail/blocked를 기록합니다.
 
-## Formula Verification
+## 수식 검증
 
-Use separate disposable copies for each formula case:
+각 항목을 별도 복사본으로 검사합니다.
 
-1. An existing supported formula whose expression is not edited.
-2. A changed formula expression.
-3. A changed dependency cell.
-4. A function unsupported by the browser preview but supported by Excel.
-5. An external workbook reference with the external source unavailable.
-6. A formula with a deliberately stale cached value.
+1. 편집하지 않은 기존 지원 수식
+2. 변경한 수식 표현식
+3. 변경한 의존 셀
+4. browser preview 미지원이지만 Excel 지원 함수
+5. 외부 원본이 없는 외부 workbook reference
+6. 의도적으로 오래된 cached value를 가진 수식
 
-Before editing, record the formula text, cached source status returned by the
-product, browser preview if present, and Excel's displayed value. After editing,
-stop the service and open the saved workbook in Excel. Record whether Excel
-recalculated automatically, showed a security or link prompt, retained the
-formula text, and produced a value. If automatic recalculation is disabled,
-record that state before using Excel's **Calculate Now** or full recalculation
-command. Do not report the browser preview as an Excel result.
+편집 전 수식 text, 제품의 cache 상태, browser preview, Excel 표시값을 기록합니다.
+편집 후 서비스를 중지하고 Excel에서 열어 자동 재계산, 보안 또는 link prompt,
+수식 text, 결과를 기록합니다. 자동 계산이 꺼져 있으면 **지금 계산** 또는 전체
+재계산 전에 그 상태를 기록합니다. browser preview를 Excel 결과로 쓰지 않습니다.
 
-An unavailable external source is an expected limitation when Excel cannot
-resolve it. The pass condition is preservation of the reference, an honest
-warning, and no fabricated authoritative value.
+외부 원본을 해결하지 못하는 것은 예상 한계입니다. reference 보존, 정직한 경고,
+가짜 기준값을 만들지 않는 것이 통과 조건입니다.
 
-## Completion Rules
+## 완료 규칙
 
-X-07 passes only when all supported edit families preserve their intended
-changes and no unrelated inventoried feature is lost without an accepted,
-documented restriction. X-08 passes only when formula expressions, dependency
-changes, unsupported functions, external references, stale caches, and native
-recalculation behavior have observed Excel results.
+X-07은 지원 편집의 의도한 변경이 모두 보존되고, inventory한 관련 없는 기능이
+승인 및 기록된 제한 없이 사라지지 않을 때 통과합니다. X-08은 수식 표현식,
+의존성, 미지원 함수, 외부 참조, stale cache, native 재계산의 실제 Excel 결과가
+있을 때 통과합니다.
 
-Any repair prompt, silent feature loss, wrong formula result, duplicated edit,
-or stale write accepted as current is a failed gate. Preserve the failing copy
-outside Git, open an issue with sanitized evidence, and do not change the result
-to pass because Excel can manually repair the file.
+repair prompt, 조용한 기능 손실, 잘못된 수식 결과, 중복 편집, stale write 승인은
+실패입니다. 실패 복사본은 Git 밖에 보관하고 비식별 증거로 이슈를 열며 Excel이
+수동 repair할 수 있다는 이유로 pass 처리하지 않습니다.

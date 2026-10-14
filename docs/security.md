@@ -1,47 +1,46 @@
-# Local Security Model
+# 로컬 보안 모델
 
-The current service is a local single-user application, not a hosted identity
-or tenant-isolation system. HTTP mode binds to loopback by default and uses
-separate browser-session and MCP bearer credentials. Stdio browser fallback is
-restricted to loopback and issues single-use launch links that expire after two
-minutes.
+현재 서비스는 로컬 단일 사용자 애플리케이션이며, 호스팅 환경의 사용자 인증이나
+테넌트 격리 시스템이 아닙니다. HTTP 모드는 기본적으로 loopback 주소에만
+연결되고 브라우저 세션과 MCP bearer 인증 정보를 분리해 사용합니다. stdio의
+브라우저 대체 화면도 loopback으로 제한되며 2분 뒤 만료되는 일회용 실행 링크를
+발급합니다.
 
-## Credential Delivery
+## 인증 정보 전달
 
-HTTP startup output is an intentional credential-delivery channel. The browser
-URL and generated MCP bearer credential are printed once so the local user can
-connect a browser or MCP client. Treat terminal output as sensitive, do not
-copy it into issues or logs, and prefer explicitly supplied credentials when a
-process supervisor records standard error. Routine HTTP responses, errors, and
-application diagnostics must never repeat either credential.
+HTTP 시작 출력은 의도된 인증 정보 전달 경로입니다. 로컬 사용자가 브라우저나
+MCP 클라이언트를 연결할 수 있도록 브라우저 URL과 생성된 MCP bearer 인증 정보를
+한 번 출력합니다. 터미널 출력은 민감 정보로 취급하고 이슈나 로그에 복사하지
+마세요. 프로세스 관리자가 표준 오류를 기록한다면 인증 정보를 명시적으로
+지정하는 방식을 권장합니다. 일반 HTTP 응답, 오류, 애플리케이션 진단에는 두 인증
+정보가 다시 포함되면 안 됩니다.
 
-Stdio keeps standard output protocol-only. Its `open_workbook` fallback returns
-a short-lived single-use URL instead of the reusable browser credential. The
-redirect removes the launch token from the address bar and sets an HTTP-only,
-same-site cookie.
+stdio의 표준 출력에는 프로토콜 데이터만 기록합니다. `open_workbook` 대체 경로는
+재사용 가능한 브라우저 인증 정보 대신 수명이 짧은 일회용 URL을 반환합니다.
+리디렉션은 주소 표시줄에서 실행 토큰을 제거하고 HTTP-only, same-site 쿠키를
+설정합니다.
 
-## Enforced Boundaries
+## 강제되는 경계
 
-- Browser routes require the browser session cookie.
-- MCP over HTTP requires its distinct bearer credential.
-- A browser credential cannot authorize MCP, and an MCP credential cannot
-  authorize browser routes.
-- Browser writes with a foreign `Origin` are rejected before request decoding
-  or workbook mutation.
-- Authentication failures do not expose credentials or workbook cell values.
-- Browser responses apply a same-origin resource policy, deny framing, disable
-  camera, microphone, and geolocation, and restrict scripts, connections,
-  images, fonts, and workers with Content Security Policy.
-- Launch links are random, single-use, time-limited, and bounded in number.
+- 브라우저 경로에는 브라우저 세션 쿠키가 필요합니다.
+- HTTP MCP에는 별도의 bearer 인증 정보가 필요합니다.
+- 브라우저 인증 정보로 MCP를 호출하거나 MCP 인증 정보로 브라우저 경로를 호출할
+  수 없습니다.
+- 다른 `Origin`에서 보낸 브라우저 쓰기 요청은 본문 해석이나 통합 문서 변경 전에
+  거부됩니다.
+- 인증 실패 응답에 인증 정보나 통합 문서 셀 값을 노출하지 않습니다.
+- 브라우저 응답은 same-origin 리소스 정책을 적용하고 frame 삽입을 막습니다.
+  카메라, 마이크, 위치 정보도 비활성화하며 Content Security Policy로 스크립트,
+  연결, 이미지, 폰트, worker를 제한합니다.
+- 실행 링크는 무작위이며 한 번만 사용할 수 있고, 유효 시간과 발급 수가
+  제한됩니다.
 
-These controls protect the local process boundary. They do not provide hosted
-OAuth, per-user permissions, remote TLS termination, tenant isolation, or a
-durable audit log.
+이 통제는 로컬 프로세스 경계를 보호합니다. 호스팅 OAuth, 사용자별 권한, 원격
+TLS 종료, 테넌트 격리, 영속 감사 로그를 제공하지는 않습니다.
 
-## Verification
+## 검증
 
-`internal/transport/httpapi/security_test.go` contains the negative browser and
-MCP credential matrix, foreign-origin no-mutation test, response non-disclosure
-checks, security-header assertions, and invalid or expired launch-link tests.
-The existing transport tests cover valid browser and MCP credentials, one-time
-launch consumption, launch capacity, and loopback-only fallback listeners.
+`internal/transport/httpapi/security_test.go`에는 잘못된 브라우저 및 MCP 인증
+조합, 외부 origin 요청의 무변경 보장, 응답 비노출, 보안 헤더, 잘못되거나 만료된
+실행 링크 테스트가 있습니다. 기존 전송 계층 테스트는 정상 인증, 일회용 링크
+소비, 링크 용량 제한, loopback 전용 대체 listener를 검증합니다.

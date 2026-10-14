@@ -1,89 +1,67 @@
-# Architecture
+# 아키텍처
 
-## System Context
+## 목표
 
-The [shared product specification](product-spec.md) defines target behavior;
-the [format support matrix](format-support.md) separates current capabilities
-from planned adapters and their release evidence.
+document-workspace는 사람과 AI가 같은 사무 문서를 안전하게 편집하는 로컬 우선
+플랫폼입니다. 형식별 fidelity는 adapter가 소유하고, 전송 계층은 형식 규칙을
+모르며, browser는 표시와 초안만 담당합니다. 서버의 리비전과 저장 상태가 항상
+기준입니다.
 
-document-workspace connects MCP clients, revisioned document sessions, format
-adapters, and interactive browser editors. A person and an AI agent operate on
-the same authoritative document revision.
+## 저장소 구조
 
 ```text
-Claude or Codex
-       |
-       | MCP tools and resources
-       v
-Transport layer
-       |
-       v
-Revisioned document session
-       |
-       +----> format adapter ----> durable source document
-       |
-       +----> ordered events ----> browser editor
+apps/web-editor/                 TypeScript 브라우저 편집기
+cmd/document-workspace/         Go 실행 파일
+internal/formats/xlsx/          XLSX 세션, 작업, 저장, 이력
+internal/transport/httpapi/     HTTP, SSE, MCP, 내장 UI
+testdata/xlsx/compatibility/    출처가 기록된 호환성 corpus
+legacy/xlsx-python/             보존된 Python 개념 증명
+docs/                           제품 및 운영 문서
 ```
 
-XLSX is the first production format. The current process still opens one XLSX
-file at startup, and the existing workbook tool contracts remain stable while
-the repository becomes format-oriented.
+형식 로직은 `internal/formats/<format>`에 둡니다. 전송이나 UI가 OOXML 저장 규칙을
+소유하면 안 됩니다. 두 번째 실제 adapter가 공통 계약을 입증하기 전에는 추상적인
+범용 문서 runtime을 만들지 않습니다.
 
-## Architectural Principles
+## 시스템 흐름
 
-1. Preserve source documents before adding editing convenience.
-2. A format adapter owns parsing, validation, mutation, and persistence.
-3. Transport code translates contracts and never owns format rules.
-4. Browser state is ephemeral. The server session is authoritative.
-5. Every accepted write validates against a base revision and commits once.
-6. Unsupported content must be preserved or reported before a destructive save.
-7. A shared abstraction needs two real consumers. Empty format scaffolding is
-   not architecture.
+```text
+Claude/Codex MCP host ─┐
+                      ├─ HTTP 또는 stdio MCP ─┐
+브라우저/MCP App ─────┘                       │
+                                              ▼
+                                  Go 전송 및 인증 계층
+                                              │
+                                  typed 작업, 리비전, event
+                                              │
+                                              ▼
+                                      XLSX format session
+                                              │
+                             candidate 검증, 원자적 교체, history
+                                              │
+                                              ▼
+                                         로컬 .xlsx
+```
 
-## Repository Boundaries
+### Go 실행 파일
 
-### Executable
+`cmd/document-workspace`는 하나의 입력 파일을 열고 HTTP 또는 stdio 전송을
+시작합니다. `-check`는 같은 adapter 경계에서 사전 검사만 수행합니다. 릴리스
+정보는 build 시 version, commit, date로 주입합니다.
 
-`cmd/document-workspace` parses process configuration, opens the selected
-format session, and starts HTTP or stdio transports. It contains no document
-mutation rules.
+### 형식 adapter
 
-### Format Adapters
+현재 `internal/formats/xlsx`가 유일한 production adapter입니다. Excelize package,
+session, typed operation, 리비전, event, persistence, history, compatibility notice를
+소유합니다. 향후 DOCX, PPTX, HWPX, PDF는 각각 별도 adapter로 시작합니다.
 
-`internal/formats/<format>` owns format-specific behavior. The current
-`internal/formats/xlsx` package owns:
+### 전송 계층
 
-- workbook lifecycle and bounded reads;
-- operation validation and transactional application;
-- revision checks and ordered events;
-- OOXML and Excelize compatibility behavior;
-- same-directory atomic persistence;
-- durable local undo and redo snapshots;
-- image and chart extraction and editing.
+`internal/transport/httpapi`는 인증, request 제한, HTTP API, SSE, MCP 도구,
+MCP App resource, loopback 브라우저 대체 화면을 제공합니다. workbook 규칙을 직접
+구현하지 않습니다.
 
-The XLSX package does not import HTTP, MCP, or browser packages.
-
-Future adapters will not be forced into spreadsheet operations:
-
-| Format | Primary model | Initial editing contract |
-| --- | --- | --- |
-| XLSX | cells, ranges, sheets, drawings | structured workbook operations |
-| DOCX | blocks, runs, tables, sections | document-tree operations |
-| PPTX | slides, shapes, media | slide and shape operations |
-| HWPX | sections, paragraphs, controls | HWPX package operations |
-| PDF | pages, annotations, forms | inspect, annotate, fill, and regenerate |
-
-Binary HWP requires a separately evaluated conversion or native integration
-path. PDF is a fixed-layout output format, so arbitrary semantic editing is not
-treated as equivalent to editing DOCX or HWPX source.
-
-### Transport Layer
-
-`internal/transport/httpapi` owns HTTP routing, security middleware, SSE, MCP
-tool registration, MCP App resources, and the loopback browser fallback. It
-depends on the active format adapter but does not implement workbook rules.
-
-The current MCP tools are workbook-specific and remain stable:
+현재 안정 MCP 도구:
 
 - `open_workbook`
 - `get_workbook`
@@ -93,183 +71,115 @@ The current MCP tools are workbook-specific and remain stable:
 - `restore_history`
 - `update_presence`
 
-New format adapters may expose format-specific tools before a proven common
-document contract exists. A future discovery tool can identify the active
-format and its capabilities without weakening typed operation schemas.
+다른 형식은 공통 계약이 증명되기 전까지 형식별 typed 도구를 가질 수 있습니다.
+MCP App resource는 `ui://document-workspace/xlsx/v1.html`입니다. HTTP와 stdio가
+같은 서버를 사용하며, stdio는 일회용 실행 token의 인증된 loopback 대체 화면을
+시작할 수 있습니다.
 
-The MCP App resource is versioned as
-`ui://document-workspace/xlsx/v1.html`. The same server supports Streamable
-HTTP and stdio. Stdio mode can start an authenticated loopback browser fallback
-with a single-use launch token.
+### 브라우저 편집기
 
-### Browser Editor
+`apps/web-editor`는 TypeScript, Vite, Tailwind CSS, Univer OSS를 사용합니다.
+`SpreadsheetEngine`이 Univer type을 격리하고 `WorkbookController`가 리비전,
+직렬화된 쓰기, presence throttle, conflict, 구독 lifecycle을 소유합니다. HTTP와
+MCP App client는 같은 `WorkbookClient` 계약을 구현하고 Zod가 입력 payload를
+검증합니다.
 
-`apps/web-editor` is the current XLSX browser editor. It uses TypeScript, Vite,
-Tailwind CSS, and Univer open-source packages. `SpreadsheetEngine` isolates
-Univer so application orchestration and transports do not depend directly on
-editor-vendor types.
+Univer는 grid keyboard와 clipboard를 담당합니다. controller는 확정된 셀 편집,
+사각 붙여넣기, undo 및 redo를 서버 기준 작업으로 바꿉니다. UI는 대기, 저장,
+실패, 충돌, 복구를 live region에 표시하고 focus, reduced motion, safe area, 작은
+화면 대체 layout을 유지합니다.
 
-`WorkbookController` owns revision state, serialized writes, presence
-throttling, conflicts, and subscription lifecycle. HTTP and MCP App clients
-implement one `WorkbookClient` contract. Zod validates incoming payloads before
-they enter application state.
+### 호환성 corpus
 
-The browser and MCP App entries share an accessible responsive shell. Univer
-owns grid keyboard editing and clipboard behavior, while the controller maps
-confirmed edits, rectangular paste, and undo or redo into server-authoritative
-operations. Live status regions expose pending, saved, failed, conflict, and
-recovery states. The shell preserves focus visibility, reduced motion, safe
-areas, and a mobile fallback without hiding workbook identity or history
-controls. See [UI verification](ui-verification.md).
+`testdata/<format>`에는 공개, 생성, 또는 출처가 기록된 fixture만 둡니다. XLSX
+테스트는 복사본을 열고 관련 없는 기능을 inventory한 뒤 실제 `xlsx.Session`으로
+편집, 저장, reopen하여 보존을 비교합니다. 현재 생성기와 LibreOffice fixture가
+있고 Microsoft Excel fixture는 남은 release gate입니다.
 
-A future non-spreadsheet editor may be another application or a format surface
-selected by a shared shell. The current code is not renamed to a generic editor
-until that second surface exists.
+`legacy/xlsx-python`은 Go 테스트가 동작을 완전히 대체할 때까지 초기 Python
+prototype과 회귀 테스트를 보존합니다.
 
-### Compatibility Corpus
+## XLSX 세션 모델
 
-`testdata/<format>` stores public, generated, or provenance-recorded fixtures.
-The XLSX corpus lives in `testdata/xlsx/compatibility`. Tests copy fixtures to a
-temporary directory, inventory unrelated features, edit through `xlsx.Session`,
-save, reopen, and compare preserved features.
+세션은 안정 ID, 현재 리비전, 순서 있는 event sequence, subscriber, 메모리의
+Excelize file을 가집니다. 쓰기는 기준 리비전을 포함합니다. 전체 batch를 먼저
+검증하고 candidate에 적용하여 원자적으로 저장한 뒤 리비전을 한 번 증가시키고
+event를 보냅니다.
 
-The corpus currently includes an Excelize-generated workbook and a LibreOffice
-export. A Microsoft Excel-produced fixture remains required before broader
-fidelity claims.
+최근 리비전 snapshot 10개를 유지합니다. 32 MiB를 넘는 snapshot은 보관하지
+않지만 문서 commit은 성공할 수 있습니다. 이력 event는 undo와 redo 가능 상태를
+포함합니다. `.xlsx-viewer-history` 이름은 업그레이드 호환성을 위해 유지합니다.
 
-### Legacy Reference
+큰 sheet는 정렬된 제한 범위 tile로 읽습니다. 쓰기는 candidate workbook에서
+수행하고 저장이 성공할 때까지 기준 메모리 상태를 유지합니다. 준비, write, sync,
+close, replacement가 실패하면 이전 리비전과 상태를 유지합니다. 문서 저장 뒤
+history manifest 확정만 실패하면 경고와 pending manifest를 남기고 다음 쓰기 전에
+조정합니다.
 
-`legacy/xlsx-python` preserves the original Python proof of concept and its
-regression test. It remains until equivalent behavior is fully characterized by
-the Go implementation.
+sidecar `write.lock`은 협조 writer를 직렬화합니다. 변경 전과 replacement 직전에
+source hash를 검사하고 삭제되거나 non-regular인 원본을 거부합니다. symlink는
+열 때 해석합니다. Excel, hard link, network filesystem 같은 비협조 writer의
+마지막 check-to-rename race는 제거하지 못합니다.
 
-## XLSX Session Model
+## XLSX 호환성 경계
 
-Each session has a stable ID, current revision, ordered event sequence, active
-subscribers, and an in-memory Excelize file. A write includes the caller's base
-revision. The session validates the entire batch before mutation, persists it
-atomically, advances the revision once, and then publishes ordered events.
+일반 validation과 conditional formatting은 Univer OSS API에 mapping합니다. 미지원
+고급 규칙은 package에 남기고 가능한 경우 안내합니다. PNG, JPEG, GIF와 지원 차트는
+drawing 또는 SVG preview로 표시합니다. 기존 image와 chart의 이동, 크기, 삭제,
+chart title 변경을 저장합니다. 이미지 삽입과 chart type, series, axis, legend,
+style 편집은 미구현입니다.
 
-The session retains up to ten revision snapshots. Individual snapshots larger
-than 32 MiB are not retained, while the document commit still succeeds. Durable
-commit and reload events carry current undo and redo availability so every
-client can disable unavailable history actions after local or remote changes.
-The `.xlsx-viewer-history` directory name remains stable for upgrade
-compatibility even though the product has been renamed.
+서비스는 수식을 저장하지만 계산하지 않습니다. cached source value와 unavailable
+value를 구분하고 Univer 결과는 browser preview로 취급합니다. 수식에 영향을 주는
+편집은 native 전체 재계산을 요청합니다.
 
-Initial worksheet data loads in bounded ranges. The browser requests aligned
-tiles as the viewport moves, while Univer keeps the grid virtualized.
+## 실시간 event와 복구
 
-Writes mutate a candidate workbook and retain the authoritative in-memory file
-until persistence succeeds. History restoration also parses and inspects its
-candidate before disk replacement. Failed preparation, writes, sync, close,
-or replacement leave the previous revision and in-memory state intact. A
-workbook saved successfully with a failed history-manifest finalization is
-reported as saved with a history warning; the pending manifest is retained and
-must reconcile before the next write.
+현재 server-to-browser event는 SSE를 사용합니다. event에는 sequence, revision,
+actor, type, 형식별 위치, 작업 data가 있습니다. 제한 replay window와
+`Last-Event-ID` 재연결을 지원합니다. gap이나 잘못된 future cursor는
+`workbook.reload`와 `state: resync`를 반환합니다. 느린 subscriber는 조용히 event를
+잃는 대신 연결을 끊습니다.
 
-A sidecar `write.lock` directory serializes cooperating writers and history
-recovery. The source hash is checked before mutation and immediately before
-replacement, including undo/redo. Changed, removed, or non-regular sources are
-rejected. Symlink paths are resolved on opening. The lock does not coordinate
-Excel, hard-link aliases, network filesystems, or other non-cooperating writers;
-a final check-to-rename race remains. Do not edit the same file simultaneously
-in an external application. A crash leaves the lock in place and fails closed.
-See [recovery operations](xlsx-recovery.md) for safe manual recovery and limits.
+쓰기 실패, 연결 중단, resync 뒤 controller는 queue를 멈추고 작업을 재시도하지
+않은 채 server snapshot을 확인합니다. 초안을 보여주고 사용자가 명시적으로 다시
+불러오게 합니다. 높은 server revision만 보고 특정 쓰기가 성공했다고 판단하지
+않습니다. typing animation과 cursor는 presentation 상태이며 영속 쓰기는 작업 또는
+batch 단위입니다.
 
-## XLSX Compatibility
+## 보안 경계
 
-The browser maps supported validation and conditional-formatting rules to OSS
-Univer APIs. Unsupported advanced rules remain in the XLSX package and produce
-a visible notice when practical.
+문서, 수식, name, value, MCP 및 browser 입력은 신뢰하지 않습니다. 로컬 모드는
+브라우저와 MCP token을 분리하고 strict cookie, same-origin 쓰기, request 제한,
+loopback listener를 사용합니다. stdout은 stdio protocol 전용입니다. 시작 출력은
+의도된 인증 정보 전달 경로이며 일반 진단은 token을 반복하지 않습니다.
 
-PNG, JPEG, and GIF images use Univer drawing support. Supported chart types are
-rendered as SVG previews because native Univer chart editing is not open
-source. Images and chart previews can be moved, resized, or deleted. AI
-operations can update existing chart titles. Image insertion and chart type,
-series, axis, legend, and style editing remain pending.
+XLSX parser 전에는 OOXML ZIP, regular file, 암호화, 안전한 part 이름, 중복, 최대
+10,000 parts, part당 256 MiB, 총 확장 512 MiB, 압축 원본 100 MiB 제한을
+검사합니다. 이는 보안 상한이며 성능 보장이 아닙니다.
 
-Formula storage and formula calculation are separate capabilities. The service
-does not calculate formulas. Cached source values are labeled separately from
-unavailable values, while Univer results are browser previews. Formula-affecting
-edits request full native recalculation in the saved XLSX. See the
-[formula policy](xlsx-formula-policy.md). Workbook content is never evaluated as
-executable source code.
+호스팅 모드에는 identity, 문서별 authorization, immutable object version, tenant
+격리, audit storage, quota, background job이 추가로 필요합니다.
 
-## Realtime Events
+## 배포 모드
 
-SSE is used for the current server-to-browser event flow. Events include a
-sequence, revision, actor, type, format location, and operation-specific data.
-The service retains a bounded replay window and supports reconnect with
-`Last-Event-ID`.
-Snapshots include an event sequence checkpoint. New browser subscriptions start
-there, avoiding historical structural edits already included in the snapshot.
-A replay gap or invalid future cursor returns a system `workbook.reload` event
-with `state: resync`; slow subscribers are disconnected instead of silently
-losing events. Browser subscriptions also track the session identity so a
-restarted process cannot reuse an old cursor unnoticed.
+로컬 모드는 선택한 문서를 adapter로 열고 browser와 MCP HTTP를 loopback에
+연결하거나 데스크톱 MCP host에서 stdio로 실행합니다. package gate는 두 UI를
+빌드하고 검증한 뒤 Go 바이너리에 포함하고 공백이 있는 절대 경로의 복사본으로
+smoke test합니다.
 
-After a failed write, connection interruption, or resync signal, the controller
-pauses all queued writes and checks the server snapshot without retrying an
-operation. The recovery panel leaves drafts visible and offers an explicit
-reload. It never treats a newer server revision as proof that a specific
-uncertain write succeeded. This is conservative reconciliation, not a durable
-idempotency-receipt API.
+호스팅 모드는 아직 구현하지 않았습니다. 구현 시 사용자와 MCP client 인증, 모든
+문서 read/write authorization, immutable object storage, 관계형 metadata와 audit,
+제한된 conversion job이 필요합니다.
 
-Typing animation and cursor movement are presentation state. Durable writes
-occur at operation or batch granularity, never once per displayed character.
+## 남은 결정
 
-## Security Boundaries
+- 두 번째 adapter 뒤의 첫 shared session interface
+- DOCX 저장 및 round-trip engine
+- PPTX canvas와 animation 보존
+- HWPX 범위와 binary HWP 연동
+- PDF annotation, form, OCR, 재생성 경계
+- XLSX 수식 계산과 남은 고급 기능 mapping
+- 호스팅 tenant, 영속 event replay, audit 저장
 
-Documents, formulas, names, values, MCP inputs, and browser inputs are
-untrusted. Local mode uses separate random browser and MCP credentials, strict
-cookies, same-origin write checks, bounded requests, and loopback-only fallback
-listeners. Credential comparison uses fixed-length hashes. Browser responses
-deny framing and external connections by default. Stdio stdout remains
-protocol-only. HTTP startup output is the deliberate local credential-delivery
-channel and must be treated as sensitive; routine responses and diagnostics do
-not repeat those credentials. See the [local security model](security.md).
-
-Before parsing an XLSX file, the adapter requires a regular OOXML ZIP package
-and rejects encrypted entries, unsafe or duplicate part names, more than 10,000
-parts, any part larger than 256 MiB when expanded, more than 512 MiB of total
-expanded data, and more than 100 MiB of compressed source data. These are safety
-ceilings, not demonstrated performance capacity.
-
-Hosted mode will require identity, per-document authorization, immutable object
-versions, tenant isolation, audit storage, quotas, and background processing.
-
-## Deployment Modes
-
-### Local
-
-- Open a user-selected document through a supported format adapter.
-- Bind browser and MCP HTTP endpoints to loopback by default.
-
-The packaging gate builds and validates the browser and self-contained MCP App
-interfaces before Go embeds them. It then opens a disposable workbook through
-the compiled executable using an absolute path containing spaces. See
-[packaging verification](packaging.md).
-- Support stdio launch by desktop MCP hosts.
-- Persist changes to the local source document.
-
-### Hosted
-
-- Authenticate users and MCP clients.
-- Authorize every document read and write.
-- Store immutable document versions in object storage.
-- Store identity, metadata, active revisions, and audit records in a relational
-  database.
-- Isolate conversion and large-document work in bounded background jobs.
-
-## Decisions Pending
-
-- The first shared session interface after a second format adapter exists.
-- DOCX editing engine and round-trip strategy.
-- PPTX canvas and animation preservation strategy.
-- HWPX coverage and binary HWP integration strategy.
-- PDF annotation, form, OCR, and regeneration boundaries.
-- XLSX formula calculation strategy and remaining advanced feature mappings.
-- Hosted tenancy, durable event replay, and audit persistence.
-
-See [ADR 0001](adr/0001-spreadsheet-engine.md) for the XLSX editor decision.
+XLSX editor 결정은 [ADR 0001](adr/0001-spreadsheet-engine.md)을 참고하세요.

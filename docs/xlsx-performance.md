@@ -1,88 +1,66 @@
-# XLSX Performance Verification
+# XLSX 성능 검증
 
-## Purpose
+## 목적
 
-The performance gate detects severe XLSX adapter regressions before release.
-Its budgets are engineering guardrails, not promises of end-user latency. Real
-workbooks vary by compression, shared strings, formulas, styles, drawings,
-conditional rules, storage speed, and machine resources.
+성능 gate는 release 전 심각한 XLSX adapter 회귀를 찾습니다. budget은 엔지니어링
+guardrail이며 사용자 latency 약속이 아닙니다. 실제 통합 문서는 압축, shared
+string, 수식, style, drawing, conditional rule, storage, machine에 따라 다릅니다.
 
-The benchmark creates a non-sensitive workbook in a temporary directory, opens
-it through the real `xlsx.Session` boundary, reads the maximum supported bounded
-range, commits one cell, and commits a 1,000-cell rectangular paste. It deletes
-the generated workbook after the run.
+benchmark는 임시 디렉터리에 비민감 통합 문서를 만들고 실제 `xlsx.Session`으로
+열어 최대 지원 범위 10,000셀을 읽습니다. 셀 하나와 1,000셀 사각 범위를 각각
+commit한 뒤 생성 파일을 삭제합니다.
 
-## Profiles and Budgets
+## Profile과 budget
 
-| Profile | Populated cells | Sheets and shape | Open | Read 10,000 cells | Commit one cell | Commit 1,000 cells | Peak observed Go heap |
+| Profile | 채운 셀 | 구조 | 열기 | 10,000셀 읽기 | 1셀 commit | 1,000셀 commit | 최대 Go heap |
 | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
-| `ci` | 25,000 | 1 sheet, 250 by 100 | 3 s | 1 s | 5 s | 8 s | 512 MiB |
-| `release` | 400,000 | 4 sheets, 1,000 by 100 | 10 s | 2 s | 15 s | 20 s | 1,024 MiB |
+| `ci` | 25,000 | 1 sheet, 250 x 100 | 3초 | 1초 | 5초 | 8초 | 512 MiB |
+| `release` | 400,000 | 4 sheets, 1,000 x 100 | 10초 | 2초 | 15초 | 20초 | 1,024 MiB |
 
-Each sheet also has one header row and formulas every 25 rows in its final
-column. Workbook generation is measured and reported separately. It is excluded
-from open and editing budgets because users supply an existing workbook.
+각 sheet에는 header 한 줄과 마지막 열의 25행마다 수식이 있습니다. 통합 문서
+생성 시간은 별도로 보고하고 사용자는 기존 파일을 제공하므로 open 및 edit
+budget에서는 제외합니다.
 
-The CI profile runs on every pull request and main push as
-`Verify XLSX performance budget`. The release profile is intentionally not run
-on every shared CI runner. Run it on the intended release machine and retain the
-report before making performance claims.
+`ci`는 모든 Pull Request와 `main` push에서 `Verify XLSX performance budget`으로
+실행합니다. `release`는 intended release machine에서 수동 실행하고 성능 주장을
+하기 전에 보고서를 보관합니다. 첫 clean baseline은
+[성능 증거](release-evidence/xlsx-performance-2026-10-12.md)에 있습니다.
 
-The first clean release-profile baseline is recorded in
-[XLSX performance evidence](release-evidence/xlsx-performance-2026-10-12.md).
-
-## Commands
-
-Run the required CI profile:
+## 명령
 
 ```bash
 make xlsx-performance-verify
-```
-
-Retain a Markdown report outside the repository:
-
-```bash
 make xlsx-performance-verify REPORT=/absolute/path/to/xlsx-performance-ci.md
-```
-
-Run the larger release profile:
-
-```bash
 make xlsx-performance-verify XLSX_PERFORMANCE_PROFILE=release REPORT=/absolute/path/to/xlsx-performance-release.md
 ```
 
-The report records the candidate commit, dirty state, timestamp, operating
-system, architecture, CPU count, Go and Excelize versions, workbook shape, file
-size, SHA-256 hash, action latency, allocated bytes, observed heap, budgets, and
-status. XLSX ZIP metadata may make hashes differ between generations. The hash
-identifies the exact input for one evidence record; it is not a golden hash.
+보고서는 candidate commit, dirty 상태, 시간, OS, architecture, CPU 수, Go와
+Excelize 버전, workbook shape, file size, SHA-256, latency, allocated bytes,
+observed heap, budget, 상태를 기록합니다. ZIP metadata 때문에 생성할 때마다 hash가
+달라질 수 있으며 hash는 그 증거의 정확한 입력만 식별합니다.
 
-## Memory Boundary
+## Memory 경계
 
-The sampler reads Go `HeapAlloc` every millisecond while each measured action is
-running. It also records total bytes allocated during the action. This catches
-large Go allocation regressions, but it is not the operating system's peak RSS
-and does not include every native or mapped allocation. Record an external RSS
-measurement separately if a release needs an operating-system memory claim.
+sampler는 각 작업 중 매 millisecond마다 Go `HeapAlloc`을 읽고 total allocated
+bytes도 기록합니다. 큰 Go allocation 회귀는 잡지만 OS peak RSS나 모든 native 및
+mapped allocation을 포함하지 않습니다. OS memory 주장이 필요하면 RSS를 따로
+측정합니다.
 
-## Failure Policy
+## 실패 정책
 
-A budget failure blocks the performance gate. First reproduce the same profile
-on a comparable machine and inspect workbook size, action allocation, garbage
-collection, storage, and runner contention. Do not increase a budget merely to
-make CI green. A budget change requires an issue, before-and-after evidence, and
-an explanation of the accepted user impact.
+budget 실패는 gate를 차단합니다. 비슷한 machine에서 같은 profile을 재현하고 file
+size, allocation, garbage collection, storage, runner contention을 확인합니다. CI를
+통과시키기 위해 budget만 올리지 않습니다. 변경에는 이슈, 전후 증거, 사용자 영향
+설명이 필요합니다.
 
-The benchmark does not replace the compatibility corpus. Run
-`make compatibility-test` after XLSX behavior changes because a fast save that
-loses unrelated workbook features is a failure.
+성능 benchmark는 compatibility corpus를 대신하지 않습니다. 빠르지만 관련 없는
+기능을 잃는 저장도 실패입니다.
 
-## Known Limits
+## 알려진 한계
 
-- The generated workload is regular tabular data with periodic formulas. It is
-  not a large chart, image, style, or shared-string stress corpus.
-- Browser rendering, scrolling frame rate, MCP transport latency, concurrent
-  users, network storage, and hosted load are outside this benchmark.
-- The 100 MiB input limit is a security ceiling, not a demonstrated performance
-  target.
-- A passing synthetic profile does not certify a private or customer workbook.
+- workload는 주기적 수식이 있는 규칙적인 table이며 chart, image, 많은 style,
+  shared string stress corpus가 아닙니다.
+- browser rendering, scroll frame rate, MCP latency, 동시 사용자, network storage,
+  hosted load는 제외합니다.
+- 입력 100 MiB는 보안 상한이며 입증된 성능 목표가 아닙니다.
+- 합성 profile 통과가 비공개 또는 고객 통합 문서를 인증하지 않습니다.
