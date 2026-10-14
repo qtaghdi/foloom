@@ -52,18 +52,23 @@ Completed foundations include:
 - image and chart preview movement, resize, deletion, and write-back;
 - generated and LibreOffice compatibility fixtures.
 
-Remaining XLSX release work:
+Remaining XLSX stable release work:
 
-1. Run the integrated pre-Excel candidate verification and review its safety,
-   compatibility, UI, access, packaging, and release-performance evidence.
-2. Add a provenance-recorded Microsoft Excel fixture and native reopen evidence.
-3. Certify the claimed Claude and Codex modes, distinguishing embedded UI from
+1. Add a provenance-recorded Microsoft Excel fixture and native reopen evidence.
+2. Certify the final claimed Claude and Codex modes, distinguishing embedded UI from
    browser fallback rather than requiring unsupported host capabilities.
-4. Complete native Excel evidence for the implemented
+3. Complete native Excel evidence for the implemented
    [formula policy](xlsx-formula-policy.md), including cache and recalculation
    behavior.
-5. Repeat the remaining visible-browser interaction check against the final
+4. Repeat the remaining visible-browser interaction check against the final
    candidate and retain any additional claimed platform artifacts.
+5. Select distribution terms, sign or explicitly bound unsigned artifacts, and
+   publish the verified alpha before declaring a stable release.
+
+The integrated pre-Excel verification, full regression CI, executable preflight,
+version metadata, and unsigned cross-platform archive pipeline are implemented.
+Public tag publication is blocked until distribution terms are selected. These
+steps improve alpha delivery but do not close native Excel gates.
 
 The [XLSX release checklist](xlsx-release-checklist.md) defines the first stable
 subset. Image insertion, chart type/series/axis/legend/style editing, and broader
@@ -143,10 +148,11 @@ PDF is treated as a fixed-layout document, not a normal source editor.
 
 ## Immediate Next Work
 
-1. Run and retain the integrated pre-Excel candidate evidence against the final
-   candidate, including the documented external-writer and crash limits.
-2. Add Excel evidence and close candidate host and visible UI gates. Verify
+1. Decide distribution terms and use the manual release workflow to inspect the
+   unsigned cross-platform alpha artifacts.
+2. Add Excel evidence and close final candidate host and visible UI gates. Verify
    the implemented formula policy during native Excel reopening.
-3. Release the verified XLSX subset, then extend object editing separately.
+3. Publish the verified XLSX alpha subset, then plan signing, a trusted launcher,
+   and automatic updates from observed installation feedback.
 4. Run the DOCX preservation experiment before selecting its editor or extracting
    a generic document session. The experiment can proceed independently on copies.

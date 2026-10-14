@@ -190,6 +190,13 @@ type Snapshot struct {
 	FormulaPolicy   FormulaPolicy     `json:"formulaPolicy"`
 }
 
+type Inspection struct {
+	Name          string           `json:"name"`
+	Sheets        []string         `json:"sheets"`
+	Warnings      []FeatureWarning `json:"warnings,omitempty"`
+	FormulaPolicy FormulaPolicy    `json:"formulaPolicy"`
+}
+
 type FormulaPolicy struct {
 	Storage             string `json:"storage"`
 	ServerCalculation   string `json:"serverCalculation"`

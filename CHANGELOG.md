@@ -9,6 +9,16 @@ and this project intends to follow Semantic Versioning when releases begin.
 
 ### Added
 
+- Added unsigned alpha archive generation for macOS, Linux, and Windows on
+  AMD64 and ARM64, with SHA-256 manifests, archive content checks, and a
+  current-platform executable smoke test.
+- Added a manual and tag-triggered release workflow that uploads verified build
+  artifacts and blocks public prerelease publication until distribution terms
+  are recorded in a `LICENSE` file.
+- Added CLI build metadata, positional workbook paths, and a workbook preflight
+  that validates compatibility without starting a transport or printing cells.
+- Added a public XLSX alpha guide covering checksums, unsigned application
+  warnings, local browser use, Claude Desktop, Codex, approvals, and backups.
 - Added a single pre-Excel XLSX candidate verification command that records
   safety, compatibility, full-suite, packaging, and release-performance results
   while keeping native Excel and visible-host claims explicitly manual.
