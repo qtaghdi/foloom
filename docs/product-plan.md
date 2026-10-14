@@ -37,7 +37,7 @@ Passing one level does not imply the next level.
 
 ## Phase 1: XLSX Production Adapter
 
-Status: in progress and usable for local workbook collaboration.
+Status: private local alpha, usable for owner-controlled workbook collaboration.
 
 Completed foundations include:
 
@@ -62,13 +62,32 @@ Remaining XLSX stable release work:
    behavior.
 4. Repeat the remaining visible-browser interaction check against the final
    candidate and retain any additional claimed platform artifacts.
-5. Select distribution terms, sign or explicitly bound unsigned artifacts, and
-   publish the verified alpha before declaring a stable release.
+5. Validate repeated use with explicitly invited testers, select distribution
+   terms, and make a separate owner decision before any public distribution.
 
 The integrated pre-Excel verification, full regression CI, executable preflight,
 version metadata, and unsigned cross-platform archive pipeline are implemented.
-Public tag publication is blocked until distribution terms are selected. These
-steps improve alpha delivery but do not close native Excel gates.
+The archive workflow is manual, repository-scoped, and unable to publish a
+GitHub Release. These steps support private testing but do not close native
+Excel or public-distribution gates.
+
+### Private Alpha Exit Criteria
+
+Keep the repository and all generated artifacts private until every condition
+below is met:
+
+1. Native Microsoft Excel fidelity and formula evidence is recorded against the
+   intended candidate.
+2. The owner and at least two explicitly invited testers complete repeated work
+   on disposable copies of representative workbooks.
+3. No unresolved source-loss, authorization, or false-success defect remains.
+4. Source and binary distribution terms are selected and dependency obligations
+   are reviewed.
+5. The repository owner explicitly approves public source or binary distribution
+   through a new issue and pull request.
+
+A landing page, payments, hosted accounts, signed installers, and automatic
+updates remain deferred until private-alpha use demonstrates recurring value.
 
 The [XLSX release checklist](xlsx-release-checklist.md) defines the first stable
 subset. Image insertion, chart type/series/axis/legend/style editing, and broader
@@ -148,11 +167,11 @@ PDF is treated as a fixed-layout document, not a normal source editor.
 
 ## Immediate Next Work
 
-1. Decide distribution terms and use the manual release workflow to inspect the
-   unsigned cross-platform alpha artifacts.
+1. Use disposable workbook copies in the private local alpha and record repeated
+   owner workflows before expanding the tester group.
 2. Add Excel evidence and close final candidate host and visible UI gates. Verify
    the implemented formula policy during native Excel reopening.
-3. Publish the verified XLSX alpha subset, then plan signing, a trusted launcher,
-   and automatic updates from observed installation feedback.
+3. Invite at least two trusted testers only after the owner workflow is stable,
+   then review the private-alpha exit criteria before selecting distribution terms.
 4. Run the DOCX preservation experiment before selecting its editor or extracting
    a generic document session. The experiment can proceed independently on copies.

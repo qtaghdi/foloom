@@ -56,11 +56,11 @@ on AMD64 and ARM64, plus `SHA256SUMS`. Each archive contains the executable,
 README, format support matrix, host compatibility guide, and local security
 guide. The Go binary embeds the previously built browser and MCP App bundles.
 
-The Release package workflow supports a manual artifact build and tagged
-prerelease publication. A manual run only uploads private workflow artifacts.
-A tag build verifies the same matrix and refuses to publish a GitHub prerelease
-unless a repository `LICENSE` file exists. This enforces an explicit owner
-decision instead of silently assigning distribution terms.
+The `Private alpha package` workflow runs only through an authorized manual
+dispatch. It uploads repository-scoped workflow artifacts and has read-only
+repository contents permission. Tags do not trigger it, and it cannot create a
+GitHub Release. Reintroducing public publication requires a separate issue,
+owner decision, distribution terms, and policy review.
 
 The alpha artifacts are not signed or notarized. They do not include macOS or
 Windows installers, automatic updates, a file picker, or a hosted service. The
