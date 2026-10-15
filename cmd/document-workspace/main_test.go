@@ -41,6 +41,26 @@ func TestParseOptionsRejectsAmbiguousOrMissingWorkbook(t *testing.T) {
 	}
 }
 
+func TestParseOptionsAllowsWorkbookFreeStdioServer(t *testing.T) {
+	options, err := parseOptions([]string{"-transport", "stdio"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.file != "" || options.transport != "stdio" {
+		t.Fatalf("options = %#v", options)
+	}
+}
+
+func TestMCPCommandRejectsMissingAction(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if exitCode := run([]string{"mcp"}, &stdout, &stderr); exitCode != 2 {
+		t.Fatalf("exit code = %d, stderr = %q", exitCode, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "install|status|uninstall") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestVersionDoesNotRequireWorkbook(t *testing.T) {
 	previousVersion, previousCommit, previousBuildDate := version, commit, buildDate
 	version, commit, buildDate = "0.1.0-alpha.1", "abc123", "2026-10-14T00:00:00Z"

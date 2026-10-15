@@ -40,6 +40,7 @@ commit, conflict, undo, 형식별 안전 저장을 제공합니다.
 - 생성 및 LibreOffice 호환성 fixture
 - Excel 전 자동 safety, regression, packaging, performance gate
 - 미서명 macOS, Linux, Windows 비공개 archive pipeline
+- macOS 단일 명령 MCP 설치, 동적 XLSX 열기, `document-xlsx` prompt 및 skill
 
 안정 릴리스 전 남은 작업:
 
@@ -74,8 +75,9 @@ extension 보존은 약속하지 않습니다.
 - 전송은 format logic 없이 adapter를 호출합니다.
 - 공통 session, event, proposal 추상화는 실제 XLSX와 DOCX가 같은 계약을 입증한
   뒤에만 만듭니다.
-- 파일 선택 및 여러 문서 탐색은 신뢰할 수 있는 launcher 또는 session 생성
-  workflow로 추가합니다.
+- 현재 XLSX는 명시적인 절대 경로로 활성 문서를 전환합니다. 파일 선택기와 여러
+  문서 동시 session은 신뢰할 수 있는 launcher 또는 session 생성 workflow에서
+  추가합니다.
 
 ## 3단계: DOCX
 

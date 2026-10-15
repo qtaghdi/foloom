@@ -221,6 +221,154 @@ func TestMCPAppToolAndResource(t *testing.T) {
 	}
 }
 
+func TestMCPStartsWithoutWorkbookAndOpensAbsolutePath(t *testing.T) {
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	t.Cleanup(func() { _ = api.Close() })
+	server := api.mcpServer()
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamic-test-client", Version: "0.1.0"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(context.Background(), serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverSession.Close()
+	clientSession, err := client.Connect(context.Background(), clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+
+	beforeOpen, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{Name: "get_workbook"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !beforeOpen.IsError {
+		t.Fatalf("get_workbook before open = %#v", beforeOpen)
+	}
+	relative, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "open_workbook",
+		Arguments: map[string]any{"path": "relative.xlsx"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !relative.IsError {
+		t.Fatalf("relative open_workbook = %#v", relative)
+	}
+
+	firstPath := createWorkbookWithValue(t, "first.xlsx", "first")
+	opened, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "open_workbook",
+		Arguments: map[string]any{"path": firstPath},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened.IsError {
+		t.Fatalf("open_workbook = %#v", opened)
+	}
+	assertMCPRangeValue(t, clientSession, "first")
+
+	secondPath := createWorkbookWithValue(t, "second.xlsx", "second")
+	switched, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "open_workbook",
+		Arguments: map[string]any{"path": secondPath},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if switched.IsError {
+		t.Fatalf("switch open_workbook = %#v", switched)
+	}
+	assertMCPRangeValue(t, clientSession, "second")
+}
+
+func TestDocumentXLSXPromptIsDiscoverableAndFocused(t *testing.T) {
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	t.Cleanup(func() { _ = api.Close() })
+	server := api.mcpServer()
+	client := mcp.NewClient(&mcp.Implementation{Name: "prompt-test-client", Version: "0.1.0"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(context.Background(), serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverSession.Close()
+	clientSession, err := client.Connect(context.Background(), clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+
+	prompts, err := clientSession.ListPrompts(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, prompt := range prompts.Prompts {
+		if prompt.Name == "document-xlsx" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("document-xlsx prompt not found: %#v", prompts.Prompts)
+	}
+	result, err := clientSession.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name: "document-xlsx",
+		Arguments: map[string]string{
+			"path": "/tmp/example.xlsx",
+			"task": "Update the asset owner column",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Messages) != 1 {
+		t.Fatalf("prompt messages = %#v", result.Messages)
+	}
+	content, ok := result.Messages[0].Content.(*mcp.TextContent)
+	if !ok || !strings.Contains(content.Text, "inspect only the workbook metadata and ranges needed") || !strings.Contains(content.Text, "/tmp/example.xlsx") {
+		t.Fatalf("prompt content = %#v", result.Messages[0].Content)
+	}
+}
+
+func createWorkbookWithValue(t *testing.T, name, value string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	file := excelize.NewFile()
+	if err := file.SetCellValue("Sheet1", "A1", value); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.SaveAs(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func assertMCPRangeValue(t *testing.T, clientSession *mcp.ClientSession, value string) {
+	t.Helper()
+	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "read_range",
+		Arguments: map[string]any{
+			"sheet": "Sheet1",
+			"range": "A1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError || !bytes.Contains(encoded, []byte(`"`+value+`"`)) {
+		t.Fatalf("read_range = %s, error = %v", encoded, result.IsError)
+	}
+}
+
 func TestStdioTransport(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "book.xlsx")
 	file := excelize.NewFile()

@@ -27,4 +27,14 @@ cp "$repository_root/testdata/xlsx/compatibility/libreoffice.xlsx" "$workbook"
 "$binary" -version | grep -F "document-workspace $version" >/dev/null
 "$binary" -check "$workbook" | grep -F "Workbook check passed" >/dev/null
 
+if [ "$host_os" = darwin ]; then
+  installer_home="$temporary_root/installer home"
+  mkdir -p "$installer_home"
+  HOME="$installer_home" "$binary" mcp install | grep -F "MCP와 document-xlsx 스킬을 설치했습니다." >/dev/null
+  HOME="$installer_home" "$binary" mcp status | grep -F "Codex MCP: 설치됨" >/dev/null
+  test -x "$installer_home/Library/Application Support/document-workspace/bin/document-workspace"
+  HOME="$installer_home" "$binary" mcp uninstall | grep -F "Codex MCP: 설치되지 않음" >/dev/null
+  test ! -e "$installer_home/Library/Application Support/document-workspace/bin/document-workspace"
+fi
+
 echo "Release smoke test passed for $host_os/$host_arch"

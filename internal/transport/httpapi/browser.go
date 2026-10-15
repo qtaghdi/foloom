@@ -86,7 +86,13 @@ func (s *Server) updatePresence(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid request: %w", err))
 		return
 	}
-	if err := s.session.UpdatePresence("human", input); err != nil {
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	defer release()
+	if err := session.UpdatePresence("human", input); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -94,11 +100,23 @@ func (s *Server) updatePresence(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getWorkbook(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.session.Snapshot())
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	defer release()
+	writeJSON(w, http.StatusOK, session.Snapshot())
 }
 
 func (s *Server) getRange(w http.ResponseWriter, r *http.Request) {
-	result, err := s.session.ReadRange(r.URL.Query().Get("sheet"), r.URL.Query().Get("range"))
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	defer release()
+	result, err := session.ReadRange(r.URL.Query().Get("sheet"), r.URL.Query().Get("range"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -107,7 +125,13 @@ func (s *Server) getRange(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getSheetObjects(w http.ResponseWriter, r *http.Request) {
-	result, err := s.session.ReadSheetObjects(r.URL.Query().Get("sheet"))
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	defer release()
+	result, err := session.ReadSheetObjects(r.URL.Query().Get("sheet"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -124,7 +148,13 @@ func (s *Server) applyOperations(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid request: %w", err))
 		return
 	}
-	snapshot, err := s.session.Apply(input.BaseRevision, "human", input.Operations)
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	defer release()
+	snapshot, err := session.Apply(input.BaseRevision, "human", input.Operations)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, xlsx.ErrRevisionConflict) || errors.Is(err, xlsx.ErrExternalChange) || errors.Is(err, xlsx.ErrWriterBusy) {
@@ -146,7 +176,13 @@ func (s *Server) restoreHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	direction := r.PathValue("direction")
-	snapshot, err := s.session.RestoreHistory(input.BaseRevision, "human", direction)
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	defer release()
+	snapshot, err := session.RestoreHistory(input.BaseRevision, "human", direction)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, xlsx.ErrRevisionConflict) || errors.Is(err, xlsx.ErrExternalChange) || errors.Is(err, xlsx.ErrWriterBusy) {
@@ -180,10 +216,16 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		}
 		after = parsed
 	}
-	if session := r.URL.Query().Get("session"); session != "" && session != s.session.Snapshot().ID {
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	if sessionID := r.URL.Query().Get("session"); sessionID != "" && sessionID != session.Snapshot().ID {
 		after = ^uint64(0)
 	}
-	events, cancel := s.session.Subscribe(after)
+	events, cancel := session.Subscribe(after)
+	release()
 	defer cancel()
 	_, _ = io.WriteString(w, ": connected\n\n")
 	flusher.Flush()
