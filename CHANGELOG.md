@@ -8,6 +8,10 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- macOS에서 실행 파일, Claude Desktop과 Codex MCP 설정, `document-xlsx` skill을
+  함께 관리하는 `mcp install`, `status`, `uninstall` 명령을 추가했습니다.
+- 파일 없이 시작한 stdio MCP에서 절대 `.xlsx` 경로를 동적으로 열고 전환하는
+  `open_workbook` 입력과 필요한 범위만 읽는 `document-xlsx` prompt를 추가했습니다.
 - macOS, Linux, Windows의 AMD64와 ARM64용 미서명 비공개 알파 archive, SHA-256
   manifest, 내용 검사, 현재 platform 실행 smoke test를 추가했습니다.
 - 공개 Release 권한이 없는 수동 private-alpha workflow, CLI build metadata,

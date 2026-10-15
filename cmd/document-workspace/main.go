@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/document-workspace/internal/hostinstall"
 	"github.com/qtaghdi/document-workspace/internal/transport/httpapi"
 )
 
@@ -41,6 +42,9 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "mcp" {
+		return runMCPCommand(args[1:], stdout, stderr)
+	}
 	options, err := parseOptions(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
@@ -64,12 +68,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	session, err := xlsx.Open(options.file)
-	if err != nil {
-		fmt.Fprintf(stderr, "open workbook: %v\n", err)
-		return 1
+	var session *xlsx.Session
+	if options.file != "" {
+		session, err = xlsx.Open(options.file)
+		if err != nil {
+			fmt.Fprintf(stderr, "open workbook: %v\n", err)
+			return 1
+		}
 	}
-	defer session.Close()
 
 	if options.browserToken == "" {
 		options.browserToken, err = randomToken()
@@ -87,6 +93,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	api := httpapi.NewWithTokens(session, options.browserToken, options.mcpToken)
+	defer api.Close()
 	if options.transport == "stdio" {
 		if options.stdioBrowser {
 			err = api.RunStdioWithBrowser(context.Background(), options.stdioBrowserAddr)
@@ -132,6 +139,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: document-workspace [options] <workbook.xlsx>")
 		fmt.Fprintln(stderr, "       document-workspace -file <workbook.xlsx> [options]")
+		fmt.Fprintln(stderr, "       document-workspace mcp <install|status|uninstall>")
 		fmt.Fprintln(stderr)
 		fmt.Fprintln(stderr, "Options:")
 		flags.PrintDefaults()
@@ -151,14 +159,66 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		}
 		result.file = flags.Arg(0)
 	}
-	if strings.TrimSpace(result.file) == "" {
+	if strings.TrimSpace(result.file) == "" && result.transport != "stdio" {
 		flags.Usage()
-		return options{}, errors.New("workbook path is required")
+		return options{}, errors.New("workbook path is required for HTTP transport")
 	}
 	if result.transport != "http" && result.transport != "stdio" {
 		return options{}, fmt.Errorf("unsupported transport %q: use http or stdio", result.transport)
 	}
 	return result, nil
+}
+
+func runMCPCommand(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		fmt.Fprintln(stderr, "사용법: document-workspace mcp <install|status|uninstall>")
+		return 2
+	}
+	installer, err := hostinstall.New()
+	if err != nil {
+		fmt.Fprintf(stderr, "MCP 설치 준비 실패: %v\n", err)
+		return 1
+	}
+	var status hostinstall.Status
+	switch args[0] {
+	case "install":
+		status, err = installer.Install()
+		if err == nil {
+			fmt.Fprintln(stdout, "MCP와 document-xlsx 스킬을 설치했습니다.")
+			fmt.Fprintln(stdout, "Claude Desktop과 Codex를 완전히 다시 시작해 주세요.")
+		}
+	case "status":
+		status, err = installer.Status()
+	case "uninstall":
+		status, err = installer.Uninstall()
+		if err == nil {
+			fmt.Fprintln(stdout, "document-workspace MCP와 스킬을 제거했습니다.")
+		}
+	default:
+		fmt.Fprintf(stderr, "지원하지 않는 MCP 명령 %q입니다. install, status, uninstall 중 하나를 사용하세요.\n", args[0])
+		return 2
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "MCP %s 실패: %v\n", args[0], err)
+		return 1
+	}
+	printMCPStatus(stdout, status)
+	return 0
+}
+
+func printMCPStatus(output io.Writer, status hostinstall.Status) {
+	fmt.Fprintf(output, "실행 파일: %s (%s)\n", installedLabel(status.Binary), status.BinaryPath)
+	fmt.Fprintf(output, "Claude Desktop MCP: %s\n", installedLabel(status.ClaudeMCP))
+	fmt.Fprintf(output, "Claude document-xlsx 스킬: %s\n", installedLabel(status.ClaudeSkill))
+	fmt.Fprintf(output, "Codex MCP: %s\n", installedLabel(status.CodexMCP))
+	fmt.Fprintf(output, "Codex document-xlsx 스킬: %s\n", installedLabel(status.CodexSkill))
+}
+
+func installedLabel(installed bool) string {
+	if installed {
+		return "설치됨"
+	}
+	return "설치되지 않음"
 }
 
 func printWorkbookCheck(output io.Writer, snapshot xlsx.Inspection) {

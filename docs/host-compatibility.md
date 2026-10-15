@@ -41,6 +41,11 @@ make build
 binary는 `bin/document-workspace`에 생성됩니다. desktop 앱은 shell 작업 디렉터리를
 상속하지 않으므로 설정에 절대 경로를 사용합니다.
 
+macOS에서는 `./bin/document-workspace mcp install`이 실행 파일을 고정된 사용자
+경로로 복사하고 Claude Desktop 및 Codex MCP 설정과 `document-xlsx` skill을
+설치합니다. `mcp status`로 각 구성 요소를 확인하고 `mcp uninstall`로 관리 항목만
+제거할 수 있습니다.
+
 ## Claude Desktop stdio 설정
 
 ```json
@@ -48,12 +53,7 @@ binary는 `bin/document-workspace`에 생성됩니다. desktop 앱은 shell 작�
   "mcpServers": {
     "document-workspace": {
       "command": "/absolute/path/to/document-workspace/bin/document-workspace",
-      "args": [
-        "-transport",
-        "stdio",
-        "-file",
-        "/absolute/path/to/workbook.xlsx"
-      ]
+      "args": ["-transport", "stdio"]
     }
   }
 }
@@ -68,11 +68,16 @@ binary는 `bin/document-workspace`에 생성됩니다. desktop 앱은 shell 작�
 ```toml
 [mcp_servers.document_workspace]
 command = "/absolute/path/to/document-workspace/bin/document-workspace"
-args = ["-transport", "stdio", "-file", "/absolute/path/to/workbook.xlsx"]
+args = ["-transport", "stdio"]
 ```
 
 설정 뒤 새 Codex session을 시작합니다. native MCP App이 없으면
 `open_workbook`의 일회용 URL을 앱 내 browser에서 엽니다.
+
+Claude는 MCP prompt 목록의 `document-xlsx`를 선택하거나 host가 노출한 slash
+command를 사용할 수 있습니다. Codex는 `$document-xlsx`로 같은 workflow를
+명시적으로 시작할 수 있습니다. host UI가 prompt 이름을 namespace와 함께 표시할
+수 있으므로 정확한 표기는 설치된 host 버전에서 확인합니다.
 
 ## 호스트 승인 모드
 
@@ -93,21 +98,24 @@ command, 이후 작업 범위를 모두 신뢰할 때만 사용합니다. 자동
 
 대표 통합 문서의 복사본만 사용합니다.
 
-1. `document-workspace`만 활성화한 새 호스트 대화를 시작합니다.
-2. 초기화와 server instruction 노출을 확인합니다.
-3. UI 없이 `get_workbook`, `read_range`를 호출합니다.
-4. `open_workbook`을 호출해 native iframe 또는 일회용 browser fallback을 엽니다.
-5. UI에서 셀 하나를 편집하고 리비전이 정확히 한 번 증가하는지 확인합니다.
-6. AI가 `update_presence`, `apply_operations`를 호출하게 하고 선택과 값 반영을
+1. `document-workspace mcp status`에서 실행 파일, 두 MCP 설정, 두 skill을 확인합니다.
+2. `document-workspace`만 활성화한 새 호스트 대화를 시작합니다.
+3. 초기화, `document-xlsx` prompt 또는 skill, server instruction 노출을 확인합니다.
+4. 절대 경로로 `open_workbook`을 호출한 뒤 `get_workbook`, `read_range`를 호출합니다.
+5. native iframe 또는 일회용 browser fallback을 엽니다.
+6. UI에서 셀 하나를 편집하고 리비전이 정확히 한 번 증가하는지 확인합니다.
+7. AI가 `update_presence`, `apply_operations`를 호출하게 하고 선택과 값 반영을
    확인합니다.
-7. stale revision을 제출해 부분 변경 없이 거부되는지 확인합니다.
-8. Excel 또는 LibreOffice에서 다시 열어 값과 주변 서식을 확인합니다.
-9. host version, OS, transport, mode, 결과, 차이를 이 문서에 기록합니다.
+8. stale revision을 제출해 부분 변경 없이 거부되는지 확인합니다.
+9. Excel 또는 LibreOffice에서 다시 열어 값과 주변 서식을 확인합니다.
+10. host version, OS, transport, mode, 결과, 차이를 이 문서에 기록합니다.
 
 ## 알려진 제약
 
-- 로컬 host 설정은 통합 문서 경로 하나를 가리킵니다. 이후 trusted launcher 또는
-  session 생성 흐름으로 파일 선택을 이동합니다.
+- 자동 설치는 현재 macOS만 지원합니다. Windows와 Linux는 수동 host 설정을
+  사용합니다.
+- 로컬 MCP는 사용자가 제공한 절대 `.xlsx` 경로만 열며 디렉터리 검색이나 파일
+  선택기를 제공하지 않습니다.
 - hosted service에는 OAuth, 문서별 authorization, stable HTTPS, 영속 storage가
   필요합니다. 로컬 bearer token은 hosted identity가 아닙니다.
 - inline MCP App 지원과 일반 MCP tool 지원은 다를 수 있습니다.

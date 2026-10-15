@@ -77,6 +77,8 @@ a concrete requirement and a short architecture note.
 
 - `cmd/document-workspace`: executable entry point.
 - `internal/formats/xlsx`: first format adapter, workbook domain, and persistence.
+- `internal/hostinstall`: local host configuration, binary installation, and
+  packaged workflow skills.
 - `internal/transport/httpapi`: HTTP, SSE, MCP, and embedded UI adapters.
 - `apps/web-editor`: current TypeScript spreadsheet editor and engine adapter.
 - `testdata/xlsx`: XLSX compatibility fixtures and provenance.
@@ -237,6 +239,8 @@ Current repository skills include:
 
 - `document-workspace-architecture` for changes spanning format adapters, Go,
   MCP, realtime, and browser editor boundaries.
+- `document-xlsx` for focused, revision-safe XLSX work through the installed
+  MCP server.
 - `xlsx-compatibility-qa` for workbook corpus verification.
 
 Likely future skills include:
