@@ -39,6 +39,7 @@ for target in $release_targets; do
   for required in \
     "$package_name/$binary_name" \
     "$package_name/README.md" \
+    "$package_name/docs/getting-started.md" \
     "$package_name/docs/format-support.md" \
     "$package_name/docs/host-compatibility.md" \
     "$package_name/docs/security.md"; do

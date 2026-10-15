@@ -23,6 +23,8 @@ const (
 )
 
 type Server struct {
+	openMu         sync.Mutex
+	sessionMu      sync.RWMutex
 	session        *xlsx.Session
 	browserToken   string
 	mcpToken       string
@@ -31,6 +33,8 @@ type Server struct {
 	browserBaseURL string
 	launchTokens   map[string]time.Time
 }
+
+var errWorkbookNotOpen = fmt.Errorf("workbook is not open; call open_workbook with an absolute XLSX path first")
 
 func New(session *xlsx.Session, token string) *Server {
 	return NewWithTokens(session, token, token)
@@ -50,6 +54,41 @@ func NewWithTokens(session *xlsx.Session, browserToken, mcpToken string) *Server
 
 func (s *Server) Handler() http.Handler {
 	return securityHeaders(s.mux)
+}
+
+func (s *Server) acquireSession() (*xlsx.Session, func(), error) {
+	s.sessionMu.RLock()
+	if s.session == nil {
+		s.sessionMu.RUnlock()
+		return nil, func() {}, errWorkbookNotOpen
+	}
+	return s.session, s.sessionMu.RUnlock, nil
+}
+
+func (s *Server) replaceSession(next *xlsx.Session) error {
+	s.sessionMu.Lock()
+	previous := s.session
+	s.session = next
+	s.sessionMu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return nil
+}
+
+// Close releases the active workbook, if any. It is safe to call when the
+// server was started without an initial workbook.
+func (s *Server) Close() error {
+	s.openMu.Lock()
+	defer s.openMu.Unlock()
+	s.sessionMu.Lock()
+	previous := s.session
+	s.session = nil
+	s.sessionMu.Unlock()
+	if previous == nil {
+		return nil
+	}
+	return previous.Close()
 }
 
 func (s *Server) routes() {

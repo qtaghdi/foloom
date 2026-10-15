@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -13,8 +15,12 @@ import (
 
 const (
 	appResourceURI     = "ui://document-workspace/xlsx/v1.html"
-	serverInstructions = "Call get_workbook before reads or writes. Use read_range for focused inspection. Pass the latest revision to apply_operations, and refresh after a conflict. Use open_workbook when an interactive spreadsheet helps. If it returns browserUrl because the host did not render the MCP App, open that short-lived URL in the host browser surface and do not repeat it in chat. Use update_presence before visible AI edits."
+	serverInstructions = "If no workbook is open, call open_workbook with an absolute XLSX path. Call get_workbook before reads or writes and use read_range only for focused inspection. Pass the latest revision to apply_operations, and refresh after a conflict. If open_workbook returns browserUrl because the host did not render the MCP App, open that short-lived URL in the host browser surface and do not repeat it in chat. Use update_presence before visible AI edits."
 )
+
+type openWorkbookInput struct {
+	Path string `json:"path,omitempty" jsonschema:"Absolute path to the local XLSX workbook. Omit only when a workbook is already open."`
+}
 
 type openWorkbookResponse struct {
 	ID         string   `json:"id"`
@@ -134,6 +140,26 @@ func (s *Server) mcpServer() *mcp.Server {
 	closedWorld := false
 	destructive := true
 	nonDestructive := false
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "document-xlsx",
+		Title:       "XLSX 문서 작업",
+		Description: "지정한 XLSX를 필요한 범위만 읽고 검토 가능한 작업 묶음으로 안전하게 수정합니다.",
+		Arguments: []*mcp.PromptArgument{
+			{Name: "path", Title: "XLSX 절대 경로", Required: true},
+			{Name: "task", Title: "요청할 작업", Required: true},
+		},
+	}, func(_ context.Context, request *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		path := strings.TrimSpace(request.Params.Arguments["path"])
+		task := strings.TrimSpace(request.Params.Arguments["task"])
+		if path == "" || task == "" {
+			return nil, fmt.Errorf("path and task are required")
+		}
+		text := fmt.Sprintf("Use the document-workspace MCP tools for this request. Open %q, inspect only the workbook metadata and ranges needed for the task, summarize the proposed changes, and use the latest revision for one coherent apply_operations batch after the host presents any required approval. Do not read the entire workbook unless the task requires it. Re-read the changed range and report the saved revision when complete. Task: %s", path, task)
+		return &mcp.GetPromptResult{
+			Description: "안전한 XLSX 편집 workflow",
+			Messages:    []*mcp.PromptMessage{{Role: mcp.Role("user"), Content: &mcp.TextContent{Text: text}}},
+		}, nil
+	})
 	server.AddResource(&mcp.Resource{
 		URI:         appResourceURI,
 		Name:        "document-workspace-xlsx",
@@ -155,11 +181,33 @@ func (s *Server) mcpServer() *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "open_workbook",
 		Title:       "Open Workbook",
-		Description: "Open the current workbook in an interactive spreadsheet surface. When the host does not render MCP Apps, use the short-lived browserUrl fallback returned by this tool.",
+		Description: "Open an absolute local XLSX path as the active workbook, or reopen the current workbook in an interactive spreadsheet surface when path is omitted. When the host does not render MCP Apps, use the short-lived browserUrl fallback returned by this tool.",
 		Meta:        appMeta,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, openWorkbookResponse, error) {
-		snapshot := s.session.Snapshot()
+	}, func(_ context.Context, _ *mcp.CallToolRequest, input openWorkbookInput) (*mcp.CallToolResult, openWorkbookResponse, error) {
+		if path := strings.TrimSpace(input.Path); path != "" {
+			s.openMu.Lock()
+			defer s.openMu.Unlock()
+			if !filepath.IsAbs(path) {
+				return nil, openWorkbookResponse{}, fmt.Errorf("workbook path must be absolute")
+			}
+			if !strings.EqualFold(filepath.Ext(path), ".xlsx") {
+				return nil, openWorkbookResponse{}, fmt.Errorf("workbook path must use the .xlsx extension")
+			}
+			next, err := xlsx.Open(path)
+			if err != nil {
+				return nil, openWorkbookResponse{}, err
+			}
+			if err := s.replaceSession(next); err != nil {
+				return nil, openWorkbookResponse{}, fmt.Errorf("close previous workbook: %w", err)
+			}
+		}
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, openWorkbookResponse{}, err
+		}
+		defer release()
+		snapshot := session.Snapshot()
 		browserURL, err := s.issueBrowserLaunchURL()
 		return nil, openWorkbookResponse{
 			ID:         snapshot.ID,
@@ -175,7 +223,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Undo or redo one committed workbook revision. Pass the latest baseRevision and direction.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input historyInput) (*mcp.CallToolResult, applyResponse, error) {
-		snapshot, err := s.session.RestoreHistory(input.BaseRevision, "ai", input.Direction)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, applyResponse{}, err
+		}
+		defer release()
+		snapshot, err := session.RestoreHistory(input.BaseRevision, "ai", input.Direction)
 		return nil, applyResponse{Workbook: snapshot, Applied: 1}, err
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -185,7 +238,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input historyInput) (*mcp.CallToolResult, applyResponse, error) {
-		snapshot, err := s.session.RestoreHistory(input.BaseRevision, "human", input.Direction)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, applyResponse{}, err
+		}
+		defer release()
+		snapshot, err := session.RestoreHistory(input.BaseRevision, "human", input.Direction)
 		return nil, applyResponse{Workbook: snapshot, Applied: 1}, err
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -194,7 +252,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Get the open workbook name, sheets, revision, and formula calculation policy before reading or editing it.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, xlsx.Snapshot, error) {
-		return nil, s.session.Snapshot(), nil
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, xlsx.Snapshot{}, err
+		}
+		defer release()
+		return nil, session.Snapshot(), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "read_range",
@@ -202,7 +265,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Read cell values and formulas from an A1-style range. Formula values are cached source values or unavailable; the server does not calculate formulas.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input readRangeInput) (*mcp.CallToolResult, xlsx.Range, error) {
-		returnValue, err := s.session.ReadRange(input.Sheet, input.Range)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, xlsx.Range{}, err
+		}
+		defer release()
+		returnValue, err := session.ReadRange(input.Sheet, input.Range)
 		return nil, returnValue, err
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -212,7 +280,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input eventPollInput) (*mcp.CallToolResult, eventPollResponse, error) {
-		events, snapshot := s.session.EventsAfter(input.AfterSequence)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, eventPollResponse{}, err
+		}
+		defer release()
+		events, snapshot := session.EventsAfter(input.AfterSequence)
 		return nil, eventPollResponse{Events: events, Workbook: snapshot}, nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -222,7 +295,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input sheetInput) (*mcp.CallToolResult, xlsx.SheetObjects, error) {
-		objects, err := s.session.ReadSheetObjects(input.Sheet)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, xlsx.SheetObjects{}, err
+		}
+		defer release()
+		objects, err := session.ReadSheetObjects(input.Sheet)
 		return nil, objects, err
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -231,7 +309,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Apply validated cell, formula, or rectangular paste edits to the open xlsx. Formula expressions are stored and native recalculation is requested; browser results are previews. Pass the latest baseRevision to prevent overwriting concurrent edits.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input applyInput) (*mcp.CallToolResult, applyResponse, error) {
-		snapshot, err := s.session.Apply(input.BaseRevision, "ai", input.Operations)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, applyResponse{}, err
+		}
+		defer release()
+		snapshot, err := session.Apply(input.BaseRevision, "ai", input.Operations)
 		return nil, applyResponse{Workbook: snapshot, Applied: len(input.Operations)}, err
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -241,7 +324,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input applyInput) (*mcp.CallToolResult, applyResponse, error) {
-		snapshot, err := s.session.Apply(input.BaseRevision, "human", input.Operations)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, applyResponse{}, err
+		}
+		defer release()
+		snapshot, err := session.Apply(input.BaseRevision, "human", input.Operations)
 		return nil, applyResponse{Workbook: snapshot, Applied: len(input.Operations)}, err
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -250,7 +338,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Move the AI cursor or selection without changing workbook data or its revision.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &nonDestructive, IdempotentHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input xlsx.Presence) (*mcp.CallToolResult, map[string]bool, error) {
-		err := s.session.UpdatePresence("ai", input)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, map[string]bool{"updated": false}, err
+		}
+		defer release()
+		err = session.UpdatePresence("ai", input)
 		return nil, map[string]bool{"updated": err == nil}, err
 	})
 	mcp.AddTool(server, &mcp.Tool{
@@ -260,7 +353,12 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &nonDestructive, IdempotentHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input xlsx.Presence) (*mcp.CallToolResult, map[string]bool, error) {
-		err := s.session.UpdatePresence("human", input)
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, map[string]bool{"updated": false}, err
+		}
+		defer release()
+		err = session.UpdatePresence("human", input)
 		return nil, map[string]bool{"updated": err == nil}, err
 	})
 	return server

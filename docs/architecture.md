@@ -45,9 +45,13 @@ Claude/Codex MCP host ─┐
 
 ### Go 실행 파일
 
-`cmd/document-workspace`는 하나의 입력 파일을 열고 HTTP 또는 stdio 전송을
-시작합니다. `-check`는 같은 adapter 경계에서 사전 검사만 수행합니다. 릴리스
-정보는 build 시 version, commit, date로 주입합니다.
+`cmd/document-workspace`는 입력 파일을 열고 HTTP 또는 stdio 전송을 시작합니다.
+stdio는 파일 없이 시작한 뒤 `open_workbook`으로 활성 XLSX를 정할 수 있습니다.
+thread-safe session holder가 활성 세션의 교체와 종료를 직렬화하며 진행 중인 도구
+호출이 닫힌 세션을 사용하지 않게 합니다. HTTP는 시작 시 파일이 계속 필요합니다.
+`-check`는 같은 adapter 경계에서 사전 검사만 수행합니다. `mcp install`, `status`,
+`uninstall`은 macOS host 설정과 사용자 skill을 관리합니다. 릴리스 정보는 build 시
+version, commit, date로 주입합니다.
 
 ### 형식 adapter
 
@@ -70,6 +74,11 @@ MCP App resource, loopback 브라우저 대체 화면을 제공합니다. workbo
 - `apply_operations`
 - `restore_history`
 - `update_presence`
+
+`open_workbook`은 선택적인 절대 `.xlsx` 경로를 받아 활성 세션을 만들거나
+전환합니다. 다른 도구는 문서가 열리기 전 명확한 오류를 반환합니다. MCP
+`document-xlsx` prompt와 host별 skill은 전체 workbook 대신 metadata와 필요한
+범위만 읽는 workflow를 제공합니다.
 
 다른 형식은 공통 계약이 증명되기 전까지 형식별 typed 도구를 가질 수 있습니다.
 MCP App resource는 `ui://document-workspace/xlsx/v1.html`입니다. HTTP와 stdio가
@@ -164,9 +173,10 @@ XLSX parser 전에는 OOXML ZIP, regular file, 암호화, 안전한 part 이름,
 ## 배포 모드
 
 로컬 모드는 선택한 문서를 adapter로 열고 browser와 MCP HTTP를 loopback에
-연결하거나 데스크톱 MCP host에서 stdio로 실행합니다. package gate는 두 UI를
-빌드하고 검증한 뒤 Go 바이너리에 포함하고 공백이 있는 절대 경로의 복사본으로
-smoke test합니다.
+연결하거나 데스크톱 MCP host에서 stdio로 실행합니다. stdio host는 설치 시 문서
+경로를 고정하지 않고 각 작업의 `open_workbook` 호출에서 사용자가 제공한 절대
+경로를 사용합니다. package gate는 두 UI를 빌드하고 검증한 뒤 Go 바이너리에
+포함하고 공백이 있는 절대 경로의 복사본으로 smoke test합니다.
 
 호스팅 모드는 아직 구현하지 않았습니다. 구현 시 사용자와 MCP client 인증, 모든
 문서 read/write authorization, immutable object storage, 관계형 metadata와 audit,

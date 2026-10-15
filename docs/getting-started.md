@@ -67,44 +67,85 @@ MCP 호스트를 설정하기 전에 사전 검사를 실행합니다.
 주소, 전송, 대체 화면 옵션은 `./document-workspace -help`로 확인합니다. 버그를
 신고할 때는 `./document-workspace -version` 결과를 기록하세요.
 
-## Claude Desktop 연결
+## macOS MCP 자동 설치
 
-Claude Desktop MCP 설정에 압축을 푼 실행 파일과 통합 문서의 절대 경로를
-사용합니다.
+압축을 푼 실행 파일에서 다음 명령을 한 번 실행합니다.
+
+```bash
+./document-workspace mcp install
+```
+
+이 명령은 다음 작업을 수행합니다.
+
+- 실행 파일을 사용자 Application Support 아래의 고정 경로로 복사합니다.
+- 기존 항목을 보존하면서 Claude Desktop과 Codex에 stdio MCP를 등록합니다.
+- Claude와 Codex의 사용자 skill 디렉터리에 `document-xlsx`를 설치합니다.
+- 변경한 host 설정의 직전 내용을 `.document-workspace.bak`으로 보관합니다.
+
+설치 뒤 Claude Desktop과 Codex를 완전히 종료하고 다시 실행하세요. 상태 확인과
+제거는 다음 명령을 사용합니다.
+
+```bash
+./document-workspace mcp status
+./document-workspace mcp uninstall
+```
+
+자동 설치는 현재 macOS만 지원합니다. 손상된 JSON이나 `document-workspace` 관리
+구간이 있는 설정은 덮어쓰지 않고 오류를 반환합니다. 제거는 이 프로그램이
+관리하는 MCP 항목, skill, 복사된 실행 파일만 제거합니다.
+
+## 문서 작업 시작
+
+Claude에서 MCP prompt 목록의 `document-xlsx`를 선택합니다. host가 MCP prompt를
+slash command로 표시하면 다음처럼 사용할 수 있습니다.
+
+```text
+/document-xlsx "/absolute/path/to/workbook.xlsx" "자산 분류 지침대로 수정해줘"
+```
+
+host 버전에 따라 명령이 MCP server namespace 아래에 표시될 수 있습니다. Codex는
+다음처럼 명시적으로 skill을 호출합니다.
+
+```text
+$document-xlsx "/absolute/path/to/workbook.xlsx" 자산 분류 지침대로 수정해줘
+```
+
+두 host 모두 자연어로 절대 경로와 작업을 전달해도 MCP 도구를 사용할 수 있습니다.
+`open_workbook`은 지정한 XLSX를 활성 문서로 만들며 같은 대화에서 다른 절대 경로를
+전달하면 안전하게 전환합니다. 임의 디렉터리를 검색하거나 파일 경로를 추측하지
+않으므로 사용자가 절대 경로를 제공해야 합니다.
+
+workflow는 통합 문서 metadata를 먼저 확인하고 필요한 범위만 읽습니다. 가능한
+경우 하나의 작업 묶음으로 변경하고, 최신 리비전으로 저장한 뒤 바뀐 범위를 다시
+읽습니다. MCP App이 표시되지 않으면 `open_workbook`이 반환한 일회용
+`browserUrl`을 여세요.
+
+## 수동 연결 대체 절차
+
+자동 설치를 사용할 수 없거나 설정을 직접 관리하려면 Claude Desktop MCP 설정에
+실행 파일만 등록합니다. 통합 문서 경로는 설정에 고정하지 않습니다.
 
 ```json
 {
   "mcpServers": {
     "document-workspace": {
       "command": "/absolute/path/to/document-workspace",
-      "args": [
-        "-transport",
-        "stdio",
-        "-file",
-        "/absolute/path/to/workbook.xlsx"
-      ]
+      "args": ["-transport", "stdio"]
     }
   }
 }
 ```
 
-설정을 바꾼 뒤 Claude Desktop을 완전히 종료하고 다시 실행하세요. 호스트에
-`open_workbook` 호출을 요청합니다. MCP App이 표시되지 않으면 도구가 반환한
-일회용 `browserUrl`을 여세요.
-
-## Codex 연결
-
-해당 Codex `config.toml`에 압축을 푼 실행 파일과 통합 문서를 추가합니다.
+Codex `config.toml`의 수동 설정은 다음과 같습니다.
 
 ```toml
 [mcp_servers.document_workspace]
 command = "/absolute/path/to/document-workspace"
-args = ["-transport", "stdio", "-file", "/absolute/path/to/workbook.xlsx"]
+args = ["-transport", "stdio"]
 ```
 
-Codex가 도구를 찾도록 새 세션을 시작하세요. Codex에 `open_workbook` 호출을
-요청하고, 기본 MCP App 표시를 사용할 수 없으면 반환된 일회용 URL을 앱 내
-브라우저에서 엽니다.
+기존 `-file` 또는 위치 인자 방식은 특정 통합 문서를 항상 여는 연동을 위해 계속
+지원합니다.
 
 ## 승인과 안전
 

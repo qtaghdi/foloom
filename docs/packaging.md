@@ -50,9 +50,9 @@ make release-verify VERSION=0.1.0-alpha.local
 ```
 
 `dist/`에는 AMD64와 ARM64용 macOS, Linux, Windows 미서명 압축 파일과
-`SHA256SUMS`가 생성됩니다. 각 압축 파일에는 실행 파일, README, 형식 지원표,
-호스트 호환성 안내, 로컬 보안 안내가 들어갑니다. Go 바이너리는 앞서 빌드한
-브라우저 및 MCP App 번들을 포함합니다.
+`SHA256SUMS`가 생성됩니다. 각 압축 파일에는 실행 파일, README, 시작 안내, 형식
+지원표, 호스트 호환성 안내, 로컬 보안 안내가 들어갑니다. Go 바이너리는 앞서
+빌드한 브라우저 및 MCP App 번들과 설치할 `document-xlsx` skill을 포함합니다.
 
 `Private alpha package` workflow는 권한 있는 사용자의 수동 실행으로만 동작합니다.
 비공개 저장소 범위의 workflow artifact를 올리고 저장소 내용에는 읽기 권한만
@@ -74,3 +74,7 @@ make release-verify VERSION=0.1.0-alpha.local
 `document-workspace -check workbook.xlsx`는 서비스와 같은 XLSX 세션 경계를
 통해 통합 문서를 열고 구조 호환성과 수식 정책 metadata를 출력한 뒤 종료합니다.
 HTTP나 stdio 전송을 시작하지 않고 셀 내용도 출력하지 않습니다.
+
+macOS의 `document-workspace mcp install`은 현재 실행 파일을 사용자 Application
+Support에 복사하고 Claude Desktop 및 Codex stdio 설정과 skill을 설치합니다.
+package 자동 테스트는 실제 사용자 설정 대신 임시 홈을 사용합니다.
