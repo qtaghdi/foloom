@@ -1,7 +1,10 @@
 package xlsx
 
 import (
+	"archive/zip"
+	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +12,146 @@ import (
 
 	"github.com/xuri/excelize/v2"
 )
+
+func TestReadRangeDecodesValidationFormulaCharacterReferences(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "book.xlsx")
+	file := excelize.NewFile()
+	file.SetSheetName("Sheet1", "정보자산 목록")
+	if _, err := file.NewSheet("선택값"); err != nil {
+		t.Fatal(err)
+	}
+	validation := excelize.NewDataValidation(true)
+	validation.Sqref = "C2:C3"
+	validation.SetDropList([]string{"선택값!$E$2:$E$5"})
+	validation.Type = "list"
+	validation.Formula1 = "선택값!$E$2:$E$5"
+	validation.Formula2 = "선택값!$F$2:$F$5"
+	if err := file.AddDataValidation("정보자산 목록", validation); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.SaveAs(path); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+	rewriteWorksheetXML(t, path, func(content string) string {
+		return strings.ReplaceAll(content, "선택값", "&#49440;&#53469;&#44050;")
+	})
+
+	session, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	rangeData, err := session.ReadRange("정보자산 목록", "C2:C3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rangeData.Validations) != 1 {
+		t.Fatalf("validations = %#v", rangeData.Validations)
+	}
+	got := rangeData.Validations[0]
+	if got.Formula1 != "선택값!$E$2:$E$5" || got.Formula2 != "선택값!$F$2:$F$5" {
+		t.Fatalf("validation formulas = %q, %q", got.Formula1, got.Formula2)
+	}
+}
+
+func TestApplyIdenticalValueDoesNotAdvanceRevisionOrHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "book.xlsx")
+	file := excelize.NewFile()
+	if err := file.SetCellValue("Sheet1", "A1", "before"); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.SaveAs(path); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+
+	session, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	changed, err := session.Apply(1, "human", []Operation{{Type: "set_cell", Sheet: "Sheet1", Cell: "A1", Value: "same"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.Revision != 2 || !changed.CanUndo || changed.CanRedo {
+		t.Fatalf("snapshot after change = %#v", changed)
+	}
+	restored, err := session.RestoreHistory(2, "human", "undo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Revision != 3 || restored.CanUndo || !restored.CanRedo {
+		t.Fatalf("snapshot after undo = %#v", restored)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := session.Apply(3, "human", []Operation{{Type: "set_cell", Sheet: "Sheet1", Cell: "A1", Value: "before"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Revision != 3 || updated.CanUndo || !updated.CanRedo {
+		t.Fatalf("snapshot after no-op = %#v", updated)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("no-op write changed workbook bytes")
+	}
+	manifest, err := readHistoryManifest(session.historyStore.manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Revision != 3 || len(manifest.Undo) != 0 || len(manifest.Redo) != 1 {
+		t.Fatalf("history manifest = %#v", manifest)
+	}
+}
+
+func rewriteWorksheetXML(t *testing.T, path string, rewrite func(string) string) {
+	t.Helper()
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := zip.NewReader(bytes.NewReader(source), int64(len(source)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	for _, item := range reader.File {
+		input, openErr := item.Open()
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		content, readErr := io.ReadAll(input)
+		_ = input.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if strings.HasPrefix(item.Name, "xl/worksheets/sheet") && bytes.Contains(content, []byte("<dataValidation")) {
+			content = []byte(rewrite(string(content)))
+		}
+		target, createErr := writer.CreateHeader(&item.FileHeader)
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		if _, writeErr := target.Write(content); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, output.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestApplyPersistsAndRejectsStaleRevision(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "book.xlsx")

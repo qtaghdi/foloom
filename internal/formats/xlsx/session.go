@@ -275,6 +275,11 @@ func (s *Session) Apply(baseRevision uint64, actor string, operations []Operatio
 	if err != nil {
 		return Snapshot{}, err
 	}
+	// Identical persisted bytes are not a new document state. Keeping the
+	// revision and both history stacks stable prevents false browser conflicts.
+	if hashBytes(nextContent) == s.currentHash {
+		return s.snapshotLocked(), nil
+	}
 	nextUndo := appendBoundedHistory(append([][]byte(nil), s.undoHistory...), previous, s.historyLimits)
 	nextRedo := [][]byte(nil)
 	if err := s.historyStore.prepare(nextRevision, nextContent, nextUndo, nextRedo); err != nil {

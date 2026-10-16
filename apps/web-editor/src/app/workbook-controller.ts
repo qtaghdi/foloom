@@ -252,14 +252,23 @@ export class WorkbookController {
       this.requireRecovery(new Error('Live event history is incomplete or the server restarted.'));
       return;
     }
+    const commitsWorkbook = event.type !== 'presence.update' && event.type !== 'cell.typing';
     if (event.actor !== 'ai') {
-      if (event.type !== 'presence.update' && event.type !== 'cell.typing' &&
-          event.revision > this.revision && this.pendingWrites === 0) {
-        this.requireRecovery(new Error('The workbook changed in another editor.'));
+      if (!commitsWorkbook || event.revision <= this.revision || this.pendingWrites > 0) return;
+      if (event.type === 'workbook.reload') {
+        this.recoveryRequired = true;
+        window.location.reload();
+        return;
       }
+      this.updateRevision(event.revision);
+      if (event.canUndo !== undefined && event.canRedo !== undefined) {
+        this.setHistoryState(event.canUndo, event.canRedo);
+      }
+      this.engine?.applyRemoteEvent(event);
+      this.view.showRevision('Remote change saved', this.revision, 'success');
       return;
     }
-    if (this.pendingWrites > 0 && event.type !== 'presence.update' && event.type !== 'cell.typing') {
+    if (this.pendingWrites > 0 && commitsWorkbook) {
       this.requireRecovery(new Error('The workbook changed while local edits were pending.'));
       return;
     }
@@ -268,15 +277,21 @@ export class WorkbookController {
       window.location.reload();
       return;
     }
-    const commitsWorkbook = event.type !== 'presence.update' && event.type !== 'cell.typing';
     if (event.revision > this.revision && commitsWorkbook) {
-      this.revision = event.revision;
+      this.updateRevision(event.revision);
     }
     if (commitsWorkbook && event.canUndo !== undefined && event.canRedo !== undefined) {
       this.setHistoryState(event.canUndo, event.canRedo);
     }
     this.engine?.applyRemoteEvent(event);
     this.view.showAIPresence(event, this.revision);
+  }
+
+  private updateRevision(revision: number): void {
+    this.revision = revision;
+    if (this.snapshot) {
+      this.snapshot = { ...this.snapshot, revision };
+    }
   }
 
   private setHistoryState(canUndo: boolean, canRedo: boolean): void {

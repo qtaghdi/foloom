@@ -2,6 +2,7 @@ package xlsx
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -89,7 +90,7 @@ func (s *Session) validationsInRange(sheet string, c1, r1, c2, r2 int) ([]DataVa
 			if rangeIntersects(ref, c1, r1, c2, r2) {
 				result = append(result, DataValidation{
 					Range: ref, Type: item.Type, Operator: item.Operator,
-					Formula1: item.Formula1, Formula2: item.Formula2,
+					Formula1: html.UnescapeString(item.Formula1), Formula2: html.UnescapeString(item.Formula2),
 					AllowBlank: item.AllowBlank, ShowDropDown: item.ShowDropDown,
 					ShowErrorMessage: item.ShowErrorMessage, Error: optionalString(item.Error),
 					ErrorTitle: optionalString(item.ErrorTitle), ShowInputMessage: item.ShowInputMessage,
