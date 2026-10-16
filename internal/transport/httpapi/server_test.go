@@ -165,12 +165,13 @@ func TestMCPAppToolAndResource(t *testing.T) {
 	if openTool == nil {
 		t.Fatal("open_workbook tool is not registered")
 	}
-	ui, ok := openTool.Meta["ui"].(map[string]any)
-	if !ok || ui["resourceUri"] != appResourceURI {
-		t.Fatalf("open_workbook UI metadata = %#v", openTool.Meta)
-	}
-	if openTool.Meta["openai/outputTemplate"] != appResourceURI {
-		t.Fatalf("open_workbook compatibility metadata = %#v", openTool.Meta)
+	if openTool.Meta != nil {
+		if _, ok := openTool.Meta["ui"]; ok {
+			t.Fatalf("open_workbook must not request an inline MCP App preview: %#v", openTool.Meta)
+		}
+		if _, ok := openTool.Meta["openai/outputTemplate"]; ok {
+			t.Fatalf("open_workbook must not request an inline output template: %#v", openTool.Meta)
+		}
 	}
 	openResult, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{Name: "open_workbook"})
 	if err != nil {
@@ -327,7 +328,8 @@ func TestDocumentXLSXPromptIsDiscoverableAndFocused(t *testing.T) {
 		t.Fatalf("prompt messages = %#v", result.Messages)
 	}
 	content, ok := result.Messages[0].Content.(*mcp.TextContent)
-	if !ok || !strings.Contains(content.Text, "inspect only the workbook metadata and ranges needed") || !strings.Contains(content.Text, "/tmp/example.xlsx") {
+	if !ok || !strings.Contains(content.Text, "browserUrl") || !strings.Contains(content.Text, "Do not use an inline image") ||
+		!strings.Contains(content.Text, "Inspect only the workbook metadata and ranges needed") || !strings.Contains(content.Text, "/tmp/example.xlsx") {
 		t.Fatalf("prompt content = %#v", result.Messages[0].Content)
 	}
 }
