@@ -5,14 +5,14 @@
 
 ## 지원 모드
 
-| 호스트 | 전송 | 구조화 MCP 도구 | native MCP App | 인증된 browser fallback | 상태 |
+| 호스트 | 전송 | 구조화 MCP 도구 | native MCP App | 인증된 browser editor | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | Claude Desktop | stdio | 구현됨 | 수동 확인 필요 | 구현됨 | candidate 인증 대기 |
 | Codex Desktop | stdio | 구현됨 | 확인되지 않음 | 2026-09-30 확인 | fallback만 역사적 인증 |
 | 일반 HTTP MCP client | Streamable HTTP | 구현됨 | 호스트별 | 별도 viewer URL | 프로토콜 테스트 있음 |
 
 host version, OS, transport, UI mode, fixture, 사람 및 AI 편집, conflict, native
-reopen을 같은 candidate에서 기록해야 인증됩니다. browser fallback 통과를 native
+reopen을 같은 candidate에서 기록해야 인증됩니다. browser editor 통과를 native
 embedded UI 통과로 표현하지 않습니다.
 
 ## Codex browser fallback 기록, 2026-09-30
@@ -60,8 +60,9 @@ macOS에서는 `./bin/document-workspace mcp install`이 실행 파일을 고정
 ```
 
 설정 뒤 Claude Desktop을 완전히 종료하고 다시 실행합니다. MCP message는 stdout,
-진단은 stderr로 출력합니다. native MCP App이 없으면 `open_workbook`을 호출하고
-일회용 `browserUrl`을 Browser panel에서 엽니다.
+진단은 stderr로 출력합니다. `open_workbook`을 호출한 뒤 반환된 일회용
+`browserUrl`을 Browser panel에서 엽니다. 작은 inline image나 MCP App preview는
+직접 편집 화면으로 사용하지 않습니다.
 
 ## Codex stdio 설정
 
@@ -71,8 +72,8 @@ command = "/absolute/path/to/document-workspace/bin/document-workspace"
 args = ["-transport", "stdio"]
 ```
 
-설정 뒤 새 Codex session을 시작합니다. native MCP App이 없으면
-`open_workbook`의 일회용 URL을 앱 내 browser에서 엽니다.
+설정 뒤 새 Codex session을 시작합니다. `open_workbook`의 일회용 URL을 앱 내
+browser에서 열어 전체 grid를 직접 편집합니다.
 
 Claude는 MCP prompt 목록의 `document-xlsx`를 선택하거나 host가 노출한 slash
 command를 사용할 수 있습니다. Codex는 `$document-xlsx`로 같은 workflow를
@@ -102,7 +103,8 @@ command, 이후 작업 범위를 모두 신뢰할 때만 사용합니다. 자동
 2. `document-workspace`만 활성화한 새 호스트 대화를 시작합니다.
 3. 초기화, `document-xlsx` prompt 또는 skill, server instruction 노출을 확인합니다.
 4. 절대 경로로 `open_workbook`을 호출한 뒤 `get_workbook`, `read_range`를 호출합니다.
-5. native iframe 또는 일회용 browser fallback을 엽니다.
+5. 일회용 browser editor URL을 엽니다. native iframe은 별도 호환성 확인에만
+   사용합니다.
 6. UI에서 셀 하나를 편집하고 리비전이 정확히 한 번 증가하는지 확인합니다.
 7. AI가 `update_presence`, `apply_operations`를 호출하게 하고 선택과 값 반영을
    확인합니다.
@@ -119,7 +121,7 @@ command, 이후 작업 범위를 모두 신뢰할 때만 사용합니다. 자동
 - hosted service에는 OAuth, 문서별 authorization, stable HTTPS, 영속 storage가
   필요합니다. 로컬 bearer token은 hosted identity가 아닙니다.
 - inline MCP App 지원과 일반 MCP tool 지원은 다를 수 있습니다.
-- stdio browser fallback은 같은 machine의 loopback에 접근 가능한 host가
+- stdio browser editor는 같은 machine의 loopback에 접근 가능한 host가
   필요합니다. 원격 connector는 launch URL을 사용할 수 없습니다.
 
 참고: [OpenAI MCP server quickstart](https://developers.openai.com/plugins/build/app-quickstart),

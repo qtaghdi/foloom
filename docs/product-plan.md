@@ -30,7 +30,7 @@ commit, conflict, undo, 형식별 안전 저장을 제공합니다.
 
 - Go 통합 문서 session, 리비전, 원자적 저장
 - Streamable HTTP와 stdio MCP
-- MCP App과 loopback browser fallback
+- browser-first loopback editor와 선택적 MCP App resource
 - 사람 편집과 순서 있는 AI event
 - 범위 붙여넣기, 서식, 병합, 행과 열 작업
 - 제한된 영속 undo와 redo
