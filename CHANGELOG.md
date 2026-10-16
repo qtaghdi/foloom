@@ -8,6 +8,8 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- browser Alert의 접기, 펼치기, 닫기 control과 MCP의 browser-first workbook 편집
+  workflow를 추가했습니다.
 - macOS에서 실행 파일, Claude Desktop과 Codex MCP 설정, `document-xlsx` skill을
   함께 관리하는 `mcp install`, `status`, `uninstall` 명령을 추가했습니다.
 - 파일 없이 시작한 stdio MCP에서 절대 `.xlsx` 경로를 동적으로 열고 전환하는

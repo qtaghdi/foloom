@@ -15,7 +15,7 @@ import (
 
 const (
 	appResourceURI     = "ui://document-workspace/xlsx/v1.html"
-	serverInstructions = "If no workbook is open, call open_workbook with an absolute XLSX path. Call get_workbook before reads or writes and use read_range only for focused inspection. Pass the latest revision to apply_operations, and refresh after a conflict. If open_workbook returns browserUrl because the host did not render the MCP App, open that short-lived URL in the host browser surface and do not repeat it in chat. Use update_presence before visible AI edits."
+	serverInstructions = "If no workbook is open, call open_workbook with an absolute XLSX path. Always open the returned short-lived browserUrl in the host browser surface so the user can inspect and directly edit the workbook; do not substitute an inline image or MCP App preview, and do not repeat the URL in chat. Call get_workbook before reads or writes and use read_range only for focused inspection. Pass the latest revision to apply_operations, and refresh after a conflict. Use update_presence before visible AI edits."
 )
 
 type openWorkbookInput struct {
@@ -132,10 +132,6 @@ func (s *Server) mcpServer() *mcp.Server {
 		&mcp.Implementation{Name: "document-workspace", Version: "0.1.0"},
 		&mcp.ServerOptions{Instructions: serverInstructions},
 	)
-	appMeta := mcp.Meta{
-		"ui":                    map[string]any{"resourceUri": appResourceURI, "visibility": []string{"model", "app"}},
-		"openai/outputTemplate": appResourceURI,
-	}
 	appOnlyMeta := mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}
 	closedWorld := false
 	destructive := true
@@ -154,7 +150,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		if path == "" || task == "" {
 			return nil, fmt.Errorf("path and task are required")
 		}
-		text := fmt.Sprintf("Use the document-workspace MCP tools for this request. Open %q, inspect only the workbook metadata and ranges needed for the task, summarize the proposed changes, and use the latest revision for one coherent apply_operations batch after the host presents any required approval. Do not read the entire workbook unless the task requires it. Re-read the changed range and report the saved revision when complete. Task: %s", path, task)
+		text := fmt.Sprintf("Use the document-workspace MCP tools for this request. Open %q, then open the returned browserUrl in the host browser surface so the user can directly edit the workbook. Do not use an inline image or MCP App preview as the editing surface, and do not repeat the short-lived URL in chat. Inspect only the workbook metadata and ranges needed for the task, summarize the proposed changes, and use the latest revision for one coherent apply_operations batch after the host presents any required approval. Do not read the entire workbook unless the task requires it. Re-read the changed range and report the saved revision when complete. Task: %s", path, task)
 		return &mcp.GetPromptResult{
 			Description: "안전한 XLSX 편집 workflow",
 			Messages:    []*mcp.PromptMessage{{Role: mcp.Role("user"), Content: &mcp.TextContent{Text: text}}},
@@ -180,9 +176,8 @@ func (s *Server) mcpServer() *mcp.Server {
 	})
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "open_workbook",
-		Title:       "Open Workbook",
-		Description: "Open an absolute local XLSX path as the active workbook, or reopen the current workbook in an interactive spreadsheet surface when path is omitted. When the host does not render MCP Apps, use the short-lived browserUrl fallback returned by this tool.",
-		Meta:        appMeta,
+		Title:       "Open Workbook in Browser",
+		Description: "Open an absolute local XLSX path as the active workbook, or reopen the current workbook when path is omitted. Always open the returned short-lived browserUrl in the host browser surface for direct user editing; do not use an inline image or MCP App preview as the editing surface.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input openWorkbookInput) (*mcp.CallToolResult, openWorkbookResponse, error) {
 		if path := strings.TrimSpace(input.Path); path != "" {

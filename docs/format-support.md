@@ -59,7 +59,7 @@ CSV 등은 이 초기 표 밖에 있으며 별도 결정을 거쳐야 합니다.
 | validation 및 conditional formatting | 일반 규칙 표시 및 동작 | 고급 규칙과 작성 범위 |
 | undo와 redo | 서버 소유, 리비전 기반, 제한된 영속 이력 | 무제한 이력이나 audit system이 아님 |
 | 보존 | 생성 및 LibreOffice fixture에서 관련 없는 편집과 reopen | Microsoft Excel fixture와 더 넓은 corpus |
-| 데스크톱 호스트 | MCP 전송, app resource, 브라우저 대체 화면 | 호스트별 모드 인증 |
+| 데스크톱 호스트 | MCP 전송, browser-first editor, 선택적 app resource | 호스트별 모드 인증 |
 
 증거는 [XLSX corpus](../testdata/xlsx/compatibility/README.md),
 [corpus tests](../internal/formats/xlsx/compatibility_test.go),
