@@ -1,8 +1,9 @@
 # 비공개 XLSX 알파 시작 안내
 
 document-workspace는 현재 기존 XLSX 통합 문서 하나를 여는 로컬 프로세스로
-동작합니다. stdio로 Claude Desktop 또는 Codex에 연결하고, MCP App이나 인증된
-loopback 브라우저 대체 화면으로 스프레드시트 UI를 제공합니다.
+동작합니다. stdio로 Claude Desktop 또는 Codex에 연결하고, 인증된 loopback
+browser editor를 기본 스프레드시트 UI로 제공합니다. MCP App resource는 호환성을
+위해 함께 제공합니다.
 
 알파는 저장소 소유자와 명시적으로 초대한 테스터만 사용할 수 있습니다.
 Microsoft Excel 대체품이나 호스팅 협업 서비스가 아닙니다. 실제 Excel 릴리스
@@ -115,10 +116,11 @@ $document-xlsx "/absolute/path/to/workbook.xlsx" 자산 분류 지침대로 수�
 전달하면 안전하게 전환합니다. 임의 디렉터리를 검색하거나 파일 경로를 추측하지
 않으므로 사용자가 절대 경로를 제공해야 합니다.
 
-workflow는 통합 문서 metadata를 먼저 확인하고 필요한 범위만 읽습니다. 가능한
-경우 하나의 작업 묶음으로 변경하고, 최신 리비전으로 저장한 뒤 바뀐 범위를 다시
-읽습니다. MCP App이 표시되지 않으면 `open_workbook`이 반환한 일회용
-`browserUrl`을 여세요.
+workflow는 `open_workbook`이 반환한 일회용 `browserUrl`을 host의 browser
+surface에 먼저 열어 사람이 전체 grid에 접근하고 직접 수정할 수 있게 합니다.
+작은 inline image나 MCP App preview를 편집 화면으로 사용하지 않습니다. 이후
+통합 문서 metadata를 확인하고 필요한 범위만 읽습니다. 가능한 경우 하나의 작업
+묶음으로 변경하고, 최신 리비전으로 저장한 뒤 바뀐 범위를 다시 읽습니다.
 
 ## 수동 연결 대체 절차
 

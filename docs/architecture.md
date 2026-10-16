@@ -76,14 +76,16 @@ MCP App resource, loopback 브라우저 대체 화면을 제공합니다. workbo
 - `update_presence`
 
 `open_workbook`은 선택적인 절대 `.xlsx` 경로를 받아 활성 세션을 만들거나
-전환합니다. 다른 도구는 문서가 열리기 전 명확한 오류를 반환합니다. MCP
-`document-xlsx` prompt와 host별 skill은 전체 workbook 대신 metadata와 필요한
-범위만 읽는 workflow를 제공합니다.
+전환하고, 사람이 직접 편집할 인증된 browser URL을 반환합니다. MCP host는 작은
+inline preview 대신 이 URL을 browser surface에 엽니다. 다른 도구는 문서가 열리기
+전 명확한 오류를 반환합니다. MCP `document-xlsx` prompt와 host별 skill은 전체
+workbook 대신 metadata와 필요한 범위만 읽는 workflow를 제공합니다.
 
 다른 형식은 공통 계약이 증명되기 전까지 형식별 typed 도구를 가질 수 있습니다.
-MCP App resource는 `ui://document-workspace/xlsx/v1.html`입니다. HTTP와 stdio가
-같은 서버를 사용하며, stdio는 일회용 실행 token의 인증된 loopback 대체 화면을
-시작할 수 있습니다.
+MCP App resource는 호환성을 위해 `ui://document-workspace/xlsx/v1.html`로
+유지하지만 `open_workbook`의 자동 output template으로 연결하지 않습니다. HTTP와
+stdio가 같은 서버를 사용하며, stdio는 일회용 실행 token의 인증된 loopback
+browser editor를 기본 상호작용 surface로 제공합니다.
 
 ### 브라우저 편집기
 
@@ -96,7 +98,8 @@ MCP App client는 같은 `WorkbookClient` 계약을 구현하고 Zod가 입력 p
 Univer는 grid keyboard와 clipboard를 담당합니다. controller는 확정된 셀 편집,
 사각 붙여넣기, undo 및 redo를 서버 기준 작업으로 바꿉니다. UI는 대기, 저장,
 실패, 충돌, 복구를 live region에 표시하고 focus, reduced motion, safe area, 작은
-화면 대체 layout을 유지합니다.
+화면 대체 layout을 유지합니다. compatibility notice와 일반 오류는 접거나 닫을 수
+있고, 편집이 중단된 복구 Alert는 reload action을 유지한 채 접을 수 있습니다.
 
 ### 호환성 corpus
 

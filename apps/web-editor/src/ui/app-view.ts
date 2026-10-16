@@ -43,7 +43,12 @@ export class AppView {
       this.warningPanel.classList.add('hidden');
       return;
     }
-    this.warningPanel.textContent = `Compatibility notice: ${warnings.map((warning) => warning.message).join('; ')}`;
+    this.renderStatusPanel(
+      this.warningPanel,
+      'Compatibility notice',
+      `${warnings.map((warning) => warning.message).join('; ')}`,
+      true,
+    );
     this.warningPanel.classList.remove('hidden');
   }
 
@@ -91,7 +96,7 @@ export class AppView {
   showError(error: unknown, revision: number): void {
     const message = error instanceof Error ? error.message : String(error);
     const details = `${message} Check the connection and workbook access, then try again.`;
-    this.errorPanel.replaceChildren(this.createErrorHeading('Operation failed'), this.createErrorMessage(details));
+    this.renderStatusPanel(this.errorPanel, 'Operation failed', details, true);
     this.errorPanel.classList.remove('hidden');
     this.showRevision('Operation failed', revision, 'error');
     this.errorPanel.focus({ preventScroll: true });
@@ -106,7 +111,7 @@ export class AppView {
     reload.className = 'mt-3 min-h-11 touch-manipulation rounded border border-red-700 bg-white px-3 py-2 font-semibold underline hover:bg-red-100 active:bg-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700';
     reload.textContent = 'Reload saved workbook';
     reload.onclick = () => window.location.reload();
-    this.errorPanel.replaceChildren(this.createErrorHeading(status), this.createErrorMessage(details), reload);
+    this.renderStatusPanel(this.errorPanel, status, details, false, [reload]);
     this.errorPanel.classList.remove('hidden');
     this.setHistoryState(false, false);
     this.showRevision(status, revision, conflict ? 'conflict' : 'recovery');
@@ -122,18 +127,63 @@ export class AppView {
   private readonly handleUndo = (): void => this.historyListener?.('undo');
   private readonly handleRedo = (): void => this.historyListener?.('redo');
 
-  private createErrorHeading(message: string): HTMLElement {
-    const heading = this.errorPanel.ownerDocument.createElement('strong');
-    heading.className = 'block text-sm font-bold';
-    heading.textContent = message;
-    return heading;
+  private renderStatusPanel(
+    panel: HTMLElement,
+    title: string,
+    message: string,
+    dismissible: boolean,
+    actions: HTMLElement[] = [],
+  ): void {
+    const document = panel.ownerDocument;
+    const header = document.createElement('div');
+    header.className = 'flex items-center justify-between gap-3';
+    const heading = document.createElement('strong');
+    heading.className = 'block min-w-0 text-sm font-bold';
+    heading.textContent = title;
+    const controls = document.createElement('div');
+    controls.className = 'flex shrink-0 items-center gap-1';
+    const details = document.createElement('div');
+    details.className = 'status-panel-details';
+    const paragraph = document.createElement('p');
+    paragraph.className = 'mt-1 text-sm leading-5';
+    paragraph.textContent = message;
+    details.append(paragraph, ...actions);
+
+    const toggle = this.createPanelButton(document, 'Collapse');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', `Collapse ${title}`);
+    toggle.addEventListener('click', () => {
+      const expanded = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      toggle.setAttribute('aria-label', `${expanded ? 'Expand' : 'Collapse'} ${title}`);
+      toggle.textContent = expanded ? 'Expand' : 'Collapse';
+      if (expanded) {
+        details.classList.add('hidden');
+      } else {
+        details.classList.remove('hidden');
+      }
+    });
+    controls.append(toggle);
+
+    if (dismissible) {
+      const dismiss = this.createPanelButton(document, 'Close');
+      dismiss.setAttribute('aria-label', `Close ${title}`);
+      dismiss.addEventListener('click', () => {
+        panel.classList.add('hidden');
+        this.spreadsheet.focus({ preventScroll: true });
+      });
+      controls.append(dismiss);
+    }
+    header.append(heading, controls);
+    panel.replaceChildren(header, details);
   }
 
-  private createErrorMessage(message: string): HTMLElement {
-    const details = this.errorPanel.ownerDocument.createElement('p');
-    details.className = 'mt-1 text-sm leading-5';
-    details.textContent = message;
-    return details;
+  private createPanelButton(document: Document, label: string): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'min-h-11 min-w-11 touch-manipulation rounded border border-current bg-white/70 px-2 py-1 text-xs font-semibold hover:bg-white active:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current';
+    button.textContent = label;
+    return button;
   }
 }
 

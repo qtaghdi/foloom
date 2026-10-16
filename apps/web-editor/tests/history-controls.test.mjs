@@ -32,8 +32,8 @@ class FakeElement {
     this.focused = false;
   }
 
-  append(child) {
-    this.children.push(child);
+  append(...children) {
+    this.children.push(...children);
   }
 
   replaceChildren(...children) {
@@ -74,6 +74,7 @@ class FakeButton extends FakeElement {
   click() {
     if (!this.disabled) {
       this.listeners.get('click')?.();
+      this.onclick?.();
     }
   }
 }
@@ -85,7 +86,12 @@ const createDocument = () => {
       return this.elements.get(id) ?? null;
     },
     createElement(tag) {
-      return tag === 'button' ? new FakeButton(this) : new FakeElement(this);
+      if (tag === 'button') {
+        const button = new FakeButton(this);
+        button.disabled = false;
+        return button;
+      }
+      return new FakeElement(this);
     },
   };
   for (const id of ['workbook-name', 'revision-status', 'ai-presence', 'ai-presence-text', 'fatal-error', 'feature-warnings', 'spreadsheet']) {
@@ -162,14 +168,57 @@ test('revision, failure, and conflict states are visible and accessible', () => 
 
   view.showError(new Error('Network unavailable'), 3);
   assert.equal(revision.dataset.state, 'error');
-  assert.equal(error.children[0].textContent, 'Operation failed');
+  assert.equal(error.children[0].children[0].textContent, 'Operation failed');
   assert.equal(error.focused, true);
+  const errorControls = error.children[0].children[1];
+  const errorToggle = errorControls.children[0];
+  const errorClose = errorControls.children[1];
+  assert.equal(errorToggle.getAttribute('aria-expanded'), 'true');
+  errorToggle.click();
+  assert.equal(errorToggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(error.children[1].classList.values.has('hidden'), true);
+  errorToggle.click();
+  assert.equal(error.children[1].classList.values.has('hidden'), false);
+  errorClose.click();
+  assert.equal(error.classList.values.has('hidden'), true);
+  assert.equal(spreadsheet.focused, true);
 
   error.focused = false;
   view.showRecovery('Revision conflict with a newer workbook.', 4);
   assert.equal(revision.dataset.state, 'conflict');
-  assert.equal(error.children[0].textContent, 'Conflict detected');
+  assert.equal(error.children[0].children[0].textContent, 'Conflict detected');
   assert.equal(error.focused, true);
+  const recoveryControls = error.children[0].children[1];
+  assert.equal(recoveryControls.children.length, 1);
+  recoveryControls.children[0].click();
+  assert.equal(error.classList.values.has('hidden'), false);
+  assert.equal(error.children[1].classList.values.has('hidden'), true);
+
+  view.dispose();
+});
+
+test('compatibility notice can collapse, expand, and close', () => {
+  const document = createDocument();
+  const window = { clearTimeout() {}, setTimeout: () => 1, location: { reload() {} } };
+  const AppView = loadAppView(window);
+  const view = new AppView(document);
+  const warning = document.getElementById('feature-warnings');
+
+  view.showWarnings([{ feature: 'validation', message: 'Some rules are read-only.' }]);
+  assert.equal(warning.classList.values.has('hidden'), false);
+  assert.equal(warning.children[0].children[0].textContent, 'Compatibility notice');
+  assert.match(warning.children[1].children[0].textContent, /Some rules are read-only/);
+  const controls = warning.children[0].children[1];
+  const toggle = controls.children[0];
+  const close = controls.children[1];
+  toggle.click();
+  assert.equal(toggle.textContent, 'Expand');
+  assert.equal(warning.children[1].classList.values.has('hidden'), true);
+  toggle.click();
+  assert.equal(toggle.textContent, 'Collapse');
+  assert.equal(warning.children[1].classList.values.has('hidden'), false);
+  close.click();
+  assert.equal(warning.classList.values.has('hidden'), true);
 
   view.dispose();
 });
