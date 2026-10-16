@@ -26,7 +26,7 @@ const loadModule = (path, globals) => {
 };
 
 const fixture = async (overrides = {}, snapshotOverrides = {}) => {
-  const state = { writes: 0, reloads: 0, recoveries: [], statuses: [], revisionStates: [], operations: [], historyDirections: [], historyStates: [], callbacks: {}, subscriptionClosed: false };
+  const state = { writes: 0, reloads: 0, recoveries: [], statuses: [], revisionStates: [], operations: [], appliedRevisions: [], remoteEvents: [], historyDirections: [], historyStates: [], callbacks: {}, subscriptionClosed: false };
   const snapshot = { id: 'session', sequence: 5, name: 'book.xlsx', sheets: ['Sheet1'],
     sheetDimensions: [{ name: 'Sheet1', rows: 1, columns: 1 }], canUndo: true, canRedo: false, revision: 2,
     ...snapshotOverrides };
@@ -36,7 +36,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     connect: async () => {}, getWorkbook: async () => snapshot,
     readRange: async () => ({ sheet: 'Sheet1', ref: 'A1', rows: [] }),
     readSheetObjects: async () => ({ sheet: 'Sheet1' }),
-    applyOperations: async (_revision, operations) => { state.writes++; state.operations.push(...operations); return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
+    applyOperations: async (revision, operations) => { state.writes++; state.appliedRevisions.push(revision); state.operations.push(...operations); return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
     restoreHistory: async (_revision, direction) => { state.writes++; state.historyDirections.push(direction); return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
     subscribe: (handler, checkpoint) => {
       state.onEvent = handler; state.checkpoint = checkpoint;
@@ -52,7 +52,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     showRecovery: (message) => state.recoveries.push(message), showError: (error) => { throw error; },
     showAIPresence() {}, dispose() {},
   };
-  const engine = { initialize() {}, dispose() {}, applyRemoteEvent() {} };
+  const engine = { initialize() {}, dispose() {}, applyRemoteEvent: (event) => state.remoteEvents.push(event) };
   for (const method of ['onCellEdit','onRangeEdit','onSelectionChange','onOperation','onViewportChange','onHistoryAction']) {
     engine[method] = (callback) => { state.callbacks[method] = callback; };
   }
@@ -166,6 +166,22 @@ test('remote AI commit updates history availability', async () => {
     canUndo: true, canRedo: false,
   });
   assert.deepEqual(state.historyStates.at(-1), [true, false]);
+});
+
+test('remote human commit advances an idle browser without conflict', async () => {
+  const { state } = await fixture({}, { canUndo: false, canRedo: false });
+  const event = {
+    type: 'cell.commit', actor: 'human', revision: 3, sequence: 6, sheet: 'Sheet1', cell: 'A1',
+    canUndo: true, canRedo: false,
+  };
+  state.onEvent(event);
+  state.callbacks.onOperation({ ...edit, cell: 'A2' });
+  await flush();
+  assert.deepEqual(state.appliedRevisions, [3]);
+  assert.equal(state.recoveries.length, 0);
+  assert.equal(state.remoteEvents.at(-1), event);
+  assert.ok(state.historyStates.some(([canUndo, canRedo]) => canUndo && !canRedo));
+  assert.ok(state.revisionStates.some(([message, revision]) => message === 'Remote change saved' && revision === 3));
 });
 
 test('remote commit during an unresolved local save cannot rebase queued drafts', async () => {
