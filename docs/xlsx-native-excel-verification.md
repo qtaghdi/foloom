@@ -60,6 +60,7 @@ subset fixture로 쓸지 결정합니다. 생성 원본과 동등하다고 표�
 | 붙여넣기 | 사각 범위 | shape, 값, 수식, 원자성 유지 |
 | 서식 | 지원 기본 서식 변경 | 요청 style 표시, 관련 없는 custom format 유지 |
 | 병합 | 임시 범위 병합 및 해제 | 범위 상태와 관련 없는 merge 유지 |
+| Validation 표시 속성 | validation 밖의 셀 하나 변경 | repair 없이 열림, dropdown과 input 및 error message 동작 유지, 저장 전후 worksheet XML에서 `showDropDown`, `showInputMessage`, `showErrorMessage`의 명시 여부와 값 일치 |
 | 행 | 삽입 및 삭제 | reference, validation, rule, drawing, 주변 data 검사 |
 | 열 | 삽입 및 삭제 | reference, validation, rule, drawing, 주변 data 검사 |
 | 이미지 | 기존 image 이동, 크기, 삭제 | 위치와 크기 저장, 관련 없는 media 유지 |

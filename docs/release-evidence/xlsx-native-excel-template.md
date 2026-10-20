@@ -55,6 +55,7 @@
 | 붙여넣기 | | | | 미실행 | Blocked | |
 | 서식 | | | | 미실행 | Blocked | |
 | 병합과 해제 | | | | 미실행 | Blocked | |
+| Validation 표시 속성 | | | 원본 속성 명시 여부와 값, dropdown, input 및 error message 유지 | 미실행 | Blocked | |
 | 행 | | | | 미실행 | Blocked | |
 | 열 | | | | 미실행 | Blocked | |
 | 이미지 | | | | 미실행 | Blocked | |
