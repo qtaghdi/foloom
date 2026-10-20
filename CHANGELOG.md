@@ -112,6 +112,8 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 수정
 
+- 관련 없는 XLSX 편집 후에도 데이터 유효성 검사의 `showDropDown`,
+  `showInputMessage`, `showErrorMessage` 명시 여부와 값을 보존합니다.
 - XML 문자 참조로 저장된 데이터 유효성 검사 수식을 디코딩하고, 내용이 같은 저장은
   리비전과 undo 이력을 늘리지 않으며 유휴 browser가 원격 리비전을 동기화합니다.
 - clean CI에서 Python MVP 회귀가 동작하도록 dependency를 고정했습니다.

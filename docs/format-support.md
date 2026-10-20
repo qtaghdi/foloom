@@ -56,7 +56,7 @@ CSV 등은 이 초기 표 밖에 있으며 별도 결정을 거쳐야 합니다.
 | 행과 열 삽입 및 삭제 | 사람 editor와 AI 작업 경로 | 구조 편집 fixture 확대 |
 | 이미지 | 기존 이미지 표시, 이동, 크기, 삭제 저장 | 이미지 삽입 |
 | 차트 | 선택 유형 preview, 이동, 크기, 삭제, AI 제목 변경 | type, series, axis, legend, style, 렌더링 확대 |
-| validation 및 conditional formatting | 일반 규칙 표시 및 동작 | 고급 규칙과 작성 범위 |
+| validation 및 conditional formatting | 일반 규칙 표시 및 동작, 관련 없는 편집에서 validation 표시 속성의 명시 여부와 값 보존 | 고급 규칙과 작성 범위, XML attribute 순서와 quote 형태의 byte-level 보존 |
 | undo와 redo | 서버 소유, 리비전 기반, 제한된 영속 이력 | 무제한 이력이나 audit system이 아님 |
 | 보존 | 생성 및 LibreOffice fixture에서 관련 없는 편집과 reopen | Microsoft Excel fixture와 더 넓은 corpus |
 | 데스크톱 호스트 | MCP 전송, browser-first editor, 선택적 app resource | 호스트별 모드 인증 |

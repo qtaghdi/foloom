@@ -40,6 +40,12 @@ go run ./testdata/xlsx/compatibility/generate
 Microsoft Excel fixture는 여전히 필요합니다. 실제 producer 버전과 출처 없이
 생성 또는 third-party 파일을 Microsoft Excel 출력으로 표시하지 않습니다.
 
+`validation_preservation_test.go`는 Excel 호환 OOXML boolean 표현인 `0`과 `1`을
+사용해 `showDropDown`, `showInputMessage`, `showErrorMessage`의 명시 조합을 package
+수준에서 구성합니다. 실제 `xlsx.Session`으로 관련 없는 셀을 편집한 뒤 속성의
+명시 여부와 값, Excelize reopen을 검사합니다. 이 테스트는 Microsoft Excel이 만든
+fixture나 native Excel reopen 증거를 대신하지 않습니다.
+
 ```bash
 make compatibility-test
 ```

@@ -141,6 +141,12 @@ drawing 또는 SVG preview로 표시합니다. 기존 image와 chart의 이동, 
 chart title 변경을 저장합니다. 이미지 삽입과 chart type, series, axis, legend,
 style 편집은 미구현입니다.
 
+관련 없는 편집을 저장할 때 data validation의 `showDropDown`, `showInputMessage`,
+`showErrorMessage`는 worksheet namespace, 범위, 규칙, 수식이 같은 노드에 한해 원본의
+명시 여부와 값을 복원합니다. 노드를 안전하게 대응시킬 수 없으면 다른 validation에
+속성을 붙이지 않고 저장을 거부합니다. XML attribute 순서, quote 형태, ZIP 압축과
+timestamp까지 byte 단위로 보존하는 계약은 아닙니다.
+
 서비스는 수식을 저장하지만 계산하지 않습니다. cached source value와 unavailable
 value를 구분하고 Univer 결과는 browser preview로 취급합니다. 수식에 영향을 주는
 편집은 native 전체 재계산을 요청합니다.
