@@ -59,22 +59,28 @@ func Open(path string) (*Session, error) {
 		_ = f.Close()
 		return nil, err
 	}
+	validationDisplay, err := captureValidationDisplayState(source.content)
+	if err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("capture validation display attributes: %w", err)
+	}
 	return &Session{
-		currentHash:   hashBytes(source.content),
-		persistence:   diskPersistence(),
-		id:            randomID(),
-		path:          source.path,
-		file:          f,
-		revision:      revision,
-		subscribers:   make(map[chan Event]struct{}),
-		dimensions:    dimensions,
-		warnings:      warnings,
-		undoHistory:   undoHistory,
-		redoHistory:   redoHistory,
-		historyStore:  historyStore,
-		hasFormulas:   hasFormulas,
-		packageLimits: source.packageLimits,
-		historyLimits: historyLimits,
+		currentHash:       hashBytes(source.content),
+		persistence:       diskPersistence(),
+		id:                randomID(),
+		path:              source.path,
+		file:              f,
+		revision:          revision,
+		subscribers:       make(map[chan Event]struct{}),
+		dimensions:        dimensions,
+		warnings:          warnings,
+		undoHistory:       undoHistory,
+		redoHistory:       redoHistory,
+		historyStore:      historyStore,
+		hasFormulas:       hasFormulas,
+		validationDisplay: validationDisplay,
+		packageLimits:     source.packageLimits,
+		historyLimits:     historyLimits,
 	}, nil
 }
 
@@ -275,6 +281,10 @@ func (s *Session) Apply(baseRevision uint64, actor string, operations []Operatio
 	if err != nil {
 		return Snapshot{}, err
 	}
+	nextContent, err = preserveValidationDisplayAttributes(s.validationDisplay, nextContent)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	// Identical persisted bytes are not a new document state. Keeping the
 	// revision and both history stacks stable prevents false browser conflicts.
 	if hashBytes(nextContent) == s.currentHash {
@@ -369,6 +379,10 @@ func (s *Session) RestoreHistory(baseRevision uint64, actor, direction string) (
 	if err := validateWorkbookBytes(target, s.packageLimits); err != nil {
 		return Snapshot{}, fmt.Errorf("validate history restore: %w", err)
 	}
+	validationDisplay, err := captureValidationDisplayState(target)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("capture history validation display attributes: %w", err)
+	}
 	candidate, err := excelize.OpenReader(bytes.NewReader(target))
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("prepare history restore: %w", err)
@@ -407,6 +421,7 @@ func (s *Session) RestoreHistory(baseRevision uint64, actor, direction string) (
 	s.dimensions = dimensions
 	s.undoHistory = nextUndo
 	s.redoHistory = nextRedo
+	s.validationDisplay = validationDisplay
 	s.revision = nextRevision
 	if historyCommitErr != nil {
 		s.addHistoryWarningLocked(historyCommitErr)

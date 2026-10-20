@@ -216,22 +216,23 @@ type SheetDimensions struct {
 }
 
 type Session struct {
-	currentHash   string
-	persistence   persistenceIO
-	mu            sync.RWMutex
-	id            string
-	path          string
-	file          *excelize.File
-	revision      uint64
-	sequence      uint64
-	history       []Event
-	subscribers   map[chan Event]struct{}
-	dimensions    map[string]SheetDimensions
-	warnings      []FeatureWarning
-	undoHistory   [][]byte
-	redoHistory   [][]byte
-	historyStore  *historyStore
-	hasFormulas   bool
-	packageLimits workbookPackageLimits
-	historyLimits historyLimits
+	currentHash       string
+	persistence       persistenceIO
+	mu                sync.RWMutex
+	id                string
+	path              string
+	file              *excelize.File
+	revision          uint64
+	sequence          uint64
+	history           []Event
+	subscribers       map[chan Event]struct{}
+	dimensions        map[string]SheetDimensions
+	warnings          []FeatureWarning
+	undoHistory       [][]byte
+	redoHistory       [][]byte
+	historyStore      *historyStore
+	hasFormulas       bool
+	validationDisplay validationDisplayState
+	packageLimits     workbookPackageLimits
+	historyLimits     historyLimits
 }
