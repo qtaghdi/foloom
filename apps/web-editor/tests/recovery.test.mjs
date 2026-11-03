@@ -48,11 +48,14 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
   const view = { spreadsheet: {}, setWorkbookName() {}, showWarnings() {},
     setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
     onHistoryAction: (handler) => { state.history = handler; },
+    onFormat: (handler) => { state.format = handler; },
+    setSelection: (selection) => { state.selection = selection; },
+    onNativeTools: (handler) => { state.nativeTools = handler; },
     showRevision: (message, revision, status) => { state.statuses.push(message); state.revisionStates.push([message, revision, status]); },
     showRecovery: (message) => state.recoveries.push(message), showError: (error) => { throw error; },
     showAIPresence() {}, dispose() {},
   };
-  const engine = { initialize() {}, dispose() {}, applyRemoteEvent: (event) => state.remoteEvents.push(event) };
+  const engine = { initialize() {}, dispose() {}, readSelection: () => ({ sheet: 'Sheet1', range: 'A1', state: 'selecting', bold: false, italic: false, fontSize: 11 }), setNativeToolbarVisible: (visible) => { state.nativeVisible = visible; }, applyRemoteEvent: (event) => state.remoteEvents.push(event) };
   for (const method of ['onCellEdit','onRangeEdit','onSelectionChange','onOperation','onViewportChange','onHistoryAction']) {
     engine[method] = (callback) => { state.callbacks[method] = callback; };
   }
@@ -256,4 +259,30 @@ test('confirmed history restore reloads without warning about nonexistent unsave
   assert.equal(state.reloads, 1);
   assert.equal(controller.shouldWarnBeforeUnload(), false);
   controller.dispose();
+});
+
+
+test('custom formatting waits for server commit before updating engine', async () => {
+  const { state, client } = await fixture();
+  let finish;
+  client.applyOperations = async (revision, operations) => {
+    state.appliedRevisions.push(revision); state.operations.push(...operations);
+    return new Promise((resolve) => { finish = resolve; });
+  };
+  state.format({ bold: true }, state.selection); await flush();
+  assert.equal(state.remoteEvents.length, 0);
+  assert.equal(state.operations[0].type, 'set_format');
+  finish({ workbook: { id: 'session', revision: 3, canUndo: true, canRedo: false }, applied: 1 });
+  await flush();
+  assert.equal(state.remoteEvents[0].type, 'range.format');
+  assert.equal(state.remoteEvents[0].format.bold, true);
+  state.nativeTools(true); assert.equal(state.nativeVisible, true);
+});
+
+test('failed custom formatting leaves engine unchanged and requires recovery', async () => {
+  const { state, client } = await fixture();
+  client.applyOperations = async () => { throw new Error('save failed'); };
+  state.format({ fontSize: 14 }, state.selection); await flush();
+  assert.equal(state.remoteEvents.length, 0);
+  assert.ok(state.recoveries.length > 0);
 });

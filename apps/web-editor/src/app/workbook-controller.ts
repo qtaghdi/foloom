@@ -88,7 +88,20 @@ export class WorkbookController {
       this.engine.initialize(snapshot, ranges, objects);
       this.engine.onCellEdit((edit) => this.queueCellEdit(edit));
       this.engine.onRangeEdit((edit) => this.queueRangeEdit(edit));
-      this.engine.onSelectionChange((selection) => this.queuePresence(selection));
+      this.engine.onSelectionChange((selection) => {
+        this.view.setSelection?.(this.engine?.readSelection?.());
+        this.queuePresence(selection);
+      });
+      this.view.setSelection?.(this.engine.readSelection?.());
+      this.view.onNativeTools?.((visible) => this.engine?.setNativeToolbarVisible?.(visible));
+      this.view.onFormat?.((format, selection) => {
+        if (this.pendingWrites > 0 || this.recoveryRequired || this.disposed) return;
+        this.queueOperation({ type: 'set_format', sheet: selection.sheet, range: selection.range, format }, () => {
+          this.engine?.applyRemoteEvent({ type: 'range.format', actor: 'human', sequence: 0, revision: this.revision,
+            sheet: selection.sheet, range: selection.range, format });
+          this.view.setSelection?.(this.engine?.readSelection?.());
+        });
+      });
       this.engine.onOperation((operation) => this.queueOperation(operation));
       this.engine.onViewportChange((viewport) => this.queueViewportLoad(viewport));
       this.engine.onHistoryAction((direction) => this.queueHistoryAction(direction));
@@ -159,7 +172,7 @@ export class WorkbookController {
     });
   }
 
-  private queueOperation(operation: WorkbookOperation): void {
+  private queueOperation(operation: WorkbookOperation, onCommitted?: () => void): void {
     if (this.recoveryRequired || this.disposed) return;
     this.pendingWrites++;
     const target = operationTarget(operation);
@@ -175,6 +188,7 @@ export class WorkbookController {
         if (operation.type === 'insert_rows' || operation.type === 'delete_rows' || operation.type === 'insert_columns' || operation.type === 'delete_columns') {
           this.loadedRanges.delete(operation.sheet);
         }
+        onCommitted?.();
         this.view.showRevision('Saved', this.revision, 'success');
       } catch (error) {
         this.requireRecovery(error);
@@ -276,6 +290,7 @@ export class WorkbookController {
         this.setHistoryState(event.canUndo, event.canRedo);
       }
       this.engine?.applyRemoteEvent(event);
+      this.view.setSelection?.(this.engine?.readSelection?.());
       this.view.showRevision('Remote change saved', this.revision, 'success');
       return;
     }
@@ -296,6 +311,7 @@ export class WorkbookController {
       this.setHistoryState(event.canUndo, event.canRedo);
     }
     this.engine?.applyRemoteEvent(event);
+      this.view.setSelection?.(this.engine?.readSelection?.());
     this.view.showAIPresence(event, this.revision);
   }
 

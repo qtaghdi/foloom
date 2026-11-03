@@ -1,11 +1,13 @@
 import { createSignal } from 'solid-js';
-import type { FeatureWarning, HistoryDirection, WorkbookEvent } from '../contracts';
+import type { CellFormat, FeatureWarning, HistoryDirection, WorkbookEvent } from '../contracts';
+
+import type { EditorSelection } from '../spreadsheet-engine';
 
 export type RevisionState = 'ready' | 'pending' | 'success' | 'error' | 'conflict' | 'recovery';
 export interface StatusPanelState { title: string; message: string; dismissible: boolean; reload?: () => void }
 export interface WorkbookViewState {
   name: string; message: string; revision: number; status: RevisionState;
-  canUndo: boolean; canRedo: boolean; presence?: string;
+  canUndo: boolean; canRedo: boolean; presence?: string; selection?: EditorSelection; nativeTools?: boolean;
   warning?: StatusPanelState; error?: StatusPanelState;
 }
 
@@ -16,11 +18,26 @@ export class AppView {
   readonly state = this.signal[0];
   private disposed = false;
   private presenceTimer: number | undefined;
+  private formatListener?: (format: CellFormat, selection: EditorSelection) => void;
+  private nativeToolsListener?: (visible: boolean) => void;
   private historyListener?: (direction: HistoryDirection) => void;
   private patch(update: Partial<WorkbookViewState>): void { if (this.disposed) return; this.signal[1]((state) => ({ ...state, ...update })); }
   onHistoryAction(listener: (direction: HistoryDirection) => void): void { this.historyListener = listener; }
   history(direction: HistoryDirection): void {
     if (direction === 'undo' ? this.state().canUndo : this.state().canRedo) this.historyListener?.(direction);
+  }
+  onFormat(listener: (format: CellFormat, selection: EditorSelection) => void): void { this.formatListener = listener; }
+  onNativeTools(listener: (visible: boolean) => void): void { this.nativeToolsListener = listener; }
+  setSelection(selection: EditorSelection | undefined): void { this.patch({ selection }); }
+  format(format: CellFormat): void {
+    const state = this.state();
+    if (!state.selection || ['pending', 'error', 'conflict', 'recovery'].includes(state.status)) return;
+    this.formatListener?.(format, state.selection);
+  }
+  toggleNativeTools(): void {
+    const visible = !this.state().nativeTools;
+    this.nativeToolsListener?.(visible);
+    this.patch({ nativeTools: visible });
   }
   setHistoryState(canUndo: boolean, canRedo: boolean): void { this.patch({ canUndo, canRedo }); }
   setWorkbookName(name: string): void { this.patch({ name }); }

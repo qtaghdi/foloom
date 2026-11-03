@@ -67,7 +67,7 @@ import {
   toUniverCellData,
   toUniverWorkbook,
 } from './spreadsheet/univer/workbook-mapper';
-import type { SpreadsheetEngine } from './spreadsheet-engine';
+import type { SpreadsheetEngine, EditorSelection } from './spreadsheet-engine';
 
 export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   private readonly univer;
@@ -99,7 +99,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
       presets: [],
       plugins: [
         UniverRenderEnginePlugin,
-        [UniverUIPlugin, { container, ribbonType: 'simple' }],
+        [UniverUIPlugin, { container, ribbonType: 'simple', header: false, toolbar: false }],
         UniverDocsPlugin,
         UniverDocsUIPlugin,
         UniverFormulaEnginePlugin,
@@ -275,6 +275,20 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         });
       },
     ));
+  }
+
+  readSelection(): EditorSelection | undefined {
+    const worksheet = this.univerAPI.getActiveWorkbook()?.getActiveSheet();
+    const range = worksheet?.getActiveRange();
+    if (!worksheet || !range) return undefined;
+    const style = range.getCellStyle();
+    return { sheet: worksheet.getSheetName(), range: range.getA1Notation(), state: 'selecting',
+      bold: style?.bold ?? false, italic: style?.italic ?? false, fontSize: style?.fontSize ?? 11 };
+  }
+
+  setNativeToolbarVisible(visible: boolean): void {
+    this.univerAPI.setUIVisible(this.univerAPI.Enum.BuiltInUIPart.HEADER, visible)
+      .setUIVisible(this.univerAPI.Enum.BuiltInUIPart.TOOLBAR, visible);
   }
 
   onCellEdit(listener: (edit: CellEdit) => void): void {

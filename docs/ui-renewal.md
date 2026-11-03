@@ -47,3 +47,9 @@ keyboard·focus 표시와 복귀, 의미 있는 label, live status, 긴 제목·
 기능별 Solid DOM·controller 검사와 실제 browser의 저장·reopen·복구를 확인합니다.
 최종 검사는 `make verify web-test compatibility-test package-test package-smoke`를
 사용합니다. 실제 호스트와 native Office 검증은 실행된 범위만 주장합니다.
+
+## 자체 XLSX 도구
+
+선택 범위의 첫 셀에서 서식 상태를 읽습니다. 자체 서식은 서버 commit이 성공한
+뒤 engine에 반영하며 실패 시 성공한 것처럼 표시하지 않습니다. 고급 도구는
+동일한 engine의 기본 ribbon을 표시·숨김하며 재마운트하지 않습니다.

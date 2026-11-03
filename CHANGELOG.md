@@ -8,6 +8,9 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- #43: 실제 선택 범위의 굵게·기울임·글자 크기를 서버에 저장하는 자체 XLSX
+  도구 모음과 선택 범위 표시, 기본 ribbon의 고급 도구 전환을 추가했습니다.
+
 - XLSX browser·MCP App과 DOCX의 앱 UI를 Solid 컴포넌트와 반응형 표시 상태로
   전환하고, DOCX 초안 폐기 확인을 자체 UI로 제공합니다.
 - 실제 Solid DOM에서 engine container·입력 focus 보존, 저장·충돌·복구와 root
