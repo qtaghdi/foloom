@@ -1,0 +1,42 @@
+[
+  {
+    "file": "generated-basic.docx",
+    "sha256": "bf11daf5a56dbd9bf918a59cebf6e162f4875366378285b1d386bc5f8e7a31ba",
+    "producer": "generate.py v1, Python standard-library zipfile",
+    "format": "OOXML transitional DOCX",
+    "date": "2026-11-03",
+    "rights": "Repository-owned synthetic content, no user documents",
+    "features": [
+      "Korean and Latin text",
+      "mixed run formatting",
+      "repeated text",
+      "whitespace",
+      "simple table",
+      "unmodified custom XML and image part"
+    ],
+    "nativeWord": "not verified",
+    "nativeLibreOffice": "not verified"
+  },
+  {
+    "file": "generated-preservation.docx",
+    "sha256": "c09a8d22f2c1de3c5ca2c5f1b2e9373f90bb4bed64e478ba4d9bf1b7c706f3ef",
+    "producer": "generate.py v1, Python standard-library zipfile",
+    "format": "OOXML transitional DOCX",
+    "date": "2026-11-03",
+    "rights": "Repository-owned synthetic content, no user documents",
+    "features": [
+      "Korean and Latin text",
+      "mixed run formatting",
+      "repeated text",
+      "whitespace",
+      "simple table",
+      "unmodified custom XML and image part",
+      "header relationship",
+      "external hyperlink",
+      "field",
+      "tracked insertion"
+    ],
+    "nativeWord": "not verified",
+    "nativeLibreOffice": "not verified"
+  }
+]

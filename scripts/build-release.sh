@@ -39,6 +39,7 @@ for target in $release_targets; do
   mkdir -p "$stage_directory/docs"
   cp "$repository_root/README.md" "$stage_directory/README.md"
   cp "$repository_root/docs/getting-started.md" "$stage_directory/docs/getting-started.md"
+  cp "$repository_root/docs/docx-editing.md" "$stage_directory/docs/docx-editing.md"
   cp "$repository_root/docs/format-support.md" "$stage_directory/docs/format-support.md"
   cp "$repository_root/docs/host-compatibility.md" "$stage_directory/docs/host-compatibility.md"
   cp "$repository_root/docs/security.md" "$stage_directory/docs/security.md"

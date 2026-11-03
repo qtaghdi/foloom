@@ -15,7 +15,7 @@ import (
 
 const (
 	appResourceURI     = "ui://document-workspace/xlsx/v1.html"
-	serverInstructions = "If no workbook is open, call open_workbook with an absolute XLSX path. Always open the returned short-lived browserUrl in the host browser surface so the user can inspect and directly edit the workbook; do not substitute an inline image or MCP App preview, and do not repeat the URL in chat. Call get_workbook before reads or writes and use read_range only for focused inspection. Pass the latest revision to apply_operations, and refresh after a conflict. Use update_presence before visible AI edits."
+	serverInstructions = "For DOCX use create_docx, open_docx, get_docx and apply_docx_operations. Open the returned browserUrl for direct editing. DOCX supports plain body and simple table text runs; inspect warnings and use current sessionId, revision, target IDs and expectedText. For XLSX, if no workbook is open, call open_workbook with an absolute XLSX path. Always open the returned short-lived browserUrl in the host browser surface so the user can inspect and directly edit the workbook; do not substitute an inline image or MCP App preview, and do not repeat the URL in chat. Call get_workbook before reads or writes and use read_range only for focused inspection. Pass the latest revision to apply_operations, and refresh after a conflict. Use update_presence before visible AI edits."
 )
 
 type openWorkbookInput struct {
@@ -356,5 +356,6 @@ func (s *Server) mcpServer() *mcp.Server {
 		err = session.UpdatePresence("human", input)
 		return nil, map[string]bool{"updated": err == nil}, err
 	})
+	s.addDOCXTools(server)
 	return server
 }

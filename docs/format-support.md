@@ -1,6 +1,6 @@
 # 형식별 지원표
 
-기준: 2026-10-08, 구현 commit `4a6cfeb`.
+기준: 2026-11-03. DOCX는 비공개 실험 범위입니다.
 이 문서는 현재 기능과 초기 제공 범위이며 모든 문서의 완전 호환 선언이 아닙니다.
 공통 요구사항은 [제품 명세](product-spec.md)를 따릅니다.
 
@@ -17,13 +17,13 @@ editor의 진입점도 따로 기록합니다.
 
 ## 현재 제품 지원
 
-현재 프로세스는 기존 XLSX 하나만 엽니다. 나머지 형식은 아직 제품에서 사용할 수
-없습니다.
+현재 프로세스는 활성 XLSX 하나와 별도 실험 DOCX 하나를 관리합니다. DOCX는 생성과
+제한된 text run 편집을 제공하며, 나머지 형식은 아직 제품에서 사용할 수 없습니다.
 
 | 형식 | 열기와 검사 | 새로 만들기 | 렌더링 | 편집 및 native 저장 | 관련 없는 내용 보존 | 변환 및 export |
 | --- | --- | --- | --- | --- | --- | --- |
 | XLSX | 일부 구현 | 계획 | 일부 구현 | 일부 구현 | corpus 범위 일부 구현 | 계획 |
-| DOCX | 계획 | 계획 | 계획 | 계획 | 계획 | 계획 |
+| DOCX | 일부 구현 | 단순 문단·표 구현 | 텍스트 입력 surface | 일반 run text 교체 | 합성 corpus 범위 일부 구현 | 계획 |
 | PPTX | 계획 | 계획 | 계획 | 계획 | 계획 | 계획 |
 | HWPX | 계획 | 계획 | 계획 | 계획 | 계획 | 연구 |
 | binary HWP | 연구 | 연기 | 연구 | 연구 | 연구 | 연구 |
@@ -38,7 +38,7 @@ CSV 등은 이 초기 표 밖에 있으며 별도 결정을 거쳐야 합니다.
 | 형식 | 첫 유용한 제공 | 보존하거나 경고할 내용 | 연기 또는 미결정 |
 | --- | --- | --- | --- |
 | XLSX | 기존 통합 문서의 셀, 수식, 기본 서식, 범위, 시트 크기, 기존 drawing | 손대지 않은 수식, 서식, validation, conditional formatting, chart, image, link, name, comment | 이미지 삽입, 고급 차트, 전체 수식 계산, macro, 암호화 |
-| DOCX | 단순 문서 생성, paragraph/run/table 검사와 편집, native 저장 | section, header/footer, comment, note, media, relationship, unknown part | 정확한 pagination, 변경 추적 작성, 복잡한 field와 floating layout, engine 선택 |
+| DOCX | 단순 문서 생성, paragraph/run/table 검사와 편집, native 저장 | section, header/footer, comment, note, media, relationship, unknown part | 정확한 pagination, 변경 추적 작성, 복잡한 field와 floating layout, 문단·표 구조 편집 |
 | PPTX | 기본 deck 생성, slide 검사, text와 단순 shape, image 이동 및 크기, slide 순서 | theme, master, note, relationship, 미지원 animation metadata | animation 작성, embedded application object, 전체 재생 fidelity |
 | HWPX | 기본 문서 생성, section, text, 단순 table, native 저장 | paragraph 및 문자 속성, control, media, untouched package | 복잡한 layout과 control, engine, proprietary extension |
 | binary HWP | 복사본에서 검사 또는 변환 가능성 prototype | 평가 중 원본 binary 무변경 | native 편집, 생성, round-trip 보장 |
@@ -99,3 +99,15 @@ engine, license, 예상 손실, 검증 증거를 기록한 뒤 노출합니다. 
 모든 adapter에서 잘못된 입력, 거부 batch, stale revision, 저장 실패, resource 제한,
 미지원 내용 옆의 관련 없는 편집을 검증합니다. 구조와 화면 결과를 따로 비교하고
 fixture별 시각 tolerance를 결과 확인 전에 정합니다.
+
+## DOCX 상세 기준
+
+MCP `create_docx`, `open_docx`, `get_docx`, `apply_docx_operations`와 `/docx`
+브라우저가 동일한 DOCX 세션을 사용합니다. 새 문단과 직사각형 표 생성, 일반 본문·표
+run의 text 교체를 지원합니다. 기존 문단·행·열의 추가·삭제, 새 서식 적용, 병합·중첩
+표, field, 변경 추적, server undo/redo는 지원하지 않습니다.
+
+대상 밖 XML byte와 다른 part의 payload 보존은 합성 corpus로 검사합니다. Word와
+LibreOffice fixture, native reopen 및 시각 증거는 미확인이며 lossless 호환성을
+주장하지 않습니다. [사용 계약](docx-editing.md), [ADR 0002](adr/0002-docx-targeted-text-editing.md),
+[합성 corpus](../testdata/docx/compatibility/README.md)를 참고하세요.

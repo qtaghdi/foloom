@@ -8,6 +8,7 @@ export default defineConfig({
   },
   build: {
     emptyOutDir: true,
+    rollupOptions: { input: ['index.html', 'docx.html'] },
     minify: 'terser',
     outDir: '../../internal/transport/httpapi/static',
     terserOptions: {

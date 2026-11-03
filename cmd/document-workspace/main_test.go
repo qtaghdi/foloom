@@ -103,3 +103,17 @@ func TestCheckValidatesWorkbookWithoutStartingTransport(t *testing.T) {
 		t.Fatalf("check created workbook history: %v", err)
 	}
 }
+
+func TestDOCXCheckDoesNotExposeText(t *testing.T) {
+	path, err := filepath.Abs("../../testdata/docx/compatibility/generated-basic.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"-check", path}, &stdout, &stderr); code != 0 {
+		t.Fatalf("DOCX check failed: %d %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "DOCX 검사 통과") || strings.Contains(stdout.String(), "repeat") {
+		t.Fatalf("unexpected DOCX preflight output: %s", stdout.String())
+	}
+}

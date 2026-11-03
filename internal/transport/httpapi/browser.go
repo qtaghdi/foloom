@@ -63,7 +63,11 @@ func (s *Server) launchBrowserSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setBrowserSessionCookie(w)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	destination := "/"
+	if r.URL.Query().Get("format") == "docx" {
+		destination = "/docx"
+	}
+	http.Redirect(w, r, destination, http.StatusSeeOther)
 }
 
 func (s *Server) setBrowserSessionCookie(w http.ResponseWriter) {

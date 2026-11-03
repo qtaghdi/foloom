@@ -11,12 +11,12 @@ const fail = (message) => {
   process.exit(1);
 };
 
-const readRequired = (path, label) => {
+const readRequired = (path, label, marker = 'Workbook editor') => {
   if (!existsSync(path) || !statSync(path).isFile()) {
     fail(`${label} is missing at ${path}`);
   }
   const content = readFileSync(path, 'utf8');
-  if (!content.includes('Workbook editor')) {
+  if (!content.includes(marker)) {
     fail(`${label} does not contain the expected application marker`);
   }
   return content;
@@ -33,6 +33,13 @@ for (const asset of referencedAssets) {
   if (!existsSync(path) || !statSync(path).isFile() || statSync(path).size === 0) {
     fail(`browser asset ${asset} is missing or empty`);
   }
+}
+const docx = readRequired(resolve(staticDirectory, 'docx.html'), 'DOCX browser entry', 'DOCX');
+const docxAssets = [...docx.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((match) => match[1]);
+if (docxAssets.length < 2) fail('DOCX entry does not reference JavaScript and CSS assets');
+for (const asset of docxAssets) {
+  const path = resolve(staticDirectory, asset.slice(1));
+  if (!existsSync(path) || !statSync(path).isFile() || statSync(path).size === 0) fail(`DOCX asset ${asset} is missing or empty`);
 }
 if (/(?:src|href)="\/assets\//.test(app)) {
   fail('MCP App entry is not self-contained');
