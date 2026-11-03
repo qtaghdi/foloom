@@ -8,6 +8,11 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- XLSX browser·MCP App과 DOCX의 앱 UI를 Solid 컴포넌트와 반응형 표시 상태로
+  전환하고, DOCX 초안 폐기 확인을 자체 UI로 제공합니다.
+- 실제 Solid DOM에서 engine container·입력 focus 보존, 저장·충돌·복구와 root
+  해제를 검사하는 컴포넌트 테스트를 추가했습니다.
+
 - DOCX 문단·단순 표 생성, 본문·표 run 텍스트의 리비전 기반 batch 편집, 원본
   OOXML 표적 보존, MCP 도구 4개와 인증된 브라우저 편집기를 추가했습니다.
   미지원 구조는 보호하며 Word native 호환성은 아직 검증하지 않았습니다.
@@ -118,6 +123,9 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 수정
 
+- 저장이 확인된 실행 취소·다시 실행 후 재열기에서 불필요한 미저장 이탈 경고가
+  나오지 않도록 복구 상태와 확정된 화면 이동을 구분합니다.
+
 - 관련 없는 XLSX 편집 후에도 데이터 유효성 검사의 `showDropDown`,
   `showInputMessage`, `showErrorMessage` 명시 여부와 값을 보존합니다.
 - XML 문자 참조로 저장된 데이터 유효성 검사 수식을 디코딩하고, 내용이 같은 저장은
@@ -130,6 +138,9 @@ Semantic Versioning을 적용할 예정입니다.
 - 크거나 미지원 object는 visible notice와 함께 생략해 시작을 막지 않습니다.
 
 ### 보안
+
+- 프런트엔드 의존성 검사에서 발견한 MCP client SDK와 Zod의 알려진 취약점을
+  수정 버전으로 갱신했습니다.
 
 - credential을 fixed-length hash로 비교하고 framing, resource, capability,
   base URI, object, form 제한을 추가했습니다.

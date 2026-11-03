@@ -1,9 +1,11 @@
+import solid from 'vite-plugin-solid';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, type Plugin } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
 export default defineConfig({
   plugins: [
+    solid(),
     pruneUnusedHyphenationLocales(),
     tailwindcss(),
     viteSingleFile({ removeViteModuleLoader: true }),

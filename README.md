@@ -17,7 +17,7 @@ Excel 실사용 검증, 반복적인 외부 사용, 배포 조건, 소유자의 
 
 현재 XLSX 어댑터는 다음을 제공합니다.
 
-- Univer 기반 브라우저 스프레드시트
+- Solid 기반 자체 앱 UI와 Univer OSS 브라우저 스프레드시트
 - Streamable HTTP와 stdio MCP 전송
 - 내장 MCP App과 인증된 loopback 대체 화면
 - 통합 문서 메타데이터, 범위 읽기, 수식, 스타일, 셀 병합, 붙여넣기
@@ -27,6 +27,10 @@ Excel 실사용 검증, 반복적인 외부 사용, 배포 조건, 소유자의 
 - 이미지와 차트 미리보기 이동, 크기 조절, 삭제, XLSX 반영
 - 대용량 시트의 제한 기반 로딩
 - 호환성 안내와 원자적 저장
+
+앱 UI는 Solid + TypeScript + Vite로 구성하고 Go 서버에서 제공합니다. Univer 내부
+React와 grid UI는 유지합니다. 프레임워크 선택과 경계는
+[ADR 0003](docs/adr/0003-solid-editor-ui.md)을 참고하세요.
 
 Univer는 오픈 소스 패키지만 사용하며, 빌드는 `@univerjs-pro/*` 의존성을
 거부합니다.
