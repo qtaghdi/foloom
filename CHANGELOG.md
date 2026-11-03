@@ -138,6 +138,9 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 수정
 
+- #43: 자체 도구로 focus를 옮겨도 해당 workbook의 선택과 서식을 참조하고,
+  초기 렌더링 뒤 같은 engine에서 고급 ribbon을 전환하도록 보완했습니다.
+
 - #46: 셀을 가리는 고정 경고를 inline 안내로 바꾸고 복구·초안 폐기 확인의
   keyboard focus 이동·취소 복귀와 Escape 동작을 추가했습니다.
 
