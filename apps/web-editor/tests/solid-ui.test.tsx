@@ -44,9 +44,9 @@ describe('Solid workbook shell', () => {
     view.showWarnings([{ feature: 'test', message: '<img src=x onerror=alert(1)>' }]);
     expect(root.querySelector('#feature-warnings img')).toBeNull();
     const warning = root.querySelector('#feature-warnings')!;
-    button(warning, '접기').click();
+    button(warning, '자세히').click(); button(warning, '접기').click();
     expect(warning.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
-    button(warning, '펼치기').click(); button(warning, '닫기').click();
+    button(warning, '자세히').click(); button(warning, '닫기').click();
     expect(root.querySelector('#feature-warnings')).toBeNull();
     view.showRecovery('Revision conflict', 4); await settle();
     expect(button(root, '실행 취소').disabled).toBe(true);
@@ -110,9 +110,11 @@ describe('Solid DOCX editor', () => {
     const input = root.querySelector('textarea')!; edit(input, '남길 초안');
     f.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
     expect(input.value).toBe('남길 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
-    button(root, '다시 불러오기').click();
+    button(root, '다시 불러오기').click(); await settle();
+    expect(document.activeElement?.id).toBe('discard-draft');
     expect(f.fetcher).toHaveBeenCalledTimes(1);
     button(root, '취소').click(); expect(input.value).toBe('남길 초안');
+    expect(document.activeElement?.id).toBe('reload-document');
     button(root, '다시 불러오기').click(); button(root, '입력 버리고 불러오기').click(); await settle();
     expect(f.fetcher).toHaveBeenCalledTimes(2);
     expect(root.querySelector('textarea')?.value).toBe('원본');

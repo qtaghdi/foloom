@@ -25,19 +25,6 @@ button { -webkit-tap-highlight-color: transparent; }
   padding-left: max(1rem, env(safe-area-inset-left));
 }
 
-.status-panel {
-  right: max(1rem, env(safe-area-inset-right));
-  left: max(1rem, env(safe-area-inset-left));
-}
-
-#feature-warnings {
-  bottom: max(1rem, env(safe-area-inset-bottom));
-}
-
-#fatal-error {
-  top: max(4rem, calc(env(safe-area-inset-top) + 4rem));
-}
-
 .skip-link {
   position: fixed;
   top: max(0.5rem, env(safe-area-inset-top));
@@ -96,9 +83,6 @@ button { -webkit-tap-highlight-color: transparent; }
     max-width: min(62vw, 24rem);
   }
 
-  #fatal-error {
-    top: max(7rem, calc(env(safe-area-inset-top) + 7rem));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

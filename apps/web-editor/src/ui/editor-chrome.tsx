@@ -7,7 +7,7 @@ export function EditorHeader(props: {
   name: string; kind: string; message: string; status: string; revision?: number;
   nameId: string; statusId: string; actions?: JSX.Element; onActivity?: () => void; activityOpen?: boolean;
 }) {
-  return <header class="app-toolbar flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-200 bg-white px-4 py-2 text-slate-900 sm:px-6">
+  return <header class="app-toolbar flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-200 bg-white px-4 py-2 text-slate-900 sm:px-6">
     <div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
       <div class="flex shrink-0 items-center gap-2 text-indigo-700" aria-label="document-workspace">
         <svg viewBox="0 0 28 32" width="24" height="28" fill="none" aria-hidden="true"><path d="M3 1h14l8 8v22H3zM17 1v9h8" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><text x="8" y="24" fill="currentColor" font-size="15" font-weight="600">D</text></svg>
