@@ -46,6 +46,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     ...overrides,
   };
   const view = { spreadsheet: {}, setWorkbookName() {}, showWarnings() {},
+    recordActivity: (entry) => { state.activities ??= []; state.activities.push(entry); },
     setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
     onHistoryAction: (handler) => { state.history = handler; },
     onFormat: (handler) => { state.format = handler; },
@@ -285,4 +286,16 @@ test('failed custom formatting leaves engine unchanged and requires recovery', a
   state.format({ fontSize: 14 }, state.selection); await flush();
   assert.equal(state.remoteEvents.length, 0);
   assert.ok(state.recoveries.length > 0);
+});
+
+
+test('an own in-flight SSE receipt does not duplicate the confirmed activity entry', async () => {
+  const { state, client, snapshot } = await fixture();
+  let finish;
+  client.applyOperations = async () => new Promise((resolve) => { finish = resolve; });
+  state.callbacks.onOperation(edit); await flush();
+  state.onEvent({ type: 'cell.commit', actor: 'human', sheet: 'Sheet1', cell: 'A1', revision: 3, sequence: 6 });
+  assert.equal(state.activities.filter((entry) => entry.state === 'committed').length, 0);
+  finish({ workbook: { ...snapshot, revision: 3 }, applied: 1 }); await flush();
+  assert.equal(state.activities.filter((entry) => entry.state === 'committed').length, 1);
 });

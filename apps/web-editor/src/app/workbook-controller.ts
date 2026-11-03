@@ -282,7 +282,7 @@ export class WorkbookController {
       return;
     }
     const commitsWorkbook = event.type !== 'presence.update' && event.type !== 'cell.typing';
-    if (commitsWorkbook && event.type !== 'workbook.reload' && event.revision > this.revision) {
+    if (commitsWorkbook && event.type !== 'workbook.reload' && event.revision > this.revision && (event.actor === 'ai' || this.pendingWrites === 0)) {
       const target = 'cell' in event ? event.cell : 'range' in event ? event.range : `${event.index}:${event.index + event.count - 1}`;
       this.view.recordActivity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed', title: event.type === 'range.format' ? '범위 서식 저장' : '문서 변경 저장', location: `${event.sheet}!${target}`, revision: event.revision });
     }
