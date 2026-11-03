@@ -461,3 +461,16 @@ func TestEventReplayGap(t *testing.T) {
 		t.Fatal("replay gap silently lost changes")
 	}
 }
+
+func TestFragmentedXMLTextAndTokenLimit(t *testing.T) {
+	text := strings.Repeat("a<![CDATA[b]]>", 20000)
+	s, _ := withDocument(t, bodyXML("<w:p><w:r><w:t>"+text+"</w:t></w:r></w:p>"))
+	snap := mustSnapshot(t, s)
+	if got := snap.Blocks[0].Paragraph.Runs[0].Text; got != strings.Repeat("ab", 20000) {
+		t.Fatal("fragmented text was not decoded correctly")
+	}
+	input := []byte("<root>" + strings.Repeat("<!--bounded-->", 500001) + "</root>")
+	if _, err := parseXML(input); err == nil || !strings.Contains(err.Error(), "token limit") {
+		t.Fatalf("unbounded XML tokens accepted: %v", err)
+	}
+}

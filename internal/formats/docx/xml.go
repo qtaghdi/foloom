@@ -15,7 +15,7 @@ type node struct {
 	attrs                       []xml.Attr
 	start, inner, endStart, end int
 	children                    []*node
-	text                        string
+	text                        strings.Builder
 }
 
 func parseXML(data []byte) (*node, error) {
@@ -23,6 +23,7 @@ func parseXML(data []byte) (*node, error) {
 	var root *node
 	var stack []*node
 	count := 0
+	tokens := 0
 	for {
 		start := int(decoder.InputOffset())
 		token, err := decoder.Token()
@@ -31,6 +32,10 @@ func parseXML(data []byte) (*node, error) {
 		}
 		if err != nil {
 			return nil, fmt.Errorf("invalid OOXML: %w", err)
+		}
+		tokens++
+		if tokens > 500000 {
+			return nil, fmt.Errorf("OOXML token limit exceeded")
 		}
 		switch t := token.(type) {
 		case xml.Directive:
@@ -67,7 +72,7 @@ func parseXML(data []byte) (*node, error) {
 			stack = stack[:len(stack)-1]
 		case xml.CharData:
 			if len(stack) > 0 {
-				stack[len(stack)-1].text += string(t)
+				_, _ = stack[len(stack)-1].text.Write(t)
 			} else if strings.TrimSpace(string(t)) != "" {
 				return nil, fmt.Errorf("text outside XML root")
 			}
@@ -109,7 +114,7 @@ func (n *node) attr(local string) string {
 }
 func textContent(n *node) string {
 	if n.is("t") {
-		return n.text
+		return n.text.String()
 	}
 	var result strings.Builder
 	for _, c := range n.children {

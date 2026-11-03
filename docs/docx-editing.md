@@ -114,6 +114,7 @@ writer lock과 원본 hash를 확인하고, 같은 디렉터리의 임시 파일
 | --- | --- |
 | 압축 파일 / 전체 확장 / part | 32 MiB / 64 MiB / 16 MiB |
 | ZIP entry / XML 깊이 / XML node | 2,048 / 64 / part당 100,000 |
+| XML token | part당 500,000, 잘게 분할된 text는 누적 buffer로 처리 |
 | 검사 식별자 수 | 10,000 |
 | batch operation / 교체 text 합계 | 1,000 / 4 MiB |
 | run text | UTF-8 64 KiB, 탭·줄바꿈과 XML 비허용 문자 거부 |
