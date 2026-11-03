@@ -3,6 +3,7 @@ import type { CellFormat, FeatureWarning, HistoryDirection, WorkbookEvent } from
 
 import type { EditorSelection } from '../spreadsheet-engine';
 
+import { featureMessage, problemMessage } from './messages';
 import { createActivityModel, type ActivityEntry } from './activity';
 
 export type RevisionState = 'ready' | 'pending' | 'success' | 'error' | 'conflict' | 'recovery';
@@ -46,7 +47,7 @@ export class AppView {
   setHistoryState(canUndo: boolean, canRedo: boolean): void { this.patch({ canUndo, canRedo }); }
   setWorkbookName(name: string): void { this.patch({ name }); }
   showWarnings(warnings: FeatureWarning[]): void {
-    this.patch({ warning: warnings.length ? { title: '호환성 안내', message: warnings.map((warning) => warning.message).join('; '), dismissible: true } : undefined });
+    this.patch({ warning: warnings.length ? { title: '호환성 안내', message: warnings.map(featureMessage).join('\n\n'), dismissible: true } : undefined });
   }
   dismiss(kind: 'warning' | 'error'): void {
     if (this.state()[kind]?.dismissible) { this.patch({ [kind]: undefined }); this.spreadsheet.focus({ preventScroll: true }); }
@@ -67,14 +68,14 @@ export class AppView {
     }
   }
   showError(error: unknown, revision: number): void {
-    this.patch({ error: { title: '작업 실패', message: `${error instanceof Error ? error.message : String(error)} 연결과 문서 접근 상태를 확인하세요.`, dismissible: true } });
+    this.patch({ error: { title: '작업 실패', message: `${problemMessage(error instanceof Error ? error.message : String(error))} 연결과 문서 접근 상태를 확인하세요.`, dismissible: true } });
     this.showRevision('작업 실패', revision, 'error'); this.focusError();
   }
   showRecovery(message: string, revision: number): void {
     this.activity.markUncertain();
     const conflict = /conflict|changed|external|newer|busy/i.test(message);
     const title = conflict ? '충돌 감지' : '복구 필요';
-    this.patch({ error: { title, message: `${message} 편집을 중단했습니다. 미저장 입력을 복사한 뒤 저장된 문서를 다시 불러오세요. 결과가 불확실한 저장은 반복하지 마세요.`, dismissible: false, reload: () => window.location.reload() }, canUndo: false, canRedo: false });
+    this.patch({ error: { title, message: `${problemMessage(message)} 편집을 중단했습니다. 미저장 입력을 복사한 뒤 저장된 문서를 다시 불러오세요. 결과가 불확실한 저장은 반복하지 마세요.`, dismissible: false, reload: () => window.location.reload() }, canUndo: false, canRedo: false });
     this.showRevision(title, revision, conflict ? 'conflict' : 'recovery'); this.focusError();
   }
   private focusError(): void { queueMicrotask(() => { if (!this.disposed) document.getElementById('fatal-error')?.focus({ preventScroll: true }); }); }

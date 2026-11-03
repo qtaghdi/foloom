@@ -161,3 +161,13 @@ it('activity shows observed commits only, deduplicates events, and bounds the co
   expect(root.querySelector('#document-activity')?.textContent).toContain('AI');
   view.dispose();
 });
+
+it('localizes known workbook notices while retaining unknown diagnostic text', () => {
+  const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
+  view.showWarnings([{ feature: 'formula calculation', message: 'cached results' }, { feature: 'future', message: 'unknown detail' }]);
+  const warning = root.querySelector('#feature-warnings')!;
+  expect(warning.textContent).toContain('미리보기'); expect(warning.textContent).toContain('unknown detail');
+  view.showRecovery('The live connection was interrupted.', 1);
+  expect(root.querySelector('#fatal-error')?.textContent).toContain('연결이 끊겼습니다');
+  view.dispose();
+});

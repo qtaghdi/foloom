@@ -5,7 +5,7 @@ import { UniverDocsDrawingPlugin } from '@univerjs/docs-drawing';
 import { UniverDocsUIPlugin } from '@univerjs/docs-ui';
 import { UniverDrawingPlugin } from '@univerjs/drawing';
 import { UniverDrawingUIPlugin } from '@univerjs/drawing-ui';
-import DrawingUIEnUS from '@univerjs/drawing-ui/locale/en-US';
+import DrawingUIKoKR from '@univerjs/drawing-ui/locale/ko-KR';
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula';
 import { UniverRenderEnginePlugin } from '@univerjs/engine-render';
 import { createUniver } from '@univerjs/presets';
@@ -18,7 +18,7 @@ import { UniverSheetsNumfmtUIPlugin } from '@univerjs/sheets-numfmt-ui';
 import { UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
 import { UniverSheetsDrawingPlugin } from '@univerjs/sheets-drawing';
 import { UniverSheetsDrawingUIPlugin } from '@univerjs/sheets-drawing-ui';
-import SheetsDrawingUIEnUS from '@univerjs/sheets-drawing-ui/locale/en-US';
+import SheetsDrawingUIKoKR from '@univerjs/sheets-drawing-ui/locale/ko-KR';
 import { UniverSheetsDataValidationPlugin } from '@univerjs/sheets-data-validation';
 import { UniverSheetsDataValidationUIPlugin } from '@univerjs/sheets-data-validation-ui';
 import type { FDataValidationBuilder } from '@univerjs/sheets-data-validation/facade';
@@ -27,7 +27,7 @@ import { CFNumberOperator, CFTimePeriodOperator, CFValueType } from '@univerjs/s
 import type { IConditionFormattingRule, IValueConfig } from '@univerjs/sheets-conditional-formatting';
 import type { FConditionalFormattingBuilder } from '@univerjs/sheets-conditional-formatting/facade';
 import { UniverUIPlugin } from '@univerjs/ui';
-import UniverPresetSheetsCoreEnUS from '@univerjs/preset-sheets-core/locales/en-US';
+import UniverPresetSheetsCoreKoKR from '@univerjs/preset-sheets-core/locales/ko-KR';
 
 import '@univerjs/docs-ui/facade';
 import '@univerjs/docs-drawing/facade';
@@ -88,12 +88,12 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
 
   constructor(container: HTMLElement) {
     const { univer, univerAPI } = createUniver({
-      locale: LocaleType.EN_US,
+      locale: LocaleType.KO_KR,
       locales: {
-        [LocaleType.EN_US]: mergeLocales(
-          UniverPresetSheetsCoreEnUS,
-          DrawingUIEnUS,
-          SheetsDrawingUIEnUS,
+        [LocaleType.KO_KR]: mergeLocales(
+          UniverPresetSheetsCoreKoKR,
+          DrawingUIKoKR,
+          SheetsDrawingUIKoKR,
         ),
       },
       presets: [],
