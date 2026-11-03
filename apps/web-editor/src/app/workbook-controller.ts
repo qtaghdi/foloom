@@ -22,6 +22,8 @@ const maxInitialCellsPerWorkbook = 500_000;
 
 export class WorkbookController {
   private revision = 0;
+  private disposed = false;
+  private navigationRequested = false;
   private recoveryRequired = false;
   private pendingWrites = 0;
   private saveQueue = Promise.resolve();
@@ -44,18 +46,23 @@ export class WorkbookController {
   async start(): Promise<void> {
     try {
       await this.client.connect();
+      if (this.disposed) return;
       const snapshot = await this.client.getWorkbook();
+      if (this.disposed) return;
       this.snapshot = snapshot;
       const initialRanges = planInitialRanges(snapshot);
       const ranges = [];
       for (const ref of initialRanges.refs) {
         ranges.push(await this.client.readRange(ref.sheet, ref.range));
+        if (this.disposed) return;
       }
       const objects = [];
       for (const sheet of snapshot.sheets) {
         objects.push(await this.client.readSheetObjects(sheet));
+        if (this.disposed) return;
       }
       const confirmed = await this.client.getWorkbook();
+      if (this.disposed) return;
       if (confirmed.id !== snapshot.id || confirmed.revision !== snapshot.revision) {
         this.requireRecovery(new Error('The workbook changed while loading.'));
         return;
@@ -93,27 +100,28 @@ export class WorkbookController {
         this.requireRecovery(new Error('The live connection was interrupted.'));
       };
     } catch (error) {
-      this.view.showError(error, this.revision);
+      if (!this.disposed) this.view.showError(error, this.revision);
     }
   }
 
   private queueHistoryAction(direction: HistoryDirection): void {
-    if (this.recoveryRequired) return;
+    if (this.recoveryRequired || this.disposed) return;
     const available = direction === 'undo' ? this.snapshot?.canUndo : this.snapshot?.canRedo;
     if (!available) {
       this.view.showRevision(direction === 'undo' ? 'Nothing to undo' : 'Nothing to redo', this.revision);
       return;
     }
     this.saveQueue = this.saveQueue.then(async () => {
-      if (this.recoveryRequired) return;
+      if (this.recoveryRequired || this.disposed) return;
       this.view.showRevision(direction === 'undo' ? 'Undoing change…' : 'Redoing change…', this.revision, 'pending');
       try {
         const response = await this.client.restoreHistory(this.revision, direction);
-        if (this.recoveryRequired) return;
+        if (this.recoveryRequired || this.disposed) return;
         this.revision = response.workbook.revision;
         this.snapshot = response.workbook;
         this.setHistoryState(response.workbook.canUndo, response.workbook.canRedo);
         this.recoveryRequired = true;
+        this.navigationRequested = true;
         window.location.reload();
       } catch (error) {
         this.requireRecovery(error);
@@ -122,6 +130,8 @@ export class WorkbookController {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     window.clearTimeout(this.presenceTimer);
     window.clearTimeout(this.viewportTimer);
     this.eventSubscription?.close();
@@ -130,7 +140,7 @@ export class WorkbookController {
   }
 
   shouldWarnBeforeUnload(): boolean {
-    return this.pendingWrites > 0 || this.recoveryRequired;
+    return this.pendingWrites > 0 || (this.recoveryRequired && !this.navigationRequested);
   }
 
   private queueCellEdit(edit: CellEdit): void {
@@ -150,15 +160,15 @@ export class WorkbookController {
   }
 
   private queueOperation(operation: WorkbookOperation): void {
-    if (this.recoveryRequired) return;
+    if (this.recoveryRequired || this.disposed) return;
     this.pendingWrites++;
     const target = operationTarget(operation);
     this.saveQueue = this.saveQueue.then(async () => {
-      if (this.recoveryRequired) { this.pendingWrites--; return; }
+      if (this.recoveryRequired || this.disposed) { this.pendingWrites--; return; }
       this.view.showRevision(`Saving ${operation.sheet}!${target}…`, this.revision, 'pending');
       try {
         const response = await this.client.applyOperations(this.revision, [operation]);
-        if (this.recoveryRequired) return;
+        if (this.recoveryRequired || this.disposed) return;
         this.revision = response.workbook.revision;
         this.snapshot = response.workbook;
         this.setHistoryState(response.workbook.canUndo, response.workbook.canRedo);
@@ -188,7 +198,7 @@ export class WorkbookController {
   }
 
   private async loadViewport(viewport: ViewportChange): Promise<void> {
-    if (this.recoveryRequired) return;
+    if (this.recoveryRequired || this.disposed) return;
     const snapshot = this.snapshot;
     const dimensions = snapshot?.sheetDimensions.find((candidate) => candidate.name === viewport.sheet);
     if (!snapshot || !dimensions) {
@@ -206,7 +216,7 @@ export class WorkbookController {
     this.pendingRangeLoads.add(key);
     try {
       const range = await this.client.readRange(viewport.sheet, ref);
-      if (this.recoveryRequired) return;
+      if (this.recoveryRequired || this.disposed) return;
       this.engine?.applyRange(range);
       this.recordLoadedRange(viewport.sheet, range.ref);
       this.view.showRevision(`Loaded ${viewport.sheet}!${ref}`, this.revision);
@@ -232,7 +242,7 @@ export class WorkbookController {
   }
 
   private queuePresence(selection: SelectionChange): void {
-    if (this.recoveryRequired) return;
+    if (this.recoveryRequired || this.disposed) return;
     this.pendingSelection = selection;
     window.clearTimeout(this.presenceTimer);
     this.presenceTimer = window.setTimeout(() => {
@@ -247,7 +257,7 @@ export class WorkbookController {
   }
 
   private handleWorkbookEvent(event: WorkbookEvent): void {
-    if (this.recoveryRequired) return;
+    if (this.recoveryRequired || this.disposed) return;
     if (event.type === 'workbook.reload' && event.state === 'resync') {
       this.requireRecovery(new Error('Live event history is incomplete or the server restarted.'));
       return;
@@ -257,6 +267,7 @@ export class WorkbookController {
       if (!commitsWorkbook || event.revision <= this.revision || this.pendingWrites > 0) return;
       if (event.type === 'workbook.reload') {
         this.recoveryRequired = true;
+        this.navigationRequested = true;
         window.location.reload();
         return;
       }
@@ -274,6 +285,7 @@ export class WorkbookController {
     }
     if (event.type === 'workbook.reload') {
       this.recoveryRequired = true;
+      this.navigationRequested = true;
       window.location.reload();
       return;
     }
@@ -302,7 +314,7 @@ export class WorkbookController {
   }
 
   private requireRecovery(error: unknown): void {
-    if (this.recoveryRequired) return;
+    if (this.recoveryRequired || this.disposed) return;
     this.recoveryRequired = true;
     window.clearTimeout(this.presenceTimer);
     window.clearTimeout(this.viewportTimer);

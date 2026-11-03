@@ -99,7 +99,12 @@ browser editor를 기본 상호작용 surface로 제공합니다.
 
 ### 브라우저 편집기
 
-`apps/web-editor`는 TypeScript, Vite, Tailwind CSS, Univer OSS를 사용합니다.
+`apps/web-editor`는 Solid, TypeScript, Vite, Tailwind CSS, Univer OSS를 사용합니다.
+Solid 컴포넌트가 앱 소유 shell·상태·panel과 DOCX 입력을 렌더링하고 view adapter가
+controller의 표시 상태를 signal로 전달합니다. grid container 내부는 Univer가
+소유하며 상태 변경으로 engine을 다시 만들지 않습니다. root 해제 시 engine·구독·
+window listener를 정리하고 지연된 초기 읽기가 해제된 engine을 만들지 못하게 합니다.
+선택과 경계는 [ADR 0003](adr/0003-solid-editor-ui.md)을 따릅니다.
 `SpreadsheetEngine`이 Univer type을 격리하고 `WorkbookController`가 리비전,
 직렬화된 쓰기, presence throttle, conflict, 구독 lifecycle을 소유합니다. HTTP와
 MCP App client는 같은 `WorkbookClient` 계약을 구현하고 Zod가 입력 payload를

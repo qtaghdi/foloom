@@ -235,3 +235,25 @@ test('successful redo applies returned history availability', async () => {
   assert.equal(state.reloads, 1);
   assert.deepEqual(state.historyStates.at(-1), [true, false]);
 });
+
+test('unmount while connecting never mounts an engine or opens a subscription', async () => {
+  let finish;
+  const { state, controller } = await fixture();
+  const connecting = new Promise((resolve) => { finish = resolve; });
+  // A fresh real controller exercises the lifecycle before the first snapshot.
+  const { WorkbookController } = loadModule(resolve(root, 'src/app/workbook-controller.ts'), { window: { clearTimeout() {} } });
+  const getWorkbook = () => { throw new Error('must not read after unmount'); };
+  let mounted = false;
+  const late = new WorkbookController({ connect: () => connecting, getWorkbook }, { dispose() {} }, () => { mounted = true; });
+  const start = late.start(); late.dispose(); finish(); await start;
+  assert.equal(mounted, false);
+  controller.dispose();
+});
+
+test('confirmed history restore reloads without warning about nonexistent unsaved edits', async () => {
+  const { state, controller } = await fixture();
+  state.history('undo'); await flush();
+  assert.equal(state.reloads, 1);
+  assert.equal(controller.shouldWarnBeforeUnload(), false);
+  controller.dispose();
+});
