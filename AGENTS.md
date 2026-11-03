@@ -281,6 +281,14 @@ and expected outputs.
   follow-up work changes. Create another issue for unrelated work.
 - Do not merge a pull request unless the repository owner explicitly requests
   the merge. Passing checks and approval are not implicit merge authorization.
+- Split independent features, fixes, and maintenance work into separate commits
+  organized by user-visible behavior or engineering responsibility. Do not bundle
+  a whole multi-feature task into one commit merely because it shares a request.
+- Keep one cohesive change in one commit when its pieces are inseparable. Do not
+  split by file or create artificial commits just to increase the commit count.
+- Include each feature's relevant tests, documentation, and changelog updates in
+  the same commit as that feature. Connect each commit or focused commit group
+  to its issue and record the implementation order for multi-issue work.
 - Make focused commits. Do not commit generated frontend assets under
   `internal/transport/httpapi/static/assets`.
 - Do not combine unrelated formatting or cleanup with a feature change.
