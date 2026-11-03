@@ -14,10 +14,14 @@ internal/transport/httpapi/static/app.html
 *.xlsx
 *.xlsm
 *.xlsb
+*.docx
+*.docm
+*.document-workspace.lock/
 .xlsx-viewer-history/
 !testdata/**/*.xlsx
 !testdata/**/*.xlsm
 !testdata/**/*.xlsb
+!testdata/**/*.docx
 
 # Go build and test outputs
 /document-workspace

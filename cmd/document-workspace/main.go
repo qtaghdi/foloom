@@ -11,9 +11,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/qtaghdi/document-workspace/internal/formats/docx"
 	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
 	"github.com/qtaghdi/document-workspace/internal/hostinstall"
 	"github.com/qtaghdi/document-workspace/internal/transport/httpapi"
@@ -58,6 +60,28 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
+	isDOCX := strings.EqualFold(filepath.Ext(options.file), ".docx")
+	if isDOCX {
+		options.file, err = filepath.Abs(options.file)
+		if err != nil {
+			fmt.Fprintf(stderr, "resolve DOCX path: %v\n", err)
+			return 1
+		}
+	}
+	if options.check && isDOCX {
+		session, err := docx.Open(context.Background(), options.file)
+		if err != nil {
+			fmt.Fprintf(stderr, "check DOCX: %v\n", err)
+			return 1
+		}
+		snapshot, err := session.Snapshot(context.Background())
+		if err != nil {
+			fmt.Fprintf(stderr, "check DOCX: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "DOCX 검사 통과\n본문 블록: %d\n호환성 안내: %d\n", len(snapshot.Blocks), len(snapshot.Warnings))
+		return 0
+	}
 	if options.check {
 		inspection, err := xlsx.Inspect(options.file)
 		if err != nil {
@@ -69,7 +93,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	var session *xlsx.Session
-	if options.file != "" {
+	if options.file != "" && !isDOCX {
 		session, err = xlsx.Open(options.file)
 		if err != nil {
 			fmt.Fprintf(stderr, "open workbook: %v\n", err)
@@ -94,6 +118,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	api := httpapi.NewWithTokens(session, options.browserToken, options.mcpToken)
 	defer api.Close()
+	if isDOCX {
+		if _, err := api.OpenDOCX(context.Background(), options.file); err != nil {
+			fmt.Fprintf(stderr, "open DOCX: %v\n", err)
+			return 1
+		}
+	}
 	if options.transport == "stdio" {
 		if options.stdioBrowser {
 			err = api.RunStdioWithBrowser(context.Background(), options.stdioBrowserAddr)
@@ -114,7 +144,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	logger.Printf("viewer: http://%s/?token=%s", options.addr, options.browserToken)
+	viewerPath := "/"
+	if isDOCX {
+		viewerPath = "/docx"
+	}
+	logger.Printf("viewer: http://%s%s?token=%s", options.addr, viewerPath, options.browserToken)
 	logger.Printf("mcp: http://%s/mcp (Authorization: Bearer %s)", options.addr, options.mcpToken)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(stderr, "run HTTP transport: %v\n", err)
@@ -127,7 +161,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var result options
 	flags := flag.NewFlagSet("document-workspace", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&result.file, "file", "", "path to the XLSX workbook to open")
+	flags.StringVar(&result.file, "file", "", "열 XLSX 또는 DOCX 문서 경로")
 	flags.StringVar(&result.transport, "transport", "http", "MCP transport: http or stdio")
 	flags.StringVar(&result.addr, "addr", "127.0.0.1:8765", "HTTP listen address")
 	flags.BoolVar(&result.stdioBrowser, "stdio-browser", true, "serve a loopback browser fallback in stdio mode")
@@ -137,8 +171,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&result.check, "check", false, "validate the workbook and exit without starting a server")
 	flags.BoolVar(&result.showVersion, "version", false, "print build version and exit")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: document-workspace [options] <workbook.xlsx>")
-		fmt.Fprintln(stderr, "       document-workspace -file <workbook.xlsx> [options]")
+		fmt.Fprintln(stderr, "Usage: document-workspace [options] <document.xlsx|document.docx>")
+		fmt.Fprintln(stderr, "       document-workspace -file <document.xlsx|document.docx> [options]")
 		fmt.Fprintln(stderr, "       document-workspace mcp <install|status|uninstall>")
 		fmt.Fprintln(stderr)
 		fmt.Fprintln(stderr, "Options:")

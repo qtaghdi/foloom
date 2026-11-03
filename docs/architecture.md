@@ -13,6 +13,7 @@ document-workspace는 사람과 AI가 같은 사무 문서를 안전하게 편�
 apps/web-editor/                 TypeScript 브라우저 편집기
 cmd/document-workspace/         Go 실행 파일
 internal/formats/xlsx/          XLSX 세션, 작업, 저장, 이력
+internal/formats/docx/          실험 DOCX 생성, 표적 편집, 저장
 internal/transport/httpapi/     HTTP, SSE, MCP, 내장 UI
 testdata/xlsx/compatibility/    출처가 기록된 호환성 corpus
 legacy/xlsx-python/             보존된 Python 개념 증명
@@ -48,7 +49,7 @@ Claude/Codex MCP host ─┐
 `cmd/document-workspace`는 입력 파일을 열고 HTTP 또는 stdio 전송을 시작합니다.
 stdio는 파일 없이 시작한 뒤 `open_workbook`으로 활성 XLSX를 정할 수 있습니다.
 thread-safe session holder가 활성 세션의 교체와 종료를 직렬화하며 진행 중인 도구
-호출이 닫힌 세션을 사용하지 않게 합니다. HTTP는 시작 시 파일이 계속 필요합니다.
+호출이 닫힌 세션을 사용하지 않게 합니다. HTTP는 시작 시 XLSX 또는 DOCX 파일이 필요하며 CLI는 확장자로 adapter를 선택합니다.
 `-check`는 같은 adapter 경계에서 사전 검사만 수행합니다. `mcp install`, `status`,
 `uninstall`은 macOS host 설정과 사용자 skill을 관리합니다. 릴리스 정보는 build 시
 version, commit, date로 주입합니다.
@@ -57,7 +58,10 @@ version, commit, date로 주입합니다.
 
 현재 `internal/formats/xlsx`가 유일한 production adapter입니다. Excelize package,
 session, typed operation, 리비전, event, persistence, history, compatibility notice를
-소유합니다. 향후 DOCX, PPTX, HWPX, PDF는 각각 별도 adapter로 시작합니다.
+소유합니다. `internal/formats/docx`는 비공개 실험 adapter로 paragraph·단순 table 생성과
+일반 run text 교체를 제공합니다. namespace-aware 검사와 원본 byte offset 표적
+수정으로 주변 XML과 다른 package part를 보존합니다. DOCX는 별도 구체 session을
+사용하고 shared runtime은 추출하지 않습니다. PPTX, HWPX, PDF는 계획입니다.
 
 ### 전송 계층
 
@@ -80,6 +84,12 @@ MCP App resource, loopback 브라우저 대체 화면을 제공합니다. workbo
 inline preview 대신 이 URL을 browser surface에 엽니다. 다른 도구는 문서가 열리기
 전 명확한 오류를 반환합니다. MCP `document-xlsx` prompt와 host별 skill은 전체
 workbook 대신 metadata와 필요한 범위만 읽는 workflow를 제공합니다.
+
+DOCX는 `create_docx`, `open_docx`, `get_docx`, `apply_docx_operations` 전용 도구,
+`/api/docx`와 `/api/docx/operations`, `/api/docx/events`, `/docx` 브라우저를
+사용합니다. DOCX event는 별도 bounded replay와 sequence·revision을 가지며
+SSE 전송은 1초 간격으로 새로운 commit을 확인합니다. 문서 교체나 gap은 reload를
+요청하고 local draft가 있으면 복구 전 저장을 차단합니다.
 
 다른 형식은 공통 계약이 증명되기 전까지 형식별 typed 도구를 가질 수 있습니다.
 MCP App resource는 호환성을 위해 `ui://document-workspace/xlsx/v1.html`로
@@ -194,7 +204,7 @@ XLSX parser 전에는 OOXML ZIP, regular file, 암호화, 안전한 part 이름,
 ## 남은 결정
 
 - 두 번째 adapter 뒤의 첫 shared session interface
-- DOCX 저장 및 round-trip engine
+- DOCX native Word·LibreOffice 검증, 구조 편집과 풍부한 서식
 - PPTX canvas와 animation 보존
 - HWPX 범위와 binary HWP 연동
 - PDF annotation, form, OCR, 재생성 경계
@@ -202,3 +212,6 @@ XLSX parser 전에는 OOXML ZIP, regular file, 암호화, 안전한 part 이름,
 - 호스팅 tenant, 영속 event replay, audit 저장
 
 XLSX editor 결정은 [ADR 0001](adr/0001-spreadsheet-engine.md)을 참고하세요.
+
+DOCX의 저장·보안 제한과 native 검증 한계는 [사용 계약](docx-editing.md)과
+[ADR 0002](adr/0002-docx-targeted-text-editing.md)를 따릅니다.

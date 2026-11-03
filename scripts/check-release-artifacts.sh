@@ -41,6 +41,7 @@ for target in $release_targets; do
     "$package_name/README.md" \
     "$package_name/docs/getting-started.md" \
     "$package_name/docs/format-support.md" \
+    "$package_name/docs/docx-editing.md" \
     "$package_name/docs/host-compatibility.md" \
     "$package_name/docs/security.md"; do
     if ! printf '%s\n' "$entries" | grep -Fx "$required" >/dev/null; then

@@ -81,8 +81,11 @@ extension 보존은 약속하지 않습니다.
 
 ## 3단계: DOCX
 
-첫 목표는 단순 paragraph와 table 편집, native 저장, 관련 없는 OOXML part
-보존입니다. Word 및 LibreOffice fixture와 [DOCX 보존 실험](docx-preservation-prototype.md)을
+현재 비공개 실험으로 paragraph와 단순 table 생성, 일반 run text 편집,
+원자적 DOCX 저장과 관련 없는 OOXML part 보존을 구현했습니다. MCP와 브라우저가
+같은 세션을 사용합니다. [DOCX 사용 안내](docx-editing.md)를 참고하세요.
+
+다음 목표는 native fixture와 시각 검증, 구조 편집과 풍부한 서식입니다. Word 및 LibreOffice fixture와 [DOCX 보존 실험](docx-preservation-prototype.md)을
 통해 저장 방식을 먼저 결정합니다. 정확한 pagination, 복잡한 field, floating
 layout, tracked-change 작성은 초기 범위가 아닙니다.
 

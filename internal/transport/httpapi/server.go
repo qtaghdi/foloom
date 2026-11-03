@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/qtaghdi/document-workspace/internal/formats/docx"
 	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
 )
 
@@ -26,6 +27,7 @@ type Server struct {
 	openMu         sync.Mutex
 	sessionMu      sync.RWMutex
 	session        *xlsx.Session
+	docxSession    *docx.Session
 	browserToken   string
 	mcpToken       string
 	mux            *http.ServeMux
@@ -84,6 +86,7 @@ func (s *Server) Close() error {
 	s.sessionMu.Lock()
 	previous := s.session
 	s.session = nil
+	s.docxSession = nil
 	s.sessionMu.Unlock()
 	if previous == nil {
 		return nil
@@ -102,6 +105,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /launch/{token}", s.launchBrowserSession)
 	s.mux.Handle("/mcp", s.requireBearer(s.mcpHandler()))
 	s.mux.HandleFunc("GET /{$}", s.index)
+	s.docxRoutes()
 	s.mux.Handle("GET /assets/", s.requireSession(http.FileServer(http.FS(assets))))
 	s.mux.Handle("GET /api/workbook", s.requireSession(http.HandlerFunc(s.getWorkbook)))
 	s.mux.Handle("GET /api/range", s.requireSession(http.HandlerFunc(s.getRange)))

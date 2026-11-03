@@ -41,7 +41,21 @@ test('complete browser and self-contained MCP App assets pass verification', () 
   mkdirSync(resolve(directory, 'assets'));
   writeFileSync(resolve(directory, 'assets/style.css'), 'body{}');
   writeFileSync(resolve(directory, 'assets/app.js'), '0');
+  writeFileSync(resolve(directory, 'docx.html'), '<title>DOCX</title><link href="/assets/style.css"><script src="/assets/app.js"></script>');
   const result = run(directory);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /verification passed/);
+});
+
+
+test('missing DOCX entry fails packaging verification', () => {
+  const directory = mkdtempSync(resolve(tmpdir(), 'embedded-assets-docx-'));
+  writeFileSync(resolve(directory, 'index.html'), `${marker}<link href="/assets/style.css"><script src="/assets/app.js"></script>`);
+  writeFileSync(resolve(directory, 'app.html'), `${marker}<style>body{}</style><script>0</script>`);
+  mkdirSync(resolve(directory, 'assets'));
+  writeFileSync(resolve(directory, 'assets/style.css'), 'body{}');
+  writeFileSync(resolve(directory, 'assets/app.js'), '0');
+  const result = run(directory);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /DOCX browser entry is missing/);
 });

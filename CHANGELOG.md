@@ -8,6 +8,12 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- DOCX 문단·단순 표 생성, 본문·표 run 텍스트의 리비전 기반 batch 편집, 원본
+  OOXML 표적 보존, MCP 도구 4개와 인증된 브라우저 편집기를 추가했습니다.
+  미지원 구조는 보호하며 Word native 호환성은 아직 검증하지 않았습니다.
+- DOCX archive·XML 제한, 외부 writer 감지, 덮어쓰기 없는 생성, 원자적 저장,
+  충돌 시 미저장 입력 유지와 합성 호환성 corpus를 추가했습니다.
+
 - browser Alert의 접기, 펼치기, 닫기 control과 MCP의 browser-first workbook 편집
   workflow를 추가했습니다.
 - macOS에서 실행 파일, Claude Desktop과 Codex MCP 설정, `document-xlsx` skill을

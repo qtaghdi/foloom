@@ -1,7 +1,9 @@
 # DOCX 원본 보존 프로토타입 명세
 
-상태: 실험 설계. 이 문서는 DOCX 어댑터, fixture corpus, 엔진 선택, 실험 성공을
-주장하지 않습니다. 관련 계약은 [제품 명세](product-spec.md),
+상태: 실험 설계와 gate 기준. #35에서 표적 text 수정 방식의 비공개 실험 adapter와
+합성 corpus를 구현했습니다. [ADR 0002](adr/0002-docx-targeted-text-editing.md)와
+[사용 계약](docx-editing.md)에 실제 범위와 증거를 기록합니다. 이 설계의 전체 gate
+통과나 native Word 호환성을 주장하지 않습니다. 관련 계약은 [제품 명세](product-spec.md),
 [형식별 지원표](format-support.md), [아키텍처](architecture.md)를 따릅니다.
 
 ## 확인할 결정
