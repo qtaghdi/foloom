@@ -53,3 +53,9 @@ keyboard·focus 표시와 복귀, 의미 있는 label, live status, 긴 제목·
 선택 범위의 첫 셀에서 서식 상태를 읽습니다. 자체 서식은 서버 commit이 성공한
 뒤 engine에 반영하며 실패 시 성공한 것처럼 표시하지 않습니다. 고급 도구는
 동일한 engine의 기본 ribbon을 표시·숨김하며 재마운트하지 않습니다.
+
+## DOCX 읽기 배치
+
+용지는 읽기 위한 단일 연속 surface입니다. 원본의 run을 합치거나 pagination을
+계산하지 않으며, 입력은 focus 시 경계를 표시합니다. 큰 문서의 본문 block은
+content-visibility로 표시 비용을 줄이고 저장 전까지 같은 입력 node를 유지합니다.
