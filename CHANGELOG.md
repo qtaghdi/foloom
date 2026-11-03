@@ -92,6 +92,9 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 변경
 
+- #42: XLSX와 DOCX의 header·문서명·상태·버튼을 흰색과 indigo 강조색의 공통
+  디자인으로 통일했습니다.
+
 - 소유자가 읽는 문서, 변경 이력, GitHub issue 및 Pull Request 양식, 제품 문구의
   기본 언어를 한국어로 바꿨습니다. AI 전용 지침, 코드 주석, commit message,
   명령어, API 식별자는 영어를 유지합니다.
