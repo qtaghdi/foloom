@@ -125,3 +125,7 @@ button { -webkit-tap-highlight-color: transparent; }
   .docx-run { width: 100%; }
 }
 .docx-paper > * { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+
+@media (max-width: 640px) {
+  .editor-workspace[data-activity-open="true"] > .editor-primary { display: none; }
+}

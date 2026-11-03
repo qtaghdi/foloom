@@ -23,7 +23,7 @@ export function EditorHeader(props: {
         {props.message}{props.revision && props.revision > 0 ? ` · 리비전 ${props.revision}` : ''}
       </p>
       {props.actions}
-      <Show when={props.onActivity}><button type="button" class={buttonClass} aria-expanded={props.activityOpen} aria-controls="document-activity" onClick={() => props.onActivity?.()}>활동</button></Show>
+      <Show when={props.onActivity}><button type="button" data-activity-toggle class={buttonClass} aria-expanded={props.activityOpen} aria-controls="document-activity" onClick={() => props.onActivity?.()}>활동</button></Show>
     </div>
   </header>;
 }

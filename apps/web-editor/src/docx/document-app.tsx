@@ -1,13 +1,14 @@
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
 import { createDocumentView } from './view';
+import { ActivityPanel } from '../ui/activity-panel';
 import { DocumentContent } from './document-content';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
 
 
 export function DocumentApp() {
-  const { state, view } = createDocumentView();
+  const { state, view, activity } = createDocumentView();
   const controller = new DocumentController(view);
   const [confirmReload, setConfirmReload] = createSignal(false);
   const reload = () => {
@@ -40,14 +41,15 @@ export function DocumentApp() {
     <a class="skip-link" href="#document-content">본문으로 이동</a>
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
     <EditorHeader name={state().snapshot?.name ?? '문서를 여는 중'} kind="문서" nameId="document-name" statusId="save-status"
-      message={state().message} status={state().status}
+      message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       />
     <div class="editor-toolstrip flex min-h-14 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6" aria-label="문서 편집 도구">
       <button id="reload-document" class={buttonClass} type="button" disabled={state().saving} onClick={() => controller.hasDrafts() ? setConfirmReload(true) : reload()}>다시 불러오기</button>
       <button id="save-document" class={primaryButtonClass} type="button" disabled={!state().canSave} onClick={() => { void controller.save(); }}>변경 저장</button>
       <span class="hidden border-l border-slate-200 pl-4 text-xs text-slate-500 sm:inline">본문과 표의 텍스트 편집</span>
     </div>
-    <main class="min-h-0 flex-1 space-y-4 overflow-auto bg-slate-100 px-3 py-5 sm:px-8 sm:py-8">
+    <div class="editor-workspace flex min-h-0 flex-1 overflow-hidden" data-activity-open={activity.open()}>
+    <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-slate-100 px-3 py-5 sm:px-8 sm:py-8">
       <details class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><summary class="cursor-pointer font-semibold">편집 범위와 원본 보존 안내</summary><ul id="document-warnings" class="mt-3 list-disc space-y-2 pl-5"><For each={state().snapshot?.warnings ?? []}>{(warning) => <li>{warning}</li>}</For></ul></details>
 
       <Show when={confirmReload()}><section class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm" role="alert">
@@ -60,6 +62,8 @@ export function DocumentApp() {
       </article>
       <p class="mx-auto max-w-[800px] text-xs leading-5 text-slate-500">지원하지 않는 구조는 원본을 유지합니다. 줄바꿈과 탭 입력은 현재 지원하지 않습니다.</p>
     </main>
+    <Show when={activity.open()}><ActivityPanel entries={activity.entries()} onClose={activity.toggle}/></Show>
+    </div>
     <footer class="border-t border-slate-200 bg-white px-4 py-2 text-xs text-slate-500">문서 배치는 미리보기입니다.</footer>
     </div>
   </>;

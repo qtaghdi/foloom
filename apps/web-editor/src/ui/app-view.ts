@@ -3,6 +3,8 @@ import type { CellFormat, FeatureWarning, HistoryDirection, WorkbookEvent } from
 
 import type { EditorSelection } from '../spreadsheet-engine';
 
+import { createActivityModel, type ActivityEntry } from './activity';
+
 export type RevisionState = 'ready' | 'pending' | 'success' | 'error' | 'conflict' | 'recovery';
 export interface StatusPanelState { title: string; message: string; dismissible: boolean; reload?: () => void }
 export interface WorkbookViewState {
@@ -14,6 +16,8 @@ export interface WorkbookViewState {
 // Controllers publish presentation state. Only the engine owns the mounted grid DOM.
 export class AppView {
   spreadsheet!: HTMLElement;
+  readonly activity = createActivityModel();
+  recordActivity(entry: ActivityEntry): void { if (!this.disposed) this.activity.record(entry); }
   private readonly signal = createSignal<WorkbookViewState>({ name: '문서를 여는 중', message: '연결 중', revision: 0, status: 'pending', canUndo: false, canRedo: false });
   readonly state = this.signal[0];
   private disposed = false;
@@ -67,6 +71,7 @@ export class AppView {
     this.showRevision('작업 실패', revision, 'error'); this.focusError();
   }
   showRecovery(message: string, revision: number): void {
+    this.activity.markUncertain();
     const conflict = /conflict|changed|external|newer|busy/i.test(message);
     const title = conflict ? '충돌 감지' : '복구 필요';
     this.patch({ error: { title, message: `${message} 편집을 중단했습니다. 미저장 입력을 복사한 뒤 저장된 문서를 다시 불러오세요. 결과가 불확실한 저장은 반복하지 마세요.`, dismissible: false, reload: () => window.location.reload() }, canUndo: false, canRedo: false });

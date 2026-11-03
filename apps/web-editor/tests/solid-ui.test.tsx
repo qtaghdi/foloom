@@ -142,3 +142,20 @@ it('custom toolbar reflects selection and blocks formatting during a pending wri
   button(root, '기울임').click(); expect(format).toHaveBeenCalledTimes(1);
   view.dispose();
 });
+
+it('activity shows observed commits only, deduplicates events, and bounds the connection log', () => {
+  const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
+  const grid = view.spreadsheet; const marker = document.createElement('canvas'); grid.append(marker);
+  if (!view.activity.open()) button(root, '활동').click();
+  expect(root.querySelector('#document-activity')?.textContent).toContain('아직 기록된 변경이 없습니다.');
+  view.recordActivity({ id: 'write', actor: 'human', state: 'pending', title: '문서 변경' });
+  view.showRecovery('connection lost', 1);
+  expect(view.activity.entries()[0]?.state).toBe('uncertain');
+  view.recordActivity({ id: 'write', actor: 'human', state: 'committed', title: '문서 변경 저장', revision: 2 });
+  expect(view.activity.entries()).toHaveLength(1);
+  for (let i = 0; i < 70; i++) view.recordActivity({ id: `event:${i}`, actor: 'ai', state: 'committed', title: '범위 서식 저장', revision: i + 3 });
+  expect(view.activity.entries()).toHaveLength(60);
+  expect(root.querySelector('#spreadsheet')).toBe(grid); expect(grid.firstChild).toBe(marker);
+  expect(root.querySelector('#document-activity')?.textContent).toContain('AI');
+  view.dispose();
+});
