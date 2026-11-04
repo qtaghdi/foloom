@@ -120,3 +120,20 @@ button[aria-pressed="true"] { background: #eef2ff; border-color: #a5b4fc; color:
 @media (max-width: 640px) {
   .docx-paper { min-height: 32rem; }
 }
+
+.docx-run { vertical-align: top; }
+.docx-run.docx-run-wide { display: block; width: 100%; }
+.docx-paragraph:focus { outline: 2px solid #0f766e; outline-offset: 5px; }
+.change-marker {
+  position: absolute;
+  top: -0.375rem;
+  right: 0;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border-radius: 0.375rem;
+  background: #ccfbf1;
+  color: #115e59;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.change-marker:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; }

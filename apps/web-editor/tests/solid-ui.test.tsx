@@ -16,7 +16,7 @@ function mount(component: () => any) {
   cleanup = render(component, root); return root;
 }
 function button(root: ParentNode, label: string): HTMLButtonElement {
-  const result = [...root.querySelectorAll('button')].find((element) => element.textContent === label);
+  const result = [...root.querySelectorAll('button')].find((element) => element.textContent === label || element.getAttribute('aria-label') === label);
   if (!result) throw new Error(`Missing button: ${label}`);
   return result;
 }
@@ -30,7 +30,7 @@ describe('Solid workbook shell', () => {
     view.showRevision('Ready', 1); view.setHistoryState(true, false); button(root, '실행 취소').click();
     expect(history).toHaveBeenCalledWith('undo');
     view.showRevision('Saved', 3, 'success');
-    expect(root.querySelector('#revision-status')?.textContent).toContain('저장됨 · 리비전 3');
+    expect(root.querySelector('#revision-status')?.textContent).toContain('저장됨');
     expect(grid.getAttribute('aria-busy')).toBe('false');
     view.showAIPresence({ type: 'presence.update', actor: 'ai', sheet: 'Sheet1', range: 'A1', revision: 3, sequence: 1 }, 3);
     expect(root.querySelector('#ai-presence')?.textContent).toContain('AI 선택');
@@ -102,7 +102,7 @@ describe('Solid DOCX editor', () => {
     const body = JSON.parse(f.fetcher.mock.calls.find(([, init]) => init?.method === 'POST')![1]!.body as string);
     expect(body.baseRevision).toBe(1); expect(body.sessionId).toBe('session');
     expect(body.operations.map((op: any) => op.type)).toEqual(['replace_run_text', 'replace_cell_text']);
-    expect(root.querySelector('#save-status')?.textContent).toContain('리비전 2');
+    expect(root.querySelector('#save-status')?.textContent).toContain('저장됨');
   });
 
   it('preserves drafts on remote commits and requires explicit discard before reloading', async () => {
@@ -183,4 +183,29 @@ it('keeps unsupported pasted text editable and restores saving after correction'
   edit(input, '수정한 한 줄');
   expect(input.getAttribute('aria-invalid')).toBe('false'); expect(button(root, '변경 저장').disabled).toBe(false);
   button(root, '변경 저장').click(); await settle(); expect(f.fetcher).toHaveBeenCalledTimes(2);
+});
+
+
+it('locates an observed AI change by paragraph and displays its verified before and after text', async () => {
+  const fixture = docxFixture();
+  const root = mount(() => <DocumentApp/>);
+  await settle();
+  const response = await fixture.fetcher.mock.results[0]!.value;
+  const before = await response.json();
+  const next = structuredClone(before);
+  next.revision = 2;
+  next.sequence = 1;
+  next.blocks[0]!.paragraph!.runs[0]!.text = 'AI 수정';
+  fixture.fetcher.mockResolvedValueOnce({ ok: true, json: async () => next });
+  fixture.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
+  await settle();
+  const marker = root.querySelector<HTMLButtonElement>('.change-marker')!;
+  expect(marker.closest('section')?.id).toBe('docx-paragraph-0');
+  marker.click();
+  expect(root.querySelector('[aria-label="AI 변경 전후"]')?.textContent).toContain('원본');
+  expect(root.querySelector('[aria-label="AI 변경 전후"]')?.textContent).toContain('AI 수정');
+  button(root, '활동').click();
+  button(root, '변경 위치로 이동').click();
+  await settle();
+  expect(document.activeElement?.id).toBe('docx-paragraph-0');
 });

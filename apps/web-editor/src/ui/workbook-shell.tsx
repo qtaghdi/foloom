@@ -12,7 +12,7 @@ export function WorkbookShell(props: { view: AppView }) {
     <a class="skip-link" href="#spreadsheet">본문으로 이동</a>
     <div id="app-shell" class="flex h-full min-h-0 flex-col overflow-hidden">
       <EditorHeader name={state().name} kind="스프레드시트" nameId="workbook-name" statusId="revision-status"
-        message={state().message} revision={state().revision} status={state().status} onActivity={props.view.activity.toggle} activityOpen={props.view.activity.open()}
+        message={state().message} status={state().status} onActivity={props.view.activity.toggle} activityOpen={props.view.activity.open()}
         actions={<Show when={state().presence}><span id="ai-presence" class="max-w-56 truncate text-xs text-indigo-700" role="status" aria-live="polite">{state().presence}</span></Show>}/>
       <WorkbookToolbar view={props.view}/>
       <Show when={state().warning} keyed>{(panel) => <StatusPanel id="feature-warnings" panel={panel} onDismiss={() => props.view.dismiss('warning')}/>}</Show>

@@ -4,7 +4,7 @@ import { buttonClass } from './editor-chrome';
 
 const states = { pending: '저장 중', committed: '저장됨', failed: '실패', uncertain: '확인 필요' };
 const actors = { ai: 'AI', human: '사람', system: '시스템' };
-export function ActivityPanel(props: { entries: ActivityEntry[]; onClose: () => void; presence?: string }) {
+export function ActivityPanel(props: { entries: ActivityEntry[]; onClose: () => void; presence?: string; canLocate?: (entry: ActivityEntry) => boolean; onLocate?: (entry: ActivityEntry) => void }) {
   return <aside id="document-activity" class="flex h-full min-h-0 w-72 max-w-full shrink-0 flex-col border-l border-slate-200 bg-white max-sm:w-full" aria-label="문서 활동">
     <div class="border-b border-slate-200 p-4">
       <div class="flex items-center justify-between gap-2"><h2 id="document-activity-heading" tabindex={-1} class="text-base font-semibold text-slate-950 focus-visible:outline-2 focus-visible:outline-indigo-600">문서 활동</h2><button type="button" class={buttonClass} aria-label="문서 활동 닫기" onClick={props.onClose}>닫기</button></div>
@@ -17,7 +17,10 @@ export function ActivityPanel(props: { entries: ActivityEntry[]; onClose: () => 
           <div class="flex items-center justify-between gap-2 text-xs"><span class="font-semibold text-slate-600">{actors[entry.actor]}</span><span classList={{ 'text-emerald-700': entry.state === 'committed', 'text-amber-700': entry.state !== 'committed' }}>{states[entry.state]}</span></div>
           <p class="font-medium text-slate-800">{entry.title}</p>
           <Show when={entry.location}><p class="break-words text-xs text-slate-500">{entry.location}</p></Show>
-          <p class="text-xs text-slate-400"><Show when={entry.revision !== undefined}>리비전 {entry.revision} · </Show><time dateTime={new Date(entry.observedAt ?? 0).toISOString()}>{new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(entry.observedAt ?? 0)}</time></p>
+          <Show when={props.canLocate?.(entry)}>
+            <button type="button" class="min-h-11 rounded px-1 text-sm font-medium text-teal-800 underline underline-offset-4 focus-visible:outline-2" onClick={() => props.onLocate?.(entry)}>변경 위치로 이동</button>
+          </Show>
+          <p class="text-xs text-slate-500"><Show when={entry.revision !== undefined}>리비전 {entry.revision} · </Show><time dateTime={new Date(entry.observedAt ?? 0).toISOString()}>{new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(entry.observedAt ?? 0)}</time></p>
         </li>}</For></ol>
       </Show>
     </div>
