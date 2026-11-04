@@ -1,4 +1,4 @@
-import { LocaleType, mergeLocales } from '@univerjs/core';
+import { EDITOR_ACTIVATED, FOCUSING_FX_BAR_EDITOR, IContextService, LocaleType, mergeLocales, RedoCommand, UndoCommand } from '@univerjs/core';
 import type { IRange } from '@univerjs/core';
 import { UniverDocsPlugin } from '@univerjs/docs';
 import { UniverDocsDrawingPlugin } from '@univerjs/docs-drawing';
@@ -26,7 +26,7 @@ import { UniverSheetsConditionalFormattingPlugin } from '@univerjs/sheets-condit
 import { CFNumberOperator, CFTimePeriodOperator, CFValueType } from '@univerjs/sheets-conditional-formatting';
 import type { IConditionFormattingRule, IValueConfig } from '@univerjs/sheets-conditional-formatting';
 import type { FConditionalFormattingBuilder } from '@univerjs/sheets-conditional-formatting/facade';
-import { UniverUIPlugin } from '@univerjs/ui';
+import { IMenuManagerService, MenuItemType, UniverUIPlugin } from '@univerjs/ui';
 import UniverPresetSheetsCoreKoKR from '@univerjs/preset-sheets-core/locales/ko-KR';
 
 import '@univerjs/docs-ui/facade';
@@ -67,13 +67,15 @@ import {
   toUniverCellData,
   toUniverWorkbook,
 } from './spreadsheet/univer/workbook-mapper';
-import type { SpreadsheetEngine, EditorSelection } from './spreadsheet-engine';
+import type { SpreadsheetEngine } from './spreadsheet-engine';
 
 export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   private readonly univer;
   private readonly univerAPI;
   private workbook: FWorkbook | undefined;
-  private lastSelection: SelectionChange | undefined;
+  private canUndo = false;
+  private canRedo = false;
+  private updateHistoryMenu?: () => void;
   private editListener: ((edit: CellEdit) => void) | undefined;
   private rangeEditListener: ((edit: RangeEdit) => void) | undefined;
   private selectionListener: ((selection: SelectionChange) => void) | undefined;
@@ -134,7 +136,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
           return;
         }
         objectsApplied = true;
-        this.setNativeToolbarVisible(false);
+        this.bindHistoryMenu();
         void this.applySheetObjects(objects);
       },
     ));
@@ -249,15 +251,12 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         });
       },
     ));
-    // Bind selection to this workbook rather than the focused global UI unit.
-    // The custom toolbar intentionally lives outside Univer's focus ownership.
     this.subscriptions.push(this.workbook.onSelectionChange((selections) => {
       const selection = selections.at(-1);
       const worksheet = this.workbook?.getActiveSheet();
       if (!selection || !worksheet) return;
-      this.lastSelection = { sheet: worksheet.getSheetName(),
-        range: toA1Range(selection.startRow, selection.startColumn, selection.endRow, selection.endColumn), state: 'selecting' };
-      this.selectionListener?.(this.lastSelection);
+      this.selectionListener?.({ sheet: worksheet.getSheetName(),
+        range: toA1Range(selection.startRow, selection.startColumn, selection.endRow, selection.endColumn), state: 'selecting' });
     }));
     this.subscriptions.push(this.univerAPI.addEvent(
       this.univerAPI.Event.ClipboardPasted,
@@ -276,15 +275,6 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     ));
   }
 
-  readSelection(): EditorSelection | undefined {
-    const worksheet = this.lastSelection ? this.workbook?.getSheetByName(this.lastSelection.sheet) : this.workbook?.getActiveSheet();
-    const range = this.lastSelection ? worksheet?.getRange(this.lastSelection.range) : worksheet?.getActiveRange();
-    if (!worksheet || !range) return undefined;
-    const style = range.getCellStyle();
-    return { sheet: worksheet.getSheetName(), range: range.getA1Notation(), state: 'selecting',
-      bold: style?.bold ?? false, italic: style?.italic ?? false, fontSize: style?.fontSize ?? 11 };
-  }
-
   locateRange(target: SelectionChange): boolean {
     const workbook = this.workbook;
     const worksheet = workbook?.getSheetByName(target.sheet);
@@ -299,13 +289,52 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     if (!visible || start.row < visible.startRow || start.row > visible.endRow || start.column < visible.startColumn || start.column > visible.endColumn) {
       worksheet.scrollToCell(start.row, start.column);
     }
-    this.lastSelection = target;
     this.selectionListener?.(target);
     return true;
   }
 
-  setNativeToolbarVisible(visible: boolean): void {
-    this.univerAPI.setUIVisible(this.univerAPI.Enum.BuiltInUIPart.TOOLBAR, visible);
+  setHistoryState(canUndo: boolean, canRedo: boolean): void {
+    this.canUndo = canUndo;
+    this.canRedo = canRedo;
+    this.updateHistoryMenu?.();
+  }
+
+  private bindHistoryMenu(): void {
+    const injector = this.univer.__getInjector();
+    const context = injector.get(IContextService);
+    const menu = injector.get(IMenuManagerService);
+    const undoDisabled = 'document-workspace.undo-disabled';
+    const redoDisabled = 'document-workspace.redo-disabled';
+
+    // Univer's local history starts empty after a reload. The shared workbook
+    // history comes from the server, while editor focus still controls availability.
+    this.updateHistoryMenu = () => {
+      const editing = context.getContextValue(EDITOR_ACTIVATED) || context.getContextValue(FOCUSING_FX_BAR_EDITOR);
+      context.setContextValue(undoDisabled, editing || !this.canUndo);
+      context.setContextValue(redoDisabled, editing || !this.canRedo);
+    };
+    const changes = context.contextChanged$.subscribe((change) => {
+      if (EDITOR_ACTIVATED in change || FOCUSING_FX_BAR_EDITOR in change) this.updateHistoryMenu?.();
+    });
+    this.subscriptions.push({ dispose: () => changes.unsubscribe() });
+    this.updateHistoryMenu();
+
+    menu.mergeMenu({
+      [UndoCommand.id]: {
+        menuItemFactory: () => ({
+          id: UndoCommand.id, type: MenuItemType.BUTTON, icon: 'UndoIcon',
+          title: 'ui.shortcut.undo', tooltip: 'ui.shortcut.undo',
+          disabled$: context.subscribeContextValue$(undoDisabled),
+        }),
+      },
+      [RedoCommand.id]: {
+        menuItemFactory: () => ({
+          id: RedoCommand.id, type: MenuItemType.BUTTON, icon: 'RedoIcon',
+          title: 'ui.shortcut.redo', tooltip: 'ui.shortcut.redo',
+          disabled$: context.subscribeContextValue$(redoDisabled),
+        }),
+      },
+    });
   }
 
   onCellEdit(listener: (edit: CellEdit) => void): void {

@@ -22,13 +22,9 @@ function button(root: ParentNode, label: string): HTMLButtonElement {
 }
 
 describe('Solid workbook shell', () => {
-  it('updates history, presence and statuses without replacing the engine container', async () => {
+  it('updates presence and statuses without replacing the engine container', async () => {
     const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
     const grid = view.spreadsheet; const sentinel = document.createElement('canvas'); grid.append(sentinel);
-    const history = vi.fn(); view.onHistoryAction(history);
-    expect(button(root, '실행 취소').disabled).toBe(true);
-    view.showRevision('Ready', 1); view.setHistoryState(true, false); button(root, '실행 취소').click();
-    expect(history).toHaveBeenCalledWith('undo');
     view.showRevision('Saved', 3, 'success');
     expect(root.querySelector('#revision-status')?.textContent).toContain('저장됨');
     expect(grid.getAttribute('aria-busy')).toBe('false');
@@ -52,7 +48,6 @@ describe('Solid workbook shell', () => {
     button(warning, '자세히').click(); button(warning, '닫기').click();
     expect(root.querySelector('#feature-warnings')).toBeNull();
     view.showRecovery('Revision conflict', 4); await settle();
-    expect(button(root, '실행 취소').disabled).toBe(true);
     expect(document.activeElement?.id).toBe('fatal-error');
     const error = root.querySelector('#fatal-error')!;
     expect(error.getAttribute('role')).toBe('alert');
@@ -132,20 +127,6 @@ describe('Solid DOCX editor', () => {
     expect(input.value).toBe('저장할 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
     expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
   });
-});
-
-it('custom toolbar reflects selection and blocks formatting during a pending write', () => {
-  const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
-  const format = vi.fn(); view.onFormat(format);
-  expect(button(root, '굵게').disabled).toBe(true);
-  view.setSelection({ sheet: 'Sheet1', range: 'A1:B2', state: 'selecting', bold: false, italic: false, fontSize: 11 });
-  view.showRevision('Ready', 1);
-  button(root, '굵게').click();
-  expect(format).toHaveBeenCalledWith({ bold: true }, expect.objectContaining({ range: 'A1:B2' }));
-  view.showRevision('Saving A1…', 1, 'pending');
-  expect(button(root, '기울임').disabled).toBe(true);
-  button(root, '기울임').click(); expect(format).toHaveBeenCalledTimes(1);
-  view.dispose();
 });
 
 it('activity shows observed commits only, deduplicates events, and bounds the connection log', () => {

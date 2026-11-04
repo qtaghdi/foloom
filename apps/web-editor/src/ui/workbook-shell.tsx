@@ -4,7 +4,6 @@ import { StatusPanel } from './status-panel';
 import { EditorHeader, quietButtonClass } from './editor-chrome';
 
 import { ActivityPanel } from './activity-panel';
-import { WorkbookToolbar } from './workbook-toolbar';
 
 export function WorkbookShell(props: { view: AppView }) {
   const state = props.view.state;
@@ -18,7 +17,6 @@ export function WorkbookShell(props: { view: AppView }) {
           <Show when={state().presence}><span id="ai-presence" class="max-w-40 truncate text-xs text-teal-800 max-sm:sr-only" role="status" aria-live="polite">{state().presence}</span></Show>
           <Show when={state().warning}><button type="button" class={quietButtonClass} aria-expanded={warningsOpen()} aria-controls="workbook-notices" onClick={() => setWarningsOpen(!warningsOpen())}>호환성</button></Show>
         </>}/>
-      <WorkbookToolbar view={props.view}/>
       <Show when={state().warning} keyed>{(panel) => <div id="workbook-notices" hidden={!warningsOpen()}>
         <StatusPanel id="feature-warnings" panel={panel} initiallyExpanded onDismiss={() => { setWarningsOpen(false); props.view.dismiss('warning'); }}/>
       </div>}</Show>
