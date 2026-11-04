@@ -92,10 +92,6 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 변경
 
-- CI의 main 푸시 중복 검사를 제거하고 PR 변경 범위로 실행할 검사를 선택합니다.
-  문서 전용 변경은 무거운 검사를 생략하고 DOCX 전용 변경은 XLSX 전용 회귀·안전성·
-  성능 gate 대신 DOCX 검증을 실행합니다. 수동 실행은 전체 검증을 유지합니다.
-
 - 독립 기능·수정별 커밋과 해당 검증·문서 동반 원칙을 AGENTS.md에 명시하고,
   불가분 변경은 하나로 유지해 형식적인 파일 단위 분리를 피합니다.
 
@@ -127,6 +123,10 @@ Semantic Versioning을 적용할 예정입니다.
 - operation과 event를 required field가 분명한 discriminated union으로 바꿨습니다.
 - host의 manual, automatic, one-time, persistent 승인을 문서화하고 image 및 chart
   write-back 한계를 안내에 반영했습니다.
+
+- CI의 main 푸시 중복 검사를 제거하고 PR 변경 범위로 실행할 검사를 선택합니다.
+  문서 전용 변경은 무거운 검사를 생략하고 DOCX 전용 변경은 XLSX 전용 회귀·안전성·
+  성능 gate 대신 DOCX 검증을 실행합니다. 수동 실행은 전체 검증을 유지합니다.
 
 ### 수정
 
