@@ -155,10 +155,10 @@ func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[strin
 	if err != nil {
 		return nil, nil, false, err
 	}
-	return inspectDocument(root, sessionID, revision)
+	return inspectDocument(root, sessionID, revision, previewStyles{})
 }
 
-func inspectDocument(root *node, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
+func inspectDocument(root *node, sessionID string, revision uint64, styles previewStyles) ([]Block, map[string]target, bool, error) {
 	if !root.is("document") || root.child("body") == nil {
 		return nil, nil, false, fmt.Errorf("DOCX requires a transitional Word document body")
 	}
@@ -199,7 +199,36 @@ func inspectDocument(root *node, sessionID string, revision uint64) ([]Block, ma
 	}
 	var paragraph func(*node, bool, string) Paragraph
 	paragraph = func(p *node, allowed bool, kind string) Paragraph {
-		out := Paragraph{ID: id(), Runs: []Run{}, Layout: paragraphLayout(p.child("pPr"))}
+		out := Paragraph{ID: id(), Runs: []Run{}}
+		var trailingBreak *node
+		if kind == "replace_run_text" {
+			trailingBreak = trailingPageBreak(p)
+			out.PageBreakAfter = trailingBreak != nil
+		}
+		props := p.child("pPr")
+		styleID := props.child("pStyle").attr("val")
+		if style := styles.byID[styleID]; style == nil || style.attr("type") != "paragraph" {
+			styleID = styles.paragraph
+		}
+		layout := ParagraphLayout{}
+		var baseRun Run
+		directRun(&baseRun, styles.defaults.child("rPrDefault").child("rPr"))
+		applyParagraph := func(props *node) {
+			applyParagraphPreview(&layout, props)
+			if br := props.child("pageBreakBefore"); br != nil {
+				out.PageBreakBefore = onOff(br.attr("val"), true)
+			}
+		}
+		applyParagraph(styles.defaults.child("pPrDefault").child("pPr"))
+		chain := styles.chain(styleID, "paragraph")
+		for i := len(chain) - 1; i >= 0; i-- {
+			applyParagraph(chain[i].child("pPr"))
+			styleRun(&baseRun, chain[i].child("rPr"))
+		}
+		applyParagraph(props)
+		if layout != (ParagraphLayout{}) {
+			out.Layout = &layout
+		}
 		// Fields and tracked changes can span runs. Fail closed for the paragraph.
 		for _, name := range []string{"fldChar", "instrText", "fldSimple", "ins", "del", "moveFrom", "moveTo", "sdt", "rPrChange", "pPrChange"} {
 			if p.has(name) {
@@ -229,16 +258,18 @@ func inspectDocument(root *node, sessionID string, revision uint64) ([]Block, ma
 			if !validText(text) {
 				editable = false
 			}
-			run := Run{ID: id(), Text: text, Editable: editable}
-			if props := r.child("rPr"); props != nil {
-				applyRunPreview(&run, props)
-				if b := props.child("b"); b != nil {
-					run.Bold = b.attr("val") != "0" && b.attr("val") != "false" && b.attr("val") != "off"
-				}
-				if i := props.child("i"); i != nil {
-					run.Italic = i.attr("val") != "0" && i.attr("val") != "false" && i.attr("val") != "off"
-				}
+			run := baseRun
+			run.ID, run.Text, run.Editable = id(), text, editable
+			if len(texts) == 0 && r.child("br") == trailingBreak && trailingBreak != nil &&
+				(len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
+				continue
 			}
+			runProps := r.child("rPr")
+			characters := styles.chain(runProps.child("rStyle").attr("val"), "character")
+			for i := len(characters) - 1; i >= 0; i-- {
+				styleRun(&run, characters[i].child("rPr"))
+			}
+			directRun(&run, runProps)
 			out.Runs = append(out.Runs, run)
 			if editable {
 				targets[run.ID] = target{node: texts[0], text: text, kind: kind}

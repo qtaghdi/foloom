@@ -48,3 +48,52 @@ func TestPagePreviewReadsDirectFormattingAndSurvivesTextSave(t *testing.T) {
 		t.Fatal("preview layout changed after a text-only save")
 	}
 }
+
+func TestPreviewResolvesRelatedStylesAndPreservesPageBreaks(t *testing.T) {
+	_, path := createTest(t)
+	styles := []byte(`<w:styles xmlns:w="` + wordNS + `">
+		<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+		<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:pPr><w:spacing w:before="80" w:after="120"/></w:pPr></w:style>
+		<w:style w:type="paragraph" w:styleId="Heading"><w:basedOn w:val="Normal"/><w:pPr><w:jc w:val="center"/><w:pageBreakBefore/></w:pPr><w:rPr><w:b/><w:sz w:val="48"/></w:rPr></w:style>
+		<w:style w:type="character" w:styleId="Accent"><w:rPr><w:i/><w:color w:val="115E59"/></w:rPr></w:style>
+	</w:styles>`)
+	rewritePackage(t, path, func(name string, data []byte) []byte {
+		if name != "word/document.xml" {
+			return data
+		}
+		x := strings.Replace(string(data), "<w:p>", `<w:p><w:pPr><w:pStyle w:val="Heading"/><w:spacing w:after="0"/></w:pPr>`, 1)
+		x = strings.Replace(x, "<w:r>", `<w:r><w:rPr><w:rStyle w:val="Accent"/><w:b w:val="0"/></w:rPr>`, 1)
+		x = strings.Replace(x, "</w:p>", `<w:r><w:br w:type="page"/></w:r></w:p>`, 1)
+		return []byte(x)
+	}, map[string][]byte{
+		"word/design.xml":              styles,
+		"word/_rels/document.xml.rels": []byte(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="design.xml"/></Relationships>`),
+	})
+	session, err := Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := mustSnapshot(t, session)
+	p := before.Blocks[0].Paragraph
+	if !p.PageBreakBefore || !p.PageBreakAfter || len(p.Runs) != 1 || p.Layout == nil ||
+		p.Layout.Align != "center" || p.Layout.Before == nil || *p.Layout.Before != 80 ||
+		p.Layout.After == nil || *p.Layout.After != 0 {
+		t.Fatalf("unexpected styled paragraph: %#v", p)
+	}
+	run := p.Runs[0]
+	if run.Bold || !run.Italic || !run.Editable || run.SizeHalfPoints != 48 || run.Color != "#115E59" {
+		t.Fatalf("unexpected run style: %#v", run)
+	}
+	if normal := before.Blocks[1].Rows[0].Cells[0].Paragraphs[0]; normal.Layout == nil || normal.Runs[0].SizeHalfPoints != 22 {
+		t.Fatalf("unexpected default style: %#v", normal)
+	}
+	original := string(session.pkg.document)
+	after, err := session.Apply(context.Background(), batch(before, "replace_run_text", run, "updated"), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(session.pkg.document) != strings.Replace(original, ">hello</w:t>", ">updated</w:t>", 1) ||
+		!reflect.DeepEqual(p.Layout, after.Blocks[0].Paragraph.Layout) || !after.Blocks[0].Paragraph.PageBreakAfter {
+		t.Fatal("saving text changed the surrounding layout")
+	}
+}

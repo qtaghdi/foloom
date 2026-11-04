@@ -92,11 +92,11 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	blocks, _, unsupported, err := inspectDocument(root, s.id, s.revision)
+	blocks, _, unsupported, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	warnings := []string{"본문과 단순 표의 일반 텍스트 run만 편집합니다. 용지와 직접 지정 서식 일부를 미리 봅니다. 페이지 나누기, 스타일 상속, 이미지, 머리글, 필드 등은 화면에서 재현하지 않습니다. 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	warnings := []string{"본문과 단순 표의 일반 텍스트 run만 편집합니다. 용지, 기본·문단·글자 스타일 일부와 문단 경계의 명시적 페이지 나눔을 미리 봅니다. 자동 페이지 매김, 이미지, 머리글과 필드는 화면에서 재현하지 않습니다. 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if unsupported {
 		warnings = append(warnings, "지원하지 않는 구조는 읽기 전용으로 표시하거나 화면에서 생략합니다.")
 	}
