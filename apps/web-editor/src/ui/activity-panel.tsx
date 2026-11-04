@@ -59,7 +59,7 @@ export function ActivityPanel(props: {
               <p class="mt-2 break-words text-sm font-medium leading-5 text-slate-900">{entry.title}</p>
               <Show when={entry.location}><p class="mt-1 break-words text-xs text-slate-600">{entry.location}</p></Show>
               <Show when={props.canLocate?.(entry)}>
-                <button type="button" class="editor-action mt-1 min-h-11 rounded-md px-2 text-sm font-medium text-teal-800 focus-visible:outline-2 focus-visible:outline-teal-700"
+                <button type="button" class="editor-action mt-1 min-h-11 rounded-md px-2 text-sm font-medium text-teal-800"
                   aria-label="변경 위치로 이동" onClick={() => props.onLocate?.(entry)}>변경 위치로 이동 <span aria-hidden="true">↗</span></button>
               </Show>
               <p class="mt-2 text-xs text-slate-600">

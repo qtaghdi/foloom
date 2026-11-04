@@ -11,16 +11,22 @@
 
 :root {
   color-scheme: light;
+  --editor-focus: #0f766e;
   font-family: Inter, "Pretendard", "Noto Sans KR", system-ui, sans-serif;
   font-synthesis: none;
 }
 
-button { -webkit-tap-highlight-color: transparent; }
 @layer components {
   .editor-action {
     position: relative;
     cursor: pointer;
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :is(.editor-action, .editor-select):focus-visible {
+    outline: 2px solid var(--editor-focus);
+    outline-offset: 2px;
   }
 
   .editor-action:disabled { cursor: not-allowed; }
@@ -36,10 +42,12 @@ button { -webkit-tap-highlight-color: transparent; }
   }
 
   @media (hover: hover) {
-    .editor-action:enabled:hover::after { opacity: 0.07; }
+    .editor-action:not(:disabled):hover::after { opacity: 0.07; }
+    .editor-select:not(:disabled):hover { background-color: #e7e5e4; }
   }
 
-  .editor-action:enabled:active::after { opacity: 0.13; }
+  .editor-action:not(:disabled):active::after { opacity: 0.13; }
+  .editor-select:not(:disabled):active { background-color: #d6d3d1; }
 
   @media (prefers-reduced-motion: no-preference) {
     .editor-action::after { transition: opacity 120ms ease-out; }
@@ -55,9 +63,17 @@ button { -webkit-tap-highlight-color: transparent; }
 #spreadsheet [role="toolbar"] button:enabled:not([aria-disabled="true"]) { cursor: pointer; }
 #spreadsheet [role="toolbar"] button:disabled,
 #spreadsheet [role="toolbar"] [aria-disabled="true"] { cursor: not-allowed; }
-#spreadsheet [role="toolbar"] :is(button, input, [tabindex]):focus-visible {
-  outline: 2px solid #0f766e;
+#spreadsheet [role="toolbar"] :is(button, [tabindex]):focus-visible,
+#spreadsheet [role="toolbar"] [data-slot="dropdown-menu-trigger"]:has(input:focus) {
+  outline: 2px solid var(--editor-focus);
   outline-offset: -2px;
+}
+
+/* The engine clips the text wrapper. Keep the ring on the field and arrow together. */
+#spreadsheet [role="toolbar"] [data-slot="dropdown-menu-trigger"] input:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .revision-status { font-variant-numeric: tabular-nums; }
@@ -193,4 +209,3 @@ button { -webkit-tap-highlight-color: transparent; }
   font-size: 0.75rem;
   font-weight: 700;
 }
-.change-marker:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; }

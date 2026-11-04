@@ -1,8 +1,8 @@
 import { Show, type JSX } from 'solid-js';
 
-export const buttonClass = 'editor-action min-h-11 shrink-0 touch-manipulation rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:opacity-40';
-export const quietButtonClass = 'editor-action min-h-11 shrink-0 touch-manipulation rounded-md px-3 text-sm font-medium text-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:opacity-40';
-export const primaryButtonClass = 'editor-action min-h-11 shrink-0 touch-manipulation rounded-md border border-teal-700 bg-teal-700 px-4 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:opacity-40';
+export const buttonClass = 'editor-action min-h-11 shrink-0 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 disabled:opacity-40';
+export const quietButtonClass = 'editor-action min-h-11 shrink-0 rounded-md px-3 text-sm font-medium text-stone-700 disabled:opacity-40';
+export const primaryButtonClass = 'editor-action min-h-11 shrink-0 rounded-md border border-teal-700 bg-teal-700 px-4 text-sm font-semibold text-white disabled:opacity-40';
 
 export function EditorHeader(props: {
   name: string; kind: string; message: string; status: string;

@@ -122,7 +122,7 @@ export function DocumentApp() {
           onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => controller.edit(operation)}/>}</Show>
       </article>
       <details class="mt-2 rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
-        <summary class="min-h-11 w-fit cursor-pointer rounded px-1 py-2 font-medium focus-visible:outline-2 focus-visible:outline-teal-700">편집 범위와 원본 보존</summary>
+        <summary class="editor-action min-h-11 w-fit rounded px-1 py-2 font-medium">편집 범위와 원본 보존</summary>
         <p>용지와 일부 직접 지정 서식을 미리 봅니다. Word의 페이지 나누기와 스타일 상속은 재현하지 않습니다. 본문과 표의 기존 텍스트를 편집할 수 있습니다.</p>
         <Show when={state().snapshot?.warnings.length}><p class="whitespace-pre-wrap">{state().snapshot?.warnings.join('\n')}</p></Show>
       </details>

@@ -27,7 +27,7 @@ export function DocumentToolbar(props: {
       <label class="ml-auto flex min-h-11 shrink-0 items-center gap-2 rounded-md px-2 text-xs text-slate-700">
         <span class="hidden sm:inline">보기 배율</span>
         <select aria-label="보기 배율" name="document-zoom" value={props.zoom}
-          class="min-h-11 cursor-pointer rounded-md bg-stone-50 text-sm tabular-nums focus-visible:outline-2 focus-visible:outline-teal-700"
+          class="editor-select min-h-11 cursor-pointer rounded-md bg-stone-50 px-2 text-sm tabular-nums"
           onChange={(event) => props.onZoom(Number(event.currentTarget.value))}>
           <For each={scales}>{scale => <option value={scale}>{scale}%</option>}</For>
         </select>
