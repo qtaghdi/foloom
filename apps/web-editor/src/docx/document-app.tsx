@@ -107,7 +107,7 @@ export function DocumentApp() {
           onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => controller.edit(operation)}/>}</Show>
       </article>
       <details class="mx-auto max-w-[780px] rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
-        <summary class="w-fit cursor-pointer font-medium">편집 범위와 원본 보존</summary>
+        <summary class="min-h-11 w-fit cursor-pointer rounded px-1 py-2 font-medium focus-visible:outline-2 focus-visible:outline-teal-700">편집 범위와 원본 보존</summary>
         <p>본문과 표의 텍스트를 편집할 수 있습니다. 줄바꿈과 탭 입력은 지원하지 않으며 화면의 페이지 배치는 미리보기입니다.</p>
         <Show when={state().snapshot?.warnings.length}><p class="whitespace-pre-wrap">{state().snapshot?.warnings.join('\n')}</p></Show>
       </details>

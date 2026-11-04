@@ -209,3 +209,29 @@ it('opens the sheet and cell associated with a confirmed activity entry', async 
   expect(document.activeElement).toBe(view.spreadsheet);
   view.dispose();
 });
+
+
+it('returns keyboard focus to the activity trigger on Escape', async () => {
+  const view = new AppView();
+  const root = mount(() => <WorkbookShell view={view}/>);
+  const trigger = button(root, '활동');
+  trigger.click();
+  await settle();
+  expect(document.activeElement?.id).toBe('document-activity-heading');
+  document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await settle();
+  expect(root.querySelector('#document-activity')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  expect(trigger.hasAttribute('aria-controls')).toBe(false);
+});
+
+it('clears the visible AI presence when the session reports idle', () => {
+  const view = new AppView();
+  const root = mount(() => <WorkbookShell view={view}/>);
+  const event = { type: 'presence.update' as const, actor: 'ai', sheet: 'Sheet1', range: 'A1', revision: 1, sequence: 1 };
+  view.showAIPresence({ ...event, state: 'editing' }, 1);
+  expect(root.querySelector('#ai-presence')?.textContent).toContain('AI 편집 중');
+  view.showAIPresence({ ...event, sequence: 2, state: 'idle' }, 1);
+  expect(root.querySelector('#ai-presence')).toBeNull();
+  view.dispose();
+});

@@ -590,21 +590,19 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     if (!worksheet) {
       return;
     }
-    if (event.type === 'presence.update' && event.range) {
+    if (event.type === 'presence.update') {
+      this.clearRemoteHighlight();
+      if (event.state === 'idle' || !event.range) return;
       const editing = event.state === 'editing';
-      window.clearTimeout(this.remoteHighlightTimer);
-      this.remoteHighlight?.dispose();
+      const animate = editing && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       this.remoteHighlight = worksheet.getRange(event.range).highlight({
         stroke: '#7c3aed',
         strokeWidth: editing ? 3 : 2,
         strokeDash: editing ? 6 : 0,
-        isAnimationDash: editing,
+        isAnimationDash: animate,
         fill: 'rgba(124, 58, 237, 0.10)',
       });
-      this.remoteHighlightTimer = window.setTimeout(() => {
-        this.remoteHighlight?.dispose();
-        this.remoteHighlight = undefined;
-      }, 5000);
+      this.remoteHighlightTimer = window.setTimeout(() => this.clearRemoteHighlight(), 5000);
       return;
     }
     if (event.type === 'range.format' && event.range && event.format) {
@@ -691,9 +689,14 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     }
   }
 
-  dispose(): void {
+  private clearRemoteHighlight(): void {
     window.clearTimeout(this.remoteHighlightTimer);
     this.remoteHighlight?.dispose();
+    this.remoteHighlight = undefined;
+  }
+
+  dispose(): void {
+    this.clearRemoteHighlight();
     for (const subscription of this.subscriptions) {
       subscription.dispose();
     }

@@ -176,7 +176,12 @@ Publish animation intent, then commit at cell or batch granularity.
   focus states are core behavior.
 - Keep business data on the server. Browser state is for presentation and
   drafts only.
-- Respect `prefers-reduced-motion` for AI cursor and typing animations.
+- Respect `prefers-reduced-motion` in CSS and canvas animations. Keep
+  hover and press feedback short, with visible keyboard focus and no layout shift.
+- Use pointer cues for actions, an I-beam for editable text, and a distinct
+  disabled state. Leave sheet selection, resize, and drag cursors to the engine.
+- Keep one XLSX ribbon and reuse shared application action styles. Use
+  `document-editor-ui` to verify visual and interaction changes in the real editor.
 - Do not fake successful persistence. Show pending, committed, conflicted, and
   failed states distinctly.
 - Keep all Univer packages on the same version and audit production
@@ -242,11 +247,11 @@ Current repository skills include:
 - `document-xlsx` for focused, revision-safe XLSX work through the installed
   MCP server.
 - `xlsx-compatibility-qa` for workbook corpus verification.
+- `document-editor-ui` for editor interaction and visual verification.
 
 Likely future skills include:
 
 - `mcp-app-release` for capability, packaging, and release checks.
-- `spreadsheet-ui-fidelity` for browser interaction and visual verification.
 
 Use the installed skill creator when adding or changing a skill. A skill must
 state its triggers, required inputs, workflow, safety constraints, verification,
