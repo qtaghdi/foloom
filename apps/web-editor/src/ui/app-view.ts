@@ -46,14 +46,20 @@ export class AppView {
   showAIPresence(event: WorkbookEvent, revision: number): void {
     if (event.type === 'workbook.reload') { this.showRevision('AI 변경 반영됨', revision); return; }
     window.clearTimeout(this.presenceTimer);
+    if (event.type === 'presence.update' && event.state === 'idle') {
+      this.patch({ presence: undefined });
+      return;
+    }
     const selection = event.type === 'cell.typing' || event.type === 'cell.commit' ? event.cell
       : 'range' in event ? event.range : `${event.index}:${event.index + event.count - 1}`;
     const location = `${event.sheet}!${selection}`;
-    this.patch({ presence: event.type === 'presence.update' ? `AI 선택: ${location}` : event.type === 'cell.typing' ? `AI 편집 중: ${location}` : `AI 변경 저장: ${location}` });
+    const editing = event.type === 'cell.typing' || (event.type === 'presence.update' && event.state === 'editing');
+    const label = editing ? 'AI 편집 중' : event.type === 'presence.update' ? 'AI 선택' : 'AI 변경 저장';
+    this.patch({ presence: `${label}: ${location}` });
     if (event.type !== 'presence.update' && event.type !== 'cell.typing') {
       this.showRevision('AI 변경 저장됨', revision, 'success');
-      this.presenceTimer = window.setTimeout(() => this.patch({ presence: undefined }), 4000);
     }
+    this.presenceTimer = window.setTimeout(() => this.patch({ presence: undefined }), 5000);
   }
   showError(error: unknown, revision: number): void {
     this.patch({ error: { title: '작업 실패', message: `${problemMessage(error instanceof Error ? error.message : String(error))} 연결과 문서 접근 상태를 확인하세요.`, dismissible: true } });

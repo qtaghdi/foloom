@@ -21,7 +21,7 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
         </Show>}</For>
       </Show>
     </div>
-    <Show when={props.changes.get(key)}>{(entry) => <button type="button" class="change-marker" aria-label={`AI 변경 보기 · ${entry().location}`} aria-expanded={props.selected?.documentChange?.key === key}
+    <Show when={props.changes.get(key)}>{(entry) => <button type="button" class="editor-action change-marker" aria-label={`AI 변경 보기 · ${entry().location}`} aria-expanded={props.selected?.documentChange?.key === key}
       onClick={() => props.onChangeSelect(entry())}>AI</button>}</Show>
     <Show when={props.selected?.documentChange?.key === key ? props.selected : undefined}>{(entry) =>
       <div class="mt-3 space-y-2 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-stone-800" role="region" aria-label="AI 변경 전후">
@@ -48,7 +48,7 @@ function RunField(props: { run: Run; fullWidth: boolean; label: string; saving: 
   return <>
     <textarea value={props.run.text} rows={Math.max(1, Math.ceil(props.run.text.length / 72))} readOnly={props.saving}
       name={props.run.id} autocomplete="off" aria-label={props.label} aria-invalid={Boolean(error())} aria-describedby={error() ? descriptionId : undefined}
-      class="docx-run min-w-0 resize-none bg-transparent leading-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+      class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
       classList={{ 'font-bold': props.run.bold, italic: props.run.italic, 'docx-run-wide': props.fullWidth, 'outline-red-500': Boolean(error()) }}
       onKeyDown={(event) => {
         if (event.isComposing || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
