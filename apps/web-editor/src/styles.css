@@ -63,17 +63,21 @@
 #spreadsheet [role="toolbar"] button:enabled:not([aria-disabled="true"]) { cursor: pointer; }
 #spreadsheet [role="toolbar"] button:disabled,
 #spreadsheet [role="toolbar"] [aria-disabled="true"] { cursor: not-allowed; }
-#spreadsheet [role="toolbar"] :is(button, [tabindex]):focus-visible,
-#spreadsheet [role="toolbar"] [data-slot="dropdown-menu-trigger"]:has(input:focus) {
+:is(#spreadsheet [role="toolbar"], [data-workspace-toolbar-overflow]) :is(button, [tabindex]):focus-visible,
+:is(#spreadsheet [role="toolbar"], [data-workspace-toolbar-overflow]) [data-slot="dropdown-menu-trigger"]:has(input:focus) {
   outline: 2px solid var(--editor-focus);
   outline-offset: -2px;
 }
 
 /* The engine clips the text wrapper. Keep the ring on the field and arrow together. */
-#spreadsheet [role="toolbar"] [data-slot="dropdown-menu-trigger"] input:focus {
+:is(#spreadsheet [role="toolbar"], [data-workspace-toolbar-overflow]) [data-slot="dropdown-menu-trigger"] input:focus {
   outline: none;
   box-shadow: none;
   border-color: transparent;
+}
+
+#spreadsheet [data-u-comp="ribbon-toolbar"] button[aria-label="서식 도구 더보기"] {
+  min-inline-size: 2.75rem;
 }
 
 .revision-status { font-variant-numeric: tabular-nums; }

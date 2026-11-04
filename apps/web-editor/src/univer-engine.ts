@@ -1,3 +1,4 @@
+import { bindToolbarAccessibility } from './univer-toolbar';
 import { EDITOR_ACTIVATED, FOCUSING_FX_BAR_EDITOR, IContextService, LocaleType, mergeLocales, RedoCommand, UndoCommand } from '@univerjs/core';
 import type { IRange } from '@univerjs/core';
 import { UniverDocsPlugin } from '@univerjs/docs';
@@ -123,6 +124,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         UniverSheetsConditionalFormattingPlugin,
       ],
     });
+    this.subscriptions.push({ dispose: bindToolbarAccessibility(container) });
     this.univer = univer;
     this.univerAPI = univerAPI;
   }
