@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/qtaghdi/document-workspace/internal/formats/docx"
 	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
 	"github.com/xuri/excelize/v2"
 )
@@ -142,7 +145,7 @@ func TestRejectedOriginDoesNotMutateWorkbook(t *testing.T) {
 	request.Host = "127.0.0.1:8765"
 	request.Header.Set("Origin", "https://attacker.example")
 	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(&http.Cookie{Name: "xlsx_session", Value: securityBrowserToken})
+	request.AddCookie(&http.Cookie{Name: "xlsx_session_8765", Value: securityBrowserToken})
 	server.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
@@ -168,7 +171,7 @@ func TestErrorPayloadDoesNotEchoCredentialsOrCellContent(t *testing.T) {
 	request.Header.Set("Origin", "http://127.0.0.1:8765")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+securityMCPToken)
-	request.AddCookie(&http.Cookie{Name: "xlsx_session", Value: securityBrowserToken})
+	request.AddCookie(&http.Cookie{Name: "xlsx_session_8765", Value: securityBrowserToken})
 	server.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusBadRequest, response.Body.String())
@@ -231,4 +234,58 @@ func assertNoSensitiveResponse(t *testing.T, response *httptest.ResponseRecorder
 			t.Fatalf("response exposed sensitive value %q: %s", secret, content)
 		}
 	}
+}
+
+func TestBrowserSessionsStayIndependentAcrossPorts(t *testing.T) {
+	workbook, _ := newSecurityServer(t)
+	const docxToken = "another-browser-secret"
+	document := NewWithTokens(nil, docxToken, "another-mcp-secret")
+	t.Cleanup(func() { _ = document.Close() })
+	snapshot, err := document.createDOCX(t.Context(), docxCreateInput{
+		Path:   filepath.Join(t.TempDir(), "sample.docx"),
+		Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "original"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bookHTTP := httptest.NewServer(workbook.Handler())
+	defer bookHTTP.Close()
+	docHTTP := httptest.NewServer(document.Handler())
+	defer docHTTP.Close()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Jar: jar, Timeout: 5 * time.Second}
+	request := func(method, base, path string, body []byte, status int) {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), method, base+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if method == http.MethodPost {
+			req.Header.Set("Origin", base)
+			req.Header.Set("Content-Type", "application/json")
+		}
+		response, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != status {
+			t.Fatalf("%s %s returned %d, want %d", method, path, response.StatusCode, status)
+		}
+	}
+	request(http.MethodGet, bookHTTP.URL, "/?token="+securityBrowserToken, nil, http.StatusOK)
+	request(http.MethodGet, docHTTP.URL, "/api/docx", nil, http.StatusUnauthorized)
+	request(http.MethodGet, docHTTP.URL, "/docx?token="+docxToken, nil, http.StatusOK)
+	request(http.MethodPost, bookHTTP.URL, "/api/operations", []byte(`{"baseRevision":1,"operations":[{"type":"set_cell","sheet":"Sheet1","cell":"A1","value":"updated"}]}`), http.StatusOK)
+	run := snapshot.Blocks[0].Paragraph.Runs[0]
+	input, err := json.Marshal(docx.ApplyInput{SessionID: snapshot.ID, BaseRevision: snapshot.Revision,
+		Operations: []docx.Operation{{Type: "replace_run_text", TargetID: run.ID, ExpectedText: run.Text, Text: "updated"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request(http.MethodPost, docHTTP.URL, "/api/docx/operations", input, http.StatusOK)
 }

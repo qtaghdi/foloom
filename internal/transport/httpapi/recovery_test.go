@@ -61,12 +61,15 @@ func TestSSESessionMismatchRequiresResync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.AddCookie(&http.Cookie{Name: "xlsx_session", Value: "browser"})
+	req.AddCookie(&http.Cookie{Name: browserSessionCookieName(req.Host), Value: "browser"})
 	response, err := server.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("SSE status = %d", response.StatusCode)
+	}
 	buffer := make([]byte, 2048)
 	var result strings.Builder
 	for !strings.Contains(result.String(), `"state":"resync"`) {

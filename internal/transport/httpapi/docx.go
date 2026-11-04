@@ -152,7 +152,7 @@ func (s *Server) docxIndex(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid session token", http.StatusUnauthorized)
 			return
 		}
-		s.setBrowserSessionCookie(w)
+		s.setBrowserSessionCookie(w, r)
 		http.Redirect(w, r, "/docx", http.StatusSeeOther)
 		return
 	}

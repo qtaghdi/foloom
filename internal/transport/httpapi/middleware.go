@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
+	"net"
 	"net/http"
+	"strconv"
 )
 
 func (s *Server) requireBearer(next http.Handler) http.Handler {
@@ -36,8 +38,23 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 }
 
 func (s *Server) validSessionCookie(r *http.Request) bool {
-	cookie, err := r.Cookie("xlsx_session")
+	cookie, err := r.Cookie(browserSessionCookieName(r.Host))
 	return err == nil && tokenMatches(cookie.Value, s.browserToken)
+}
+
+func browserSessionCookieName(host string) string {
+	const name = "xlsx_session"
+	// Cookie storage is shared across ports of the same host. Name each local
+	// endpoint separately so its launch cannot replace another server's cookie.
+	_, port, err := net.SplitHostPort(host)
+	if err != nil {
+		return name
+	}
+	number, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || number == 0 {
+		return name
+	}
+	return name + "_" + strconv.FormatUint(number, 10)
 }
 
 func tokenMatches(got, want string) bool {
