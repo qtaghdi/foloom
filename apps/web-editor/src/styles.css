@@ -142,7 +142,18 @@ button { -webkit-tap-highlight-color: transparent; }
 @supports not (field-sizing: content) {
   .docx-run { width: 100%; }
 }
-.docx-paper > * { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+.docx-preview {
+  container-type: inline-size;
+  max-width: var(--paper-width);
+}
+.docx-paper {
+  min-block-size: calc(100cqi * var(--paper-ratio));
+  padding: var(--paper-insets);
+}
+.docx-paper > * { content-visibility: auto; contain-intrinsic-size: auto 28px; }
+.docx-paper > .docx-paragraph { margin-block-end: 6pt; }
+.docx-table { margin-block: 8pt; }
+.docx-table .docx-paragraph + .docx-paragraph { margin-block-start: 4pt; }
 
 @media (max-width: 640px) {
   .editor-workspace[data-activity-open="true"] > .editor-primary { display: none; }
@@ -150,9 +161,6 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .editor-workspace { padding-bottom: env(safe-area-inset-bottom); }
 #document-content { scroll-margin-top: 1rem; }
-@media (max-width: 640px) {
-  .docx-paper { min-height: 32rem; }
-}
 
 .docx-run { vertical-align: top; }
 .docx-run.docx-run-wide { display: block; width: 100%; }

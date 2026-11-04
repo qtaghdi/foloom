@@ -86,6 +86,9 @@ func parseXML(data []byte) (*node, error) {
 
 func (n *node) is(local string) bool { return n.name.Space == wordNS && n.name.Local == local }
 func (n *node) child(local string) *node {
+	if n == nil {
+		return nil
+	}
 	for _, c := range n.children {
 		if c.is(local) {
 			return c
@@ -105,6 +108,9 @@ func (n *node) has(local string) bool {
 	return false
 }
 func (n *node) attr(local string) string {
+	if n == nil {
+		return ""
+	}
 	for _, a := range n.attrs {
 		if a.Name.Space == wordNS && a.Name.Local == local {
 			return a.Value
@@ -149,6 +155,10 @@ func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[strin
 	if err != nil {
 		return nil, nil, false, err
 	}
+	return inspectDocument(root, sessionID, revision)
+}
+
+func inspectDocument(root *node, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
 	if !root.is("document") || root.child("body") == nil {
 		return nil, nil, false, fmt.Errorf("DOCX requires a transitional Word document body")
 	}
@@ -189,7 +199,7 @@ func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[strin
 	}
 	var paragraph func(*node, bool, string) Paragraph
 	paragraph = func(p *node, allowed bool, kind string) Paragraph {
-		out := Paragraph{ID: id(), Runs: []Run{}}
+		out := Paragraph{ID: id(), Runs: []Run{}, Layout: paragraphLayout(p.child("pPr"))}
 		// Fields and tracked changes can span runs. Fail closed for the paragraph.
 		for _, name := range []string{"fldChar", "instrText", "fldSimple", "ins", "del", "moveFrom", "moveTo", "sdt", "rPrChange", "pPrChange"} {
 			if p.has(name) {
@@ -221,6 +231,7 @@ func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[strin
 			}
 			run := Run{ID: id(), Text: text, Editable: editable}
 			if props := r.child("rPr"); props != nil {
+				applyRunPreview(&run, props)
 				if b := props.child("b"); b != nil {
 					run.Bold = b.attr("val") != "0" && b.attr("val") != "false" && b.attr("val") != "off"
 				}
