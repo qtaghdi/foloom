@@ -3,7 +3,7 @@ GO_TOOLCHAIN ?= go1.25.0
 GO_CACHE ?= /tmp/document-workspace-go-cache
 XLSX_PERFORMANCE_PROFILE ?= ci
 
-.PHONY: audit build compatibility-test dev go-build go-test package-check package-smoke package-test package-verify release-build release-package-test release-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
+.PHONY: audit build compatibility-test dev docx-verify go-build go-test package-check package-smoke package-test package-verify release-build release-package-test release-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
 
 VERSION ?= 0.1.0-alpha.local
 HOST_OS := $(shell $(GO) env GOOS)
@@ -19,6 +19,16 @@ web-test:
 
 web-build:
 	CI=true pnpm --dir apps/web-editor run build
+
+# DOCX edits still compile both embedded editors. Only DOCX Go tests execute here.
+docx-verify: web-build
+	CI=true pnpm --dir apps/web-editor exec node --test tests/docx.test.mjs
+	CI=true pnpm --dir apps/web-editor exec vitest run
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./internal/formats/docx
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test -race ./internal/formats/docx
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./internal/transport/httpapi -run DOCX -count=1
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test -race ./internal/transport/httpapi -run DOCX -count=1
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) vet ./internal/formats/docx ./internal/transport/httpapi
 
 go-test:
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./...
