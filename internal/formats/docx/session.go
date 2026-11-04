@@ -88,15 +88,19 @@ func (s *Session) Snapshot(ctx context.Context) (Snapshot, error) {
 	return s.snapshotLocked()
 }
 func (s *Session) snapshotLocked() (Snapshot, error) {
-	blocks, _, unsupported, err := inspect(s.pkg.document, s.id, s.revision)
+	root, err := parseXML(s.pkg.document)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	warnings := []string{"본문과 단순 표의 일반 텍스트 run만 편집합니다. 페이지 배치, 이미지, 머리글, 필드 등의 화면 재현과 편집은 지원하지 않습니다. 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	blocks, _, unsupported, err := inspectDocument(root, s.id, s.revision)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	warnings := []string{"본문과 단순 표의 일반 텍스트 run만 편집합니다. 용지와 직접 지정 서식 일부를 미리 봅니다. 페이지 나누기, 스타일 상속, 이미지, 머리글, 필드 등은 화면에서 재현하지 않습니다. 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if unsupported {
 		warnings = append(warnings, "지원하지 않는 구조는 읽기 전용으로 표시하거나 화면에서 생략합니다.")
 	}
-	return Snapshot{ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Warnings: warnings}, nil
+	return Snapshot{ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {

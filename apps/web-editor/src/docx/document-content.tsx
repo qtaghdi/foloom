@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import type { Snapshot, Run, Operation } from './contracts';
+import type { Snapshot, Run, Paragraph, Operation } from './contracts';
 
-export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onEdit: (operation: Operation) => void; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void }) {
+export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onEdit: (operation: Operation) => void; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   const positions = createMemo(() => {
     const result = new Map<string, number>();
     for (const block of props.snapshot.blocks) {
@@ -12,11 +12,18 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     }
     return result;
   });
-  const paragraph = (runs: Run[], kind: Operation['type'], key: string) => <section class="docx-paragraph relative min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}>
-    <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }}>
-      <Show when={runs.length} fallback={<span class="text-sm text-slate-400">빈 문단</span>}>
-        <For each={runs}>{(run) => <Show when={run.editable} fallback={<span class="whitespace-pre-wrap text-stone-700" title="읽기 전용: 원본 구조를 보존합니다.">{run.text || '표시되지 않는 구조'}</span>}>
-          <RunField run={run} fullWidth={runs.length === 1} label={`${kind === 'replace_cell_text' ? '표' : '본문'} 텍스트 ${positions().get(run.id)}`} saving={props.saving}
+  const paragraph = (p: Paragraph, kind: Operation['type'], key: string) => <section
+    class="docx-paragraph relative min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
+    style={{
+      'margin-block-start': p.layout?.before === undefined ? undefined : `${p.layout.before / 20}pt`,
+      'margin-block-end': p.layout?.after === undefined ? undefined : `${p.layout.after / 20}pt`,
+    }}>
+    <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
+      <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
+        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span class="whitespace-pre-wrap" style={runStyle(run)} title="읽기 전용: 원본 구조를 보존합니다.">{run.text || '표시되지 않는 구조'}</span>}>
+          <RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
+            label={`${kind === 'replace_cell_text' ? '표' : '본문'} 텍스트 ${positions().get(run.id)}`} saving={props.saving}
+            onFocus={() => props.onFocusRun(run)}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/>
         </Show>}</For>
       </Show>
@@ -32,24 +39,36 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     </Show>
   </section>;
   return <Show when={props.snapshot.blocks.length} fallback={<p>표시할 수 있는 본문이 없습니다. 원본 문서는 보존됩니다.</p>}>
-    <For each={props.snapshot.blocks}>{(block, blockIndex) => block.type === 'paragraph' ? paragraph(block.paragraph.runs, 'replace_run_text', `${blockIndex()}`) :
-      <div class="overflow-x-auto border border-slate-300" tabindex={0} aria-label="문서 표. 좁은 화면에서는 좌우로 스크롤하세요.">
+    <For each={props.snapshot.blocks}>{(block, blockIndex) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${blockIndex()}`) :
+      <div class="docx-table overflow-x-auto" tabindex={0} aria-label="문서 표. 좁은 화면에서는 좌우로 스크롤하세요.">
         <table class="w-full border-collapse text-left"><tbody><For each={block.rows}>{(row, rowIndex) => <tr><For each={row.cells}>{(cell, cellIndex) =>
-          <td class="min-w-32 border border-slate-300 px-3 py-2 align-top"><For each={cell.paragraphs}>{(p, pIndex) => paragraph(p.runs, 'replace_cell_text', `${blockIndex()}-${rowIndex()}-${cellIndex()}-${pIndex()}`)}</For></td>
+          <td class="min-w-24 border border-slate-300 px-2 py-1 align-top"><For each={cell.paragraphs}>{(p, pIndex) => paragraph(p, 'replace_cell_text', `${blockIndex()}-${rowIndex()}-${cellIndex()}-${pIndex()}`)}</For></td>
         }</For></tr>}</For></tbody></table>
       </div>
     }</For>
   </Show>;
 }
 
-function RunField(props: { run: Run; fullWidth: boolean; label: string; saving: boolean; onEdit: (text: string) => void }) {
+function runStyle(run: Run) {
+  return {
+    'font-size': run.sizeHalfPoints === undefined ? undefined : `${run.sizeHalfPoints / 2}pt`,
+    'font-family': run.font ? `${JSON.stringify(run.font)}, system-ui, sans-serif` : undefined,
+    color: run.color,
+    'font-weight': run.bold ? '700' : undefined,
+    'font-style': run.italic ? 'italic' : undefined,
+  };
+}
+
+function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onEdit: (text: string) => void }) {
   const [error, setError] = createSignal('');
   const descriptionId = `input-error-${props.run.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   return <>
     <textarea value={props.run.text} rows={Math.max(1, Math.ceil(props.run.text.length / 72))} readOnly={props.saving}
       name={props.run.id} autocomplete="off" aria-label={props.label} aria-invalid={Boolean(error())} aria-describedby={error() ? descriptionId : undefined}
-      class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
-      classList={{ 'font-bold': props.run.bold, italic: props.run.italic, 'docx-run-wide': props.fullWidth, 'outline-red-500': Boolean(error()) }}
+      class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit]"
+      style={{ ...runStyle(props.run), 'text-align': props.align }}
+      classList={{ 'docx-run-wide': props.fullWidth }}
+      onFocus={props.onFocus}
       onKeyDown={(event) => {
         if (event.isComposing || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
         const field = event.currentTarget;

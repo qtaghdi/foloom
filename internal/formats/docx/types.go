@@ -20,16 +20,36 @@ const (
 )
 
 type Run struct {
-	ID       string `json:"id"`
-	Text     string `json:"text"`
-	Editable bool   `json:"editable"`
-	Bold     bool   `json:"bold"`
-	Italic   bool   `json:"italic"`
+	ID             string `json:"id"`
+	Text           string `json:"text"`
+	Editable       bool   `json:"editable"`
+	Bold           bool   `json:"bold"`
+	Italic         bool   `json:"italic"`
+	SizeHalfPoints int    `json:"sizeHalfPoints,omitempty"`
+	Color          string `json:"color,omitempty"`
+	Font           string `json:"font,omitempty"`
+}
+
+// Layout fields are bounded preview hints. They never participate in writes.
+type PageLayout struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	Top    int `json:"top"`
+	Right  int `json:"right"`
+	Bottom int `json:"bottom"`
+	Left   int `json:"left"`
+}
+
+type ParagraphLayout struct {
+	Align  string `json:"align,omitempty"`
+	Before *int   `json:"before,omitempty"`
+	After  *int   `json:"after,omitempty"`
 }
 
 type Paragraph struct {
-	ID   string `json:"id"`
-	Runs []Run  `json:"runs"`
+	ID     string           `json:"id"`
+	Runs   []Run            `json:"runs"`
+	Layout *ParagraphLayout `json:"layout,omitempty"`
 }
 
 type Cell struct {
@@ -49,12 +69,13 @@ type Block struct {
 }
 
 type Snapshot struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Revision uint64   `json:"revision"`
-	Sequence uint64   `json:"sequence"`
-	Blocks   []Block  `json:"blocks"`
-	Warnings []string `json:"warnings"`
+	ID       string      `json:"id"`
+	Name     string      `json:"name"`
+	Revision uint64      `json:"revision"`
+	Sequence uint64      `json:"sequence"`
+	Blocks   []Block     `json:"blocks"`
+	Page     *PageLayout `json:"page,omitempty"`
+	Warnings []string    `json:"warnings"`
 }
 
 type Operation struct {
