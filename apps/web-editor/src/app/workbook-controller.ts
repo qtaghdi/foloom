@@ -27,6 +27,7 @@ export class WorkbookController {
   private navigationRequested = false;
   private recoveryRequired = false;
   private pendingWrites = 0;
+  private historyPending = false;
   private saveQueue = Promise.resolve();
   private presenceTimer: number | undefined;
   private pendingSelection: SelectionChange | undefined;
@@ -79,7 +80,6 @@ export class WorkbookController {
       }
       this.view.showWarnings(warnings);
       this.setHistoryState(snapshot.canUndo, snapshot.canRedo);
-      this.view.onHistoryAction((direction) => this.queueHistoryAction(direction));
       this.view.showRevision(
         initialRanges.truncated ? 'Ready with a bounded initial data window' : 'Ready',
         this.revision,
@@ -89,20 +89,9 @@ export class WorkbookController {
       this.engine.initialize(snapshot, ranges, objects);
       this.engine.onCellEdit((edit) => this.queueCellEdit(edit));
       this.engine.onRangeEdit((edit) => this.queueRangeEdit(edit));
-      this.engine.onSelectionChange((selection) => {
-        this.view.setSelection?.(this.engine?.readSelection?.());
-        this.queuePresence(selection);
-      });
-      this.view.setSelection?.(this.engine.readSelection?.());
-      this.view.onNativeTools?.((visible) => this.engine?.setNativeToolbarVisible?.(visible));
-      this.view.onFormat?.((format, selection) => {
-        if (this.pendingWrites > 0 || this.recoveryRequired || this.disposed) return;
-        this.queueOperation({ type: 'set_format', sheet: selection.sheet, range: selection.range, format }, () => {
-          this.engine?.applyRemoteEvent({ type: 'range.format', actor: 'human', sequence: 0, revision: this.revision,
-            sheet: selection.sheet, range: selection.range, format });
-          this.view.setSelection?.(this.engine?.readSelection?.());
-        });
-      });
+      this.engine.onSelectionChange((selection) => this.queuePresence(selection));
+      this.view.onLocate?.((target) => this.engine?.locateRange?.(target) ?? false);
+      this.syncHistoryControls();
       this.engine.onOperation((operation) => this.queueOperation(operation));
       this.engine.onViewportChange((viewport) => this.queueViewportLoad(viewport));
       this.engine.onHistoryAction((direction) => this.queueHistoryAction(direction));
@@ -119,12 +108,14 @@ export class WorkbookController {
   }
 
   private queueHistoryAction(direction: HistoryDirection): void {
-    if (this.recoveryRequired || this.disposed) return;
+    if (this.recoveryRequired || this.disposed || this.historyPending || this.pendingWrites > 0) return;
     const available = direction === 'undo' ? this.snapshot?.canUndo : this.snapshot?.canRedo;
     if (!available) {
       this.view.showRevision(direction === 'undo' ? 'Nothing to undo' : 'Nothing to redo', this.revision);
       return;
     }
+    this.historyPending = true;
+    this.syncHistoryControls();
     this.saveQueue = this.saveQueue.then(async () => {
       if (this.recoveryRequired || this.disposed) return;
       this.view.showRevision(direction === 'undo' ? 'Undoing change…' : 'Redoing change…', this.revision, 'pending');
@@ -139,6 +130,9 @@ export class WorkbookController {
         window.location.reload();
       } catch (error) {
         this.requireRecovery(error);
+      } finally {
+        this.historyPending = false;
+        this.syncHistoryControls();
       }
     });
   }
@@ -173,12 +167,14 @@ export class WorkbookController {
     });
   }
 
-  private queueOperation(operation: WorkbookOperation, onCommitted?: () => void): void {
+  private queueOperation(operation: WorkbookOperation): void {
     if (this.recoveryRequired || this.disposed) return;
     this.pendingWrites++;
+    this.syncHistoryControls();
     const target = operationTarget(operation);
     const activityId = `local:${++this.activitySequence}`;
     const location = `${operation.sheet}!${target}`;
+    const sheetTarget = 'cell' in operation || 'range' in operation ? { sheet: operation.sheet, range: target } : undefined;
     this.saveQueue = this.saveQueue.then(async () => {
       if (this.recoveryRequired || this.disposed) { this.pendingWrites--; return; }
       this.view.recordActivity?.({ id: activityId, actor: 'human', state: 'pending', title: operation.type === 'set_format' ? '선택 범위 서식 변경' : '문서 변경', location });
@@ -192,13 +188,13 @@ export class WorkbookController {
         if (operation.type === 'insert_rows' || operation.type === 'delete_rows' || operation.type === 'insert_columns' || operation.type === 'delete_columns') {
           this.loadedRanges.delete(operation.sheet);
         }
-        this.view.recordActivity?.({ id: activityId, actor: 'human', state: 'committed', title: operation.type === 'set_format' ? '선택 범위 서식 저장' : '문서 변경 저장', location, revision: this.revision });
-        onCommitted?.();
+        this.view.recordActivity?.({ id: activityId, actor: 'human', state: 'committed', title: operation.type === 'set_format' ? '선택 범위 서식 저장' : '문서 변경 저장', location, sheetTarget, revision: this.revision });
         this.view.showRevision('Saved', this.revision, 'success');
       } catch (error) {
         this.requireRecovery(error);
       } finally {
         this.pendingWrites--;
+        this.syncHistoryControls();
       }
     });
     this.saveQueue = this.saveQueue.catch(() => undefined);
@@ -284,7 +280,8 @@ export class WorkbookController {
     const commitsWorkbook = event.type !== 'presence.update' && event.type !== 'cell.typing';
     if (commitsWorkbook && event.type !== 'workbook.reload' && event.revision > this.revision && (event.actor === 'ai' || this.pendingWrites === 0)) {
       const target = 'cell' in event ? event.cell : 'range' in event ? event.range : `${event.index}:${event.index + event.count - 1}`;
-      this.view.recordActivity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed', title: event.type === 'range.format' ? '범위 서식 저장' : '문서 변경 저장', location: `${event.sheet}!${target}`, revision: event.revision });
+      this.view.recordActivity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed', title: event.type === 'range.format' ? '범위 서식 저장' : '문서 변경 저장', location: `${event.sheet}!${target}`,
+        sheetTarget: 'cell' in event || 'range' in event ? { sheet: event.sheet, range: target } : undefined, revision: event.revision });
     }
 
     if (event.actor !== 'ai') {
@@ -300,7 +297,6 @@ export class WorkbookController {
         this.setHistoryState(event.canUndo, event.canRedo);
       }
       this.engine?.applyRemoteEvent(event);
-      this.view.setSelection?.(this.engine?.readSelection?.());
       this.view.showRevision('Remote change saved', this.revision, 'success');
       return;
     }
@@ -321,7 +317,6 @@ export class WorkbookController {
       this.setHistoryState(event.canUndo, event.canRedo);
     }
     this.engine?.applyRemoteEvent(event);
-      this.view.setSelection?.(this.engine?.readSelection?.());
     this.view.showAIPresence(event, this.revision);
   }
 
@@ -336,12 +331,18 @@ export class WorkbookController {
     if (this.snapshot) {
       this.snapshot = { ...this.snapshot, canUndo, canRedo };
     }
-    this.view.setHistoryState(canUndo, canRedo);
+    this.syncHistoryControls();
+  }
+
+  private syncHistoryControls(): void {
+    const ready = !this.recoveryRequired && !this.historyPending && this.pendingWrites === 0;
+    this.engine?.setHistoryState?.(ready && Boolean(this.snapshot?.canUndo), ready && Boolean(this.snapshot?.canRedo));
   }
 
   private requireRecovery(error: unknown): void {
     if (this.recoveryRequired || this.disposed) return;
     this.recoveryRequired = true;
+    this.syncHistoryControls();
     window.clearTimeout(this.presenceTimer);
     window.clearTimeout(this.viewportTimer);
     this.eventSubscription?.close();

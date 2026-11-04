@@ -200,12 +200,15 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.AddCookie(&http.Cookie{Name: "xlsx_session", Value: "browser-token"})
+	request.AddCookie(&http.Cookie{Name: browserSessionCookieName(request.Host), Value: "browser-token"})
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("SSE status = %d", response.StatusCode)
+	}
 	run := snapshot.Blocks[0].Paragraph.Runs[0]
 	_, err = api.applyDOCX(ctx, docx.ApplyInput{SessionID: snapshot.ID, BaseRevision: 1, Operations: []docx.Operation{{Type: "replace_run_text", TargetID: run.ID, ExpectedText: run.Text, Text: "after"}}}, "ai")
 	if err != nil {

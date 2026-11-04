@@ -33,7 +33,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid session token", http.StatusUnauthorized)
 			return
 		}
-		s.setBrowserSessionCookie(w)
+		s.setBrowserSessionCookie(w, r)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -62,7 +62,7 @@ func (s *Server) launchBrowserSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid or expired launch link", http.StatusUnauthorized)
 		return
 	}
-	s.setBrowserSessionCookie(w)
+	s.setBrowserSessionCookie(w, r)
 	destination := "/"
 	if r.URL.Query().Get("format") == "docx" {
 		destination = "/docx"
@@ -70,9 +70,9 @@ func (s *Server) launchBrowserSession(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, destination, http.StatusSeeOther)
 }
 
-func (s *Server) setBrowserSessionCookie(w http.ResponseWriter) {
+func (s *Server) setBrowserSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "xlsx_session",
+		Name:     browserSessionCookieName(r.Host),
 		Value:    s.browserToken,
 		Path:     "/",
 		HttpOnly: true,

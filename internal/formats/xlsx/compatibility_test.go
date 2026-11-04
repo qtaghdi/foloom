@@ -64,6 +64,18 @@ func verifyCompatibilityFixture(t *testing.T, fixture string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if fixture == "feature-rich.xlsx" {
+		amount, err := session.ReadRange("Compatibility", "B2")
+		if err != nil {
+			_ = session.Close()
+			t.Fatal(err)
+		}
+		style := amount.Rows[0][0].Style
+		if style == nil || style.FillColor != "#DDEBF7" || style.FontColor != "#1F4E78" {
+			_ = session.Close()
+			t.Fatalf("amount preview colors = %#v", style)
+		}
+	}
 	if _, err := session.Apply(1, "compatibility-test", []Operation{{
 		Type: "set_cell", Sheet: "Compatibility", Cell: "Z50", Value: "round-trip marker",
 	}}); err != nil {

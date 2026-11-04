@@ -1,8 +1,5 @@
 import { createSignal } from 'solid-js';
-import type { CellFormat, FeatureWarning, HistoryDirection, WorkbookEvent } from '../contracts';
-
-import type { EditorSelection } from '../spreadsheet-engine';
-
+import type { FeatureWarning, WorkbookEvent, SelectionChange } from '../contracts';
 import { featureMessage, problemMessage } from './messages';
 import { createActivityModel, type ActivityEntry } from './activity';
 
@@ -10,7 +7,7 @@ export type RevisionState = 'ready' | 'pending' | 'success' | 'error' | 'conflic
 export interface StatusPanelState { title: string; message: string; dismissible: boolean; reload?: () => void }
 export interface WorkbookViewState {
   name: string; message: string; revision: number; status: RevisionState;
-  canUndo: boolean; canRedo: boolean; presence?: string; selection?: EditorSelection; nativeTools?: boolean;
+  presence?: string;
   warning?: StatusPanelState; error?: StatusPanelState;
 }
 
@@ -19,32 +16,23 @@ export class AppView {
   spreadsheet!: HTMLElement;
   readonly activity = createActivityModel();
   recordActivity(entry: ActivityEntry): void { if (!this.disposed) this.activity.record(entry); }
-  private readonly signal = createSignal<WorkbookViewState>({ name: '문서를 여는 중', message: '연결 중', revision: 0, status: 'pending', canUndo: false, canRedo: false });
+  private readonly signal = createSignal<WorkbookViewState>({ name: '문서를 여는 중', message: '연결 중', revision: 0, status: 'pending' });
   readonly state = this.signal[0];
   private disposed = false;
   private presenceTimer: number | undefined;
-  private formatListener?: (format: CellFormat, selection: EditorSelection) => void;
-  private nativeToolsListener?: (visible: boolean) => void;
-  private historyListener?: (direction: HistoryDirection) => void;
   private patch(update: Partial<WorkbookViewState>): void { if (this.disposed) return; this.signal[1]((state) => ({ ...state, ...update })); }
-  onHistoryAction(listener: (direction: HistoryDirection) => void): void { this.historyListener = listener; }
-  history(direction: HistoryDirection): void {
-    if (direction === 'undo' ? this.state().canUndo : this.state().canRedo) this.historyListener?.(direction);
+  private locateListener?: (selection: SelectionChange) => boolean;
+  onLocate(listener: (selection: SelectionChange) => boolean): void { this.locateListener = listener; }
+  locate(target: NonNullable<ActivityEntry['sheetTarget']>): void {
+    if (['pending', 'conflict', 'recovery'].includes(this.state().status)) return;
+    const narrow = window.matchMedia('(max-width: 640px)').matches;
+    if (narrow && this.activity.open()) this.activity.toggle();
+    queueMicrotask(() => {
+      if (this.disposed) return;
+      if (this.locateListener?.({ ...target, state: 'selecting' })) this.spreadsheet.focus({ preventScroll: true });
+      else this.showError('기록된 셀 범위를 열 수 없습니다.', this.state().revision);
+    });
   }
-  onFormat(listener: (format: CellFormat, selection: EditorSelection) => void): void { this.formatListener = listener; }
-  onNativeTools(listener: (visible: boolean) => void): void { this.nativeToolsListener = listener; }
-  setSelection(selection: EditorSelection | undefined): void { this.patch({ selection }); }
-  format(format: CellFormat): void {
-    const state = this.state();
-    if (!state.selection || ['pending', 'conflict', 'recovery'].includes(state.status)) return;
-    this.formatListener?.(format, state.selection);
-  }
-  toggleNativeTools(): void {
-    const visible = !this.state().nativeTools;
-    this.nativeToolsListener?.(visible);
-    this.patch({ nativeTools: visible });
-  }
-  setHistoryState(canUndo: boolean, canRedo: boolean): void { this.patch({ canUndo, canRedo }); }
   setWorkbookName(name: string): void { this.patch({ name }); }
   showWarnings(warnings: FeatureWarning[]): void {
     this.patch({ warning: warnings.length ? { title: '호환성 안내', message: warnings.map(featureMessage).join('\n\n'), dismissible: true } : undefined });
@@ -75,11 +63,11 @@ export class AppView {
     this.activity.markUncertain();
     const conflict = /conflict|changed|external|newer|busy/i.test(message);
     const title = conflict ? '충돌 감지' : '복구 필요';
-    this.patch({ error: { title, message: `${problemMessage(message)} 편집을 중단했습니다. 미저장 입력을 복사한 뒤 저장된 문서를 다시 불러오세요. 결과가 불확실한 저장은 반복하지 마세요.`, dismissible: false, reload: () => window.location.reload() }, canUndo: false, canRedo: false });
+    this.patch({ error: { title, message: `${problemMessage(message)} 편집을 중단했습니다. 미저장 입력을 복사한 뒤 저장된 문서를 다시 불러오세요. 결과가 불확실한 저장은 반복하지 마세요.`, dismissible: false, reload: () => window.location.reload() } });
     this.showRevision(title, revision, conflict ? 'conflict' : 'recovery'); this.focusError();
   }
   private focusError(): void { queueMicrotask(() => { if (!this.disposed) document.getElementById('fatal-error')?.focus({ preventScroll: true }); }); }
-  dispose(): void { this.disposed = true; window.clearTimeout(this.presenceTimer); this.historyListener = undefined; }
+  dispose(): void { this.disposed = true; window.clearTimeout(this.presenceTimer); }
 }
 function translateStatus(message: string): string {
   const labels: Record<string, string> = { Ready: '편집 준비됨', Saved: '저장됨', 'Remote change saved': '다른 편집 저장됨', 'Nothing to undo': '실행 취소할 변경 없음', 'Nothing to redo': '다시 실행할 변경 없음', 'Undoing change…': '실행 취소 중', 'Redoing change…': '다시 실행 중', 'Ready with a bounded initial data window': '필요한 범위부터 불러왔습니다' };

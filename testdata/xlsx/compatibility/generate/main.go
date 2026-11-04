@@ -35,8 +35,8 @@ func main() {
 
 	numberFormat := "$#,##0.00"
 	styleID, err := workbook.NewStyle(&excelize.Style{
-		Font:         &excelize.Font{Bold: true, Family: "Arial", Size: 12, Color: "FF1F4E78"},
-		Fill:         excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"FFDDEBF7"}},
+		Font:         &excelize.Font{Bold: true, Family: "Arial", Size: 12, Color: "1F4E78"},
+		Fill:         excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"DDEBF7"}},
 		CustomNumFmt: &numberFormat,
 	})
 	must(err)
@@ -74,7 +74,7 @@ func main() {
 	must(workbook.AddDataValidation(sheet, dateValidation))
 
 	conditionalStyle, err := workbook.NewConditionalStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"FFC6EFCE"}},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"C6EFCE"}},
 	})
 	must(err)
 	must(workbook.SetConditionalFormat(sheet, "C2:C4", []excelize.ConditionalFormatOptions{{

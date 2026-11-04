@@ -47,16 +47,15 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
   };
   const view = { spreadsheet: {}, setWorkbookName() {}, showWarnings() {},
     recordActivity: (entry) => { state.activities ??= []; state.activities.push(entry); },
-    setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
-    onHistoryAction: (handler) => { state.history = handler; },
-    onFormat: (handler) => { state.format = handler; },
-    setSelection: (selection) => { state.selection = selection; },
-    onNativeTools: (handler) => { state.nativeTools = handler; },
     showRevision: (message, revision, status) => { state.statuses.push(message); state.revisionStates.push([message, revision, status]); },
     showRecovery: (message) => state.recoveries.push(message), showError: (error) => { throw error; },
     showAIPresence() {}, dispose() {},
   };
-  const engine = { initialize() {}, dispose() {}, readSelection: () => ({ sheet: 'Sheet1', range: 'A1', state: 'selecting', bold: false, italic: false, fontSize: 11 }), setNativeToolbarVisible: (visible) => { state.nativeVisible = visible; }, applyRemoteEvent: (event) => state.remoteEvents.push(event) };
+  const engine = {
+    initialize() {}, dispose() {},
+    setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
+    applyRemoteEvent: (event) => state.remoteEvents.push(event),
+  };
   for (const method of ['onCellEdit','onRangeEdit','onSelectionChange','onOperation','onViewportChange','onHistoryAction']) {
     engine[method] = (callback) => { state.callbacks[method] = callback; };
   }
@@ -79,7 +78,7 @@ test('lost response blocks queued edits and reconciles without retry or reload',
   assert.equal(state.subscriptionClosed, true);
   assert.equal(controller.shouldWarnBeforeUnload(), true);
   state.callbacks.onOperation(edit);
-  state.history('undo');
+  state.callbacks.onHistoryAction('undo');
   await flush();
   assert.equal(state.writes, 1);
   assert.ok(!state.statuses.includes('Saved'));
@@ -155,7 +154,7 @@ test('spreadsheet keyboard undo delegates to server-owned history', async () => 
 test('unavailable history remains disabled and never calls the server', async () => {
   const { state } = await fixture({}, { canUndo: false, canRedo: false });
   assert.deepEqual(state.historyStates.at(-1), [false, false]);
-  state.history('undo');
+  state.callbacks.onHistoryAction('undo');
   state.callbacks.onHistoryAction('redo');
   await flush();
   assert.equal(state.writes, 0);
@@ -206,7 +205,7 @@ test('remote commit during an unresolved local save cannot rebase queued drafts'
 test('failed undo does not allow a queued edit to continue', async () => {
   const { state, client } = await fixture();
   client.restoreHistory = async () => { state.writes++; throw new Error('unknown undo outcome'); };
-  state.history('undo');
+  state.callbacks.onHistoryAction('undo');
   state.callbacks.onOperation(edit);
   await flush();
   assert.equal(state.writes, 1);
@@ -219,25 +218,25 @@ test('successful undo cancels queued edits based on the previous grid', async ()
     state.writes++;
     return { workbook: { ...snapshot, revision: 3, canUndo: false, canRedo: true }, applied: 1 };
   };
-  state.history('undo');
+  state.callbacks.onHistoryAction('undo');
   state.callbacks.onOperation(edit);
   await flush();
   assert.equal(state.writes, 1);
   assert.equal(state.reloads, 1);
-  assert.deepEqual(state.historyStates.at(-1), [false, true]);
+  assert.deepEqual(state.historyStates.at(-1), [false, false]);
 });
 
-test('successful redo applies returned history availability', async () => {
+test('successful redo reloads and keeps history disabled during navigation', async () => {
   const { state, client, snapshot } = await fixture({}, { canUndo: false, canRedo: true });
   client.restoreHistory = async () => {
     state.writes++;
     return { workbook: { ...snapshot, revision: 3, canUndo: true, canRedo: false }, applied: 1 };
   };
-  state.history('redo');
+  state.callbacks.onHistoryAction('redo');
   await flush();
   assert.equal(state.writes, 1);
   assert.equal(state.reloads, 1);
-  assert.deepEqual(state.historyStates.at(-1), [true, false]);
+  assert.deepEqual(state.historyStates.at(-1), [false, false]);
 });
 
 test('unmount while connecting never mounts an engine or opens a subscription', async () => {
@@ -256,38 +255,32 @@ test('unmount while connecting never mounts an engine or opens a subscription', 
 
 test('confirmed history restore reloads without warning about nonexistent unsaved edits', async () => {
   const { state, controller } = await fixture();
-  state.history('undo'); await flush();
+  state.callbacks.onHistoryAction('undo'); await flush();
   assert.equal(state.reloads, 1);
   assert.equal(controller.shouldWarnBeforeUnload(), false);
   controller.dispose();
 });
 
 
-test('custom formatting waits for server commit before updating engine', async () => {
-  const { state, client } = await fixture();
+test('toolbar formatting saves the selected range and blocks history while saving', async () => {
+  const { state, client, snapshot } = await fixture();
   let finish;
   client.applyOperations = async (revision, operations) => {
-    state.appliedRevisions.push(revision); state.operations.push(...operations);
+    state.appliedRevisions.push(revision);
+    state.operations.push(...operations);
     return new Promise((resolve) => { finish = resolve; });
   };
-  state.format({ bold: true }, state.selection); await flush();
-  assert.equal(state.remoteEvents.length, 0);
-  assert.equal(state.operations[0].type, 'set_format');
-  finish({ workbook: { id: 'session', revision: 3, canUndo: true, canRedo: false }, applied: 1 });
+  const format = { type: 'set_format', sheet: 'Sheet1', range: 'A1:B2', format: { bold: true } };
+  state.callbacks.onOperation(format);
+  state.callbacks.onHistoryAction('undo');
   await flush();
-  assert.equal(state.remoteEvents[0].type, 'range.format');
-  assert.equal(state.remoteEvents[0].format.bold, true);
-  state.nativeTools(true); assert.equal(state.nativeVisible, true);
+  assert.deepEqual(state.operations, [format]);
+  assert.deepEqual(state.historyDirections, []);
+  assert.deepEqual(state.historyStates.at(-1), [false, false]);
+  finish({ workbook: { ...snapshot, revision: 3 }, applied: 1 });
+  await flush();
+  assert.deepEqual(state.historyStates.at(-1), [true, false]);
 });
-
-test('failed custom formatting leaves engine unchanged and requires recovery', async () => {
-  const { state, client } = await fixture();
-  client.applyOperations = async () => { throw new Error('save failed'); };
-  state.format({ fontSize: 14 }, state.selection); await flush();
-  assert.equal(state.remoteEvents.length, 0);
-  assert.ok(state.recoveries.length > 0);
-});
-
 
 test('an own in-flight SSE receipt does not duplicate the confirmed activity entry', async () => {
   const { state, client, snapshot } = await fixture();

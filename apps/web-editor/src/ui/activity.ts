@@ -2,6 +2,8 @@ import { createSignal } from 'solid-js';
 
 export interface ActivityEntry {
   id: string; actor: 'ai' | 'human' | 'system'; state: 'pending' | 'committed' | 'failed' | 'uncertain';
+  documentChange?: { session: string; key: string; before: string; after: string };
+  sheetTarget?: { sheet: string; range: string };
   title: string; location?: string; revision?: number; observedAt?: number;
 }
 
@@ -9,7 +11,7 @@ export interface ActivityEntry {
 // or a receipt for a write whose server result has not been confirmed.
 export function createActivityModel() {
   const [entries, setEntries] = createSignal<ActivityEntry[]>([]);
-  const [open, setOpen] = createSignal(typeof window !== 'undefined' && window.matchMedia('(min-width: 1100px)').matches);
+  const [open, setOpen] = createSignal(false);
   const record = (entry: ActivityEntry) => setEntries((previous) => {
     const existing = previous.find((item) => item.id === entry.id);
     return [{ ...entry, observedAt: existing?.observedAt ?? entry.observedAt ?? Date.now() }, ...previous.filter((item) => item.id !== entry.id)].slice(0, 60);
