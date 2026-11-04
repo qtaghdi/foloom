@@ -78,3 +78,6 @@ HTTP나 stdio 전송을 시작하지 않고 셀 내용도 출력하지 않습니
 macOS의 `document-workspace mcp install`은 현재 실행 파일을 사용자 Application
 Support에 복사하고 Claude Desktop 및 Codex stdio 설정과 skill을 설치합니다.
 package 자동 테스트는 실제 사용자 설정 대신 임시 홈을 사용합니다.
+
+PR에서 변경 범위별로 패키지 검사를 선택하는 기준과 수동 전체 검사 방법은
+[변경 범위별 CI](ci.md)를 참고하세요.
