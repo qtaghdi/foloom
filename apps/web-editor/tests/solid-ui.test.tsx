@@ -133,7 +133,7 @@ it('activity shows observed commits only, deduplicates events, and bounds the co
   const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
   const grid = view.spreadsheet; const marker = document.createElement('canvas'); grid.append(marker);
   if (!view.activity.open()) button(root, '활동').click();
-  expect(root.querySelector('#document-activity')?.textContent).toContain('아직 기록된 변경이 없습니다.');
+  expect(root.querySelector('#document-activity')?.textContent).toContain('아직 변경이 없어요');
   view.recordActivity({ id: 'write', actor: 'human', state: 'pending', title: '문서 변경' });
   view.showRecovery('connection lost', 1);
   expect(view.activity.entries()[0]?.state).toBe('uncertain');

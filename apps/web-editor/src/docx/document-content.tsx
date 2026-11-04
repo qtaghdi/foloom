@@ -65,9 +65,9 @@ function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'cent
   return <>
     <textarea value={props.run.text} rows={Math.max(1, Math.ceil(props.run.text.length / 72))} readOnly={props.saving}
       name={props.run.id} autocomplete="off" aria-label={props.label} aria-invalid={Boolean(error())} aria-describedby={error() ? descriptionId : undefined}
-      class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+      class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit]"
       style={{ ...runStyle(props.run), 'text-align': props.align }}
-      classList={{ 'docx-run-wide': props.fullWidth, 'outline-red-500': Boolean(error()) }}
+      classList={{ 'docx-run-wide': props.fullWidth }}
       onFocus={props.onFocus}
       onKeyDown={(event) => {
         if (event.isComposing || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
