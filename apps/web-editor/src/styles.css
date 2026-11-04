@@ -113,7 +113,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .editor-workspace[data-activity-open="true"] > .editor-primary { display: none; }
 }
 
-button[aria-pressed="true"] { background: #eef2ff; border-color: #a5b4fc; color: #4338ca; }
+.sheet-tool[aria-pressed="true"]:not(:disabled),
+.sheet-tool[aria-expanded="true"]:not(:disabled) { background: #d5eee8; color: #134e4a; }
 .editor-toolstrip { padding-right: max(1rem, env(safe-area-inset-right)); padding-left: max(1rem, env(safe-area-inset-left)); }
 .editor-workspace { padding-bottom: env(safe-area-inset-bottom); }
 #document-content { scroll-margin-top: 1rem; }
