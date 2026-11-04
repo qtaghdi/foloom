@@ -4,7 +4,7 @@ import { buttonClass } from './editor-chrome';
 
 export function WorkbookToolbar(props: { view: AppView }) {
   const state = props.view.state;
-  const blocked = () => !state().selection || ['pending', 'error', 'conflict', 'recovery'].includes(state().status);
+  const blocked = () => !state().selection || ['pending', 'conflict', 'recovery'].includes(state().status);
   const sizes = () => [...new Set([8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 32, 36, 48, 72, state().selection?.fontSize ?? 11])].sort((a, b) => a - b);
   return <div class="editor-toolstrip flex min-h-14 min-w-0 shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 sm:px-6" aria-label="스프레드시트 편집 도구">
     <div class="flex gap-1" role="group" aria-label="문서 변경 이력">

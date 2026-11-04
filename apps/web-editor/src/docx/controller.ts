@@ -1,7 +1,9 @@
+import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import { eventSchema, snapshotSchema, type Snapshot, type Operation } from './contracts';
 
 export interface DocumentView {
+  validation?(message: string): void;
   activity?(entry: ActivityEntry): void;
   render(snapshot: Snapshot): void;
   status(message: string, state: 'pending' | 'committed' | 'failed' | 'conflicted'): void;
@@ -55,7 +57,7 @@ export class DocumentController {
   }
 
   async save(): Promise<void> {
-    if (this.blocked || this.busy || !this.snapshot || !this.drafts.size) return;
+    if (this.blocked || this.busy || !this.snapshot || !this.drafts.size || this.draftError()) return;
     this.busy = true;
     this.disconnect();
     this.updateSave();
@@ -120,6 +122,13 @@ export class DocumentController {
     this.updateSave();
   }
   private disconnect(): void { this.events?.close(); this.events = undefined; }
-  private updateSave(): void { this.view.canSave(!this.blocked && !this.busy && this.drafts.size > 0); }
+  private draftError(): string {
+    return validateDrafts(this.snapshot?.id ?? '', this.snapshot?.revision ?? 0, [...this.drafts.values()]);
+  }
+  private updateSave(): void {
+    const error = this.draftError();
+    this.view.validation?.(error);
+    this.view.canSave(!this.blocked && !this.busy && this.drafts.size > 0 && !error);
+  }
   dispose(): void { this.disposed = true; this.disconnect(); }
 }

@@ -22,7 +22,7 @@ export function WorkbookShell(props: { view: AppView }) {
         <main id="spreadsheet" ref={(element) => { props.view.spreadsheet = element; }} class="editor-primary min-h-0 min-w-0 flex-1" aria-label="스프레드시트 편집" tabindex={-1} aria-busy={state().status === 'pending'}/>
         <Show when={props.view.activity.open()}><ActivityPanel entries={props.view.activity.entries()} onClose={props.view.activity.toggle} presence={state().presence}/></Show>
       </div>
-
+      <footer class="shrink-0 border-t border-slate-200 bg-white px-4 py-2 text-xs text-slate-500">수식 결과는 미리보기입니다.</footer>
     </div>
   </>;
 }

@@ -36,7 +36,7 @@ export class AppView {
   setSelection(selection: EditorSelection | undefined): void { this.patch({ selection }); }
   format(format: CellFormat): void {
     const state = this.state();
-    if (!state.selection || ['pending', 'error', 'conflict', 'recovery'].includes(state.status)) return;
+    if (!state.selection || ['pending', 'conflict', 'recovery'].includes(state.status)) return;
     this.formatListener?.(format, state.selection);
   }
   toggleNativeTools(): void {

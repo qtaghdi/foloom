@@ -29,7 +29,11 @@ export function DocumentApp() {
   };
   const keydown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && confirmReload()) { event.preventDefault(); cancelReload(); return; }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void controller.save(); }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      if (state().validation) { document.querySelector<HTMLTextAreaElement>('textarea[aria-invalid="true"]')?.focus(); return; }
+      void controller.save();
+    }
   };
   let disposed = false;
   const dispose = () => {
@@ -60,6 +64,7 @@ export function DocumentApp() {
     </div>
     <Show when={state().snapshot?.warnings.length}><StatusPanel id="document-warnings" panel={{ title: '편집 범위 안내', message: state().snapshot?.warnings.join('\n\n') ?? '', dismissible: false }} onDismiss={() => {}}/></Show>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: '작업 확인 필요', message: message(), dismissible: false }} danger onDismiss={() => {}}/>}</Show>
+    <Show when={state().validation}>{(message) => <p class="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs leading-6 text-red-800 sm:px-6" role="alert">{message()}</p>}</Show>
     <Show when={confirmReload()}><section class="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-6" role="region" aria-label="미저장 입력 폐기 확인">
       <p>미저장 입력을 버리고 저장된 문서를 다시 불러올까요? 필요한 입력을 먼저 복사하세요.</p>
       <div class="mt-3 flex flex-wrap gap-2"><button id="discard-draft" type="button" class={primaryButtonClass} onClick={reload}>입력 버리고 불러오기</button><button type="button" class={buttonClass} onClick={cancelReload}>취소</button></div>

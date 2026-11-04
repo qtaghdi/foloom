@@ -171,3 +171,16 @@ it('localizes known workbook notices while retaining unknown diagnostic text', (
   expect(root.querySelector('#fatal-error')?.textContent).toContain('연결이 끊겼습니다');
   view.dispose();
 });
+
+it('keeps unsupported pasted text editable and restores saving after correction', async () => {
+  const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
+  const input = root.querySelector('textarea')!;
+  edit(input, '붙여넣은\n여러 줄');
+  expect(input.value).toBe('붙여넣은\n여러 줄'); expect(input.getAttribute('aria-invalid')).toBe('true');
+  expect(button(root, '변경 저장').disabled).toBe(true);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
+  expect(document.activeElement).toBe(input); expect(f.fetcher).toHaveBeenCalledTimes(1);
+  edit(input, '수정한 한 줄');
+  expect(input.getAttribute('aria-invalid')).toBe('false'); expect(button(root, '변경 저장').disabled).toBe(false);
+  button(root, '변경 저장').click(); await settle(); expect(f.fetcher).toHaveBeenCalledTimes(2);
+});
