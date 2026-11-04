@@ -285,9 +285,27 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
       bold: style?.bold ?? false, italic: style?.italic ?? false, fontSize: style?.fontSize ?? 11 };
   }
 
+  locateRange(target: SelectionChange): boolean {
+    const workbook = this.workbook;
+    const worksheet = workbook?.getSheetByName(target.sheet);
+    if (!workbook || !worksheet || !/^[A-Z]{1,3}[1-9][0-9]{0,6}(?::[A-Z]{1,3}[1-9][0-9]{0,6})?$/i.test(target.range)) return false;
+    const [first, last = first] = target.range.split(':');
+    const start = parseCellAddress(first!);
+    const end = parseCellAddress(last!);
+    if (start.row > end.row || start.column > end.column || end.row >= worksheet.getMaxRows() || end.column >= worksheet.getMaxColumns()) return false;
+    workbook.setActiveSheet(worksheet);
+    worksheet.setActiveRange(worksheet.getRange(target.range));
+    const visible = worksheet.getVisibleRange();
+    if (!visible || start.row < visible.startRow || start.row > visible.endRow || start.column < visible.startColumn || start.column > visible.endColumn) {
+      worksheet.scrollToCell(start.row, start.column);
+    }
+    this.lastSelection = target;
+    this.selectionListener?.(target);
+    return true;
+  }
+
   setNativeToolbarVisible(visible: boolean): void {
-    this.univerAPI.setUIVisible(this.univerAPI.Enum.BuiltInUIPart.HEADER, visible)
-      .setUIVisible(this.univerAPI.Enum.BuiltInUIPart.TOOLBAR, visible);
+    this.univerAPI.setUIVisible(this.univerAPI.Enum.BuiltInUIPart.TOOLBAR, visible);
   }
 
   onCellEdit(listener: (edit: CellEdit) => void): void {

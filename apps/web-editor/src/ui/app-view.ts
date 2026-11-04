@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import type { CellFormat, FeatureWarning, HistoryDirection, WorkbookEvent } from '../contracts';
+import type { CellFormat, FeatureWarning, HistoryDirection, WorkbookEvent, SelectionChange } from '../contracts';
 
 import type { EditorSelection } from '../spreadsheet-engine';
 
@@ -33,6 +33,18 @@ export class AppView {
   }
   onFormat(listener: (format: CellFormat, selection: EditorSelection) => void): void { this.formatListener = listener; }
   onNativeTools(listener: (visible: boolean) => void): void { this.nativeToolsListener = listener; }
+  private locateListener?: (selection: SelectionChange) => boolean;
+  onLocate(listener: (selection: SelectionChange) => boolean): void { this.locateListener = listener; }
+  locate(target: NonNullable<ActivityEntry['sheetTarget']>): void {
+    if (['pending', 'conflict', 'recovery'].includes(this.state().status)) return;
+    const narrow = window.matchMedia('(max-width: 640px)').matches;
+    if (narrow && this.activity.open()) this.activity.toggle();
+    queueMicrotask(() => {
+      if (this.disposed) return;
+      if (this.locateListener?.({ ...target, state: 'selecting' })) this.spreadsheet.focus({ preventScroll: true });
+      else this.showError('기록된 셀 범위를 열 수 없습니다.', this.state().revision);
+    });
+  }
   setSelection(selection: EditorSelection | undefined): void { this.patch({ selection }); }
   format(format: CellFormat): void {
     const state = this.state();

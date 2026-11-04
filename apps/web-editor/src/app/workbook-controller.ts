@@ -94,6 +94,7 @@ export class WorkbookController {
         this.queuePresence(selection);
       });
       this.view.setSelection?.(this.engine.readSelection?.());
+      this.view.onLocate?.((target) => this.engine?.locateRange?.(target) ?? false);
       this.view.onNativeTools?.((visible) => this.engine?.setNativeToolbarVisible?.(visible));
       this.view.onFormat?.((format, selection) => {
         if (this.pendingWrites > 0 || this.recoveryRequired || this.disposed) return;
@@ -179,6 +180,7 @@ export class WorkbookController {
     const target = operationTarget(operation);
     const activityId = `local:${++this.activitySequence}`;
     const location = `${operation.sheet}!${target}`;
+    const sheetTarget = 'cell' in operation || 'range' in operation ? { sheet: operation.sheet, range: target } : undefined;
     this.saveQueue = this.saveQueue.then(async () => {
       if (this.recoveryRequired || this.disposed) { this.pendingWrites--; return; }
       this.view.recordActivity?.({ id: activityId, actor: 'human', state: 'pending', title: operation.type === 'set_format' ? '선택 범위 서식 변경' : '문서 변경', location });
@@ -192,7 +194,7 @@ export class WorkbookController {
         if (operation.type === 'insert_rows' || operation.type === 'delete_rows' || operation.type === 'insert_columns' || operation.type === 'delete_columns') {
           this.loadedRanges.delete(operation.sheet);
         }
-        this.view.recordActivity?.({ id: activityId, actor: 'human', state: 'committed', title: operation.type === 'set_format' ? '선택 범위 서식 저장' : '문서 변경 저장', location, revision: this.revision });
+        this.view.recordActivity?.({ id: activityId, actor: 'human', state: 'committed', title: operation.type === 'set_format' ? '선택 범위 서식 저장' : '문서 변경 저장', location, sheetTarget, revision: this.revision });
         onCommitted?.();
         this.view.showRevision('Saved', this.revision, 'success');
       } catch (error) {
@@ -284,7 +286,8 @@ export class WorkbookController {
     const commitsWorkbook = event.type !== 'presence.update' && event.type !== 'cell.typing';
     if (commitsWorkbook && event.type !== 'workbook.reload' && event.revision > this.revision && (event.actor === 'ai' || this.pendingWrites === 0)) {
       const target = 'cell' in event ? event.cell : 'range' in event ? event.range : `${event.index}:${event.index + event.count - 1}`;
-      this.view.recordActivity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed', title: event.type === 'range.format' ? '범위 서식 저장' : '문서 변경 저장', location: `${event.sheet}!${target}`, revision: event.revision });
+      this.view.recordActivity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed', title: event.type === 'range.format' ? '범위 서식 저장' : '문서 변경 저장', location: `${event.sheet}!${target}`,
+        sheetTarget: 'cell' in event || 'range' in event ? { sheet: event.sheet, range: target } : undefined, revision: event.revision });
     }
 
     if (event.actor !== 'ai') {

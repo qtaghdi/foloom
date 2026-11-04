@@ -4,8 +4,8 @@ import { buttonClass } from './editor-chrome';
 
 export const controlClass = buttonClass;
 
-export function StatusPanel(props: { id: string; panel: StatusPanelState; danger?: boolean; onDismiss: () => void }) {
-  const [expanded, setExpanded] = createSignal(Boolean(props.danger));
+export function StatusPanel(props: { id: string; panel: StatusPanelState; danger?: boolean; initiallyExpanded?: boolean; onDismiss: () => void }) {
+  const [expanded, setExpanded] = createSignal(Boolean(props.danger || props.initiallyExpanded));
   return <section id={props.id} role={props.danger ? 'alert' : 'status'} aria-live={props.danger ? 'assertive' : 'polite'} tabindex={-1}
     class={`shrink-0 border-b px-4 py-2 text-sm break-words focus-visible:outline-2 focus-visible:outline-indigo-600 sm:px-6 ${props.danger ? 'border-red-200 bg-red-50 text-red-900' : 'border-indigo-100 bg-indigo-50/70 text-slate-700'}`}>
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">

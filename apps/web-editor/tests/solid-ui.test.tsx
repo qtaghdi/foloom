@@ -44,7 +44,10 @@ describe('Solid workbook shell', () => {
     view.showWarnings([{ feature: 'test', message: '<img src=x onerror=alert(1)>' }]);
     expect(root.querySelector('#feature-warnings img')).toBeNull();
     const warning = root.querySelector('#feature-warnings')!;
-    button(warning, '자세히').click(); button(warning, '접기').click();
+    expect(root.querySelector('#workbook-notices')?.hasAttribute('hidden')).toBe(true);
+    button(root, '호환성').click();
+    expect(root.querySelector('#workbook-notices')?.hasAttribute('hidden')).toBe(false);
+    button(warning, '접기').click();
     expect(warning.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
     button(warning, '자세히').click(); button(warning, '닫기').click();
     expect(root.querySelector('#feature-warnings')).toBeNull();
@@ -208,4 +211,20 @@ it('locates an observed AI change by paragraph and displays its verified before 
   button(root, '변경 위치로 이동').click();
   await settle();
   expect(document.activeElement?.id).toBe('docx-paragraph-0');
+});
+
+
+it('opens the sheet and cell associated with a confirmed activity entry', async () => {
+  const view = new AppView();
+  const root = mount(() => <WorkbookShell view={view}/>);
+  const locate = vi.fn(() => true);
+  view.onLocate(locate);
+  view.showRevision('Ready', 2);
+  view.recordActivity({ id: 'event:1', actor: 'ai', title: '셀 수정', state: 'committed', sheetTarget: { sheet: '업무!현황', range: 'A4' } });
+  button(root, '활동').click();
+  button(root, '변경 위치로 이동').click();
+  await settle();
+  expect(locate).toHaveBeenCalledWith({ sheet: '업무!현황', range: 'A4', state: 'selecting' });
+  expect(document.activeElement).toBe(view.spreadsheet);
+  view.dispose();
 });

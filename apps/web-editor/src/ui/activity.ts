@@ -3,6 +3,7 @@ import { createSignal } from 'solid-js';
 export interface ActivityEntry {
   id: string; actor: 'ai' | 'human' | 'system'; state: 'pending' | 'committed' | 'failed' | 'uncertain';
   documentChange?: { session: string; key: string; before: string; after: string };
+  sheetTarget?: { sheet: string; range: string };
   title: string; location?: string; revision?: number; observedAt?: number;
 }
 

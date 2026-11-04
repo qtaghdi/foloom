@@ -14,6 +14,7 @@ import type {
 export interface EditorSelection extends SelectionChange { bold: boolean; italic: boolean; fontSize: number }
 
 export interface SpreadsheetEngine {
+  locateRange?(target: SelectionChange): boolean;
   readSelection?(): EditorSelection | undefined;
   setNativeToolbarVisible?(visible: boolean): void;
   initialize(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void;
