@@ -3,7 +3,7 @@ import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import type { Snapshot, Run, Paragraph, Operation } from './contracts';
 
-export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onEdit: (operation: Operation) => void; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void }) {
+export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onEdit: (operation: Operation) => void; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   const positions = createMemo(() => {
     const result = new Map<string, number>();
     for (const block of props.snapshot.blocks) {
@@ -23,6 +23,7 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
         <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span class="whitespace-pre-wrap" style={runStyle(run)} title="읽기 전용: 원본 구조를 보존합니다.">{run.text || '표시되지 않는 구조'}</span>}>
           <RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={`${kind === 'replace_cell_text' ? '표' : '본문'} 텍스트 ${positions().get(run.id)}`} saving={props.saving}
+            onFocus={() => props.onFocusRun(run)}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/>
         </Show>}</For>
       </Show>
@@ -58,7 +59,7 @@ function runStyle(run: Run) {
   };
 }
 
-function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onEdit: (text: string) => void }) {
+function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onEdit: (text: string) => void }) {
   const [error, setError] = createSignal('');
   const descriptionId = `input-error-${props.run.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   return <>
@@ -67,6 +68,7 @@ function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'cent
       class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
       style={{ ...runStyle(props.run), 'text-align': props.align }}
       classList={{ 'docx-run-wide': props.fullWidth, 'outline-red-500': Boolean(error()) }}
+      onFocus={props.onFocus}
       onKeyDown={(event) => {
         if (event.isComposing || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
         const field = event.currentTarget;

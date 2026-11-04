@@ -5,7 +5,9 @@ import { StatusPanel } from '../ui/status-panel';
 import type { ActivityEntry } from '../ui/activity';
 import { ActivityPanel } from '../ui/activity-panel';
 import { DocumentContent } from './document-content';
-import { EditorHeader, buttonClass, primaryButtonClass, quietButtonClass } from '../ui/editor-chrome';
+import { DocumentToolbar } from './document-toolbar';
+import type { Run } from './contracts';
+import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
 
 
@@ -13,11 +15,14 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
+  const [zoom, setZoom] = createSignal(100);
+  const [focusedRun, setFocusedRun] = createSignal<Run>();
   const paper = () => state().snapshot?.page ?? defaultPaper;
   const paperStyle = () => {
     const { width, height, top, right, bottom, left } = paper();
     const inset = (twips: number) => `${100 * twips / width}%`;
     return {
+      zoom: String(zoom() / 100),
       '--paper-width': `${width / 15}px`,
       '--paper-ratio': String(height / width),
       '--paper-insets': [top, right, bottom, left].map(inset).join(' '),
@@ -45,6 +50,7 @@ export function DocumentApp() {
     const index = active instanceof HTMLTextAreaElement && state().snapshot?.id === snapshot.id ? fields.indexOf(active) : -1;
     const selection = index >= 0 && active instanceof HTMLTextAreaElement
       ? [active.selectionStart, active.selectionEnd] as const : undefined;
+    if (state().snapshot?.id !== snapshot.id) setFocusedRun(undefined);
     view.render(snapshot);
     if (selection && document.activeElement === document.body) {
       const field = article?.querySelectorAll('textarea')[index];
@@ -97,14 +103,10 @@ export function DocumentApp() {
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
     <EditorHeader name={state().snapshot?.name ?? '문서를 여는 중'} kind="문서" nameId="document-name" statusId="save-status"
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
-      actions={<>
-        <Show when={state().canSave || state().saving || state().validation || state().error}>
-          <button id="save-document" class={primaryButtonClass} type="button" disabled={!state().canSave} onClick={() => { void controller.save(); }}>변경 저장</button>
-        </Show>
-        <button id="reload-document" class={state().error ? buttonClass : quietButtonClass} type="button" disabled={state().saving || state().loading} onClick={requestReload} title="다시 불러오기" aria-label="다시 불러오기">
-          <Show when={state().error} fallback={<svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5.3" stroke-linecap="round" stroke-linejoin="round"/></svg>}>다시 불러오기</Show>
-        </button>
-      </>}/>
+    />
+    <DocumentToolbar canSave={state().canSave} saving={state().saving} loading={state().loading}
+      needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
+      onSave={() => { void controller.save(); }} onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: '작업 확인 필요', message: message(), dismissible: false }} danger onDismiss={() => {}}/>}</Show>
     <Show when={state().validation}>{(message) => <p class="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs leading-6 text-red-800 sm:px-6" role="alert">{message()}</p>}</Show>
     <Show when={confirmReload()}><section class="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-6" role="region" aria-label="미저장 입력 폐기 확인">
@@ -117,7 +119,7 @@ export function DocumentApp() {
       <article id="document-content" aria-label="DOCX 본문과 표 편집" aria-busy={!state().snapshot} class="docx-paper w-full border border-slate-200 bg-white text-[11pt] leading-[1.35] text-stone-900 shadow-sm" tabindex={-1}>
         <Show when={state().snapshot}>{(snapshot) => <DocumentContent snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
-          onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => controller.edit(operation)}/>}</Show>
+          onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => controller.edit(operation)}/>}</Show>
       </article>
       <details class="mt-2 rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
         <summary class="min-h-11 w-fit cursor-pointer rounded px-1 py-2 font-medium focus-visible:outline-2 focus-visible:outline-teal-700">편집 범위와 원본 보존</summary>
