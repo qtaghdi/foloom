@@ -114,3 +114,12 @@ test('DOCX closed event sources cannot interrupt a newer save', async () => {
   assert.equal(f.state.enabled.at(-1), true);
   assert.equal(f.state.statuses.some(([, state]) => state === 'failed'), false);
 });
+
+test('DOCX rejects unsupported draft text before sending and accepts corrected emoji text', async () => {
+  const f = fixture(); await f.controller.load();
+  f.controller.edit({ ...edit, text: 'two\nlines' }); await f.controller.save();
+  assert.equal(f.state.writes.length, 0); assert.equal(f.state.enabled.at(-1), false);
+  f.controller.edit({ ...edit, text: '문서 😀' });
+  assert.equal(f.state.enabled.at(-1), true); await f.controller.save();
+  assert.equal(f.state.writes.length, 1);
+});

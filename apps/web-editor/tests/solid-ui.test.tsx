@@ -27,7 +27,7 @@ describe('Solid workbook shell', () => {
     const grid = view.spreadsheet; const sentinel = document.createElement('canvas'); grid.append(sentinel);
     const history = vi.fn(); view.onHistoryAction(history);
     expect(button(root, '실행 취소').disabled).toBe(true);
-    view.setHistoryState(true, false); button(root, '실행 취소').click();
+    view.showRevision('Ready', 1); view.setHistoryState(true, false); button(root, '실행 취소').click();
     expect(history).toHaveBeenCalledWith('undo');
     view.showRevision('Saved', 3, 'success');
     expect(root.querySelector('#revision-status')?.textContent).toContain('저장됨 · 리비전 3');
@@ -44,9 +44,9 @@ describe('Solid workbook shell', () => {
     view.showWarnings([{ feature: 'test', message: '<img src=x onerror=alert(1)>' }]);
     expect(root.querySelector('#feature-warnings img')).toBeNull();
     const warning = root.querySelector('#feature-warnings')!;
-    button(warning, '접기').click();
+    button(warning, '자세히').click(); button(warning, '접기').click();
     expect(warning.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
-    button(warning, '펼치기').click(); button(warning, '닫기').click();
+    button(warning, '자세히').click(); button(warning, '닫기').click();
     expect(root.querySelector('#feature-warnings')).toBeNull();
     view.showRecovery('Revision conflict', 4); await settle();
     expect(button(root, '실행 취소').disabled).toBe(true);
@@ -110,9 +110,11 @@ describe('Solid DOCX editor', () => {
     const input = root.querySelector('textarea')!; edit(input, '남길 초안');
     f.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
     expect(input.value).toBe('남길 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
-    button(root, '다시 불러오기').click();
+    button(root, '다시 불러오기').click(); await settle();
+    expect(document.activeElement?.id).toBe('discard-draft');
     expect(f.fetcher).toHaveBeenCalledTimes(1);
     button(root, '취소').click(); expect(input.value).toBe('남길 초안');
+    expect(document.activeElement?.id).toBe('reload-document');
     button(root, '다시 불러오기').click(); button(root, '입력 버리고 불러오기').click(); await settle();
     expect(f.fetcher).toHaveBeenCalledTimes(2);
     expect(root.querySelector('textarea')?.value).toBe('원본');
@@ -127,4 +129,58 @@ describe('Solid DOCX editor', () => {
     expect(input.value).toBe('저장할 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
     expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
   });
+});
+
+it('custom toolbar reflects selection and blocks formatting during a pending write', () => {
+  const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
+  const format = vi.fn(); view.onFormat(format);
+  expect(button(root, '굵게').disabled).toBe(true);
+  view.setSelection({ sheet: 'Sheet1', range: 'A1:B2', state: 'selecting', bold: false, italic: false, fontSize: 11 });
+  view.showRevision('Ready', 1);
+  button(root, '굵게').click();
+  expect(format).toHaveBeenCalledWith({ bold: true }, expect.objectContaining({ range: 'A1:B2' }));
+  view.showRevision('Saving A1…', 1, 'pending');
+  expect(button(root, '기울임').disabled).toBe(true);
+  button(root, '기울임').click(); expect(format).toHaveBeenCalledTimes(1);
+  view.dispose();
+});
+
+it('activity shows observed commits only, deduplicates events, and bounds the connection log', () => {
+  const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
+  const grid = view.spreadsheet; const marker = document.createElement('canvas'); grid.append(marker);
+  if (!view.activity.open()) button(root, '활동').click();
+  expect(root.querySelector('#document-activity')?.textContent).toContain('아직 기록된 변경이 없습니다.');
+  view.recordActivity({ id: 'write', actor: 'human', state: 'pending', title: '문서 변경' });
+  view.showRecovery('connection lost', 1);
+  expect(view.activity.entries()[0]?.state).toBe('uncertain');
+  view.recordActivity({ id: 'write', actor: 'human', state: 'committed', title: '문서 변경 저장', revision: 2 });
+  expect(view.activity.entries()).toHaveLength(1);
+  for (let i = 0; i < 70; i++) view.recordActivity({ id: `event:${i}`, actor: 'ai', state: 'committed', title: '범위 서식 저장', revision: i + 3 });
+  expect(view.activity.entries()).toHaveLength(60);
+  expect(root.querySelector('#spreadsheet')).toBe(grid); expect(grid.firstChild).toBe(marker);
+  expect(root.querySelector('#document-activity')?.textContent).toContain('AI');
+  view.dispose();
+});
+
+it('localizes known workbook notices while retaining unknown diagnostic text', () => {
+  const view = new AppView(); const root = mount(() => <WorkbookShell view={view}/>);
+  view.showWarnings([{ feature: 'formula calculation', message: 'cached results' }, { feature: 'future', message: 'unknown detail' }]);
+  const warning = root.querySelector('#feature-warnings')!;
+  expect(warning.textContent).toContain('미리보기'); expect(warning.textContent).toContain('unknown detail');
+  view.showRecovery('The live connection was interrupted.', 1);
+  expect(root.querySelector('#fatal-error')?.textContent).toContain('연결이 끊겼습니다');
+  view.dispose();
+});
+
+it('keeps unsupported pasted text editable and restores saving after correction', async () => {
+  const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
+  const input = root.querySelector('textarea')!;
+  edit(input, '붙여넣은\n여러 줄');
+  expect(input.value).toBe('붙여넣은\n여러 줄'); expect(input.getAttribute('aria-invalid')).toBe('true');
+  expect(button(root, '변경 저장').disabled).toBe(true);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
+  expect(document.activeElement).toBe(input); expect(f.fetcher).toHaveBeenCalledTimes(1);
+  edit(input, '수정한 한 줄');
+  expect(input.getAttribute('aria-invalid')).toBe('false'); expect(button(root, '변경 저장').disabled).toBe(false);
+  button(root, '변경 저장').click(); await settle(); expect(f.fetcher).toHaveBeenCalledTimes(2);
 });

@@ -11,7 +11,11 @@ import type {
   SheetObjects,
 } from './contracts';
 
+export interface EditorSelection extends SelectionChange { bold: boolean; italic: boolean; fontSize: number }
+
 export interface SpreadsheetEngine {
+  readSelection?(): EditorSelection | undefined;
+  setNativeToolbarVisible?(visible: boolean): void;
   initialize(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void;
   onCellEdit(listener: (edit: CellEdit) => void): void;
   onRangeEdit(listener: (edit: RangeEdit) => void): void;

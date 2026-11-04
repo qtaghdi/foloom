@@ -1,31 +1,53 @@
 import { createSignal } from 'solid-js';
-import type { FeatureWarning, HistoryDirection, WorkbookEvent } from '../contracts';
+import type { CellFormat, FeatureWarning, HistoryDirection, WorkbookEvent } from '../contracts';
+
+import type { EditorSelection } from '../spreadsheet-engine';
+
+import { featureMessage, problemMessage } from './messages';
+import { createActivityModel, type ActivityEntry } from './activity';
 
 export type RevisionState = 'ready' | 'pending' | 'success' | 'error' | 'conflict' | 'recovery';
 export interface StatusPanelState { title: string; message: string; dismissible: boolean; reload?: () => void }
 export interface WorkbookViewState {
   name: string; message: string; revision: number; status: RevisionState;
-  canUndo: boolean; canRedo: boolean; presence?: string;
+  canUndo: boolean; canRedo: boolean; presence?: string; selection?: EditorSelection; nativeTools?: boolean;
   warning?: StatusPanelState; error?: StatusPanelState;
 }
 
 // Controllers publish presentation state. Only the engine owns the mounted grid DOM.
 export class AppView {
   spreadsheet!: HTMLElement;
+  readonly activity = createActivityModel();
+  recordActivity(entry: ActivityEntry): void { if (!this.disposed) this.activity.record(entry); }
   private readonly signal = createSignal<WorkbookViewState>({ name: '문서를 여는 중', message: '연결 중', revision: 0, status: 'pending', canUndo: false, canRedo: false });
   readonly state = this.signal[0];
   private disposed = false;
   private presenceTimer: number | undefined;
+  private formatListener?: (format: CellFormat, selection: EditorSelection) => void;
+  private nativeToolsListener?: (visible: boolean) => void;
   private historyListener?: (direction: HistoryDirection) => void;
   private patch(update: Partial<WorkbookViewState>): void { if (this.disposed) return; this.signal[1]((state) => ({ ...state, ...update })); }
   onHistoryAction(listener: (direction: HistoryDirection) => void): void { this.historyListener = listener; }
   history(direction: HistoryDirection): void {
     if (direction === 'undo' ? this.state().canUndo : this.state().canRedo) this.historyListener?.(direction);
   }
+  onFormat(listener: (format: CellFormat, selection: EditorSelection) => void): void { this.formatListener = listener; }
+  onNativeTools(listener: (visible: boolean) => void): void { this.nativeToolsListener = listener; }
+  setSelection(selection: EditorSelection | undefined): void { this.patch({ selection }); }
+  format(format: CellFormat): void {
+    const state = this.state();
+    if (!state.selection || ['pending', 'conflict', 'recovery'].includes(state.status)) return;
+    this.formatListener?.(format, state.selection);
+  }
+  toggleNativeTools(): void {
+    const visible = !this.state().nativeTools;
+    this.nativeToolsListener?.(visible);
+    this.patch({ nativeTools: visible });
+  }
   setHistoryState(canUndo: boolean, canRedo: boolean): void { this.patch({ canUndo, canRedo }); }
   setWorkbookName(name: string): void { this.patch({ name }); }
   showWarnings(warnings: FeatureWarning[]): void {
-    this.patch({ warning: warnings.length ? { title: '호환성 안내', message: warnings.map((warning) => warning.message).join('; '), dismissible: true } : undefined });
+    this.patch({ warning: warnings.length ? { title: '호환성 안내', message: warnings.map(featureMessage).join('\n\n'), dismissible: true } : undefined });
   }
   dismiss(kind: 'warning' | 'error'): void {
     if (this.state()[kind]?.dismissible) { this.patch({ [kind]: undefined }); this.spreadsheet.focus({ preventScroll: true }); }
@@ -46,13 +68,14 @@ export class AppView {
     }
   }
   showError(error: unknown, revision: number): void {
-    this.patch({ error: { title: '작업 실패', message: `${error instanceof Error ? error.message : String(error)} 연결과 문서 접근 상태를 확인하세요.`, dismissible: true } });
+    this.patch({ error: { title: '작업 실패', message: `${problemMessage(error instanceof Error ? error.message : String(error))} 연결과 문서 접근 상태를 확인하세요.`, dismissible: true } });
     this.showRevision('작업 실패', revision, 'error'); this.focusError();
   }
   showRecovery(message: string, revision: number): void {
+    this.activity.markUncertain();
     const conflict = /conflict|changed|external|newer|busy/i.test(message);
     const title = conflict ? '충돌 감지' : '복구 필요';
-    this.patch({ error: { title, message: `${message} 편집을 중단했습니다. 미저장 입력을 복사한 뒤 저장된 문서를 다시 불러오세요. 결과가 불확실한 저장은 반복하지 마세요.`, dismissible: false, reload: () => window.location.reload() }, canUndo: false, canRedo: false });
+    this.patch({ error: { title, message: `${problemMessage(message)} 편집을 중단했습니다. 미저장 입력을 복사한 뒤 저장된 문서를 다시 불러오세요. 결과가 불확실한 저장은 반복하지 마세요.`, dismissible: false, reload: () => window.location.reload() }, canUndo: false, canRedo: false });
     this.showRevision(title, revision, conflict ? 'conflict' : 'recovery'); this.focusError();
   }
   private focusError(): void { queueMicrotask(() => { if (!this.disposed) document.getElementById('fatal-error')?.focus({ preventScroll: true }); }); }

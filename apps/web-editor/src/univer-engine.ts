@@ -5,12 +5,12 @@ import { UniverDocsDrawingPlugin } from '@univerjs/docs-drawing';
 import { UniverDocsUIPlugin } from '@univerjs/docs-ui';
 import { UniverDrawingPlugin } from '@univerjs/drawing';
 import { UniverDrawingUIPlugin } from '@univerjs/drawing-ui';
-import DrawingUIEnUS from '@univerjs/drawing-ui/locale/en-US';
+import DrawingUIKoKR from '@univerjs/drawing-ui/locale/ko-KR';
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula';
 import { UniverRenderEnginePlugin } from '@univerjs/engine-render';
 import { createUniver } from '@univerjs/presets';
 import { UniverSheetsPlugin } from '@univerjs/sheets';
-import type { FWorksheet } from '@univerjs/sheets/facade';
+import type { FWorksheet, FWorkbook } from '@univerjs/sheets/facade';
 import { UniverSheetsFormulaPlugin } from '@univerjs/sheets-formula';
 import { UniverSheetsFormulaUIPlugin } from '@univerjs/sheets-formula-ui';
 import { UniverSheetsNumfmtPlugin } from '@univerjs/sheets-numfmt';
@@ -18,7 +18,7 @@ import { UniverSheetsNumfmtUIPlugin } from '@univerjs/sheets-numfmt-ui';
 import { UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
 import { UniverSheetsDrawingPlugin } from '@univerjs/sheets-drawing';
 import { UniverSheetsDrawingUIPlugin } from '@univerjs/sheets-drawing-ui';
-import SheetsDrawingUIEnUS from '@univerjs/sheets-drawing-ui/locale/en-US';
+import SheetsDrawingUIKoKR from '@univerjs/sheets-drawing-ui/locale/ko-KR';
 import { UniverSheetsDataValidationPlugin } from '@univerjs/sheets-data-validation';
 import { UniverSheetsDataValidationUIPlugin } from '@univerjs/sheets-data-validation-ui';
 import type { FDataValidationBuilder } from '@univerjs/sheets-data-validation/facade';
@@ -27,7 +27,7 @@ import { CFNumberOperator, CFTimePeriodOperator, CFValueType } from '@univerjs/s
 import type { IConditionFormattingRule, IValueConfig } from '@univerjs/sheets-conditional-formatting';
 import type { FConditionalFormattingBuilder } from '@univerjs/sheets-conditional-formatting/facade';
 import { UniverUIPlugin } from '@univerjs/ui';
-import UniverPresetSheetsCoreEnUS from '@univerjs/preset-sheets-core/locales/en-US';
+import UniverPresetSheetsCoreKoKR from '@univerjs/preset-sheets-core/locales/ko-KR';
 
 import '@univerjs/docs-ui/facade';
 import '@univerjs/docs-drawing/facade';
@@ -67,11 +67,13 @@ import {
   toUniverCellData,
   toUniverWorkbook,
 } from './spreadsheet/univer/workbook-mapper';
-import type { SpreadsheetEngine } from './spreadsheet-engine';
+import type { SpreadsheetEngine, EditorSelection } from './spreadsheet-engine';
 
 export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   private readonly univer;
   private readonly univerAPI;
+  private workbook: FWorkbook | undefined;
+  private lastSelection: SelectionChange | undefined;
   private editListener: ((edit: CellEdit) => void) | undefined;
   private rangeEditListener: ((edit: RangeEdit) => void) | undefined;
   private selectionListener: ((selection: SelectionChange) => void) | undefined;
@@ -88,12 +90,12 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
 
   constructor(container: HTMLElement) {
     const { univer, univerAPI } = createUniver({
-      locale: LocaleType.EN_US,
+      locale: LocaleType.KO_KR,
       locales: {
-        [LocaleType.EN_US]: mergeLocales(
-          UniverPresetSheetsCoreEnUS,
-          DrawingUIEnUS,
-          SheetsDrawingUIEnUS,
+        [LocaleType.KO_KR]: mergeLocales(
+          UniverPresetSheetsCoreKoKR,
+          DrawingUIKoKR,
+          SheetsDrawingUIKoKR,
         ),
       },
       presets: [],
@@ -132,10 +134,11 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
           return;
         }
         objectsApplied = true;
+        this.setNativeToolbarVisible(false);
         void this.applySheetObjects(objects);
       },
     ));
-    this.univerAPI.createWorkbook(toUniverWorkbook(snapshot, ranges));
+    this.workbook = this.univerAPI.createWorkbook(toUniverWorkbook(snapshot, ranges));
     for (const range of ranges) {
       this.applyWorkbookFeatures(range);
     }
@@ -177,7 +180,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         if (this.applyingRemote || !this.operationListener) {
           return;
         }
-        const worksheet = this.univerAPI.getActiveWorkbook()?.getActiveSheet();
+        const worksheet = this.workbook?.getActiveSheet();
         if (!worksheet) {
           return;
         }
@@ -246,20 +249,16 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         });
       },
     ));
-    this.subscriptions.push(this.univerAPI.addEvent(
-      this.univerAPI.Event.SelectionChanged,
-      ({ worksheet, selections }) => {
-        const selection = selections.at(-1);
-        if (!selection || !this.selectionListener) {
-          return;
-        }
-        this.selectionListener({
-          sheet: worksheet.getSheetName(),
-          range: toA1Range(selection.startRow, selection.startColumn, selection.endRow, selection.endColumn),
-          state: 'selecting',
-        });
-      },
-    ));
+    // Bind selection to this workbook rather than the focused global UI unit.
+    // The custom toolbar intentionally lives outside Univer's focus ownership.
+    this.subscriptions.push(this.workbook.onSelectionChange((selections) => {
+      const selection = selections.at(-1);
+      const worksheet = this.workbook?.getActiveSheet();
+      if (!selection || !worksheet) return;
+      this.lastSelection = { sheet: worksheet.getSheetName(),
+        range: toA1Range(selection.startRow, selection.startColumn, selection.endRow, selection.endColumn), state: 'selecting' };
+      this.selectionListener?.(this.lastSelection);
+    }));
     this.subscriptions.push(this.univerAPI.addEvent(
       this.univerAPI.Event.ClipboardPasted,
       ({ worksheet }) => {
@@ -275,6 +274,20 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         });
       },
     ));
+  }
+
+  readSelection(): EditorSelection | undefined {
+    const worksheet = this.lastSelection ? this.workbook?.getSheetByName(this.lastSelection.sheet) : this.workbook?.getActiveSheet();
+    const range = this.lastSelection ? worksheet?.getRange(this.lastSelection.range) : worksheet?.getActiveRange();
+    if (!worksheet || !range) return undefined;
+    const style = range.getCellStyle();
+    return { sheet: worksheet.getSheetName(), range: range.getA1Notation(), state: 'selecting',
+      bold: style?.bold ?? false, italic: style?.italic ?? false, fontSize: style?.fontSize ?? 11 };
+  }
+
+  setNativeToolbarVisible(visible: boolean): void {
+    this.univerAPI.setUIVisible(this.univerAPI.Enum.BuiltInUIPart.HEADER, visible)
+      .setUIVisible(this.univerAPI.Enum.BuiltInUIPart.TOOLBAR, visible);
   }
 
   onCellEdit(listener: (edit: CellEdit) => void): void {
@@ -302,7 +315,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   }
 
   applyRange(source: WorkbookRange): void {
-    const worksheet = this.univerAPI.getActiveWorkbook()?.getSheetByName(source.sheet);
+    const worksheet = this.workbook?.getSheetByName(source.sheet);
     if (!worksheet) {
       return;
     }
@@ -337,7 +350,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   }
 
   private applyWorkbookFeatures(source: WorkbookRange): void {
-    const worksheet = this.univerAPI.getActiveWorkbook()?.getSheetByName(source.sheet);
+    const worksheet = this.workbook?.getSheetByName(source.sheet);
     if (!worksheet) return;
     for (const validation of source.validations ?? []) {
       const key = validationKey(source.sheet, validation);
@@ -350,7 +363,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
       if (validation.type === 'list') {
         const rangeSource = parseValidationRange(validation.formula1 ?? '', source.sheet);
         if (rangeSource) {
-          const sourceWorksheet = this.univerAPI.getActiveWorkbook()?.getSheetByName(rangeSource.sheet);
+          const sourceWorksheet = this.workbook?.getSheetByName(rangeSource.sheet);
           if (sourceWorksheet) {
             builder.requireValueInRange(
               sourceWorksheet.getRange(rangeSource.range),
@@ -422,7 +435,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   private async applySheetObjects(groups: SheetObjects[]): Promise<void> {
     this.applyingRemote = true;
     try {
-      const workbook = this.univerAPI.getActiveWorkbook();
+      const workbook = this.workbook;
       if (!workbook) return;
       for (const group of groups) {
         const worksheet = workbook.getSheetByName(group.sheet);
@@ -525,7 +538,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     if (!('sheet' in event) || !event.sheet) {
       return;
     }
-    const workbook = this.univerAPI.getActiveWorkbook();
+    const workbook = this.workbook;
     const worksheet = workbook?.getSheetByName(event.sheet);
     if (!worksheet) {
       return;

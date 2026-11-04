@@ -1,6 +1,10 @@
+import { validateDrafts } from './validation';
+import type { ActivityEntry } from '../ui/activity';
 import { eventSchema, snapshotSchema, type Snapshot, type Operation } from './contracts';
 
 export interface DocumentView {
+  validation?(message: string): void;
+  activity?(entry: ActivityEntry): void;
   render(snapshot: Snapshot): void;
   status(message: string, state: 'pending' | 'committed' | 'failed' | 'conflicted'): void;
   error(message: string): void;
@@ -11,6 +15,7 @@ export interface DocumentView {
 // explicitly reloads, including when the connection fails after a disk commit.
 export class DocumentController {
   private snapshot?: Snapshot;
+  private activitySequence = 0;
   private drafts = new Map<string, Operation>();
   private busy = false;
   private blocked = true;
@@ -52,11 +57,13 @@ export class DocumentController {
   }
 
   async save(): Promise<void> {
-    if (this.blocked || this.busy || !this.snapshot || !this.drafts.size) return;
+    if (this.blocked || this.busy || !this.snapshot || !this.drafts.size || this.draftError()) return;
     this.busy = true;
     this.disconnect();
     this.updateSave();
     this.view.status('저장 중', 'pending');
+    const activityId = `local:${++this.activitySequence}`;
+    this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.drafts.size}개 수정` });
     try {
       const snapshot = await this.request('/api/docx/operations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -64,11 +71,15 @@ export class DocumentController {
       });
       if (this.disposed) return;
       this.snapshot = snapshot;
+      this.view.activity?.({ id: activityId, actor: 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: snapshot.revision });
       this.drafts.clear();
       this.view.render(snapshot);
       this.view.status(`저장됨 · 리비전 ${snapshot.revision}`, 'committed');
       this.connect(snapshot);
-    } catch (error) { this.fail(error); }
+    } catch (error) {
+      this.view.activity?.({ id: activityId, actor: 'human', state: 'uncertain', title: '저장 결과 확인 필요' });
+      this.fail(error);
+    }
     finally { this.busy = false; this.updateSave(); }
   }
 
@@ -88,6 +99,9 @@ export class DocumentController {
       if (this.events !== events || this.disposed) return;
       try {
         const event = eventSchema.parse(JSON.parse((raw as MessageEvent<string>).data));
+        if (event.type === 'docx.committed' && event.revision > (this.snapshot?.revision ?? 0)) {
+          this.view.activity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: event.revision });
+        }
         if (event.type === 'docx.reload' || event.revision > (this.snapshot?.revision ?? 0)) {
           if (this.hasDrafts()) {
             this.fail(new Error('다른 편집이 저장되었습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'));
@@ -108,6 +122,13 @@ export class DocumentController {
     this.updateSave();
   }
   private disconnect(): void { this.events?.close(); this.events = undefined; }
-  private updateSave(): void { this.view.canSave(!this.blocked && !this.busy && this.drafts.size > 0); }
+  private draftError(): string {
+    return validateDrafts(this.snapshot?.id ?? '', this.snapshot?.revision ?? 0, [...this.drafts.values()]);
+  }
+  private updateSave(): void {
+    const error = this.draftError();
+    this.view.validation?.(error);
+    this.view.canSave(!this.blocked && !this.busy && this.drafts.size > 0 && !error);
+  }
   dispose(): void { this.disposed = true; this.disconnect(); }
 }
