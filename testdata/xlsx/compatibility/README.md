@@ -10,6 +10,7 @@
 
 - 출처: `go run ./testdata/xlsx/compatibility/generate`로 생성
 - 생성기: Go 1.25, Excelize 2.11.0
+- 색상 교정: 생성기에 6자리 RGB를 전달하고, 재생성한 스타일 정의만 교체했습니다.
 - 기능: 수식, 외부 workbook 수식 reference, styled cell, merge, inline 및 range
   list validation, prompt와 error가 있는 whole-number validation, date 및 custom
   formula validation, 숫자와 text highlight, three-color scale, data bar, duplicate
