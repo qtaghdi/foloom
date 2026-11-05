@@ -1,19 +1,20 @@
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import type { PasteMode, ClipboardParagraph } from './clipboard';
 import { continuousInput } from './continuous-input';
 import type { TextSelection } from './selection';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
-export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export function DocumentContent(props: { pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
   const input = continuousInput(() => editor, {
     snapshot: () => props.snapshot, saving: () => props.saving, edit: operation => props.onEdit(operation),
     replace: (...args) => props.onRange(...args), delete: (...args) => props.onDelete(...args), structure: (...args) => props.onStructure(...args),
     composition: active => props.onComposition(active), refresh: selection => props.onRefresh(selection), text: selection => props.selectionText(selection),
-    focus: run => props.onFocusRun(run), notice: message => setNotice(message === 'protected' ? source('paragraphStructureUnavailable') : message === 'invalid' ? source('thisInputContainsLineBreaksTabsOrUnsupported') : ''),
+    focus: run => props.onFocusRun(run), pasteMode: () => props.pasteMode, pasteRich: (...args) => props.onPasteRich(...args), richText: selection => props.richSelection(selection), notice: message => setNotice(message === 'protected' ? source('paragraphStructureUnavailable') : message === 'invalid' ? source('thisInputContainsLineBreaksTabsOrUnsupported') : message === 'clipboard' ? source('clipboardNormalized') : ''),
   });
   const positions = createMemo(() => {
     const result = new Map<string, number>();

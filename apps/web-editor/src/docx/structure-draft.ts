@@ -1,8 +1,9 @@
-import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction } from './contracts';
+import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle } from './contracts';
+import type { ClipboardParagraph } from './clipboard';
 import { isTextBoundary, graphemeOffsets, type TextSelection, type TextPoint } from './selection';
 import { validateRunText } from './validation';
 
-type DraftRun = Run & { sourceId: string };
+type DraftRun = Run & { sourceId: string; style?: InlineStyle };
 type DraftParagraph = Omit<Paragraph, 'runs'> & { sourceId: string; runs: DraftRun[] };
 type Group = { originals: Paragraph[]; current: DraftParagraph[]; changed: boolean };
 
@@ -50,7 +51,7 @@ export class StructureDraft {
     return this.groups.filter(group => group.changed).map(group => ({
       type: 'replace_paragraphs', targetId: group.originals[0]!.id, endTargetId: group.originals.at(-1)!.id,
       expectedText: group.originals.map(p => p.runs.map(r => r.text).join('')).join('\n'), text: '',
-      paragraphs: group.current.map(p => ({ sourceId: p.sourceId, runs: p.runs.map(r => ({ sourceId: r.sourceId, text: r.text })) })),
+      paragraphs: group.current.map(p => ({ sourceId: p.sourceId, runs: p.runs.map(r => ({ sourceId: r.sourceId, text: r.text, ...(r.style ? { style: r.style } : {}) })) })),
     }));
   }
   ownsOriginal(runId: string): boolean {
@@ -151,7 +152,7 @@ export class StructureDraft {
     }
     return { anchor: selection.anchor, focus: target };
   }
-  replace(selection: TextSelection, text: string, inline = false): DraftFocus | undefined {
+  replace(selection: TextSelection, text: string, inline = false, rich?: ClipboardParagraph[]): DraftFocus | undefined {
     if (text.length > 1024 * 1024 || text.split('\n').some(value => validateRunText(value))) return;
     const range = this.normalized(selection);
     if (!range || range.runs.some(x => !x.run.editable)) return;
@@ -172,7 +173,23 @@ export class StructureDraft {
       const insertion = group === first.group ? text : '';
       const pieces = inline ? [insertion] : insertion.split('\n');
       const { first: a, last: b } = span;
-      if (group.current.length - (b.p - a.p + 1) + pieces.length > 1000) return;
+      if (group.current.length - (b.p - a.p + 1) + (rich && group === first.group ? rich.length : pieces.length) > 1000) return;
+      if (rich && group === first.group) {
+        const prefix = { ...a.run, text: a.run.text.slice(0, span.start) };
+        const result: DraftParagraph[] = rich.map((paragraph,index) => ({ ...a.paragraph, id:index===0?a.paragraph.id:this.id(), runs:paragraph.map(run => ({
+          ...a.run, id:this.id(), text:run.text,
+          style:{...a.run.style,...run.style}, ...run.style,
+        })) }));
+        if (prefix.text) result[0]!.runs.unshift(...a.paragraph.runs.slice(0,a.r),prefix);
+        else result[0]!.runs.unshift(...a.paragraph.runs.slice(0,a.r));
+        const final=result.at(-1)!;const inserted=final.runs.at(-1)!;
+        focus={runId:inserted.id,start:inserted.text.length,end:inserted.text.length};
+        const suffix={...b.run,id:result.some(p=>p.runs.some(r=>r.id===b.run.id))?this.id():b.run.id,text:b.run.text.slice(span.end)};
+        if (suffix.text) final.runs.push(suffix);
+        final.runs.push(...b.paragraph.runs.slice(b.r+1));
+        prepared.push({group,from:a.p,count:b.p-a.p+1,paragraphs:result});
+        continue;
+      }
       const left = { ...a.run, text: a.run.text.slice(0, span.start) + pieces[0] };
       const result: DraftParagraph[] = [{ ...a.paragraph, runs: [...a.paragraph.runs.slice(0, a.r), left] }];
       for (const piece of pieces.slice(1)) result.push({ ...a.paragraph, id: this.id(), runs: [{ ...a.run, id: this.id(), text: piece }] });
@@ -187,6 +204,19 @@ export class StructureDraft {
     }
     for (const item of prepared) { item.group.current.splice(item.from, item.count, ...item.paragraphs); item.group.changed = true; }
     return focus;
+  }
+  replaceRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): DraftFocus | undefined {
+    if (!paragraphs.length || paragraphs.length>1000 || paragraphs.some(p=>!p.length)) return;
+    return this.replace(selection,paragraphs.map(p=>p.map(r=>r.text).join('')).join('\n'),false,paragraphs);
+  }
+  selectedRich(selection: TextSelection): ClipboardParagraph[] | undefined {
+    const range=this.normalized(selection);if (!range) return;
+    const result:ClipboardParagraph[]=[];let previous:string|undefined;
+    for (const [index,{paragraph,run}] of range.runs.entries()) {
+      if (previous!==paragraph.id) result.push([]);previous=paragraph.id;
+      result.at(-1)!.push({text:run.text.slice(index===0?range.start.offset:0,index===range.runs.length-1?range.end.offset:undefined),style:{bold:run.bold,italic:run.italic,...run.font?{font:run.font}:{},...run.color?{color:run.color}:{},...run.sizeHalfPoints?{sizeHalfPoints:run.sizeHalfPoints}:{}}});
+    }
+    return result;
   }
   snapshot(): Snapshot {
     const expand = (paragraphs: Paragraph[]): Paragraph[] => {

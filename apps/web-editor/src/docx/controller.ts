@@ -3,6 +3,7 @@ import { source } from '../i18n/index';
 import { errorResponseSchema } from '../transport/schemas';
 import { documentEvents } from '../transport/document-events';
 import { scopedDocumentURL } from '../transport/document-scope';
+import type { ClipboardParagraph } from './clipboard';
 import type { TextSelection } from './selection';
 import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
@@ -68,6 +69,15 @@ export class DocumentController {
     if (!this.blocked) this.view.status('미저장 변경', 'pending');
     this.updateSave(); return true;
   }
+  pasteRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): boolean {
+    if (this.busy || this.loading || this.disposed || this.composing) return false;
+    const focus=this.structureDraft?.replaceRich(selection,paragraphs);
+    if (!focus || !this.structureDraft) return false;
+    this.view.render(this.structureDraft.snapshot(),focus);
+    if (!this.blocked) this.view.status('미저장 변경','pending');
+    this.updateSave();return true;
+  }
+  richSelection(selection: TextSelection): ClipboardParagraph[] | undefined {return this.structureDraft?.selectedRich(selection);}
   deleteSelection(selection: TextSelection, direction: 'backward' | 'forward', word: boolean): boolean {
     const range = this.structureDraft?.deletion(selection, direction, word ? 'word' : 'grapheme');
     return Boolean(range && this.replaceSelection(range, ''));

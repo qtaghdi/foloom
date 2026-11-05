@@ -304,3 +304,27 @@ it('uses mobile beforeinput paragraph intent and preserves structure drafts afte
   expect(button(root, '저장').disabled).toBe(true);
   expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
 });
+
+it('offers plain and basic style paste and never deletes selected text for an image-only clipboard', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'keep',editable:true,bold:true,italic:false}]}}] };
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();
+  const options=root.querySelector<HTMLSelectElement>('[aria-label="붙여넣기 서식"]')!;
+  options.value='basic';options.dispatchEvent(new Event('change',{bubbles:true}));
+  selectRich(root,0,0,0,4);
+  const image=new DataTransfer(); image.items.add(new File(['bytes'],'image.png',{type:'image/png'}));
+  rich(root).dispatchEvent(new ClipboardEvent('paste',{clipboardData:image,bubbles:true,cancelable:true}));
+  expect(spans(root)[0]?.textContent).toBe('keep');
+  const clipboard=new DataTransfer();clipboard.setData('text/plain','new');clipboard.setData('text/html','<p><em style="color:#112233">new</em></p>');
+  rich(root).dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));await settle();
+  expect(spans(root)[0]?.textContent).toBe('new');expect(spans(root)[0]?.style.fontStyle).toBe('italic');
+  button(root,'저장').click();await settle();
+  const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+  expect(body.operations[0].paragraphs[0].runs[0].style).toEqual({bold:false,italic:true,color:'#112233'});
+});
+it('preserves selected source text when writing a cut clipboard fails', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'keep',editable:true,bold:false,italic:false}]}}] };
+  docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,0,0,4);
+  const clipboard=new DataTransfer();clipboard.setData=()=>{throw new Error('clipboard denied');};
+  rich(root).dispatchEvent(new ClipboardEvent('cut',{clipboardData:clipboard,bubbles:true,cancelable:true}));await settle();
+  expect(spans(root)[0]?.textContent).toBe('keep');expect(root.querySelector('#save-status')?.textContent).toBe('저장됨');
+});

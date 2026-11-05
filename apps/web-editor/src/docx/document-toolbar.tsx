@@ -1,10 +1,12 @@
 import { For } from 'solid-js';
 import { buttonClass, quietButtonClass } from '../ui/editor-chrome';
+import type { PasteMode } from './clipboard';
 import type { Run } from './contracts';
 
 const scales = [75, 90, 100, 110, 125, 150];
 
 export function DocumentToolbar(props: {
+  pasteMode: PasteMode; onPasteMode: (mode: PasteMode) => void;
   saving: boolean; loading: boolean; needsRecovery: boolean;
   run?: Run; zoom: number;
   onZoom: (value: number) => void; onReload: () => void;
@@ -20,6 +22,13 @@ export function DocumentToolbar(props: {
         <path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5.3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
+    <label class="flex min-h-11 items-center gap-2 text-xs text-slate-700">
+      <span class="hidden sm:inline">붙여넣기</span>
+      <select aria-label="붙여넣기 서식" class="editor-select min-h-11 max-w-36 rounded-md bg-stone-50 px-2" value={props.pasteMode}
+        onChange={event => props.onPasteMode(event.currentTarget.value === 'basic' ? 'basic' : 'text')}>
+        <option value="text">텍스트만</option><option value="basic">기본 서식 유지</option>
+      </select>
+    </label>
     <div class="flex min-w-0 flex-1 items-center gap-2 border-l border-slate-200 pl-2 sm:gap-3">
       <output class="min-w-0 truncate text-xs text-slate-700 sm:text-sm" aria-label="현재 글자 서식" title={format()}>{format()}</output>
       <label class="ml-auto flex min-h-11 shrink-0 items-center gap-2 rounded-md px-2 text-xs text-slate-700">
