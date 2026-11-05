@@ -356,6 +356,10 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     void this.applySheetObjects(objects);
   }
 
+  async finishEditing(): Promise<void> {
+    if (this.workbook?.isCellEditing() && !await this.workbook.endEditingAsync(true)) throw new Error('The current cell edit could not be confirmed.');
+  }
+
   setHistoryBusy(busy: boolean): void {
     this.workbook?.setEditable(!busy);
   }

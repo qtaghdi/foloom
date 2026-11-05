@@ -96,7 +96,7 @@ describe('Solid DOCX editor', () => {
     expect(root.querySelector('textarea')).toBe(input); expect(document.activeElement).toBe(input);
     expect(input.value).toBe('초안');
     edit(root.querySelectorAll('textarea')[1]!, '표 초안');
-    button(root, '변경 저장').click(); await settle();
+    button(root, '저장').click(); await settle();
     const body = JSON.parse(f.fetcher.mock.calls.find(([, init]) => init?.method === 'POST')![1]!.body as string);
     expect(body.baseRevision).toBe(1); expect(body.sessionId).toBe('session');
     expect(body.operations.map((op: any) => op.type)).toEqual(['replace_run_text', 'replace_cell_text']);
@@ -107,7 +107,7 @@ describe('Solid DOCX editor', () => {
     const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
     const input = root.querySelector('textarea')!; edit(input, '남길 초안');
     f.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
-    expect(input.value).toBe('남길 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
+    expect(input.value).toBe('남길 초안'); expect(button(root, '저장').disabled).toBe(true);
     button(root, '다시 불러오기').click(); await settle();
     expect(document.activeElement?.id).toBe('discard-draft');
     expect(f.fetcher).toHaveBeenCalledTimes(1);
@@ -123,8 +123,8 @@ describe('Solid DOCX editor', () => {
     const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
     const input = root.querySelector('textarea')!; edit(input, '저장할 초안');
     f.fetcher.mockRejectedValueOnce(new Error('offline'));
-    button(root, '변경 저장').click(); await settle();
-    expect(input.value).toBe('저장할 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
+    button(root, '저장').click(); await settle();
+    expect(input.value).toBe('저장할 초안'); expect(button(root, '저장').disabled).toBe(true);
     expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
   });
 });
@@ -161,12 +161,12 @@ it('keeps unsupported pasted text editable and restores saving after correction'
   const input = root.querySelector('textarea')!;
   edit(input, '붙여넣은\n여러 줄');
   expect(input.value).toBe('붙여넣은\n여러 줄'); expect(input.getAttribute('aria-invalid')).toBe('true');
-  expect(button(root, '변경 저장').disabled).toBe(true);
+  expect(button(root, '저장').disabled).toBe(true);
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
   expect(document.activeElement).toBe(input); expect(f.fetcher).toHaveBeenCalledTimes(1);
   edit(input, '수정한 한 줄');
-  expect(input.getAttribute('aria-invalid')).toBe('false'); expect(button(root, '변경 저장').disabled).toBe(false);
-  button(root, '변경 저장').click(); await settle(); expect(f.fetcher).toHaveBeenCalledTimes(2);
+  expect(input.getAttribute('aria-invalid')).toBe('false'); expect(button(root, '저장').disabled).toBe(false);
+  button(root, '저장').click(); await settle(); expect(f.fetcher).toHaveBeenCalledTimes(2);
 });
 
 

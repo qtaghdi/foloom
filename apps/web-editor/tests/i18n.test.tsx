@@ -64,7 +64,8 @@ it('changes DOCX messages and validation without replacing the draft or translat
   setLocale('en');
   expect(document.querySelector('textarea')).toBe(field); expect(field.value).toBe('보존할 초안');
   expect(document.querySelector('#save-status')!.textContent).toBe('Unsaved changes');
-  expect(document.querySelector('#save-document')!.textContent).toBe('변경 저장');
+  expect(document.querySelector('#save-document')!.textContent).toBe('Save');
+  expect(document.querySelector('#reload-document')!.getAttribute('aria-label')).toBe('다시 불러오기');
   expect(document.querySelector('#document-name')!.textContent).toBe('Saved.docx');
   expect(document.body.textContent).toContain('Native opening and visual compatibility');
   field.value = '줄\n바꿈'; field.dispatchEvent(new Event('input', { bubbles: true }));

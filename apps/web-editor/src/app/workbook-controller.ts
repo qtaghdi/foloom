@@ -1,3 +1,5 @@
+import { DocumentFileError, type DownloadedFile } from '../transport/document-files';
+import { source } from '../i18n/index';
 import type {
   CellEdit,
   RangeEdit,
@@ -31,6 +33,7 @@ export class WorkbookController {
   private recoveryRequired = false;
   private pendingWrites = 0;
   private historyPending = false;
+  private fileActionBusy = false;
   private saveQueue = Promise.resolve();
   private presenceTimer: number | undefined;
   private pendingSelection: SelectionChange | undefined;
@@ -109,6 +112,53 @@ export class WorkbookController {
     })) };
   }
 
+  async save(): Promise<boolean> { return Boolean(await this.fileAction(false)); }
+
+  async download(): Promise<DownloadedFile | undefined> {
+    const result = await this.fileAction(true);
+    return result && typeof result === 'object' ? result : undefined;
+  }
+
+  private async fileAction(download: boolean): Promise<DownloadedFile | boolean> {
+    if (this.disposed || this.recoveryRequired || this.historyPending || this.fileActionBusy || !this.engine || !this.snapshot) return false;
+    this.fileActionBusy = true;
+    this.view.setFileBusy?.(true);
+    this.syncHistoryControls();
+    try {
+      await this.engine.finishEditing?.();
+      this.engine.setHistoryBusy?.(true);
+      let queue: Promise<void>;
+      do { queue = this.saveQueue; await queue; } while (queue !== this.saveQueue);
+      if (this.recoveryRequired || this.disposed || this.pendingWrites) return false;
+      const checkpoint = { ...this.snapshot };
+      if (!this.client.confirmSave) throw new Error('Save confirmation is unavailable in this host.');
+      this.view.showRevision(source('checkingSave'), this.revision, 'pending');
+      await this.client.confirmSave(checkpoint);
+      if (this.recoveryRequired || this.disposed || checkpoint.id !== this.snapshot?.id || checkpoint.revision !== this.revision || this.pendingWrites) throw new DocumentFileError('document revision conflict during save confirmation', 409);
+      let file: DownloadedFile | undefined;
+      if (download) {
+        if (!this.client.download) throw new Error(source('browserDownloadOnly'));
+        this.view.showRevision(source('preparingDownload'), this.revision, 'pending');
+        file = await this.client.download(checkpoint);
+        if (this.recoveryRequired || this.disposed || checkpoint.id !== this.snapshot?.id || checkpoint.revision !== this.revision || this.pendingWrites) throw new DocumentFileError('document revision conflict during download', 409);
+      }
+      this.view.clearError?.();
+      this.view.showRevision('Saved', this.revision, 'success');
+      return file ?? true;
+    } catch (error) {
+      if (!this.disposed) {
+        if (error instanceof DocumentFileError && error.status === 409) this.requireRecovery(error);
+        else this.view.showError(error, this.revision);
+      }
+      return false;
+    } finally {
+      this.fileActionBusy = false;
+      if (!this.disposed) this.engine?.setHistoryBusy?.(this.recoveryRequired || this.historyPending);
+      this.view.setFileBusy?.(false);
+      this.syncHistoryControls();
+    }
+  }
+
   private async readWorkbookPreview(snapshot: WorkbookSnapshot) {
     const initialRanges = planInitialRanges(snapshot);
     const ranges: WorkbookRange[] = [];
@@ -134,7 +184,7 @@ export class WorkbookController {
   }
 
   private queueHistoryAction(direction: HistoryDirection): void {
-    if (this.recoveryRequired || this.disposed || this.historyPending || this.pendingWrites > 0) return;
+    if (this.recoveryRequired || this.disposed || this.historyPending || this.fileActionBusy || this.pendingWrites > 0) return;
     const available = direction === 'undo' ? this.snapshot?.canUndo : this.snapshot?.canRedo;
     if (!available) {
       this.view.showRevision(direction === 'undo' ? 'Nothing to undo' : 'Nothing to redo', this.revision);
@@ -197,7 +247,7 @@ export class WorkbookController {
   }
 
   shouldWarnBeforeUnload(): boolean {
-    return this.pendingWrites > 0 || (this.recoveryRequired && !this.navigationRequested);
+    return this.pendingWrites > 0 || this.fileActionBusy || (this.recoveryRequired && !this.navigationRequested);
   }
 
   private queueCellEdit(edit: CellEdit): void {
@@ -386,7 +436,7 @@ export class WorkbookController {
   }
 
   private syncHistoryControls(): void {
-    const ready = !this.recoveryRequired && !this.historyPending && this.pendingWrites === 0;
+    const ready = !this.recoveryRequired && !this.historyPending && !this.fileActionBusy && this.pendingWrites === 0;
     this.engine?.setHistoryState?.(ready && Boolean(this.snapshot?.canUndo), ready && Boolean(this.snapshot?.canRedo));
   }
 

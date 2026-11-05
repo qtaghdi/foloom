@@ -947,6 +947,72 @@ export const catalog = {
     "en": "Unsupported structures are read only or omitted from the view.",
     "ja": "未対応の構造は読み取り専用で表示するか、画面から省略します。",
     "zh-CN": "不支持的结构将以只读方式显示，或从视图中省略。"
+  },
+  "fileActions": {
+    "ko": "파일 작업",
+    "en": "File actions",
+    "ja": "ファイル操作",
+    "zh-CN": "文件操作"
+  },
+  "saveFile": {
+    "ko": "저장",
+    "en": "Save",
+    "ja": "保存",
+    "zh-CN": "保存"
+  },
+  "downloadFile": {
+    "ko": "다운로드",
+    "en": "Download",
+    "ja": "ダウンロード",
+    "zh-CN": "下载"
+  },
+  "saveCurrentFile": {
+    "ko": "현재 파일에 저장하고 저장 상태를 확인합니다.",
+    "en": "Save to the current file and verify it is saved.",
+    "ja": "現在のファイルに保存し、保存状態を確認します。",
+    "zh-CN": "保存到当前文件并确认保存状态。"
+  },
+  "downloadSavedFile": {
+    "ko": "변경 내용을 저장한 뒤 현재 파일을 다운로드합니다.",
+    "en": "Save changes, then download the current file.",
+    "ja": "変更を保存してから現在のファイルをダウンロードします。",
+    "zh-CN": "保存更改后下载当前文件。"
+  },
+  "browserDownloadOnly": {
+    "ko": "다운로드는 브라우저 편집기에서 사용할 수 있습니다.",
+    "en": "Downloads are available in the browser editor.",
+    "ja": "ダウンロードはブラウザー編集画面で利用できます。",
+    "zh-CN": "请在浏览器编辑器中下载文件。"
+  },
+  "checkingSave": {
+    "ko": "저장 확인 중",
+    "en": "Checking save",
+    "ja": "保存を確認中",
+    "zh-CN": "正在确认保存"
+  },
+  "preparingDownload": {
+    "ko": "다운로드 준비 중",
+    "en": "Preparing download",
+    "ja": "ダウンロードを準備中",
+    "zh-CN": "正在准备下载"
+  },
+  "savedToFile": {
+    "ko": "파일에 저장됨",
+    "en": "Saved to file",
+    "ja": "ファイルに保存しました",
+    "zh-CN": "已保存到文件"
+  },
+  "downloadStarted": {
+    "ko": "브라우저에 다운로드를 요청했습니다.",
+    "en": "Download requested in your browser.",
+    "ja": "ブラウザーにダウンロードを要求しました。",
+    "zh-CN": "已向浏览器请求下载。"
+  },
+  "fileActionFailed": {
+    "ko": "파일 작업을 완료하지 못했습니다.",
+    "en": "The file action could not be completed.",
+    "ja": "ファイル操作を完了できませんでした。",
+    "zh-CN": "无法完成文件操作。"
   }
 } as const;
 export type MessageKey = keyof typeof catalog;

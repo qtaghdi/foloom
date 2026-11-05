@@ -1,3 +1,4 @@
+import { source } from '../i18n';
 import { createSignal } from 'solid-js';
 import { createActivityModel } from '../ui/activity';
 import type { DocumentView } from './controller';
@@ -15,7 +16,7 @@ export function createDocumentView() {
     activity: activity.record,
     validation: (validation) => patch({ validation }),
     render: (snapshot) => patch({ snapshot }),
-    status: (message, status) => patch({ message, status, saving: status === 'pending' && message === '저장 중', loading: status === 'pending' && message === '문서를 불러오는 중' }),
+    status: (message, status) => patch({ message, status, saving: status === 'pending' && ['저장 중', source('checkingSave'), source('preparingDownload')].includes(message), loading: status === 'pending' && message === '문서를 불러오는 중' }),
     error: (error, errorDetails) => patch({ error, errorDetails }),
     canSave: (canSave) => patch({ canSave }),
   };

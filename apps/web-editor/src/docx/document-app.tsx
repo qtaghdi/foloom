@@ -1,3 +1,4 @@
+import { FileActions } from '../ui/file-actions';
 import { warningMessage } from '../ui/messages';
 import { DiagnosticDetails } from '../i18n/diagnostic-details';
 import { t, localizeMessage } from '../i18n';
@@ -103,7 +104,7 @@ export function DocumentApp() {
     controller.dispose();
   };
   onMount(() => {
-    disconnectWorkspace = connectWorkspaceBridge(editorState, () => controller.save());
+    disconnectWorkspace = connectWorkspaceBridge(editorState, async () => { await controller.save(); });
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
     window.addEventListener('pagehide', dispose, { once: true });
@@ -115,11 +116,11 @@ export function DocumentApp() {
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
     <EditorHeader name={state().snapshot?.name ?? t('openingDocument')} kind={t('document')} nameId="document-name" statusId="save-status"
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
-      actions={<DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/>}
+      actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentToolbar canSave={state().canSave} saving={state().saving} loading={state().loading}
+    <DocumentToolbar saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
-      onSave={() => { void controller.save(); }} onReload={requestReload}/>
+      onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
     <Show when={state().validation}>{(message) => <p class="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs leading-6 text-red-800 sm:px-6" role="alert">{localizeMessage(message())}</p>}</Show>
     <Show when={confirmReload()}><section class="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-6" role="region" aria-label={t('confirmDiscardingUnsavedInput')}>

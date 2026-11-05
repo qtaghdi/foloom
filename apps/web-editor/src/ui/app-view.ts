@@ -6,7 +6,7 @@ import { createActivityModel, type ActivityEntry } from './activity';
 export type RevisionState = 'ready' | 'pending' | 'success' | 'error' | 'conflict' | 'recovery';
 export interface StatusPanelState { title: string; message: string; details?: string; dismissible: boolean; reload?: () => void }
 export interface WorkbookViewState {
-  name: string; message: string; revision: number; status: RevisionState;
+  name: string; message: string; fileBusy?: boolean; revision: number; status: RevisionState;
   presence?: string;
   warning?: StatusPanelState; error?: StatusPanelState;
 }
@@ -33,6 +33,8 @@ export class AppView {
       else this.showError('기록된 셀 범위를 열 수 없습니다.', this.state().revision);
     });
   }
+  setFileBusy(fileBusy: boolean): void { this.patch({ fileBusy }); }
+  clearError(): void { if (this.state().error?.dismissible) this.patch({ error: undefined }); }
   setWorkbookName(name: string): void { this.patch({ name }); }
   showWarnings(warnings: FeatureWarning[]): void {
     this.patch({ warning: warnings.length ? { title: '호환성 안내', message: warnings.map(featureMessage).join('\n\n'), details: warnings.map(warning => `${warning.feature}: ${warning.message}`).join('\n'), dismissible: true } : undefined });

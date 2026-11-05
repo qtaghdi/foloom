@@ -1,21 +1,19 @@
 import { For } from 'solid-js';
-import { buttonClass, primaryButtonClass, quietButtonClass } from '../ui/editor-chrome';
+import { buttonClass, quietButtonClass } from '../ui/editor-chrome';
 import type { Run } from './contracts';
 
 const scales = [75, 90, 100, 110, 125, 150];
 
 export function DocumentToolbar(props: {
-  canSave: boolean; saving: boolean; loading: boolean; needsRecovery: boolean;
+  saving: boolean; loading: boolean; needsRecovery: boolean;
   run?: Run; zoom: number;
-  onZoom: (value: number) => void; onSave: () => void; onReload: () => void;
+  onZoom: (value: number) => void; onReload: () => void;
 }) {
   const format = () => {
     const run = props.run;
     return run ? `${run.font ?? '기본 글꼴'} · ${(run.sizeHalfPoints ?? 22) / 2} pt` : '본문 서식';
   };
   return <div role="group" aria-label="문서 도구" class="flex min-w-0 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-200 bg-stone-50 px-3 py-1 sm:px-6">
-    <button id="save-document" class={props.canSave ? primaryButtonClass : buttonClass} type="button"
-      disabled={!props.canSave} aria-keyshortcuts="Control+S Meta+S" onClick={props.onSave}>변경 저장</button>
     <button id="reload-document" class={props.needsRecovery ? buttonClass : quietButtonClass} type="button"
       disabled={props.saving || props.loading} title="다시 불러오기" aria-label="다시 불러오기" onClick={props.onReload}>
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">

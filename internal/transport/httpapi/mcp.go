@@ -386,5 +386,6 @@ func (s *Server) mcpServer() *mcp.Server {
 		return nil, map[string]bool{"updated": err == nil}, err
 	})
 	s.addDOCXTools(server)
+	s.addFileTools(server)
 	return server
 }
