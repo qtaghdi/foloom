@@ -213,3 +213,27 @@
   font-size: 0.75rem;
   font-weight: 700;
 }
+
+/* Keep the engine's commands and disabled state, with consistent history icons. */
+#spreadsheet button[data-workspace-history] {
+  @apply relative min-h-9 min-w-9 cursor-pointer rounded-md border border-transparent text-slate-700 transition-colors hover:border-slate-200 hover:bg-slate-100 active:bg-slate-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:cursor-default disabled:opacity-35;
+}
+#spreadsheet button[data-workspace-history] > * { visibility: hidden; }
+#spreadsheet button[data-workspace-history]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 19px;
+  height: 19px;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 4 3 9l5 5M3 9h10a7 7 0 0 1 0 14' transform='translate(0 -1)'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+#spreadsheet button[data-workspace-history="redo"]::after { transform: scaleX(-1); }
+@media (pointer: coarse) {
+  #spreadsheet button[data-workspace-history] { min-height: 44px; min-width: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #spreadsheet button[data-workspace-history] { transition: none; }
+}

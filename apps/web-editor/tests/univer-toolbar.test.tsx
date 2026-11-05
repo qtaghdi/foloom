@@ -39,3 +39,18 @@ it('labels overflow tools and returns keyboard focus to the font input', async (
     container.remove();
   }
 });
+
+it('styles history commands as labeled icons without replacing command handlers or disabled state', () => {
+  const container = document.createElement('div');
+  container.innerHTML = '<button data-u-command="univer.command.undo" disabled><svg/></button><button data-u-command="univer.command.redo"><svg/></button>';
+  document.body.append(container);
+  const redo = container.querySelectorAll('button')[1]!;
+  const action = vi.fn(); redo.addEventListener('click', action);
+  const dispose = bindToolbarAccessibility(container);
+  const undo = container.querySelector('button')!;
+  expect(undo.dataset.workspaceHistory).toBe('undo'); expect(undo.disabled).toBe(true);
+  expect(undo.getAttribute('aria-label')).toBe('실행 취소'); expect(undo.title).toContain('Ctrl/⌘ Z');
+  expect(redo.dataset.workspaceHistory).toBe('redo'); expect(redo.getAttribute('aria-keyshortcuts')).toContain('Meta+Shift+Z');
+  redo.click(); expect(action).toHaveBeenCalledOnce();
+  dispose(); container.remove();
+});

@@ -1,3 +1,7 @@
+import { LocaleSelect } from '../i18n/locale-select';
+import { StatusPanel } from '../ui/status-panel';
+import { problemMessage } from '../ui/messages';
+import { t, localizeMessage, locale } from '../i18n';
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { z } from 'zod';
 import { buttonClass, primaryButtonClass, quietButtonClass } from '../ui/editor-chrome';
@@ -16,7 +20,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   const body: unknown = await response.json();
   if (!response.ok) {
     const error = z.object({ error: z.string() }).safeParse(body);
-    throw new Error(error.success ? error.data.error : '파일 작업에 실패했습니다.');
+    throw new Error(error.success ? error.data.error : t('theFileOperationFailed'));
   }
   return body;
 }
@@ -40,7 +44,7 @@ export function WorkspaceApp() {
   let disposed = false;
   let polling = false;
   const syncVisibility = () => {
-    for (const [id, frame] of frames) frame.contentWindow?.postMessage({ type: 'workspace:visibility', active: active() === id }, window.location.origin);
+    for (const [id, frame] of frames) { frame.contentWindow?.postMessage({ type: 'workspace:visibility', active: active() === id }, window.location.origin); frame.contentWindow?.postMessage({ type: 'workspace:locale', locale: locale() }, window.location.origin); }
   };
   const select = (id: string) => { setVisited(previous => new Set([...previous, id])); setActive(id); queueMicrotask(() => { syncVisibility(); document.getElementById(`tab-${id}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); }); };
   const remember = (path: string) => {
@@ -62,7 +66,7 @@ export function WorkspaceApp() {
         const initial = new URLSearchParams(window.location.search).get('document');
         select(result.documents.find(item => item.id === initial)?.id ?? result.documents[0]!.id);
       }
-    } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : '열린 파일을 확인하지 못했습니다.'); }
+    } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : t('openFilesCouldNotBeChecked')); }
     finally { polling = false; }
   };
   const openFiles = async (input = paths()) => {
@@ -77,7 +81,7 @@ export function WorkspaceApp() {
         select(opened.id); remember(opened.path);
       }
       setPaths('');
-    } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : '파일을 열지 못했습니다.'); }
+    } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : t('theFileCouldNotBeOpened')); }
     finally { if (!disposed) setOpening(false); }
   };
   const clearPending = () => { if (pending) clearTimeout(pending.timer); pending = undefined; setChecking(''); };
@@ -86,7 +90,7 @@ export function WorkspaceApp() {
     setClosing(item.id); mutationVersion++; setError('');
     try {
       const response = await fetch(`/api/documents/${encodeURIComponent(item.id)}`, { method: 'DELETE', credentials: 'same-origin' });
-      if (!response.ok && response.status !== 404) throw new Error('파일을 닫지 못했습니다. 다시 시도하세요.');
+      if (!response.ok && response.status !== 404) throw new Error(t('theFileCouldNotBeClosedTryAgain'));
       if (disposed) return;
       const remaining = documents().filter(candidate => candidate.id !== item.id);
       setDocuments(remaining); frames.delete(item.id); setConfirmClose(undefined);
@@ -94,7 +98,7 @@ export function WorkspaceApp() {
       setVisited(previous => { const next = new Set(previous); next.delete(item.id); return next; });
       if (active() === item.id) select(remaining[0]?.id ?? '');
       queueMicrotask(() => document.getElementById(active() ? `tab-${active()}` : 'workspace-paths')?.focus());
-    } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : '파일을 닫지 못했습니다.'); }
+    } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : t('theFileCouldNotBeClosed')); }
     finally { if (!disposed) setClosing(''); }
   };
   const checkClose = (item: OpenDocument, save = false, discard = false) => {
@@ -103,7 +107,7 @@ export function WorkspaceApp() {
     if (!frame) { void close(item); return; }
     const requestID = String(++sequence);
     setChecking(item.id); setError('');
-    pending = { id: item.id, request: requestID, discard, timer: setTimeout(() => { clearPending(); setError('편집 상태를 확인하지 못했습니다. 파일 탭에서 연결 상태를 확인하세요.'); }, 15000) };
+    pending = { id: item.id, request: requestID, discard, timer: setTimeout(() => { clearPending(); setError(t('theEditorStateCouldNotBeCheckedCheck')); }, 15000) };
     frame.contentWindow?.postMessage({ type: 'workspace:check', request: requestID, save }, window.location.origin);
   };
   const message = (event: MessageEvent) => {
@@ -112,13 +116,14 @@ export function WorkspaceApp() {
     if (!parsed.success || frames.get(parsed.data.id)?.contentWindow !== event.source) return;
     const value = parsed.data;
     frames.get(value.id)?.contentWindow?.postMessage({ type: 'workspace:visibility', active: active() === value.id }, window.location.origin);
+    frames.get(value.id)?.contentWindow?.postMessage({ type: 'workspace:locale', locale: locale() }, window.location.origin);
     setStates(previous => ({ ...previous, [value.id]: value }));
     if (value.type !== 'workspace:checked' || pending?.id !== value.id || pending.request !== value.request) return;
     const discard = pending.discard;
     clearPending();
     const item = documents().find(item => item.id === value.id);
     if (!item) return;
-    if (value.busy) { setError('파일이 저장 또는 로딩 중입니다. 완료된 뒤 닫아 주세요.'); return; }
+    if (value.busy) { setError(t('theFileIsSavingOrLoadingWaitUntil')); return; }
     if (value.dirty && !discard) { setConfirmClose(item); queueMicrotask(() => document.getElementById('workspace-close')?.focus()); return; }
     void close(item);
   };
@@ -142,20 +147,20 @@ export function WorkspaceApp() {
   onCleanup(() => { disposed = true; clearPending(); clearInterval(timer); window.removeEventListener('message', message); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('keydown', keydown); });
   return <div class="flex h-dvh min-h-0 flex-col bg-slate-100 text-slate-900">
     <header class="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
-      <div class="flex flex-wrap items-center justify-between gap-3"><h1 class="font-semibold">문서 작업 공간 <span class="ml-2 text-xs font-normal text-slate-500">열린 파일 {documents().length}/8</span></h1><details class="relative"><summary class={`${quietButtonClass} flex items-center`}>최근 파일</summary><div class="absolute right-0 top-full z-50 mt-2 max-h-72 w-[min(28rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg"><Show when={recent().length} fallback={<p class="p-2 text-sm text-slate-500">최근 파일이 없습니다.</p>}><For each={recent()}>{path => <button class="editor-action block w-full truncate rounded p-2 text-left text-xs" title={path} disabled={opening()} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void openFiles(path); }}>{path}</button>}</For><button class={quietButtonClass} onClick={() => { setRecent([]); try { localStorage.removeItem(recentKey); } catch {} }}>기록 지우기</button></Show></div></details></div>
+      <div class="flex flex-wrap items-center justify-between gap-3"><h1 class="font-semibold">{t('workspace')} <span class="ml-2 text-xs font-normal text-slate-500">{t('openCount', { count: documents().length })}</span></h1><LocaleSelect/><details class="relative"><summary class={`${quietButtonClass} flex items-center`}>{t('recent')}</summary><div class="absolute right-0 top-full z-50 mt-2 max-h-72 w-[min(28rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg"><Show when={recent().length} fallback={<p class="p-2 text-sm text-slate-500">{t('noRecent')}</p>}><For each={recent()}>{path => <button class="editor-action block w-full truncate rounded p-2 text-left text-xs" title={path} disabled={opening()} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void openFiles(path); }}>{path}</button>}</For><button class={quietButtonClass} onClick={() => { setRecent([]); try { localStorage.removeItem(recentKey); } catch {} }}>{t('clearHistory')}</button></Show></div></details></div>
       <form class="mt-2 flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); void openFiles(); }}>
-        <label class="min-w-0 flex-1 text-xs text-slate-600" for="workspace-paths">파일 경로 <span class="text-slate-400">· 여러 경로는 한 줄에 하나씩</span><textarea id="workspace-paths" rows={1} value={paths()} onInput={event => setPaths(event.currentTarget.value)} placeholder="/Users/이름/Documents/문서.xlsx" class="mt-1 block min-h-11 w-full resize-y rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-teal-700"/></label>
-        <button type="submit" class={primaryButtonClass} disabled={opening() || !paths().trim()}>{opening() ? '여는 중' : '파일 열기'}</button>
+        <label class="min-w-0 flex-1 text-xs text-slate-600" for="workspace-paths">{t('paths')} <span class="text-slate-400">{t('pathsHint')}</span><textarea id="workspace-paths" rows={1} value={paths()} onInput={event => setPaths(event.currentTarget.value)} placeholder="/absolute/path/document.xlsx" class="mt-1 block min-h-11 w-full resize-y rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-teal-700"/></label>
+        <button type="submit" class={primaryButtonClass} disabled={opening() || !paths().trim()}>{opening() ? t('opening') : t('openFiles')}</button>
       </form>
     </header>
-    <Show when={error()}><p role="alert" class="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{error()}</p></Show>
-    <Show when={confirmClose()}>{item => <section id="workspace-close" tabindex={-1} role="region" aria-label="파일 닫기 확인" class="shrink-0 border-b border-amber-200 bg-amber-50 p-4 text-sm"><p><b>{item().name}</b>에 미저장 입력 또는 확인이 필요한 저장이 있습니다.</p><div class="mt-2 flex flex-wrap gap-2"><Show when={item().kind === 'docx'}><button class={primaryButtonClass} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item(), true)}>저장 후 닫기</button></Show><button class={buttonClass} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item(), false, true)}>입력 버리고 닫기</button><button class={buttonClass} onClick={() => { select(item().id); cancelClose(); }}>문서로 돌아가기</button><button class={quietButtonClass} onClick={cancelClose}>취소</button></div></section>}</Show>
-    <div role="tablist" aria-label="열린 문서" class="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-300 bg-slate-50 p-2"><For each={documents()}>{(item, index) => <div class="flex shrink-0 items-center rounded-md border" classList={{ 'border-teal-600 bg-white': active() === item.id, 'border-transparent': active() !== item.id }}>
-      <button id={`tab-${item.id}`} role="tab" aria-selected={active() === item.id} aria-controls={`panel-${item.id}`} tabindex={active() === item.id ? 0 : -1} class="editor-action max-w-64 rounded-md px-3 py-2 text-left" title={item.path} onClick={() => select(item.id)} onKeyDown={event => tabKey(event, index())}><span class="block truncate text-sm font-medium">{item.name}</span><span class="block truncate text-xs text-slate-500">{item.kind.toUpperCase()} · {states()[item.id]?.message ?? '열기 준비'} · {item.path.split('/').at(-2)}</span></button>
-      <button aria-label={`${item.name} 닫기`} class={`${quietButtonClass} px-2`} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item)}>×</button>
+    <Show when={error()}><StatusPanel id="workspace-error" danger panel={{ title: t('operationFailed'), message: problemMessage(error()), details: error(), dismissible: true }} onDismiss={() => setError('')}/></Show>
+    <Show when={confirmClose()}>{item => <section id="workspace-close" tabindex={-1} role="region" aria-label={t('confirmClosingFile')} class="shrink-0 border-b border-amber-200 bg-amber-50 p-4 text-sm"><p>{t('closeWarning', { name: item().name })}</p><div class="mt-2 flex flex-wrap gap-2"><Show when={item().kind === 'docx'}><button class={primaryButtonClass} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item(), true)}>{t('saveAndClose')}</button></Show><button class={buttonClass} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item(), false, true)}>{t('discardInputAndClose')}</button><button class={buttonClass} onClick={() => { select(item().id); cancelClose(); }}>{t('returnToDocument')}</button><button class={quietButtonClass} onClick={cancelClose}>{t('cancel')}</button></div></section>}</Show>
+    <div role="tablist" aria-label={t('openDocuments')} class="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-300 bg-slate-50 p-2"><For each={documents()}>{(item, index) => <div class="flex shrink-0 items-center rounded-md border" classList={{ 'border-teal-600 bg-white': active() === item.id, 'border-transparent': active() !== item.id }}>
+      <button id={`tab-${item.id}`} role="tab" aria-selected={active() === item.id} aria-controls={`panel-${item.id}`} tabindex={active() === item.id ? 0 : -1} class="editor-action max-w-64 rounded-md px-3 py-2 text-left" title={item.path} onClick={() => select(item.id)} onKeyDown={event => tabKey(event, index())}><span class="block truncate text-sm font-medium">{item.name}</span><span class="block truncate text-xs text-slate-500">{item.kind.toUpperCase()} · {localizeMessage(states()[item.id]?.message ?? t('readyToOpen'))} · {item.path.split('/').at(-2)}</span></button>
+      <button aria-label={t('closeNamed', { name: item.name })} class={`${quietButtonClass} px-2`} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item)}>×</button>
     </div>}</For></div>
-    <main class="relative min-h-0 flex-1"><Show when={!documents().length}><div class="mx-auto max-w-lg p-8 text-center"><h2 class="text-lg font-semibold">여러 문서를 함께 열어 보세요</h2><p class="mt-3 text-sm leading-7 text-slate-600">XLSX와 DOCX 파일 경로를 입력하면 탭으로 오갈 수 있습니다. 전환해도 미저장 입력과 편집 위치는 유지됩니다.</p></div></Show>
-      <For each={documents()}>{item => <section id={`panel-${item.id}`} role="tabpanel" aria-labelledby={`tab-${item.id}`} aria-hidden={active() !== item.id} class="absolute inset-0" style={{ visibility: active() === item.id ? 'visible' : 'hidden', 'pointer-events': active() === item.id ? 'auto' : 'none' }}><Show when={visited().has(item.id)}><iframe ref={frame => frames.set(item.id, frame)} onLoad={syncVisibility} title={`${item.name} 편집`} class="h-full w-full border-0 bg-white" src={`${item.kind === 'docx' ? '/docx' : '/'}?document=${encodeURIComponent(item.id)}&embedded=1`}/></Show></section>}</For>
+    <main class="relative min-h-0 flex-1"><Show when={!documents().length}><div class="mx-auto max-w-lg p-8 text-center"><h2 class="text-lg font-semibold">{t('workspaceEmpty')}</h2><p class="mt-3 text-sm leading-7 text-slate-600">{t('enterXlsxAndDocxPathsToSwitchBetween')}</p></div></Show>
+      <For each={documents()}>{item => <section id={`panel-${item.id}`} role="tabpanel" aria-labelledby={`tab-${item.id}`} aria-hidden={active() !== item.id} class="absolute inset-0" style={{ visibility: active() === item.id ? 'visible' : 'hidden', 'pointer-events': active() === item.id ? 'auto' : 'none' }}><Show when={visited().has(item.id)}><iframe data-document-editor ref={frame => frames.set(item.id, frame)} onLoad={syncVisibility} title={t('editNamed', { name: item.name })} class="h-full w-full border-0 bg-white" src={`${item.kind === 'docx' ? '/docx' : '/'}?document=${encodeURIComponent(item.id)}&embedded=1`}/></Show></section>}</For>
     </main>
   </div>;
 }
