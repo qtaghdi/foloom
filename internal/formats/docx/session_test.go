@@ -363,7 +363,8 @@ func TestCreateFailureNeverOverwrites(t *testing.T) {
 }
 
 func TestCompatibilityCorpus(t *testing.T) {
-	for _, name := range []string{"generated-basic.docx", "generated-preservation.docx"} {
+	for _, fixture := range compatibilityFixtures(t) {
+		name := fixture.File
 		t.Run(name, func(t *testing.T) {
 			source := filepath.Join("../../../testdata/docx/compatibility", name)
 			path := filepath.Join(t.TempDir(), name)
@@ -389,6 +390,28 @@ func TestCompatibilityCorpus(t *testing.T) {
 			input.Operations = append(input.Operations, Operation{Type: "replace_cell_text", TargetID: cell.ID, ExpectedText: cell.Text, Text: "표 변경"})
 			if _, e = s.Apply(context.Background(), input, "ai"); e != nil {
 				t.Fatal(e)
+			}
+			if output := os.Getenv("DOCX_COMPATIBILITY_OUTPUT"); output != "" {
+				if !filepath.IsAbs(output) {
+					t.Fatal("DOCX_COMPATIBILITY_OUTPUT must be absolute")
+				}
+				if err := os.MkdirAll(output, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				// Exclusive creation prevents QA from overwriting an earlier
+				// candidate, a source fixture, or a user document.
+				out, err := os.OpenFile(filepath.Join(output, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, writeErr := out.Write(fileBytes(t, path))
+				closeErr := out.Close()
+				if writeErr != nil {
+					t.Fatal(writeErr)
+				}
+				if closeErr != nil {
+					t.Fatal(closeErr)
+				}
 			}
 			for round := 0; round < 2; round++ {
 				after, e := loadPackage(fileBytes(t, path))

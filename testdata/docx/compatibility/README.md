@@ -6,7 +6,7 @@ manifest에 생성 정보와 SHA-256을 기록합니다.
 
 ```sh
 python3 testdata/docx/compatibility/generate.py
-GOTOOLCHAIN=go1.25.0 GOCACHE=/tmp/document-workspace-go-cache go test ./internal/formats/docx -run CompatibilityCorpus -count=1
+make docx-compatibility-test
 ```
 
 - `generated-basic.docx`: 한글, 반복 text, 공백, 혼합 run 서식, 단순 표
@@ -21,3 +21,7 @@ payload hash와 대상 밖 XML byte를 비교합니다. 위험 archive, 손상 X
 Microsoft Word와 LibreOffice에서 생산한 fixture와 native reopen 및 시각 증거는
 아직 없습니다. 합성 corpus 통과를 Word 호환성 또는 손실 없는 편집으로 표현하지
 않습니다. 실제 문서는 복사본으로 사용합니다.
+
+manifest의 SHA-256·출처 누락과 미등록 DOCX를 CI에서 거부합니다. 서로 다른
+내용의 반복 저장과 원본 비변경을 검사하며, native 검증용 출력은
+[품질 검증 안내](../../../docs/docx-quality.md)의 전용 절대 경로를 사용합니다.
