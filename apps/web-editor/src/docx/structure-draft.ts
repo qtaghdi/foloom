@@ -32,6 +32,16 @@ export class StructureDraft {
     }
     collect(body);
   }
+  currentText(runId: string): string | undefined { return this.find(runId)?.run.text ?? this.otherText.get(runId); }
+  capture(): string {
+    return JSON.stringify({ serial: this.serial, groups: this.groups.map(g => ({ current: g.current, changed: g.changed })), otherText: [...this.otherText] });
+  }
+  restore(captured: string): void {
+    const state = JSON.parse(captured) as { serial: number; groups: Array<{ current: DraftParagraph[]; changed: boolean }>; otherText: Array<[string, string]> };
+    this.serial = state.serial;
+    state.groups.forEach((g, i) => { this.groups[i]!.current = g.current; this.groups[i]!.changed = g.changed; });
+    this.otherText = new Map(state.otherText);
+  }
   private id(): string { return `draft:${++this.serial}`; }
   private find(runId: string) {
     for (const group of this.groups) for (const [p, paragraph] of group.current.entries()) {

@@ -4,8 +4,9 @@ import { readTextSelection, restoreTextSelection, targetTextSelection, type Text
 import { validateRunText } from './validation';
 
 type InputCallbacks = {
+  history: (direction: 'undo' | 'redo') => void;
   snapshot: () => Snapshot; saving: () => boolean;
-  edit: (operation: TextOperation) => void;
+  edit: (operation: TextOperation, selection?: TextSelection) => void;
   replace: (selection: TextSelection, text: string, inline?: boolean) => boolean;
   delete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean;
   structure: (action: StructureAction, id: string, start: number, end: number) => boolean;
@@ -27,6 +28,7 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
   let softBreak = false;
   let composed = false;
   let plainPaste = false;
+  let nativeBefore: TextSelection | undefined;
   const eligible = (event: Event) => !(event.target as Element | null)?.closest('textarea, button, input, select');
   const selection = () => readTextSelection(root());
   const apply = (range: TextSelection | undefined, text: string, inline = false) => {
@@ -41,9 +43,10 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
       const item = current.get(span.dataset.docxRun!); if (!item) continue;
       const text = span.textContent ?? '';
       if (text) span.querySelector('[data-docx-empty]')?.remove();
-      if (text !== item.run.text) callbacks.edit({ type: item.type, targetId: item.run.id, expectedText: item.run.text, text });
+      if (text !== item.run.text) callbacks.edit({ type: item.type, targetId: item.run.id, expectedText: item.run.text, text }, nativeBefore);
       if (validateRunText(text)) callbacks.notice('invalid');
     }
+    nativeBefore = undefined;
     const range = selection(); const focused = range && current.get(range.focus.runId);
     if (focused) callbacks.focus(focused.run);
   };
@@ -65,6 +68,7 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
       if (!eligible(event) || callbacks.saving() || !event.cancelable) return;
       if (composition || event.isComposing) return;
       if (event.inputType.includes('Composition') || composed && event.inputType === 'insertText') { event.preventDefault(); composed = false; return; }
+      if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') { event.preventDefault(); callbacks.history(event.inputType === 'historyUndo' ? 'undo' : 'redo'); return; }
       const target = event.getTargetRanges?.()[0];
       const range = target ? targetTextSelection(root(), target) : selection();
       if (!range) { event.preventDefault(); return; }
@@ -74,6 +78,7 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
         if (range.anchor.runId === range.focus.runId) {
           // Empty spans may have a BR placeholder rather than a text node.
           // Normalize that position before letting the browser insert text.
+          nativeBefore = range;
           const actual = root().ownerDocument.getSelection()?.anchorNode;
           if (actual?.nodeType !== Node.TEXT_NODE) restoreTextSelection(root(), range);
           return;
@@ -86,7 +91,7 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
       if (event.inputType.startsWith('delete')) {
         event.preventDefault(); callbacks.delete(range, event.inputType.endsWith('Forward') ? 'forward' : 'backward', event.inputType.includes('Word')); return;
       }
-      if (!event.inputType.startsWith('history')) event.preventDefault();
+      event.preventDefault();
     },
     input(event: InputEvent) { if (eligible(event) && !composition && !event.isComposing) sync(); },
     compositionstart(event: CompositionEvent) {

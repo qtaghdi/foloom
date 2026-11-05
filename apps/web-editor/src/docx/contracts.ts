@@ -21,6 +21,7 @@ const pageSchema = z.object({
 export const snapshotSchema = z.object({
   id: z.string(), name: z.string(), revision: z.number().int().nonnegative(),
   sequence: z.number().int().nonnegative(), page: pageSchema.optional(), warnings: z.array(z.string()),
+  history: z.object({ undo: z.number().int().min(0).max(10), redo: z.number().int().min(0).max(10), undoActor: z.enum(['human', 'ai']).optional(), redoActor: z.enum(['human', 'ai']).optional() }).optional(),
   blocks: z.array(z.discriminatedUnion('type', [
     z.object({ id: z.string(), type: z.literal('paragraph'), paragraph: paragraphSchema }),
     z.object({ id: z.string(), type: z.literal('table'), rows: z.array(z.object({

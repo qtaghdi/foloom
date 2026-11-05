@@ -342,3 +342,17 @@ it('restores the entire reversed selection when IME composition is cancelled', a
   expect(spans(root).map(s=>s.textContent)).toEqual(['앞부분','뒷부분']);
   expect(readTextSelection(rich(root))).toEqual(before);
 });
+
+it('uses one draft history for range edits, native undo intent and keyboard redo', async () => {
+  const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'앞뒤',editable:true,bold:true,italic:false}]}}]};
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);
+  rich(root).dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
+  const undo=new InputEvent('beforeinput',{inputType:'historyUndo',bubbles:true,cancelable:true});rich(root).dispatchEvent(undo);await settle();
+  expect(undo.defaultPrevented).toBe(true);expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(1);
+  expect(readTextSelection(rich(root))?.focus.offset).toBe(1);
+  rich(root).dispatchEvent(new KeyboardEvent('keydown',{key:'z',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
+  expect(f.fetcher.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0);
+  expect(button(root,'실행 취소').disabled).toBe(false);
+});

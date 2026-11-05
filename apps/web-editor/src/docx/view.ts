@@ -1,11 +1,11 @@
 import { source } from '../i18n';
 import { createSignal } from 'solid-js';
 import { createActivityModel } from '../ui/activity';
-import type { DocumentView } from './controller';
+import type { DocumentView, HistoryControls } from './controller';
 import type { Snapshot } from './contracts';
 
 export interface DocumentViewState {
-  snapshot?: Snapshot; message: string; status: 'pending' | 'committed' | 'failed' | 'conflicted';
+  history?: HistoryControls; snapshot?: Snapshot; message: string; status: 'pending' | 'committed' | 'failed' | 'conflicted';
   error: string; errorDetails?: string; validation: string; canSave: boolean; saving: boolean; loading: boolean;
 }
 export function createDocumentView() {
@@ -14,6 +14,7 @@ export function createDocumentView() {
   const patch = (update: Partial<DocumentViewState>) => setState((previous) => ({ ...previous, ...update }));
   const view: DocumentView = {
     activity: activity.record,
+    history: history => patch({ history }),
     validation: (validation) => patch({ validation }),
     render: (snapshot) => patch({ snapshot }),
     status: (message, status) => patch({ message, status, saving: status === 'pending' && ['저장 중', source('checkingSave'), source('preparingDownload')].includes(message), loading: status === 'pending' && message === '문서를 불러오는 중' }),
