@@ -369,3 +369,26 @@ it('reports mixed formatting and writes only the selected range through the tool
  const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
  expect(body.operations[0].paragraphs[0].runs.map((r:any)=>r.style)).toEqual([undefined,{underline:true},{underline:true},undefined]);
 });
+
+it('saves paragraph alignment and indent through the document toolbar',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ const alignment=root.querySelector<HTMLSelectElement>('[aria-label="문단 정렬"]')!;alignment.value='center';alignment.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ const indent=root.querySelector<HTMLInputElement>('[aria-label="첫 줄 들여쓰기"]')!;indent.value='-12';indent.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ expect(root.querySelector<HTMLElement>('.docx-paragraph')?.style.textIndent).toBe('-12pt');
+ button(root,'저장').click();await settle();const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+ expect(body.operations[0].paragraphs[0].format).toEqual({align:'center',hanging:240});
+});
+
+it('remaps the cached toolbar selection after save when native selection was cleared',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ button(root,'밑줄').click();await settle();
+ const saved:Snapshot={...initial,revision:2,blocks:[{id:'new-p',type:'paragraph',paragraph:{id:'new-p',structureEditable:true,runs:[{id:'new-r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ f.fetcher.mockResolvedValueOnce({ok:true,json:async()=>saved});
+ document.getSelection()!.removeAllRanges();button(root,'저장').click();await settle();
+ expect(readTextSelection(rich(root))?.focus.runId).toBe('new-r');
+ const align=root.querySelector<HTMLSelectElement>('[aria-label="문단 정렬"]')!;expect(align.disabled).toBe(false);
+ align.value='center';align.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ expect(root.querySelector<HTMLElement>('.docx-paragraph > div')?.style.textAlign).toBe('center');
+});

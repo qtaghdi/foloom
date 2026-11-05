@@ -1,10 +1,10 @@
-import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle } from './contracts';
+import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat } from './contracts';
 import type { ClipboardParagraph } from './clipboard';
 import { isTextBoundary, graphemeOffsets, type TextSelection, type TextPoint } from './selection';
 import { validateRunText } from './validation';
 
 type DraftRun = Run & { sourceId: string; style?: InlineStyle };
-type DraftParagraph = Omit<Paragraph, 'runs'> & { sourceId: string; runs: DraftRun[] };
+type DraftParagraph = Omit<Paragraph, 'runs'> & { sourceId: string; format?: ParagraphFormat; runs: DraftRun[] };
 type Group = { originals: Paragraph[]; current: DraftParagraph[]; changed: boolean };
 
 // Local identities survive splits and moves until commit. Source identities are
@@ -61,7 +61,7 @@ export class StructureDraft {
     return this.groups.filter(group => group.changed).map(group => ({
       type: 'replace_paragraphs', targetId: group.originals[0]!.id, endTargetId: group.originals.at(-1)!.id,
       expectedText: group.originals.map(p => p.runs.map(r => r.text).join('')).join('\n'), text: '',
-      paragraphs: group.current.map(p => ({ sourceId: p.sourceId, runs: p.runs.map(r => ({ sourceId: r.sourceId, text: r.text, ...(r.style ? { style: r.style } : {}) })) })),
+      paragraphs: group.current.map(p => ({ sourceId: p.sourceId, ...(p.format ? {format:p.format}:{}), runs: p.runs.map(r => ({ sourceId: r.sourceId, text: r.text, ...(r.style ? { style: r.style } : {}) })) })),
     }));
   }
   ownsOriginal(runId: string): boolean {
@@ -214,6 +214,26 @@ export class StructureDraft {
     }
     for (const item of prepared) { item.group.current.splice(item.from, item.count, ...item.paragraphs); item.group.changed = true; }
     return focus;
+  }
+  formatParagraph(selection: TextSelection, format: ParagraphFormat): DraftFocus | undefined {
+    const range=this.normalized(selection);if(!range)return;
+    const found=range.runs.map(item=>this.find(item.run.id));if(found.some(item=>!item))return;
+    const selected=new Set<DraftParagraph>();
+    found.forEach((item,index)=>{if(index===found.length-1 && index>0 && range.end.offset===0 && !selected.has(item!.paragraph))return;selected.add(item!.paragraph);});
+    for(const p of selected){
+      const merged={...p.format,...format};
+      if(format.firstLine!==undefined)delete merged.hanging;
+      if(format.hanging!==undefined)delete merged.firstLine;
+      p.format=merged;p.layout={...p.layout,...format};
+      if(format.firstLine!==undefined)delete p.layout.hanging;
+      if(format.hanging!==undefined)delete p.layout.firstLine;
+      this.paragraphGroup.get(p.sourceId)!.changed=true;
+    }
+    return {runId:selection.focus.runId,start:selection.focus.offset,end:selection.focus.offset,selection};
+  }
+  selectedParagraphs(selection:TextSelection):Paragraph[] {
+    const range=this.normalized(selection);if(!range)return [];const paragraphs=new Map<string,Paragraph>();
+    range.runs.forEach((item,index)=>{if(index===range.runs.length-1&&index>0&&range.end.offset===0&&!paragraphs.has(item.paragraph.id))return;paragraphs.set(item.paragraph.id,item.paragraph);});return [...paragraphs.values()];
   }
   format(selection: TextSelection, style: InlineStyle): DraftFocus | undefined {
     const range=this.normalized(selection);if (!range) return;

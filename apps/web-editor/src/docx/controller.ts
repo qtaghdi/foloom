@@ -9,7 +9,7 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
 type DraftCheckpoint = { structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
@@ -117,6 +117,13 @@ export class DocumentController {
     if (!this.blocked) this.view.status('미저장 변경','pending');
     this.updateSave();return true;
   }
+  formatParagraph(selection:TextSelection,format:ParagraphFormat):boolean {
+    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    const before=this.checkpoint(selection),focus=this.structureDraft.formatParagraph(selection,format);
+    if(!focus)return false;this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
+    if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
+  }
+  selectedParagraphs(selection:TextSelection) {return this.structureDraft?.selectedParagraphs(selection)??[];}
   format(selection: TextSelection, style: InlineStyle): boolean {
     if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
     const before=this.checkpoint(selection),focus=this.structureDraft.format(selection,style);

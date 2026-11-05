@@ -45,10 +45,31 @@ type PageLayout struct {
 	Left   int `json:"left"`
 }
 
+type ParagraphFormat struct {
+	Align         string `json:"align,omitempty"`
+	Left          *int   `json:"left,omitempty"`
+	Right         *int   `json:"right,omitempty"`
+	FirstLine     *int   `json:"firstLine,omitempty"`
+	Hanging       *int   `json:"hanging,omitempty"`
+	Before        *int   `json:"before,omitempty"`
+	After         *int   `json:"after,omitempty"`
+	Line          *int   `json:"line,omitempty"`
+	LineRule      string `json:"lineRule,omitempty"`
+	Bidi          *bool  `json:"bidi,omitempty"`
+	TextDirection string `json:"textDirection,omitempty"`
+}
 type ParagraphLayout struct {
-	Align  string `json:"align,omitempty"`
-	Before *int   `json:"before,omitempty"`
-	After  *int   `json:"after,omitempty"`
+	Left          *int   `json:"left,omitempty"`
+	Right         *int   `json:"right,omitempty"`
+	FirstLine     *int   `json:"firstLine,omitempty"`
+	Hanging       *int   `json:"hanging,omitempty"`
+	Line          *int   `json:"line,omitempty"`
+	LineRule      string `json:"lineRule,omitempty"`
+	Bidi          bool   `json:"bidi,omitempty"`
+	TextDirection string `json:"textDirection,omitempty"`
+	Align         string `json:"align,omitempty"`
+	Before        *int   `json:"before,omitempty"`
+	After         *int   `json:"after,omitempty"`
 }
 
 type Paragraph struct {
@@ -101,8 +122,9 @@ type Snapshot struct {
 // ParagraphContent references formatting in the inspected revision. Repeated
 // source paragraphs create new identities rather than cloning OOXML IDs.
 type ParagraphContent struct {
-	SourceID string       `json:"sourceId"`
-	Runs     []RunContent `json:"runs"`
+	Format   *ParagraphFormat `json:"format,omitempty"`
+	SourceID string           `json:"sourceId"`
+	Runs     []RunContent     `json:"runs"`
 }
 
 // InlineStyle contains explicit, bounded clipboard formatting overrides. Source

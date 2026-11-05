@@ -61,3 +61,12 @@ it('formats a collapsed typing position and restores inherited style on direct r
  expect(p.paragraph.runs.map(r=>[r.text,r.bold,r.italic,r.font])).toEqual([['a',true,true,'Direct'],['',true,false,'Inherited'],['b',true,true,'Direct']]);
  draft.edit(focus!.runId,'new');expect(draft.operations()[0]!.paragraphs[0]!.runs[1]).toMatchObject({text:'new',style:{reset:true}});
 });
+
+it('formats touched paragraphs without including a selection ending at the next paragraph start',()=>{
+ const draft=new StructureDraft(snapshot);const range=selection('p1:0',1,'p2:0',0);
+ expect(draft.formatParagraph(range,{align:'center',firstLine:240})).toBeDefined();
+ expect(draft.selectedParagraphs(range)).toHaveLength(1);
+ expect(draft.operations()[0]!.paragraphs.map(p=>p.format)).toEqual([{align:'center',firstLine:240},undefined]);
+ draft.formatParagraph(selection('p1:0',0),{hanging:120});
+ expect(draft.operations()[0]!.paragraphs[0]!.format).toEqual({align:'center',hanging:120});
+});

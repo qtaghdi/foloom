@@ -9,10 +9,15 @@ export const runSchema = z.object({
   font: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
 });
 const spacing = z.number().int().min(0).max(2880).optional();
+const paragraphFormatSchema = z.object({
+ align:z.enum(['start','center','end','justify']).optional(),before:spacing,after:spacing,
+ left:z.number().int().min(-14400).max(14400).optional(),right:z.number().int().min(-14400).max(14400).optional(),firstLine:z.number().int().min(0).max(14400).optional(),hanging:z.number().int().min(0).max(14400).optional(),
+ line:z.number().int().min(20).max(2880).optional(),lineRule:z.enum(['auto','exact','atLeast']).optional(),bidi:z.boolean().optional(),textDirection:z.string().max(20).optional(),
+});
 const paragraphSchema = z.object({
   id: z.string(), runs: z.array(runSchema), structureEditable: z.boolean().optional(),
   pageBreakBefore: z.boolean().optional(), pageBreakAfter: z.boolean().optional(),
-  layout: z.object({ align: z.enum(['start', 'center', 'end', 'justify']).optional(), before: spacing, after: spacing }).optional(),
+  layout: paragraphFormatSchema.optional(),
 });
 const paperSize = z.number().int().min(2000).max(50000);
 const paperMargin = z.number().int().min(0).max(50000);
@@ -43,9 +48,10 @@ export type TextOperation = {
 };
 
 export type InlineStyle = { reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; sizeHalfPoints?: number };
+export type ParagraphFormat = z.infer<typeof paragraphFormatSchema>;
 export type ParagraphOperation = {
  type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';
- paragraphs: Array<{ sourceId: string; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
+ paragraphs: Array<{ sourceId: string; format?: ParagraphFormat; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type Operation = TextOperation | ParagraphOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };

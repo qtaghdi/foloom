@@ -38,6 +38,12 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
     contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
     style={{
+      'margin-left': p.layout?.left===undefined?undefined:`${p.layout.left/20}pt`,
+      'margin-right': p.layout?.right===undefined?undefined:`${p.layout.right/20}pt`,
+      'text-indent': p.layout?.hanging!==undefined?`${-p.layout.hanging/20}pt`:p.layout?.firstLine===undefined?undefined:`${p.layout.firstLine/20}pt`,
+      'line-height': p.layout?.line===undefined?undefined:p.layout.lineRule==='exact'?`${p.layout.line/20}pt`:p.layout.lineRule==='atLeast'?`max(1.35em, ${p.layout.line/20}pt)`:String(p.layout.line/240),
+      direction: p.layout?.bidi?'rtl':undefined,
+      'writing-mode': p.layout?.textDirection==='tbRl'?'vertical-rl':p.layout?.textDirection==='btLr'?'vertical-lr':undefined,
       'margin-block-start': p.layout?.before === undefined ? undefined : `${p.layout.before / 20}pt`,
       'margin-block-end': p.layout?.after === undefined ? undefined : `${p.layout.after / 20}pt`,
     }}>

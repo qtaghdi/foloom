@@ -323,3 +323,8 @@ DOCX 글자 도구는 source run의 일부 범위를 분리한 뒤 typed `Inline
 참조·언어·나머지 rPr를 보존합니다. snapshot의 `baseStyle`은 직접 서식을
 제외한 상속 미리 보기이며 쓰기 권한이나 source formatting 참조가 아닙니다.
 문단 계획의 source ID·전체 검증·원자 저장·확정 이력 경계는 유지합니다.
+
+같은 문단 계획의 `paragraphs[].format`은 문단 배치·길이·방향의 선택적
+변경입니다. adapter는 원본 pPr의 대상 속성과 충돌하는 대체 길이 속성만
+교체합니다. UI는 pt, API는 twips와 240분율 줄 간격을 사용하며 초안과 확정
+이력은 글자 서식과 같은 transaction 경계를 따릅니다.

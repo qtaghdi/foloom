@@ -4,7 +4,7 @@ import { DiagnosticDetails } from '../i18n/diagnostic-details';
 import { t, localizeMessage } from '../i18n';
 import { connectWorkspaceBridge, publishEditorState } from '../ui/workspace-bridge';
 import { DocumentSearch } from '../ui/document-search';
-import { readTextSelection, restoreTextSelection } from './selection';
+import { readTextSelection, restoreTextSelection, revealTextSelection } from './selection';
 import { searchDocument } from './search';
 import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
@@ -58,11 +58,11 @@ export function DocumentApp() {
   };
   const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
     setStructuralDraft(Boolean(focus));
-    if(focus?.selection)setFormattingSelection(focus.selection);
+    if(focus)setFormattingSelection(focus.selection??{anchor:{runId:focus.runId,offset:focus.start},focus:{runId:focus.runId,offset:focus.end}});
     const article = document.getElementById('document-content');
     const active = document.activeElement;
     const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
-    const richSelection = previousEditor && readTextSelection(previousEditor);
+    const richSelection = previousEditor && (readTextSelection(previousEditor) ?? (state().snapshot?.id===snapshot.id ? formattingSelection() : undefined));
     const previousRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
     const fields = [...article?.querySelectorAll('textarea') ?? []];
     const previousField = active instanceof HTMLTextAreaElement ? active
@@ -70,6 +70,7 @@ export function DocumentApp() {
     const index = previousField && state().snapshot?.id === snapshot.id ? fields.indexOf(previousField) : -1;
     const selection = index >= 0 && previousField ? [previousField.selectionStart, previousField.selectionEnd] as const : undefined;
     const restoringSave = state().saving;
+    if(!focus && !restoringSave)setFormattingSelection(undefined);
     if (state().snapshot?.id !== snapshot.id) setFocusedRun(undefined);
     view.render(snapshot);
     if (focus) {
@@ -91,7 +92,7 @@ export function DocumentApp() {
           return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
         };
         const anchor = remap(richSelection.anchor), focus = remap(richSelection.focus);
-        if (editor && anchor && focus) restoreTextSelection(editor, { anchor, focus });
+        if (editor && anchor && focus) {setFormattingSelection({anchor,focus});restoreTextSelection(editor, { anchor, focus });}
       });
     } else if (selection && (restoringSave || document.activeElement === document.body)) {
       const field = article?.querySelectorAll('textarea')[index];
@@ -104,9 +105,11 @@ export function DocumentApp() {
     const range=editor && readTextSelection(editor);if(range)setFormattingSelection(range);
   };
   const selectedStyles = createMemo(() => {
-    draftVersion();const selection=formattingSelection();
+    draftVersion();state().snapshot;const selection=formattingSelection();
     return selection ? controller.richSelection(selection)?.flatMap(p=>p.map(r=>r.style??{}))??[] : [];
   });
+  const selectedParagraphFormats=createMemo(()=>{draftVersion();state().snapshot;const selection=formattingSelection();return selection?controller.selectedParagraphs(selection).map(p=>p.layout??{}):[];});
+  const applyParagraphFormat=(format:import('./contracts').ParagraphFormat)=>{const selection=formattingSelection();if(selection&&controller.formatParagraph(selection,format))setDraftVersion(v=>v+1);};
   const applyFormat = (style: import('./contracts').InlineStyle) => {
     const selection=formattingSelection();if(selection && controller.format(selection,style))setDraftVersion(v=>v+1);
   };
@@ -123,6 +126,7 @@ export function DocumentApp() {
       document.getElementById(state().error ? 'document-error' : 'document-content')?.focus();
     });
   };
+  const resized = () => {window.requestAnimationFrame(()=>{const editor=document.querySelector<HTMLElement>('[data-continuous-editor]');if(editor?.contains(document.activeElement))revealTextSelection(editor);});};
   const beforeUnload = (event: BeforeUnloadEvent) => {
     if (controller.hasDrafts()) { event.preventDefault(); event.returnValue = ''; }
   };
@@ -157,6 +161,7 @@ export function DocumentApp() {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    window.removeEventListener('resize',resized);
     document.removeEventListener('selectionchange',selectionChanged);
     window.removeEventListener('beforeunload', beforeUnload);
     window.removeEventListener('keydown', keydown);
@@ -166,6 +171,7 @@ export function DocumentApp() {
   };
   onMount(() => {
     disconnectWorkspace = connectWorkspaceBridge(editorState, async () => { await controller.save(); });
+    window.addEventListener('resize',resized);
     document.addEventListener('selectionchange',selectionChanged);
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
@@ -180,7 +186,7 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentToolbar styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
+    <DocumentToolbar paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
