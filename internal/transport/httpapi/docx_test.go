@@ -66,7 +66,7 @@ func TestDOCXMCPAndBrowserShareCommits(t *testing.T) {
 	token := strings.TrimPrefix(opened.BrowserURL, api.browserBaseURL)
 	recorder := httptest.NewRecorder()
 	api.Handler().ServeHTTP(recorder, httptest.NewRequest("GET", token, nil))
-	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/docx" {
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/docx?document="+opened.Document.ID {
 		t.Fatal("launch did not redirect to DOCX")
 	}
 	cookies := recorder.Result().Cookies()
@@ -232,7 +232,15 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 	if !found {
 		t.Fatalf("no SSE commit: %v", scanner.Err())
 	}
-	if _, err = api.OpenDOCX(ctx, path); err != nil {
+	switchedPath := filepath.Join(t.TempDir(), "switched.docx")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(switchedPath, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = api.OpenDOCX(ctx, switchedPath); err != nil {
 		t.Fatal(err)
 	}
 	found = false

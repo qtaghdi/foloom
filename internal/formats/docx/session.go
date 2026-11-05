@@ -274,3 +274,6 @@ func (s *Session) EventsAfter(ctx context.Context, after uint64) ([]Event, error
 
 // ID is immutable for the lifetime of a session.
 func (s *Session) ID() string { return s.id }
+
+// SourcePath identifies the normalized file owned by this session. It is immutable.
+func (s *Session) SourcePath() string { return s.path }

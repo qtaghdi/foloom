@@ -24,6 +24,9 @@ const (
 )
 
 type Server struct {
+	documents      map[string]*openedDocument
+	scoped         bool
+	closed         bool
 	openMu         sync.Mutex
 	sessionMu      sync.RWMutex
 	session        *xlsx.Session
@@ -51,11 +54,15 @@ func NewWithTokens(session *xlsx.Session, browserToken, mcpToken string) *Server
 		launchTokens: make(map[string]time.Time),
 	}
 	s.routes()
+	s.documents = make(map[string]*openedDocument)
+	if session != nil {
+		s.registerDocument(session.SourcePath(), session, nil)
+	}
 	return s
 }
 
 func (s *Server) Handler() http.Handler {
-	return securityHeaders(s.mux)
+	return securityHeaders(http.HandlerFunc(s.serveDocument))
 }
 
 func (s *Server) acquireSession() (*xlsx.Session, func(), error) {
@@ -68,30 +75,38 @@ func (s *Server) acquireSession() (*xlsx.Session, func(), error) {
 }
 
 func (s *Server) replaceSession(next *xlsx.Session) error {
+	if _, err := s.registerDocument(next.SourcePath(), next, nil); err != nil {
+		_ = next.Close()
+		return err
+	}
 	s.sessionMu.Lock()
-	previous := s.session
 	s.session = next
 	s.sessionMu.Unlock()
-	if previous != nil {
-		_ = previous.Close()
-	}
 	return nil
 }
 
-// Close releases the active workbook, if any. It is safe to call when the
-// server was started without an initial workbook.
+// Close waits for in-flight requests before releasing all retained documents.
 func (s *Server) Close() error {
 	s.openMu.Lock()
 	defer s.openMu.Unlock()
 	s.sessionMu.Lock()
 	previous := s.session
+	documents := s.documents
+	s.documents = nil
+	s.closed = true
 	s.session = nil
 	s.docxSession = nil
 	s.sessionMu.Unlock()
-	if previous == nil {
+	if len(documents) > 0 {
+		for _, document := range documents {
+			_ = document.server.Close()
+		}
 		return nil
 	}
-	return previous.Close()
+	if previous != nil {
+		return previous.Close()
+	}
+	return nil
 }
 
 func (s *Server) routes() {
@@ -106,6 +121,7 @@ func (s *Server) routes() {
 	s.mux.Handle("/mcp", s.requireBearer(s.mcpHandler()))
 	s.mux.HandleFunc("GET /{$}", s.index)
 	s.docxRoutes()
+	s.workspaceRoutes()
 	s.mux.Handle("GET /assets/", s.requireSession(http.FileServer(http.FS(assets))))
 	s.mux.Handle("GET /api/workbook", s.requireSession(http.HandlerFunc(s.getWorkbook)))
 	s.mux.Handle("GET /api/search", s.requireSession(http.HandlerFunc(s.searchWorkbook)))

@@ -572,3 +572,6 @@ func (s *Session) ensureFormulaWarningLocked() {
 		Message: "formula expressions are stored, but server values are cached or unavailable; browser results are previews until a native spreadsheet application recalculates the workbook",
 	}}, s.warnings...)
 }
+
+// SourcePath identifies the normalized file owned by this session. It is immutable.
+func (s *Session) SourcePath() string { return s.path }

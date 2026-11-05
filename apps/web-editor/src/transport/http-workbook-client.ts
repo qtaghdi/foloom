@@ -1,3 +1,5 @@
+import { documentEvents } from './document-events';
+import { scopedDocumentURL } from './document-scope';
 import type { z } from 'zod';
 
 import type { HistoryDirection, SelectionChange, WorkbookEvent, WorkbookOperation, WorkbookSnapshot } from '../contracts';
@@ -13,7 +15,7 @@ import {
 import type { EventSubscription, WorkbookClient } from './workbook-client';
 
 async function requestJSON<T>(url: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await fetch(scopedDocumentURL(url), init);
   const body: unknown = await response.json();
   if (!response.ok) {
     const parsedError = errorResponseSchema.safeParse(body);
@@ -61,7 +63,7 @@ export class HTTPWorkbookClient implements WorkbookClient {
   }
 
   async updatePresence(selection: SelectionChange): Promise<void> {
-    const response = await fetch('/api/presence', {
+    const response = await fetch(scopedDocumentURL('/api/presence'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(selection),
@@ -75,7 +77,7 @@ export class HTTPWorkbookClient implements WorkbookClient {
 
   subscribe(onEvent: (event: WorkbookEvent) => void, checkpoint: WorkbookSnapshot): EventSubscription {
     const query = new URLSearchParams({ after: String(checkpoint.sequence), session: checkpoint.id });
-    const source = new EventSource(`/api/events?${query}`);
+    const source = documentEvents(scopedDocumentURL(`/api/events?${query}`));
     let onerror: ((error: unknown) => void) | null = null;
     source.addEventListener('workbook', (message) => {
       try {

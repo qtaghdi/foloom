@@ -31,8 +31,23 @@ type docxOpenResponse struct {
 func (s *Server) OpenDOCX(ctx context.Context, path string) (docx.Snapshot, error) {
 	s.openMu.Lock()
 	defer s.openMu.Unlock()
+	if s.scoped {
+		return docx.Snapshot{}, fmt.Errorf("open files through the workspace endpoint")
+	}
+	if retained := s.findDocument(path); retained != nil && retained.Kind == "docx" {
+		s.sessionMu.Lock()
+		s.docxSession = retained.server.docxSession
+		s.sessionMu.Unlock()
+		return retained.server.docxSnapshot(ctx)
+	}
+	if err := s.checkDocumentLimit(); err != nil {
+		return docx.Snapshot{}, err
+	}
 	next, err := docx.Open(ctx, path)
 	if err != nil {
+		return docx.Snapshot{}, err
+	}
+	if _, err := s.registerDocument(next.SourcePath(), nil, next); err != nil {
 		return docx.Snapshot{}, err
 	}
 	s.sessionMu.Lock()
@@ -43,8 +58,17 @@ func (s *Server) OpenDOCX(ctx context.Context, path string) (docx.Snapshot, erro
 func (s *Server) createDOCX(ctx context.Context, input docxCreateInput) (docx.Snapshot, error) {
 	s.openMu.Lock()
 	defer s.openMu.Unlock()
+	if s.scoped {
+		return docx.Snapshot{}, fmt.Errorf("create files through the workspace endpoint")
+	}
+	if err := s.checkDocumentLimit(); err != nil {
+		return docx.Snapshot{}, err
+	}
 	next, err := docx.Create(ctx, input.Path, input.Blocks)
 	if err != nil {
+		return docx.Snapshot{}, err
+	}
+	if _, err := s.registerDocument(next.SourcePath(), nil, next); err != nil {
 		return docx.Snapshot{}, err
 	}
 	s.sessionMu.Lock()
@@ -69,6 +93,14 @@ func (s *Server) docxSnapshot(ctx context.Context) (docx.Snapshot, error) {
 	return session.Snapshot(ctx)
 }
 func (s *Server) applyDOCX(ctx context.Context, input docx.ApplyInput, actor string) (docx.Snapshot, error) {
+	if !s.scoped && input.SessionID != "" {
+		s.sessionMu.RLock()
+		document := s.documents[input.SessionID]
+		s.sessionMu.RUnlock()
+		if document != nil && document.Kind == "docx" {
+			return document.server.applyDOCX(ctx, input, actor)
+		}
+	}
 	session, release, err := s.acquireDOCX()
 	if err != nil {
 		return docx.Snapshot{}, err
@@ -76,10 +108,11 @@ func (s *Server) applyDOCX(ctx context.Context, input docx.ApplyInput, actor str
 	defer release()
 	return session.Apply(ctx, input, actor)
 }
-func (s *Server) docxLaunchURL() (string, error) {
+func (s *Server) docxLaunchURL(id string) (string, error) {
 	url, err := s.issueBrowserLaunchURL()
 	if url != "" {
 		url += "?format=docx"
+		url += "&document=" + id
 	}
 	return url, err
 }
@@ -90,7 +123,7 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		if err != nil {
 			return nil, docxOpenResponse{}, err
 		}
-		url, err := s.docxLaunchURL()
+		url, err := s.docxLaunchURL(snapshot.ID)
 		return nil, docxOpenResponse{Document: snapshot, BrowserURL: url}, err
 	})
 	mcp.AddTool(server, &mcp.Tool{Name: "create_docx", Title: "DOCX 생성", Description: "Create a new local DOCX with paragraph and simple rectangular table blocks. Never overwrites an existing destination. Open browserUrl for editing.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &nonDestructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docxCreateInput) (*mcp.CallToolResult, docxOpenResponse, error) {
@@ -98,7 +131,7 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		if err != nil {
 			return nil, docxOpenResponse{}, err
 		}
-		url, err := s.docxLaunchURL()
+		url, err := s.docxLaunchURL(snapshot.ID)
 		return nil, docxOpenResponse{Document: snapshot, BrowserURL: url}, err
 	})
 	mcp.AddTool(server, &mcp.Tool{Name: "get_docx", Title: "DOCX 확인", Description: "Inspect the active DOCX revision, session ID, ordered body paragraphs, tables, editable run IDs and compatibility warnings.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, docx.Snapshot, error) {

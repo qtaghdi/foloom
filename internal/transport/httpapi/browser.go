@@ -13,6 +13,7 @@ import (
 )
 
 type applyInput struct {
+	DocumentID   string           `json:"documentId,omitempty" jsonschema:"Workbook session ID. Required when multiple XLSX files are open."`
 	BaseRevision uint64           `json:"baseRevision" jsonschema:"Revision returned by get_workbook or read_range"`
 	Operations   []xlsx.Operation `json:"operations" jsonschema:"Ordered workbook edits to apply atomically"`
 }
@@ -23,6 +24,7 @@ type applyResponse struct {
 }
 
 type historyInput struct {
+	DocumentID   string `json:"documentId,omitempty" jsonschema:"Workbook session ID. Required when multiple XLSX files are open."`
 	BaseRevision uint64 `json:"baseRevision" jsonschema:"Current workbook revision"`
 	Direction    string `json:"direction,omitempty" jsonschema:"History direction: undo or redo"`
 }
@@ -66,6 +68,9 @@ func (s *Server) launchBrowserSession(w http.ResponseWriter, r *http.Request) {
 	destination := "/"
 	if r.URL.Query().Get("format") == "docx" {
 		destination = "/docx"
+	}
+	if document := r.URL.Query().Get("document"); document != "" {
+		destination += "?document=" + document
 	}
 	http.Redirect(w, r, destination, http.StatusSeeOther)
 }
@@ -152,7 +157,7 @@ func (s *Server) applyOperations(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid request: %w", err))
 		return
 	}
-	session, release, err := s.acquireSession()
+	session, release, err := s.acquireWorkbookTarget(input.DocumentID, true)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
@@ -180,7 +185,7 @@ func (s *Server) restoreHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	direction := r.PathValue("direction")
-	session, release, err := s.acquireSession()
+	session, release, err := s.acquireWorkbookTarget(input.DocumentID, true)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

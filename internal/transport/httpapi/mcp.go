@@ -15,7 +15,7 @@ import (
 
 const (
 	appResourceURI     = "ui://document-workspace/xlsx/v1.html"
-	serverInstructions = "For DOCX use create_docx, open_docx, get_docx and apply_docx_operations. Open the returned browserUrl for direct editing. DOCX supports plain body and simple table text runs; inspect warnings and use current sessionId, revision, target IDs and expectedText. For XLSX, if no workbook is open, call open_workbook with an absolute XLSX path. Always open the returned short-lived browserUrl in the host browser surface so the user can inspect and directly edit the workbook; do not substitute an inline image or MCP App preview, and do not repeat the URL in chat. Call get_workbook before reads or writes and use read_range only for focused inspection. Pass the latest revision to apply_operations, and refresh after a conflict. Use update_presence before visible AI edits."
+	serverInstructions = "For DOCX use create_docx, open_docx, get_docx and apply_docx_operations. Open the returned browserUrl for direct editing. DOCX supports plain body and simple table text runs; inspect warnings and use current sessionId, revision, target IDs and expectedText. For XLSX, if no workbook is open, call open_workbook with an absolute XLSX path. Always open the returned short-lived browserUrl in the host browser surface so the user can inspect and directly edit the workbook; do not substitute an inline image or MCP App preview, and do not repeat the URL in chat. Call get_workbook before reads or writes and use read_range only for focused inspection. Pass the latest revision and documentId to apply_operations when multiple workbooks are open, and refresh after a conflict. Use update_presence before visible AI edits."
 )
 
 type openWorkbookInput struct {
@@ -30,16 +30,23 @@ type openWorkbookResponse struct {
 	BrowserURL string   `json:"browserUrl,omitempty"`
 }
 
+type workbookTargetInput struct {
+	DocumentID string `json:"documentId,omitempty" jsonschema:"Optional explicit XLSX session ID returned by open_workbook or get_workbook"`
+}
+
 type readRangeInput struct {
-	Sheet string `json:"sheet" jsonschema:"Worksheet name"`
-	Range string `json:"range" jsonschema:"A1-style range, for example A1:H40"`
+	DocumentID string `json:"documentId,omitempty"`
+	Sheet      string `json:"sheet" jsonschema:"Worksheet name"`
+	Range      string `json:"range" jsonschema:"A1-style range, for example A1:H40"`
 }
 
 type sheetInput struct {
-	Sheet string `json:"sheet" jsonschema:"Worksheet name"`
+	DocumentID string `json:"documentId,omitempty"`
+	Sheet      string `json:"sheet" jsonschema:"Worksheet name"`
 }
 
 type eventPollInput struct {
+	DocumentID    string `json:"documentId,omitempty"`
 	AfterSequence uint64 `json:"afterSequence,omitempty" jsonschema:"Last processed event sequence, or zero for all retained events"`
 }
 
@@ -181,6 +188,9 @@ func (s *Server) mcpServer() *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input openWorkbookInput) (*mcp.CallToolResult, openWorkbookResponse, error) {
 		if path := strings.TrimSpace(input.Path); path != "" {
+			if s.scoped {
+				return nil, openWorkbookResponse{}, fmt.Errorf("open files through the workspace endpoint")
+			}
 			s.openMu.Lock()
 			defer s.openMu.Unlock()
 			if !filepath.IsAbs(path) {
@@ -189,7 +199,7 @@ func (s *Server) mcpServer() *mcp.Server {
 			if !strings.EqualFold(filepath.Ext(path), ".xlsx") {
 				return nil, openWorkbookResponse{}, fmt.Errorf("workbook path must use the .xlsx extension")
 			}
-			next, err := xlsx.Open(path)
+			next, err := s.retainedWorkbook(path)
 			if err != nil {
 				return nil, openWorkbookResponse{}, err
 			}
@@ -204,6 +214,9 @@ func (s *Server) mcpServer() *mcp.Server {
 		defer release()
 		snapshot := session.Snapshot()
 		browserURL, err := s.issueBrowserLaunchURL()
+		if browserURL != "" {
+			browserURL += "?document=" + snapshot.ID
+		}
 		return nil, openWorkbookResponse{
 			ID:         snapshot.ID,
 			Name:       snapshot.Name,
@@ -218,7 +231,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Undo or redo one committed workbook revision. Pass the latest baseRevision and direction.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input historyInput) (*mcp.CallToolResult, applyResponse, error) {
-		session, release, err := s.acquireSession()
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, true)
 		if err != nil {
 			return nil, applyResponse{}, err
 		}
@@ -233,7 +246,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input historyInput) (*mcp.CallToolResult, applyResponse, error) {
-		session, release, err := s.acquireSession()
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, true)
 		if err != nil {
 			return nil, applyResponse{}, err
 		}
@@ -246,8 +259,8 @@ func (s *Server) mcpServer() *mcp.Server {
 		Title:       "Get Workbook",
 		Description: "Get the open workbook name, sheets, revision, and formula calculation policy before reading or editing it.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, xlsx.Snapshot, error) {
-		session, release, err := s.acquireSession()
+	}, func(_ context.Context, _ *mcp.CallToolRequest, input workbookTargetInput) (*mcp.CallToolResult, xlsx.Snapshot, error) {
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, false)
 		if err != nil {
 			return nil, xlsx.Snapshot{}, err
 		}
@@ -259,7 +272,8 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Search stored cell display values across all sheets, case insensitively. Returns at most 200 cells with session ID and revision. Truncated indicates a result or scan limit. Does not calculate formulas.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input struct {
-		Query string `json:"query" jsonschema:"Literal text, 1 to 200 characters"`
+		DocumentID string `json:"documentId,omitempty"`
+		Query      string `json:"query" jsonschema:"Literal text, 1 to 200 characters"`
 	}) (*mcp.CallToolResult, xlsx.SearchResult, error) {
 		session, release, err := s.acquireSession()
 		if err != nil {
@@ -275,7 +289,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Read cell values and formulas from an A1-style range. Formula values are cached source values or unavailable; the server does not calculate formulas.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input readRangeInput) (*mcp.CallToolResult, xlsx.Range, error) {
-		session, release, err := s.acquireSession()
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, false)
 		if err != nil {
 			return nil, xlsx.Range{}, err
 		}
@@ -290,7 +304,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input eventPollInput) (*mcp.CallToolResult, eventPollResponse, error) {
-		session, release, err := s.acquireSession()
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, false)
 		if err != nil {
 			return nil, eventPollResponse{}, err
 		}
@@ -305,7 +319,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input sheetInput) (*mcp.CallToolResult, xlsx.SheetObjects, error) {
-		session, release, err := s.acquireSession()
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, false)
 		if err != nil {
 			return nil, xlsx.SheetObjects{}, err
 		}
@@ -319,7 +333,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Description: "Apply validated cell, formula, or rectangular paste edits to the open xlsx. Formula expressions are stored and native recalculation is requested; browser results are previews. Pass the latest baseRevision to prevent overwriting concurrent edits.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input applyInput) (*mcp.CallToolResult, applyResponse, error) {
-		session, release, err := s.acquireSession()
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, true)
 		if err != nil {
 			return nil, applyResponse{}, err
 		}
@@ -334,7 +348,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Meta:        appOnlyMeta,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input applyInput) (*mcp.CallToolResult, applyResponse, error) {
-		session, release, err := s.acquireSession()
+		session, release, err := s.acquireWorkbookTarget(input.DocumentID, true)
 		if err != nil {
 			return nil, applyResponse{}, err
 		}
