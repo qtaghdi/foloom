@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -100,6 +101,9 @@ func (s *Server) Close() error {
 	if len(documents) > 0 {
 		for _, document := range documents {
 			_ = document.server.Close()
+			if document.cleanupDir != "" {
+				_ = os.RemoveAll(document.cleanupDir)
+			}
 		}
 		return nil
 	}
@@ -122,6 +126,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /{$}", s.index)
 	s.docxRoutes()
 	s.workspaceRoutes()
+	s.fileRoutes()
 	s.mux.Handle("GET /assets/", s.requireSession(http.FileServer(http.FS(assets))))
 	s.mux.Handle("GET /api/workbook", s.requireSession(http.HandlerFunc(s.getWorkbook)))
 	s.mux.Handle("GET /api/search", s.requireSession(http.HandlerFunc(s.searchWorkbook)))

@@ -73,7 +73,7 @@ const snapshot: Snapshot = {
   blocks: [{ id: 'p1', type: 'paragraph', paragraph: { id: 'p1', runs: [{ id: 'r1', text: '원본', editable: true, bold: false, italic: false }] } },
     { id: 'table1', type: 'table', rows: [{ cells: [{ id: 'c1', paragraphs: [{ id: 'p2', runs: [{ id: 'r2', text: '표 원본', editable: true, bold: true, italic: false }] }] }] }] }],
 };
-function docxFixture() {
+function docxFixture(initial: Snapshot = snapshot) {
   const sources: any[] = [];
   class Source {
     listener?: (event: { data: string }) => void;
@@ -82,13 +82,28 @@ function docxFixture() {
     addEventListener(_type: string, listener: any) { this.listener = listener; }
   }
   vi.stubGlobal('EventSource', Source);
-  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => init?.method === 'POST' ? { ...snapshot, revision: 2 } : snapshot }));
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => init?.method === 'POST' ? { ...initial, revision: 2 } : initial }));
   vi.stubGlobal('fetch', fetcher);
   return { sources, fetcher };
 }
 function edit(input: HTMLTextAreaElement, value: string) { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); }
 
 describe('Solid DOCX editor', () => {
+  it('keeps an empty text target writable throughout sequential draft input', async () => {
+    const empty: Snapshot = { ...snapshot, blocks: [{ id: 'empty', type: 'paragraph', paragraph: { id: 'empty', runs: [{ id: 'empty-run', text: '', editable: true, bold: false, italic: false }] } }] };
+    docxFixture(empty); const root = mount(() => <DocumentApp/>); await settle();
+    const input = root.querySelector('textarea')!;
+    expect(input.placeholder).toBe('여기에 입력하세요');
+    input.focus();
+    for (const text of ['한', '한글', '한글 typing']) {
+      edit(input, text);
+      expect(input.readOnly).toBe(false);
+      expect(document.activeElement).toBe(input);
+      expect(root.querySelector('textarea')).toBe(input);
+    }
+    expect(button(root, '저장').disabled).toBe(false);
+  });
+
   it('retains input nodes while draft/status changes and saves body and table in one batch', async () => {
     const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
     const input = root.querySelector('textarea')!;
@@ -96,7 +111,7 @@ describe('Solid DOCX editor', () => {
     expect(root.querySelector('textarea')).toBe(input); expect(document.activeElement).toBe(input);
     expect(input.value).toBe('초안');
     edit(root.querySelectorAll('textarea')[1]!, '표 초안');
-    button(root, '변경 저장').click(); await settle();
+    button(root, '저장').click(); await settle();
     const body = JSON.parse(f.fetcher.mock.calls.find(([, init]) => init?.method === 'POST')![1]!.body as string);
     expect(body.baseRevision).toBe(1); expect(body.sessionId).toBe('session');
     expect(body.operations.map((op: any) => op.type)).toEqual(['replace_run_text', 'replace_cell_text']);
@@ -107,7 +122,7 @@ describe('Solid DOCX editor', () => {
     const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
     const input = root.querySelector('textarea')!; edit(input, '남길 초안');
     f.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
-    expect(input.value).toBe('남길 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
+    expect(input.value).toBe('남길 초안'); expect(button(root, '저장').disabled).toBe(true);
     button(root, '다시 불러오기').click(); await settle();
     expect(document.activeElement?.id).toBe('discard-draft');
     expect(f.fetcher).toHaveBeenCalledTimes(1);
@@ -123,8 +138,8 @@ describe('Solid DOCX editor', () => {
     const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
     const input = root.querySelector('textarea')!; edit(input, '저장할 초안');
     f.fetcher.mockRejectedValueOnce(new Error('offline'));
-    button(root, '변경 저장').click(); await settle();
-    expect(input.value).toBe('저장할 초안'); expect(button(root, '변경 저장').disabled).toBe(true);
+    button(root, '저장').click(); await settle();
+    expect(input.value).toBe('저장할 초안'); expect(button(root, '저장').disabled).toBe(true);
     expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
   });
 });
@@ -161,12 +176,12 @@ it('keeps unsupported pasted text editable and restores saving after correction'
   const input = root.querySelector('textarea')!;
   edit(input, '붙여넣은\n여러 줄');
   expect(input.value).toBe('붙여넣은\n여러 줄'); expect(input.getAttribute('aria-invalid')).toBe('true');
-  expect(button(root, '변경 저장').disabled).toBe(true);
+  expect(button(root, '저장').disabled).toBe(true);
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
   expect(document.activeElement).toBe(input); expect(f.fetcher).toHaveBeenCalledTimes(1);
   edit(input, '수정한 한 줄');
-  expect(input.getAttribute('aria-invalid')).toBe('false'); expect(button(root, '변경 저장').disabled).toBe(false);
-  button(root, '변경 저장').click(); await settle(); expect(f.fetcher).toHaveBeenCalledTimes(2);
+  expect(input.getAttribute('aria-invalid')).toBe('false'); expect(button(root, '저장').disabled).toBe(false);
+  button(root, '저장').click(); await settle(); expect(f.fetcher).toHaveBeenCalledTimes(2);
 });
 
 

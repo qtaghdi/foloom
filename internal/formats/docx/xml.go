@@ -167,6 +167,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 	fieldDepth := 0
 	var markFields func(*node)
 	markFields = func(n *node) {
+		if n.is("p") && fieldDepth > 0 {
+			protected[n] = true
+		}
 		if n.is("fldChar") {
 			switch n.attr("fldCharType") {
 			case "begin":
@@ -199,6 +202,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 	}
 	var paragraph func(*node, bool, string) Paragraph
 	paragraph = func(p *node, allowed bool, kind string) Paragraph {
+		allowed = allowed && !protected[p]
+		if strings.TrimSpace(p.text.String()) != "" {
+			allowed = false
+			unsupported = true
+		}
 		out := Paragraph{ID: id(), Runs: []Run{}}
 		var trailingBreak *node
 		if kind == "replace_run_text" {
@@ -245,7 +253,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				continue
 			}
 			texts := []*node{}
-			plain := true
+			plain := strings.TrimSpace(r.text.String()) == ""
 			for _, c := range r.children {
 				if c.is("t") {
 					texts = append(texts, c)
@@ -253,7 +261,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					plain = false
 				}
 			}
-			editable := allowed && !protected[r] && plain && len(texts) == 1 && len(texts[0].children) == 0
+			editable := allowed && !protected[r] && plain && (len(texts) == 0 || len(texts) == 1 && len(texts[0].children) == 0)
 			text := textContent(r)
 			if !validText(text) {
 				editable = false
@@ -272,10 +280,22 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			directRun(&run, runProps)
 			out.Runs = append(out.Runs, run)
 			if editable {
-				targets[run.ID] = target{node: texts[0], text: text, kind: kind}
+				textNode := r
+				if len(texts) == 1 {
+					textNode = texts[0]
+				}
+				targets[run.ID] = target{node: textNode, text: text, kind: kind}
 			} else {
 				unsupported = true
 			}
+		}
+		// A genuinely empty paragraph needs an insertion target even when Word
+		// stored no run. Never synthesize one around unsupported child content.
+		if allowed && len(out.Runs) == 0 && (len(p.children) == 0 || len(p.children) == 1 && p.child("pPr") != nil) {
+			run := baseRun
+			run.ID, run.Editable = id(), true
+			out.Runs = append(out.Runs, run)
+			targets[run.ID] = target{node: p, kind: kind}
 		}
 		return out
 	}

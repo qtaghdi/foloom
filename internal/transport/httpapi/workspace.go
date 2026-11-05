@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,11 +18,13 @@ import (
 const maxOpenDocuments = 8
 
 type openedDocument struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Kind   string `json:"kind"`
-	server *Server
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Kind       string `json:"kind"`
+	Uploaded   bool   `json:"uploaded,omitempty"`
+	cleanupDir string
+	server     *Server
 }
 
 func canonicalDocumentPath(path string) (string, error) {
@@ -65,7 +69,7 @@ func (s *Server) retainedWorkbook(path string) (*xlsx.Session, error) {
 	}
 	return xlsx.Open(path)
 }
-func (s *Server) registerDocument(path string, workbook *xlsx.Session, document *docx.Session) (*openedDocument, error) {
+func (s *Server) registerDocument(path string, workbook *xlsx.Session, document *docx.Session, cleanupDirs ...string) (*openedDocument, error) {
 	s.sessionMu.Lock()
 	defer s.sessionMu.Unlock()
 	if s.closed {
@@ -91,6 +95,9 @@ func (s *Server) registerDocument(path string, workbook *xlsx.Session, document 
 		opened.ID = document.ID()
 		opened.Name = filepath.Base(document.SourcePath())
 		opened.Kind = "docx"
+	}
+	if len(cleanupDirs) > 0 {
+		opened.Uploaded, opened.cleanupDir, opened.Path = true, cleanupDirs[0], ""
 	}
 	s.documents[opened.ID] = opened
 	return opened, nil
@@ -136,6 +143,7 @@ func (s *Server) workspaceRoutes() {
 			MaxOpen   int               `json:"maxOpen"`
 		}{documents, maxOpenDocuments})
 	})))
+	s.mux.Handle("POST /api/documents/upload", s.requireSession(http.HandlerFunc(s.uploadDocument)))
 	s.mux.Handle("POST /api/documents", s.requireSession(http.HandlerFunc(s.openDocument)))
 	s.mux.Handle("DELETE /api/documents/{id}", s.requireSession(http.HandlerFunc(s.closeDocument)))
 }
@@ -169,31 +177,41 @@ func (s *Server) openDocument(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
+	opened, err := s.openDocumentPath(r.Context(), path)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, opened)
+}
+
+// Callers hold openMu through validation, opening and registration.
+func (s *Server) openDocumentPath(ctx context.Context, path string, cleanupDirs ...string) (*openedDocument, error) {
+	var err error
 	var opened *openedDocument
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".xlsx":
 		workbook, openErr := xlsx.Open(path)
 		err = openErr
 		if err == nil {
-			opened, err = s.registerDocument(path, workbook, nil)
+			opened, err = s.registerDocument(path, workbook, nil, cleanupDirs...)
 			if err != nil {
 				_ = workbook.Close()
 			}
 		}
 	case ".docx":
-		document, openErr := docx.Open(r.Context(), path)
+		document, openErr := docx.Open(ctx, path)
 		err = openErr
 		if err == nil {
-			opened, err = s.registerDocument(path, nil, document)
+			opened, err = s.registerDocument(path, nil, document, cleanupDirs...)
 		}
 	default:
 		err = fmt.Errorf("XLSX 또는 DOCX 파일을 선택하세요")
 	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, opened)
+	return opened, nil
 }
 func (s *Server) closeDocument(w http.ResponseWriter, r *http.Request) {
 	s.openMu.Lock()
@@ -215,6 +233,9 @@ func (s *Server) closeDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = document.server.Close()
+	if document.cleanupDir != "" {
+		_ = os.RemoveAll(document.cleanupDir)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

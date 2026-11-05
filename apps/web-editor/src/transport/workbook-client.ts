@@ -1,3 +1,4 @@
+import type { DownloadedFile, DocumentCheckpoint } from './document-files';
 import type {
   SelectionChange,
   WorkbookEvent,
@@ -20,6 +21,8 @@ export interface EventSubscription {
 
 export interface WorkbookClient {
   search?(query: string): Promise<{ id: string; revision: number; truncated: boolean; hits: { sheet: string; cell: string; text: string }[] }>;
+  confirmSave?(checkpoint: DocumentCheckpoint): Promise<void>;
+  download?(checkpoint: DocumentCheckpoint): Promise<DownloadedFile>;
   connect(): Promise<void>;
   getWorkbook(): Promise<WorkbookSnapshot>;
   readRange(sheet: string, range: string): Promise<WorkbookRange>;

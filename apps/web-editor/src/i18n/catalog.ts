@@ -947,7 +947,83 @@ export const catalog = {
     "en": "Unsupported structures are read only or omitted from the view.",
     "ja": "未対応の構造は読み取り専用で表示するか、画面から省略します。",
     "zh-CN": "不支持的结构将以只读方式显示，或从视图中省略。"
-  }
+  },
+  "fileActions": {
+    "ko": "파일 작업",
+    "en": "File actions",
+    "ja": "ファイル操作",
+    "zh-CN": "文件操作"
+  },
+  "saveFile": {
+    "ko": "저장",
+    "en": "Save",
+    "ja": "保存",
+    "zh-CN": "保存"
+  },
+  "downloadFile": {
+    "ko": "다운로드",
+    "en": "Download",
+    "ja": "ダウンロード",
+    "zh-CN": "下载"
+  },
+  "saveCurrentFile": {
+    "ko": "현재 파일에 저장하고 저장 상태를 확인합니다.",
+    "en": "Save to the current file and verify it is saved.",
+    "ja": "現在のファイルに保存し、保存状態を確認します。",
+    "zh-CN": "保存到当前文件并确认保存状态。"
+  },
+  "downloadSavedFile": {
+    "ko": "변경 내용을 저장한 뒤 현재 파일을 다운로드합니다.",
+    "en": "Save changes, then download the current file.",
+    "ja": "変更を保存してから現在のファイルをダウンロードします。",
+    "zh-CN": "保存更改后下载当前文件。"
+  },
+  "browserDownloadOnly": {
+    "ko": "다운로드는 브라우저 편집기에서 사용할 수 있습니다.",
+    "en": "Downloads are available in the browser editor.",
+    "ja": "ダウンロードはブラウザー編集画面で利用できます。",
+    "zh-CN": "请在浏览器编辑器中下载文件。"
+  },
+  "checkingSave": {
+    "ko": "저장 확인 중",
+    "en": "Checking save",
+    "ja": "保存を確認中",
+    "zh-CN": "正在确认保存"
+  },
+  "preparingDownload": {
+    "ko": "다운로드 준비 중",
+    "en": "Preparing download",
+    "ja": "ダウンロードを準備中",
+    "zh-CN": "正在准备下载"
+  },
+  "savedToFile": {
+    "ko": "파일에 저장됨",
+    "en": "Saved to file",
+    "ja": "ファイルに保存しました",
+    "zh-CN": "已保存到文件"
+  },
+  "downloadStarted": {
+    "ko": "브라우저에 다운로드를 요청했습니다.",
+    "en": "Download requested in your browser.",
+    "ja": "ブラウザーにダウンロードを要求しました。",
+    "zh-CN": "已向浏览器请求下载。"
+  },
+  "fileActionFailed": {
+    "ko": "파일 작업을 완료하지 못했습니다.",
+    "en": "The file action could not be completed.",
+    "ja": "ファイル操作を完了できませんでした。",
+    "zh-CN": "无法完成文件操作。"
+  },
+  "chooseLocalFiles": {"ko": "내 컴퓨터에서 열기", "en": "Open from computer", "ja": "パソコンから開く", "zh-CN": "从电脑打开"},
+  "openByPath": {"ko": "경로로 열기", "en": "Open by path", "ja": "パスで開く", "zh-CN": "通过路径打开"},
+  "workingCopyHint": {"ko": "선택한 파일은 작업 복사본으로 열립니다. 원본은 유지되며 수정본은 다운로드할 수 있습니다.", "en": "Selected files open as working copies. Originals stay unchanged; download your edited files.", "ja": "選択したファイルは作業用コピーで開きます。元のファイルは変更せず、編集後にダウンロードできます。", "zh-CN": "所选文件以工作副本打开。原文件保持不变，编辑后可下载。"},
+  "workingCopy": {"ko": "작업 복사본", "en": "Working copy", "ja": "作業用コピー", "zh-CN": "工作副本"},
+  "chooseFilesHint": {"ko": "XLSX·DOCX 파일을 선택해 여러 문서를 함께 편집하세요.", "en": "Select XLSX or DOCX files to edit multiple documents together.", "ja": "XLSX・DOCX を選択して複数の文書を編集できます。", "zh-CN": "选择 XLSX 或 DOCX 文件，同时编辑多个文档。"},
+  "fileSelectionInvalid": {"ko": "XLSX는 100 MB, DOCX는 32 MB 이하의 파일을 선택하세요.", "en": "Select XLSX files up to 100 MB or DOCX files up to 32 MB.", "ja": "XLSX は 100 MB、DOCX は 32 MB 以下を選択してください。", "zh-CN": "请选择不超过 100 MB 的 XLSX 或不超过 32 MB 的 DOCX 文件。"},
+  "openLimit": {"ko": "열린 파일은 최대 8개입니다. 파일을 닫은 뒤 다시 여세요.", "en": "You can open up to 8 files. Close a file and try again.", "ja": "開けるファイルは 8 個までです。ファイルを閉じて再試行してください。", "zh-CN": "最多可打开 8 个文件。请关闭文件后重试。"},
+  "typeHere": {"ko":"여기에 입력하세요", "en":"Type here", "ja":"ここに入力", "zh-CN":"在此输入"},
+  "closeWorkingCopyWarning": {"ko": "{name}의 작업 복사본을 닫으면 이 앱에 저장한 내용도 삭제됩니다. 필요한 수정본을 먼저 다운로드하세요.", "en": "Closing the working copy of {name} also deletes its saved edits from this app. Download your edited file first.", "ja": "{name} の作業用コピーを閉じると、このアプリに保存した編集内容も削除されます。先に編集済みファイルをダウンロードしてください。", "zh-CN": "关闭 {name} 的工作副本也会删除此应用中已保存的编辑。请先下载修改后的文件。"},
+  "closeWorkingCopy": {"ko": "복사본 닫기", "en": "Close working copy", "ja": "作業用コピーを閉じる", "zh-CN": "关闭工作副本"}
 } as const;
 export type MessageKey = keyof typeof catalog;
 export type Locale = keyof (typeof catalog)[MessageKey];

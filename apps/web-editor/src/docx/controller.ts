@@ -1,3 +1,5 @@
+import { confirmSavedDocument, downloadSavedDocument, DocumentFileError, type DownloadedFile } from '../transport/document-files';
+import { source } from '../i18n/index';
 import { errorResponseSchema } from '../transport/schemas';
 import { documentEvents } from '../transport/document-events';
 import { scopedDocumentURL } from '../transport/document-scope';
@@ -68,31 +70,61 @@ export class DocumentController {
     finally { this.loading = false; this.updateSave(); }
   }
 
-  async save(): Promise<void> {
-    if (this.blocked || this.busy || !this.snapshot || !this.drafts.size || this.draftError()) return;
+  async save(): Promise<boolean> {
+    if (this.blocked || this.busy || this.loading || this.disposed || !this.snapshot || this.draftError()) return false;
+    const hasChanges = this.drafts.size > 0;
     this.busy = true;
     this.disconnect();
     this.updateSave();
-    this.view.status('저장 중', 'pending');
+    this.view.status(hasChanges ? '저장 중' : source('checkingSave'), 'pending');
     const activityId = `local:${++this.activitySequence}`;
-    this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.drafts.size}개 수정` });
+    if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.drafts.size}개 수정` });
     try {
-      const snapshot = await this.request('/api/docx/operations', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: this.snapshot.id, baseRevision: this.snapshot.revision, operations: [...this.drafts.values()] }),
-      });
-      if (this.disposed) return;
+      let snapshot = this.snapshot;
+      if (hasChanges) {
+        snapshot = await this.request('/api/docx/operations', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: snapshot.id, baseRevision: snapshot.revision, operations: [...this.drafts.values()] }),
+        });
+      } else { await confirmSavedDocument(snapshot); }
+      if (this.disposed) return false;
       this.snapshot = snapshot;
-      this.view.activity?.({ id: activityId, actor: 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: snapshot.revision });
-      this.drafts.clear();
-      this.view.render(snapshot);
+      if (hasChanges) {
+        this.view.activity?.({ id: activityId, actor: 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: snapshot.revision });
+        this.drafts.clear();
+        this.view.render(snapshot);
+      }
       this.view.status('저장됨', 'committed');
       this.connect(snapshot);
+      return true;
     } catch (error) {
-      this.view.activity?.({ id: activityId, actor: 'human', state: 'uncertain', title: '저장 결과 확인 필요' });
+      if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'uncertain', title: '저장 결과 확인 필요' });
       this.fail(error);
+      return false;
     }
     finally { this.busy = false; this.updateSave(); }
+  }
+
+  async download(): Promise<DownloadedFile | undefined> {
+    if (!await this.save() || !this.snapshot || this.disposed || this.blocked || this.hasDrafts()) return;
+    const checkpoint = this.snapshot;
+    this.busy = true;
+    this.disconnect();
+    this.updateSave();
+    this.view.status(source('preparingDownload'), 'pending');
+    try {
+      const file = await downloadSavedDocument(checkpoint, 'docx');
+      if (this.disposed || this.blocked || this.drafts.size || this.snapshot.id !== checkpoint.id || this.snapshot.revision !== checkpoint.revision) return;
+      this.view.status('저장됨', 'committed');
+      return file;
+    } catch (error) {
+      if (error instanceof DocumentFileError && error.status === 409) this.fail(error);
+      else { this.view.status('저장됨', 'committed'); throw error; }
+    } finally {
+      this.busy = false;
+      this.updateSave();
+      if (!this.blocked && !this.disposed && this.snapshot) this.connect(this.snapshot);
+    }
   }
 
   private async request(url: string, init?: RequestInit): Promise<Snapshot> {

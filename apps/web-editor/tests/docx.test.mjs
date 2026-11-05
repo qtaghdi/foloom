@@ -27,6 +27,7 @@ const edit = { type: 'replace_run_text', targetId: 'r1', expectedText: 'old', te
 function fixture() {
   const state = { writes: [], statuses: [], renders: [], errors: [], enabled: [], events: [] };
   let handler = async (_url, init) => {
+    if (_url.startsWith('/api/save')) return { ok: true, json: async () => ({ id: snapshot.id, revision: snapshot.revision, name: snapshot.name }) };
     if (init?.method === 'POST') state.writes.push(JSON.parse(init.body));
     return { ok: true, json: async () => ({ ...snapshot, revision: init?.method === 'POST' ? 2 : 1 }) };
   };
@@ -36,7 +37,7 @@ function fixture() {
     close() { this.closed = true; }
   }
   const { DocumentController } = loadModule(resolve(root, 'src/docx/controller.ts'), {
-    fetch: (...args) => handler(...args), EventSource,
+    fetch: (...args) => handler(...args), EventSource, URLSearchParams,
   });
   const controller = new DocumentController({
     render: (s) => state.renders.push(s), status: (...args) => state.statuses.push(args),

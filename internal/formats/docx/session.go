@@ -150,6 +150,21 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		}
 		n := t.node
 		opening := string(s.pkg.document[n.start:n.inner])
+		if n.is("p") || n.is("r") {
+			// Insert into a verified empty container. A local namespace declaration
+			// makes this independent of the imported document's chosen prefix.
+			content := `<w:t xmlns:w="` + wordNS + `" xml:space="preserve">` + escapeText(op.Text) + `</w:t>`
+			if n.is("p") {
+				content = `<w:r xmlns:w="` + wordNS + `">` + content + `</w:r>`
+			}
+			if strings.HasSuffix(opening, "/>") {
+				name := strings.TrimSuffix(strings.Fields(strings.TrimPrefix(opening, "<"))[0], "/>")
+				edits = append(edits, replacement{n.start, n.end, []byte(strings.TrimSuffix(opening, "/>") + ">" + content + "</" + name + ">")})
+			} else {
+				edits = append(edits, replacement{n.endStart, n.endStart, []byte(content)})
+			}
+			continue
+		}
 		// Self-closing text elements need an explicit close tag after insertion.
 		if strings.HasSuffix(opening, "/>") {
 			name := strings.Fields(strings.TrimPrefix(opening, "<"))[0]

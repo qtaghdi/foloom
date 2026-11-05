@@ -1,3 +1,4 @@
+import { confirmSavedDocument, downloadSavedDocument, type DocumentCheckpoint } from './document-files';
 import { documentEvents } from './document-events';
 import { scopedDocumentURL } from './document-scope';
 import type { z } from 'zod';
@@ -25,6 +26,8 @@ async function requestJSON<T>(url: string, schema: z.ZodType<T>, init?: RequestI
 }
 
 export class HTTPWorkbookClient implements WorkbookClient {
+  async confirmSave(checkpoint: DocumentCheckpoint) { await confirmSavedDocument(checkpoint); }
+  async download(checkpoint: DocumentCheckpoint) { return downloadSavedDocument(checkpoint, 'xlsx'); }
   async connect(): Promise<void> {}
 
   async search(query: string) {

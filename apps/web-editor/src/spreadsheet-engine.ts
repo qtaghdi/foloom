@@ -13,6 +13,7 @@ import type {
 } from './contracts';
 
 export interface SpreadsheetEngine {
+  finishEditing?(): Promise<void>;
   setHistoryBusy?(busy: boolean): void;
   locateRange?(target: SelectionChange): boolean;
   setHistoryState?(canUndo: boolean, canRedo: boolean): void;

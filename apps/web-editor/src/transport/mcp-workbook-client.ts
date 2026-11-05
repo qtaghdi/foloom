@@ -1,3 +1,4 @@
+import { savedReceiptSchema, type DocumentCheckpoint } from './document-files';
 import { App, PostMessageTransport } from '@modelcontextprotocol/ext-apps';
 import type { z } from 'zod';
 
@@ -28,6 +29,11 @@ export class MCPWorkbookClient implements WorkbookClient {
 
   async search(query: string) {
     return this.callTool('search_workbook', { query, documentId: this.documentId }, searchResultSchema);
+  }
+
+  async confirmSave(checkpoint: DocumentCheckpoint) {
+    const receipt = await this.callTool('confirm_workbook_save', { sessionId: checkpoint.id, baseRevision: checkpoint.revision }, savedReceiptSchema);
+    if (receipt.id !== checkpoint.id || receipt.revision !== checkpoint.revision || receipt.name !== checkpoint.name) throw new Error('document revision conflict during save confirmation');
   }
 
   async getWorkbook() {
