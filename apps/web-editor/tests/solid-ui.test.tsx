@@ -73,7 +73,7 @@ const snapshot: Snapshot = {
   blocks: [{ id: 'p1', type: 'paragraph', paragraph: { id: 'p1', runs: [{ id: 'r1', text: '원본', editable: true, bold: false, italic: false }] } },
     { id: 'table1', type: 'table', rows: [{ cells: [{ id: 'c1', paragraphs: [{ id: 'p2', runs: [{ id: 'r2', text: '표 원본', editable: true, bold: true, italic: false }] }] }] }] }],
 };
-function docxFixture() {
+function docxFixture(initial: Snapshot = snapshot) {
   const sources: any[] = [];
   class Source {
     listener?: (event: { data: string }) => void;
@@ -82,13 +82,28 @@ function docxFixture() {
     addEventListener(_type: string, listener: any) { this.listener = listener; }
   }
   vi.stubGlobal('EventSource', Source);
-  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => init?.method === 'POST' ? { ...snapshot, revision: 2 } : snapshot }));
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => init?.method === 'POST' ? { ...initial, revision: 2 } : initial }));
   vi.stubGlobal('fetch', fetcher);
   return { sources, fetcher };
 }
 function edit(input: HTMLTextAreaElement, value: string) { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); }
 
 describe('Solid DOCX editor', () => {
+  it('keeps an empty text target writable throughout sequential draft input', async () => {
+    const empty: Snapshot = { ...snapshot, blocks: [{ id: 'empty', type: 'paragraph', paragraph: { id: 'empty', runs: [{ id: 'empty-run', text: '', editable: true, bold: false, italic: false }] } }] };
+    docxFixture(empty); const root = mount(() => <DocumentApp/>); await settle();
+    const input = root.querySelector('textarea')!;
+    expect(input.placeholder).toBe('여기에 입력하세요');
+    input.focus();
+    for (const text of ['한', '한글', '한글 typing']) {
+      edit(input, text);
+      expect(input.readOnly).toBe(false);
+      expect(document.activeElement).toBe(input);
+      expect(root.querySelector('textarea')).toBe(input);
+    }
+    expect(button(root, '저장').disabled).toBe(false);
+  });
+
   it('retains input nodes while draft/status changes and saves body and table in one batch', async () => {
     const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
     const input = root.querySelector('textarea')!;
