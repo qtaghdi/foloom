@@ -25,7 +25,7 @@ const loadModule = (path, globals) => {
   return module.exports;
 };
 
-const fixture = async (overrides = {}, snapshotOverrides = {}) => {
+const fixture = async (overrides = {}, snapshotOverrides = {}, applyHistoryCells) => {
   const state = { writes: 0, reloads: 0, recoveries: [], statuses: [], revisionStates: [], operations: [], appliedRevisions: [], remoteEvents: [], historyDirections: [], historyStates: [], callbacks: {}, subscriptionClosed: false };
   const snapshot = { id: 'session', sequence: 5, name: 'book.xlsx', sheets: ['Sheet1'],
     sheetDimensions: [{ name: 'Sheet1', rows: 1, columns: 1 }], canUndo: true, canRedo: false, revision: 2,
@@ -62,7 +62,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     showAIPresence() {}, dispose() {},
   };
   const engine = {
-    initialize() {}, dispose() {}, replaceWorkbook: (workbook) => { state.replacements = (state.replacements ?? 0) + 1; state.replaced = workbook; },
+    initialize() {}, dispose() {}, applyHistoryCells, replaceWorkbook: (workbook) => { state.replacements = (state.replacements ?? 0) + 1; state.replaced = workbook; },
     setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
     applyRemoteEvent: (event) => state.remoteEvents.push(event),
   };
@@ -279,6 +279,23 @@ test('undo replaces the preview once when the live event precedes the response',
   assert.equal(state.replacements, 1);
   assert.equal(state.replaced.revision, 3);
   assert.equal(state.checkpoint.sequence, 6);
+});
+
+test('content-only history updates affected cells without replacing the preview', async () => {
+  let restored = false;
+  let patched;
+  const { state, client, snapshot } = await fixture({
+    readRange: async () => ({ sheet: 'Sheet1', ref: 'A1', rows: [[{ address: 'A1', value: restored ? 'old text' : '' }]] }),
+  }, {}, changes => { patched = changes; return true; });
+  client.restoreHistory = async () => {
+    restored = true;
+    return { workbook: { ...snapshot, revision: 3 }, applied: 1 };
+  };
+  state.callbacks.onHistoryAction('undo');
+  await flush();
+  assert.equal(state.replacements, undefined);
+  assert.equal(state.reloads, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(patched)), [{ sheet: 'Sheet1', cells: [{ cell: 'A1', value: 'old text' }] }]);
 });
 
 test('history recovery keeps the current preview when the confirmed revision changed', async () => {

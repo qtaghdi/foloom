@@ -1,3 +1,4 @@
+import type { HistoryContentChange } from './spreadsheet/history-content';
 import type {
   CellEdit,
   RangeEdit,
@@ -16,6 +17,7 @@ export interface SpreadsheetEngine {
   locateRange?(target: SelectionChange): boolean;
   setHistoryState?(canUndo: boolean, canRedo: boolean): void;
   initialize(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void;
+  applyHistoryCells?(changes: HistoryContentChange[]): boolean;
   replaceWorkbook(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void;
   onCellEdit(listener: (edit: CellEdit) => void): void;
   onRangeEdit(listener: (edit: RangeEdit) => void): void;

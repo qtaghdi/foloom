@@ -1,7 +1,8 @@
+import type { HistoryContentChange } from './spreadsheet/history-content';
 import { clearContentOperations } from './spreadsheet/clear-content';
 import { bindToolbarAccessibility } from './univer-toolbar';
 import { EDITOR_ACTIVATED, FOCUSING_FX_BAR_EDITOR, IContextService, LocaleType, mergeLocales, RedoCommand, UndoCommand } from '@univerjs/core';
-import type { IRange } from '@univerjs/core';
+import type { ICellData, IRange } from '@univerjs/core';
 import { UniverDocsPlugin } from '@univerjs/docs';
 import { UniverDocsDrawingPlugin } from '@univerjs/docs-drawing';
 import { UniverDocsUIPlugin } from '@univerjs/docs-ui';
@@ -292,6 +293,36 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
       this.selectionListener?.({ sheet: worksheet.getSheetName(),
         range: toA1Range(selection.startRow, selection.startColumn, selection.endRow, selection.endColumn), state: 'selecting' });
     });
+  }
+
+  applyHistoryCells(changes: HistoryContentChange[]): boolean {
+    const workbook = this.workbook;
+    if (!workbook) return false;
+    this.applyingRemote = true;
+    try {
+      for (const { sheet, cells } of changes) {
+        const worksheet = workbook.getSheetByName(sheet);
+        if (!worksheet) return false;
+        const cellValue: Record<number, Record<number, ICellData>> = {};
+        for (const change of cells) {
+          const { row, column } = parseCellAddress(change.cell);
+          cellValue[row] ??= {};
+          cellValue[row][column] = {
+            ...toUniverCellData(change.formula ? null : change.value),
+            f: change.formula ? normalizeFormula(change.formula) : null,
+            p: null,
+            si: null,
+            t: null,
+          };
+        }
+        if (!this.univerAPI.syncExecuteCommand(SetRangeValuesMutation.id, {
+          unitId: workbook.getId(), subUnitId: worksheet.getSheetId(), cellValue,
+        })) return false;
+      }
+      return true;
+    } finally {
+      this.applyingRemote = false;
+    }
   }
 
   replaceWorkbook(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void {

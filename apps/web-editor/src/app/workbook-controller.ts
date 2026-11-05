@@ -11,6 +11,7 @@ import type {
   WorkbookSnapshot,
 } from '../contracts';
 import type { SpreadsheetEngine } from '../spreadsheet-engine';
+import { historyContentChanges } from '../spreadsheet/history-content';
 import { toA1Range } from '../spreadsheet/a1';
 import { parseCellAddress } from '../spreadsheet/a1';
 import type { EventSubscription, WorkbookClient } from '../transport/workbook-client';
@@ -133,6 +134,13 @@ export class WorkbookController {
       if (this.recoveryRequired || this.disposed) return;
       this.view.showRevision(direction === 'undo' ? 'Undoing change…' : 'Redoing change…', this.revision, 'pending');
       try {
+        const previous = this.snapshot;
+        // Bound the extra comparison reads. Larger previews use the existing replacement path.
+        const compare = previous && this.engine?.applyHistoryCells && previous.sheetDimensions.reduce(
+          (count, sheet) => count + Math.max(1, sheet.rows) * Math.max(1, sheet.columns), 0,
+        ) <= maxRangeCells;
+        const before = compare ? await this.readWorkbookPreview(previous).catch(() => undefined) : undefined;
+        if (this.recoveryRequired || this.disposed) return;
         const response = await this.client.restoreHistory(this.revision, direction);
         if (this.recoveryRequired || this.disposed) return;
         const snapshot = response.workbook;
@@ -143,9 +151,15 @@ export class WorkbookController {
         }
         this.revision = snapshot.revision;
         this.snapshot = snapshot;
-        this.loadedRanges.clear();
-        for (const range of ranges) this.recordLoadedRange(range.sheet, range.ref);
-        this.engine?.replaceWorkbook(snapshot, ranges, objects);
+        const changes = before && previous && before.confirmed?.id === previous.id &&
+          before.confirmed.revision === previous.revision && !before.initialRanges.truncated
+          ? historyContentChanges({ snapshot: previous, ...before }, { snapshot, ranges, objects })
+          : undefined;
+        if (!changes || !this.engine?.applyHistoryCells?.(changes)) {
+          this.loadedRanges.clear();
+          for (const range of ranges) this.recordLoadedRange(range.sheet, range.ref);
+          this.engine?.replaceWorkbook(snapshot, ranges, objects);
+        }
         this.subscribeToWorkbook(snapshot);
         this.view.showRevision('Saved', this.revision, 'success');
       } catch (error) {
