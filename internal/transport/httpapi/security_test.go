@@ -55,6 +55,7 @@ func TestBrowserRoutesRejectMissingInvalidAndCrossRoleCredentials(t *testing.T) 
 		{http.MethodGet, "/?token=" + securityMCPToken, ""},
 		{http.MethodGet, "/assets/not-found.js", ""},
 		{http.MethodGet, "/api/workbook", ""},
+		{http.MethodGet, "/api/search?query=private", ""},
 		{http.MethodGet, "/api/range?sheet=Sheet1&range=A1", ""},
 		{http.MethodGet, "/api/sheet-objects?sheet=Sheet1", ""},
 		{http.MethodGet, "/api/events", ""},

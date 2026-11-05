@@ -24,5 +24,5 @@ export function WorkbookApp(props: { client: WorkbookClient; createEngine: Sprea
     void controller.start();
   });
   onCleanup(dispose);
-  return <WorkbookShell view={view}/>;
+  return <WorkbookShell view={view} search={(query) => controller.search(query)}/>;
 }

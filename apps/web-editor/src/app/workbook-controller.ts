@@ -96,6 +96,19 @@ export class WorkbookController {
     }
   }
 
+  async search(query: string) {
+    if (!this.snapshot || !this.client.search || this.pendingWrites || this.historyPending || this.recoveryRequired) throw new Error('Workbook is not ready');
+    const result = await this.client.search(query);
+    if (this.disposed || result.id !== this.snapshot.id || result.revision !== this.revision || this.pendingWrites || this.historyPending || this.recoveryRequired) throw new Error('Search result is stale');
+    return { truncated: result.truncated, items: result.hits.map((hit) => ({
+      label: `${hit.sheet}!${hit.cell}`, text: hit.text,
+      locate: () => {
+        if (this.snapshot?.id !== result.id || this.revision !== result.revision) return;
+        this.view.locate({ sheet: hit.sheet, range: hit.cell });
+      },
+    })) };
+  }
+
   private async readWorkbookPreview(snapshot: WorkbookSnapshot) {
     const initialRanges = planInitialRanges(snapshot);
     const ranges: WorkbookRange[] = [];

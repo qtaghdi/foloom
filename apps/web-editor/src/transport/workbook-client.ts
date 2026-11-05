@@ -19,6 +19,7 @@ export interface EventSubscription {
 }
 
 export interface WorkbookClient {
+  search?(query: string): Promise<{ id: string; revision: number; truncated: boolean; hits: { sheet: string; cell: string; text: string }[] }>;
   connect(): Promise<void>;
   getWorkbook(): Promise<WorkbookSnapshot>;
   readRange(sheet: string, range: string): Promise<WorkbookRange>;

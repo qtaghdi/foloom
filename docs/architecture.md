@@ -73,6 +73,7 @@ MCP App resource, loopback 브라우저 대체 화면을 제공합니다. workbo
 
 - `open_workbook`
 - `get_workbook`
+- `search_workbook`
 - `read_range`
 - `get_sheet_objects`
 - `apply_operations`
@@ -220,3 +221,14 @@ XLSX editor 결정은 [ADR 0001](adr/0001-spreadsheet-engine.md)을 참고하세
 
 DOCX의 저장·보안 제한과 native 검증 한계는 [사용 계약](docx-editing.md)과
 [ADR 0002](adr/0002-docx-targeted-text-editing.md)를 따릅니다.
+
+## 문서 안 검색
+
+XLSX `search_workbook`과 인증된 `GET /api/search?query=...`는 adapter의 읽기 전용
+검색을 공유합니다. 대소문자를 구분하지 않는 일반 문자열로 모든 sheet의 저장된
+표시값을 찾습니다. 수식을 계산하지 않으며 결과 200개, 행과 셀을 합한 탐색량
+1,000,000개에서 중단하고 `truncated`를 반환합니다. 검색어는 200자까지입니다.
+세션 ID와 리비전이 바뀐 응답은 UI에서 폐기합니다. DOCX 검색은 렌더링된 본문과
+표의 run을 문단별로 이어서 미저장 입력까지 포함하고 문단당 한 위치를 반환합니다.
+두 편집기는 검색 버튼, Ctrl/Cmd+F, Escape와 결과 위치 이동을 제공합니다.
+검색은 문서나 리비전을 변경하지 않습니다. 바꾸기와 다중 파일 검색은 포함하지 않습니다.

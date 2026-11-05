@@ -189,3 +189,8 @@ export const eventPollResponseSchema = z.object({
 
 export const presenceResponseSchema = z.object({ updated: z.boolean() });
 export const errorResponseSchema = z.object({ error: z.string() });
+
+export const searchResultSchema = z.object({
+  id: z.string(), revision: z.number().int().nonnegative(), truncated: z.boolean(),
+  hits: z.array(z.object({ sheet: z.string(), cell: z.string(), text: z.string() })).max(200),
+});

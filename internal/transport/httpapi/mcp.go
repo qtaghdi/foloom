@@ -255,6 +255,21 @@ func (s *Server) mcpServer() *mcp.Server {
 		return nil, session.Snapshot(), nil
 	})
 	mcp.AddTool(server, &mcp.Tool{
+		Name: "search_workbook", Title: "통합 문서 검색",
+		Description: "Search stored cell display values across all sheets, case insensitively. Returns at most 200 cells with session ID and revision. Truncated indicates a result or scan limit. Does not calculate formulas.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input struct {
+		Query string `json:"query" jsonschema:"Literal text, 1 to 200 characters"`
+	}) (*mcp.CallToolResult, xlsx.SearchResult, error) {
+		session, release, err := s.acquireSession()
+		if err != nil {
+			return nil, xlsx.SearchResult{}, err
+		}
+		defer release()
+		result, err := session.Search(ctx, input.Query)
+		return nil, result, err
+	})
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "read_range",
 		Title:       "Read Range",
 		Description: "Read cell values and formulas from an A1-style range. Formula values are cached source values or unavailable; the server does not calculate formulas.",
