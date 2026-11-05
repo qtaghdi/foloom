@@ -1,3 +1,4 @@
+import { clearContentOperations } from './spreadsheet/clear-content';
 import { bindToolbarAccessibility } from './univer-toolbar';
 import { EDITOR_ACTIVATED, FOCUSING_FX_BAR_EDITOR, IContextService, LocaleType, mergeLocales, RedoCommand, UndoCommand } from '@univerjs/core';
 import type { IRange } from '@univerjs/core';
@@ -10,7 +11,7 @@ import DrawingUIKoKR from '@univerjs/drawing-ui/locale/ko-KR';
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula';
 import { UniverRenderEnginePlugin } from '@univerjs/engine-render';
 import { createUniver } from '@univerjs/presets';
-import { UniverSheetsPlugin } from '@univerjs/sheets';
+import { ClearSelectionContentCommand, SetRangeValuesMutation, UniverSheetsPlugin } from '@univerjs/sheets';
 import type { FWorksheet, FWorkbook } from '@univerjs/sheets/facade';
 import { UniverSheetsFormulaPlugin } from '@univerjs/sheets-formula';
 import { UniverSheetsFormulaUIPlugin } from '@univerjs/sheets-formula-ui';
@@ -82,7 +83,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   private editListener: ((edit: CellEdit) => void) | undefined;
   private rangeEditListener: ((edit: RangeEdit) => void) | undefined;
   private selectionListener: ((selection: SelectionChange) => void) | undefined;
-  private operationListener: ((operation: WorkbookOperation) => void) | undefined;
+  private operationListener: ((operation: WorkbookOperation, additional?: WorkbookOperation[]) => void) | undefined;
   private viewportListener: ((viewport: ViewportChange) => void) | undefined;
   private historyListener: ((direction: HistoryDirection) => void) | undefined;
   private readonly subscriptions: Array<{ dispose(): void }> = [];
@@ -180,6 +181,19 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
       this.univerAPI.Event.CommandExecuted,
       ({ id, params }) => {
         if (this.applyingRemote || !this.operationListener) {
+          return;
+        }
+        if (id === SetRangeValuesMutation.id) {
+          const mutation = params as { trigger?: string; unitId?: string; subUnitId?: string; cellValue?: Record<number, Record<number, unknown>> } | undefined;
+          const workbook = this.workbook;
+          if (workbook && mutation?.trigger === ClearSelectionContentCommand.id &&
+              mutation.unitId === workbook.getId() && mutation.subUnitId && mutation.cellValue) {
+            const sheet = workbook.getSheetBySheetId(mutation.subUnitId);
+            if (sheet) {
+              const [first, ...remaining] = clearContentOperations(sheet.getSheetName(), mutation.cellValue);
+              if (first) this.operationListener(first, remaining);
+            }
+          }
           return;
         }
         const worksheet = this.workbook?.getActiveSheet();
@@ -391,7 +405,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     this.selectionListener = listener;
   }
 
-  onOperation(listener: (operation: WorkbookOperation) => void): void {
+  onOperation(listener: (operation: WorkbookOperation, additional?: WorkbookOperation[]) => void): void {
     this.operationListener = listener;
   }
 

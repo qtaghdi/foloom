@@ -83,7 +83,7 @@ export class WorkbookController {
       this.engine.onSelectionChange((selection) => this.queuePresence(selection));
       this.view.onLocate?.((target) => this.engine?.locateRange?.(target) ?? false);
       this.syncHistoryControls();
-      this.engine.onOperation((operation) => this.queueOperation(operation));
+      this.engine.onOperation((operation, additional) => this.queueOperation(operation, additional));
       this.engine.onViewportChange((viewport) => this.queueViewportLoad(viewport));
       this.engine.onHistoryAction((direction) => this.queueHistoryAction(direction));
       for (const range of ranges) {
@@ -189,7 +189,7 @@ export class WorkbookController {
     });
   }
 
-  private queueOperation(operation: WorkbookOperation): void {
+  private queueOperation(operation: WorkbookOperation, additional: WorkbookOperation[] = []): void {
     if (this.recoveryRequired || this.disposed || this.historyPending) return;
     this.pendingWrites++;
     this.syncHistoryControls();
@@ -202,7 +202,7 @@ export class WorkbookController {
       this.view.recordActivity?.({ id: activityId, actor: 'human', state: 'pending', title: operation.type === 'set_format' ? '선택 범위 서식 변경' : '문서 변경', location });
       this.view.showRevision(`Saving ${operation.sheet}!${target}…`, this.revision, 'pending');
       try {
-        const response = await this.client.applyOperations(this.revision, [operation]);
+        const response = await this.client.applyOperations(this.revision, [operation, ...additional]);
         if (this.recoveryRequired || this.disposed) return;
         this.revision = response.workbook.revision;
         this.snapshot = response.workbook;

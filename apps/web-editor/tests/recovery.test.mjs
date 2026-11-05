@@ -62,7 +62,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     showAIPresence() {}, dispose() {},
   };
   const engine = {
-    initialize() {}, dispose() {}, replaceWorkbook: (workbook) => { state.replaced = workbook; },
+    initialize() {}, dispose() {}, replaceWorkbook: (workbook) => { state.replacements = (state.replacements ?? 0) + 1; state.replaced = workbook; },
     setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
     applyRemoteEvent: (event) => state.remoteEvents.push(event),
   };
@@ -151,6 +151,21 @@ test('clipboard paste becomes one atomic rectangular range operation', async () 
     type: 'paste_range', sheet: 'Sheet1', range: 'B2:C3',
     cells: [[{ value: 'A' }, { value: 'B' }], [{ value: 1 }, { value: 2 }]],
   });
+});
+
+test('separate cleared cells are saved in one revision', async () => {
+  const { state, client, snapshot } = await fixture();
+  const clears = ['B1', 'D1'].map(cell => ({ type: 'set_cell', sheet: 'Sheet1', cell, value: null }));
+  client.applyOperations = async (revision, operations) => {
+    state.writes++;
+    assert.equal(revision, snapshot.revision);
+    assert.deepEqual([...operations], clears);
+    return { workbook: { ...snapshot, revision: 3 }, applied: 2 };
+  };
+  state.callbacks.onOperation(clears[0], clears.slice(1));
+  await flush();
+  assert.equal(state.writes, 1);
+  assert.equal(state.revisionStates.at(-1)[1], 3);
 });
 
 test('spreadsheet keyboard undo delegates to server-owned history', async () => {
@@ -258,10 +273,23 @@ test('undo replaces the preview once when the live event precedes the response',
     return { workbook: { ...snapshot, sequence: 6, revision: 3 }, applied: 1 };
   };
   state.callbacks.onHistoryAction('undo');
+  state.callbacks.onHistoryAction('undo');
   await flush();
   assert.equal(state.reloads, 0);
+  assert.equal(state.replacements, 1);
   assert.equal(state.replaced.revision, 3);
   assert.equal(state.checkpoint.sequence, 6);
+});
+
+test('history recovery keeps the current preview when the confirmed revision changed', async () => {
+  const { state, client, snapshot } = await fixture();
+  client.getWorkbook = async () => ({ ...snapshot, revision: 4 });
+  state.callbacks.onHistoryAction('undo');
+  await flush();
+  assert.equal(state.writes, 1);
+  assert.equal(state.reloads, 0);
+  assert.equal(state.replacements, undefined);
+  assert.match(state.recoveries[0], /changed while loading/);
 });
 
 test('unmount while connecting never mounts an engine or opens a subscription', async () => {
