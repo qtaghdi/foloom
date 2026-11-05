@@ -1,3 +1,4 @@
+import { UndoCommand, RedoCommand } from '@univerjs/core';
 const toolbar = '[data-u-comp="ribbon-toolbar"]';
 const menuTrigger = '[data-u-command][data-slot="dropdown-menu-trigger"]';
 const overflowTrigger = `${toolbar} button[data-slot="popover-trigger"]`;
@@ -17,6 +18,17 @@ export function bindToolbarAccessibility(container: HTMLElement): () => void {
     'button:not(:disabled), input:not(:disabled), [tabindex="0"]',
   )].filter(control => control.getAttribute('aria-disabled') !== 'true' && control.getClientRects().length > 0);
   const update = () => {
+    for (const [command, action, label, shortcut] of [
+      [UndoCommand.id, 'undo', '실행 취소', 'Control+Z Meta+Z'],
+      [RedoCommand.id, 'redo', '다시 실행', 'Control+Y Meta+Shift+Z'],
+    ]) {
+      for (const button of container.querySelectorAll<HTMLButtonElement>(`button[data-u-command="${command}"]`)) {
+        button.dataset.workspaceHistory = action;
+        button.setAttribute('aria-label', label!);
+        button.setAttribute('title', `${label} · ${action === 'undo' ? 'Ctrl/⌘ Z' : 'Ctrl Y / ⌘ ⇧ Z'}`);
+        button.setAttribute('aria-keyshortcuts', shortcut!);
+      }
+    }
     const more = container.querySelector(overflowTrigger);
     more?.setAttribute('aria-label', '서식 도구 더보기');
     const panel = overflowPanel();
