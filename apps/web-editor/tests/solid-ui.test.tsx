@@ -392,3 +392,38 @@ it('remaps the cached toolbar selection after save when native selection was cle
  align.value='center';align.dispatchEvent(new Event('change',{bubbles:true}));await settle();
  expect(root.querySelector<HTMLElement>('.docx-paragraph > div')?.style.textAlign).toBe('center');
 });
+
+it('creates a style definition draft in the real dialog and applies it in the same save',async()=>{
+ const show=vi.spyOn(HTMLDialogElement.prototype,'showModal').mockImplementation(function(this:HTMLDialogElement){this.open=true;});
+ const close=vi.spyOn(HTMLDialogElement.prototype,'close').mockImplementation(function(this:HTMLDialogElement){this.open=false;});
+ try{
+  const initial:Snapshot={...snapshot,styles:[],blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'제목',editable:true,bold:false,italic:false}]}}]};
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+  button(root,'스타일 정의 편집').click();await settle();expect(show).toHaveBeenCalledOnce();
+  button(root,'스타일 추가').click();await settle();
+  const name=root.querySelector<HTMLInputElement>('[aria-label="스타일 이름"]')!;name.value='새 제목';name.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+  button(root,'상속 굵게 반전').click();await settle();button(root,'닫기').click();await settle();
+  const apply=root.querySelector<HTMLSelectElement>('[aria-label="문단 스타일 적용"]')!;const option=[...apply.options].find(o=>o.textContent?.startsWith('새 제목'))!;
+  apply.value=option.value;apply.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+  expect(root.textContent).toContain('스타일 미리 보기는 저장 후 갱신됩니다.');
+  button(root,'저장').click();await settle();const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+  expect(body.operations.map((op:any)=>op.type)).toEqual(['define_style','replace_paragraphs']);
+  expect(body.operations[0].styleDefinition).toMatchObject({name:'새 제목',kind:'paragraph',run:{bold:true}});
+  expect(body.operations[1].paragraphs[0].format.styleId).toBe(body.operations[0].styleDefinition.id);
+ }finally{show.mockRestore();close.mockRestore();}
+});
+
+it('keeps the newly created style selected after a second definition is inserted',async()=>{
+ const show=vi.spyOn(HTMLDialogElement.prototype,'showModal').mockImplementation(function(this:HTMLDialogElement){this.open=true;});
+ const close=vi.spyOn(HTMLDialogElement.prototype,'close').mockImplementation(function(this:HTMLDialogElement){this.open=false;});
+ try{
+  docxFixture({...snapshot,styles:[]});const root=mount(()=><DocumentApp/>);await settle();button(root,'스타일 정의 편집').click();await settle();
+  button(root,'스타일 추가').click();await settle();
+  const name=root.querySelector<HTMLInputElement>('[aria-label="새 스타일 이름"]')!;name.value='두 번째';name.dispatchEvent(new Event('input',{bubbles:true}));
+  button(root,'스타일 추가').click();await settle();
+  const picker=root.querySelector<HTMLSelectElement>('[aria-label="편집할 스타일"]')!;
+  expect(picker.selectedOptions[0]!.textContent).toContain('두 번째');
+  button(root,'닫기').click();await settle();button(root,'스타일 정의 편집').click();await settle();
+  expect(root.querySelector<HTMLSelectElement>('[aria-label="편집할 스타일"]')!.selectedOptions[0]!.textContent).toContain('두 번째');
+ }finally{show.mockRestore();close.mockRestore();}
+});

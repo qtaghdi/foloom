@@ -223,6 +223,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 		props := p.child("pPr")
 		styleID := props.child("pStyle").attr("val")
+		if styleText(styleID, true) {
+			out.StyleID = styleID
+		}
 		if style := styles.byID[styleID]; style == nil || style.attr("type") != "paragraph" {
 			styleID = styles.paragraph
 		}
@@ -306,6 +309,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			run.BaseStyle = &InlineStyle{Bold: &base.Bold, Italic: &base.Italic, Underline: &base.Underline, Strike: &base.Strike, Color: base.Color, Font: base.Font, Highlight: base.Highlight, Vertical: base.Vertical}
 			if base.SizeHalfPoints != 0 {
 				run.BaseStyle.SizeHalfPoints = &base.SizeHalfPoints
+			}
+			if id := runProps.child("rStyle").attr("val"); styleText(id, true) {
+				run.CharacterStyleID = id
 			}
 			directRun(&run, runProps)
 			out.Runs = append(out.Runs, run)

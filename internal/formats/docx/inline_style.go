@@ -14,6 +14,9 @@ func validateInlineStyle(style *InlineStyle) error {
 	if style == nil {
 		return nil
 	}
+	if style.StyleID != nil && !styleText(*style.StyleID, true) {
+		return fmt.Errorf("invalid DOCX character style reference")
+	}
 	if style.Highlight != "" && !strings.Contains(" none yellow green cyan magenta blue red darkBlue darkCyan darkGreen darkMagenta darkRed darkYellow darkGray lightGray black white ", " "+style.Highlight+" ") {
 		return fmt.Errorf("invalid DOCX highlight")
 	}
@@ -77,6 +80,12 @@ func inlineProperties(props *node, data []byte, style *InlineStyle) (string, err
 		overrides[name] = true
 		additions.WriteString(`<dw:` + name + ` xmlns:dw="` + wordNS + `" dw:val="` + escapeText(value) + `"/>`)
 	}
+	if style.StyleID != nil {
+		overrides["rStyle"] = true
+		if *style.StyleID != "" {
+			property("rStyle", *style.StyleID)
+		}
+	}
 	if style.Underline != nil {
 		value := "none"
 		if *style.Underline {
@@ -107,15 +116,43 @@ func inlineProperties(props *node, data []byte, style *InlineStyle) (string, err
 		value := escapeText(style.Font)
 		additions.WriteString(`<dw:rFonts xmlns:dw="` + wordNS + `" dw:ascii="` + value + `" dw:hAnsi="` + value + `" dw:eastAsia="` + value + `" dw:cs="` + value + `"/>`)
 	}
-	var content strings.Builder
+	// Insert named properties in schema order without reordering untouched XML.
+	type chunk struct{ name, raw string }
+	chunks := []chunk{}
 	if props != nil {
 		for _, child := range props.children {
 			if child.name.Space == wordNS && overrides[child.name.Local] {
 				continue
 			}
-			content.Write(data[child.start:child.end])
+			chunks = append(chunks, chunk{child.name.Local, string(data[child.start:child.end])})
 		}
 	}
-	content.WriteString(additions.String())
+	extra := []byte(`<dwx:rPr xmlns:dwx="` + wordNS + `">` + additions.String() + `</dwx:rPr>`)
+	parsed, err := parseXML(extra)
+	if err != nil {
+		return "", err
+	}
+	order := strings.Fields("rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange")
+	rank := map[string]int{}
+	for i, name := range order {
+		rank[name] = i + 1
+	}
+	for _, child := range parsed.children {
+		item := chunk{child.name.Local, string(extra[child.start:child.end])}
+		index := len(chunks)
+		for i, old := range chunks {
+			if rank[old.name] > rank[item.name] {
+				index = i
+				break
+			}
+		}
+		chunks = append(chunks, chunk{})
+		copy(chunks[index+1:], chunks[index:])
+		chunks[index] = item
+	}
+	var content strings.Builder
+	for _, c := range chunks {
+		content.WriteString(c.raw)
+	}
 	return opening + content.String() + closing, nil
 }

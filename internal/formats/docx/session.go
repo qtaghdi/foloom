@@ -116,6 +116,9 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지와 일부 스타일을 미리 보며 자동 페이지 매김, 이미지, 머리글과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	if len(s.pkg.styles.byID) > 500 {
+		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
+	}
 	if unsupported {
 		warnings = append(warnings, "지원하지 않는 구조는 읽기 전용으로 표시하거나 화면에서 생략합니다.")
 	}
@@ -129,7 +132,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if history.Redo > 0 {
 		history.RedoActor = s.history.manifest.Redo[history.Redo-1].Actor
 	}
-	return Snapshot{History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -151,6 +154,10 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	if len(input.Operations) == 0 || len(input.Operations) > maxOperations {
 		return Snapshot{}, fmt.Errorf("DOCX batch requires 1 to 1000 operations")
 	}
+	parts, styles, err := s.pkg.prepareStyles(input.Operations)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	_, targets, _, err := inspect(s.pkg.document, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
@@ -160,6 +167,23 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	textBytes := 0
 	structuralBytes := 0
 	for _, op := range input.Operations {
+		if op.Type == "define_style" {
+			continue
+		}
+		for _, p := range op.Paragraphs {
+			if p.Format != nil {
+				if err := validateStyleReference(styles, p.Format.StyleID, "paragraph"); err != nil {
+					return Snapshot{}, err
+				}
+			}
+			for _, r := range p.Runs {
+				if r.Style != nil {
+					if err := validateStyleReference(styles, r.Style.StyleID, "character"); err != nil {
+						return Snapshot{}, err
+					}
+				}
+			}
+		}
 		t, ok := targets[op.TargetID]
 		if op.Type == "replace_paragraphs" {
 			last, exists := targets[op.EndTargetID]
@@ -290,7 +314,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 			edits = append(edits, replacement{n.start, n.endStart, []byte(opening + escapeText(op.Text))})
 		}
 	}
-	if len(edits) == 0 {
+	if len(edits) == 0 && len(parts) == 0 {
 		if err := s.checkSource(); err != nil {
 			return Snapshot{}, err
 		}
@@ -317,7 +341,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		offset = e.end
 	}
 	document = append(document, s.pkg.document[offset:]...)
-	content, err := s.pkg.serialize(document)
+	content, err := s.pkg.serializeParts(document, parts)
 	if err != nil {
 		return Snapshot{}, err
 	}

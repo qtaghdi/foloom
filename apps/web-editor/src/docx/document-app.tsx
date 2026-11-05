@@ -70,7 +70,7 @@ export function DocumentApp() {
     const index = previousField && state().snapshot?.id === snapshot.id ? fields.indexOf(previousField) : -1;
     const selection = index >= 0 && previousField ? [previousField.selectionStart, previousField.selectionEnd] as const : undefined;
     const restoringSave = state().saving;
-    if(!focus && !restoringSave)setFormattingSelection(undefined);
+    if(!focus && !restoringSave){setFormattingSelection(undefined);setFocusedRun(undefined);}
     if (state().snapshot?.id !== snapshot.id) setFocusedRun(undefined);
     view.render(snapshot);
     if (focus) {
@@ -106,10 +106,14 @@ export function DocumentApp() {
   };
   const selectedStyles = createMemo(() => {
     draftVersion();state().snapshot;const selection=formattingSelection();
-    return selection ? controller.richSelection(selection)?.flatMap(p=>p.map(r=>r.style??{}))??[] : [];
+    return selection ? controller.selectedRuns(selection).map(run=>({...run,underline:Boolean(run.underline),strike:Boolean(run.strike),highlight:run.highlight??'none',vertical:run.vertical??'baseline'})) : [];
   });
   const selectedParagraphFormats=createMemo(()=>{draftVersion();state().snapshot;const selection=formattingSelection();return selection?controller.selectedParagraphs(selection).map(p=>p.layout??{}):[];});
   const applyParagraphFormat=(format:import('./contracts').ParagraphFormat)=>{const selection=formattingSelection();if(selection&&controller.formatParagraph(selection,format))setDraftVersion(v=>v+1);};
+  const stylesCatalog=createMemo(()=>{draftVersion();state().snapshot;return controller.styles();});
+  const selectedParagraphStyleIds=createMemo(()=>{draftVersion();state().snapshot;const selection=formattingSelection();return selection?controller.selectedParagraphs(selection).map(p=>p.styleId??''):[];});
+  const selectedCharacterStyleIds=createMemo(()=>{draftVersion();state().snapshot;const selection=formattingSelection();return selection?controller.selectedRuns(selection).map(run=>run.characterStyleId??''):[];});
+  const stylePending=createMemo(()=>{draftVersion();state().snapshot;return controller.hasStyleDrafts();});
   const applyFormat = (style: import('./contracts').InlineStyle) => {
     const selection=formattingSelection();if(selection && controller.format(selection,style))setDraftVersion(v=>v+1);
   };
@@ -186,7 +190,7 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentToolbar paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
+    <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>

@@ -15,9 +15,10 @@ type part struct {
 }
 
 type documentPackage struct {
-	parts    []part
-	document []byte
-	styles   previewStyles
+	parts      []part
+	document   []byte
+	styles     previewStyles
+	stylesPath string
 }
 
 func loadPackage(content []byte) (*documentPackage, error) {
@@ -158,6 +159,7 @@ func loadPackage(content []byte) (*documentPackage, error) {
 	if !mainFound || !contentTypeFound {
 		return nil, fmt.Errorf("unsupported DOCX main document mapping")
 	}
+	p.stylesPath = stylesPath
 	for _, part := range p.parts {
 		if part.header.Name == stylesPath {
 			root, _ := parseXML(part.data)

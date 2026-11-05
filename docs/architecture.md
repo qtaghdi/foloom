@@ -328,3 +328,12 @@ DOCX 글자 도구는 source run의 일부 범위를 분리한 뒤 typed `Inline
 변경입니다. adapter는 원본 pPr의 대상 속성과 충돌하는 대체 길이 속성만
 교체합니다. UI는 pt, API는 twips와 240분율 줄 간격을 사용하며 초안과 확정
 이력은 글자 서식과 같은 transaction 경계를 따릅니다.
+
+DOCX 스타일 작성은 `define_style` operation과 문단·run의 `styleId` 참조를
+기존 batch에 결합합니다. format adapter가 스타일 part와 관계·content type을
+검증하고 필요한 part만 교체합니다. 처음 part를 추가할 때도 기존 이름을
+덮어쓰지 않습니다. `serializeParts`는 바꾸지 않는 ZIP header와 part payload를
+유지합니다. 문서 XML·스타일·관계 변경은 하나의 파일 교체와 revision·이력으로
+확정합니다. UI의 스타일 정의 초안은 controller에서 관리하며 저장 후 canonical
+snapshot으로 상속 미리 보기를 갱신합니다. 스타일 정의의 토글과 직접 run의
+절대 속성은 각각 Word 상속 규칙을 유지합니다.

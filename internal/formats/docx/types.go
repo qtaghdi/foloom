@@ -20,19 +20,20 @@ const (
 )
 
 type Run struct {
-	BaseStyle      *InlineStyle `json:"baseStyle,omitempty"`
-	Underline      bool         `json:"underline,omitempty"`
-	Strike         bool         `json:"strike,omitempty"`
-	Highlight      string       `json:"highlight,omitempty"`
-	Vertical       string       `json:"vertical,omitempty"`
-	ID             string       `json:"id"`
-	Text           string       `json:"text"`
-	Editable       bool         `json:"editable"`
-	Bold           bool         `json:"bold"`
-	Italic         bool         `json:"italic"`
-	SizeHalfPoints int          `json:"sizeHalfPoints,omitempty"`
-	Color          string       `json:"color,omitempty"`
-	Font           string       `json:"font,omitempty"`
+	CharacterStyleID string       `json:"characterStyleId,omitempty"`
+	BaseStyle        *InlineStyle `json:"baseStyle,omitempty"`
+	Underline        bool         `json:"underline,omitempty"`
+	Strike           bool         `json:"strike,omitempty"`
+	Highlight        string       `json:"highlight,omitempty"`
+	Vertical         string       `json:"vertical,omitempty"`
+	ID               string       `json:"id"`
+	Text             string       `json:"text"`
+	Editable         bool         `json:"editable"`
+	Bold             bool         `json:"bold"`
+	Italic           bool         `json:"italic"`
+	SizeHalfPoints   int          `json:"sizeHalfPoints,omitempty"`
+	Color            string       `json:"color,omitempty"`
+	Font             string       `json:"font,omitempty"`
 }
 
 // Layout fields are bounded preview hints. They never participate in writes.
@@ -46,17 +47,18 @@ type PageLayout struct {
 }
 
 type ParagraphFormat struct {
-	Align         string `json:"align,omitempty"`
-	Left          *int   `json:"left,omitempty"`
-	Right         *int   `json:"right,omitempty"`
-	FirstLine     *int   `json:"firstLine,omitempty"`
-	Hanging       *int   `json:"hanging,omitempty"`
-	Before        *int   `json:"before,omitempty"`
-	After         *int   `json:"after,omitempty"`
-	Line          *int   `json:"line,omitempty"`
-	LineRule      string `json:"lineRule,omitempty"`
-	Bidi          *bool  `json:"bidi,omitempty"`
-	TextDirection string `json:"textDirection,omitempty"`
+	StyleID       *string `json:"styleId,omitempty"`
+	Align         string  `json:"align,omitempty"`
+	Left          *int    `json:"left,omitempty"`
+	Right         *int    `json:"right,omitempty"`
+	FirstLine     *int    `json:"firstLine,omitempty"`
+	Hanging       *int    `json:"hanging,omitempty"`
+	Before        *int    `json:"before,omitempty"`
+	After         *int    `json:"after,omitempty"`
+	Line          *int    `json:"line,omitempty"`
+	LineRule      string  `json:"lineRule,omitempty"`
+	Bidi          *bool   `json:"bidi,omitempty"`
+	TextDirection string  `json:"textDirection,omitempty"`
 }
 type ParagraphLayout struct {
 	Left          *int   `json:"left,omitempty"`
@@ -73,6 +75,7 @@ type ParagraphLayout struct {
 }
 
 type Paragraph struct {
+	StyleID           string           `json:"styleId,omitempty"`
 	StructureEditable bool             `json:"structureEditable"`
 	PageBreakBefore   bool             `json:"pageBreakBefore,omitempty"`
 	PageBreakAfter    bool             `json:"pageBreakAfter,omitempty"`
@@ -109,6 +112,7 @@ type HistoryInput struct {
 	Direction    string `json:"direction" jsonschema:"undo or redo"`
 }
 type Snapshot struct {
+	Styles   []StyleInfo  `json:"styles"`
 	History  HistoryState `json:"history"`
 	ID       string       `json:"id"`
 	Name     string       `json:"name"`
@@ -130,16 +134,17 @@ type ParagraphContent struct {
 // InlineStyle contains explicit, bounded clipboard formatting overrides. Source
 // run properties not named here remain unchanged.
 type InlineStyle struct {
-	Reset          bool   `json:"reset,omitempty"`
-	Underline      *bool  `json:"underline,omitempty"`
-	Strike         *bool  `json:"strike,omitempty"`
-	Highlight      string `json:"highlight,omitempty"`
-	Vertical       string `json:"vertical,omitempty"`
-	Bold           *bool  `json:"bold,omitempty"`
-	Italic         *bool  `json:"italic,omitempty"`
-	Color          string `json:"color,omitempty"`
-	Font           string `json:"font,omitempty"`
-	SizeHalfPoints *int   `json:"sizeHalfPoints,omitempty"`
+	StyleID        *string `json:"styleId,omitempty"`
+	Reset          bool    `json:"reset,omitempty"`
+	Underline      *bool   `json:"underline,omitempty"`
+	Strike         *bool   `json:"strike,omitempty"`
+	Highlight      string  `json:"highlight,omitempty"`
+	Vertical       string  `json:"vertical,omitempty"`
+	Bold           *bool   `json:"bold,omitempty"`
+	Italic         *bool   `json:"italic,omitempty"`
+	Color          string  `json:"color,omitempty"`
+	Font           string  `json:"font,omitempty"`
+	SizeHalfPoints *int    `json:"sizeHalfPoints,omitempty"`
 }
 type RunContent struct {
 	Style    *InlineStyle `json:"style,omitempty"`
@@ -147,13 +152,31 @@ type RunContent struct {
 	Text     string       `json:"text"`
 }
 
+type StyleDefinition struct {
+	ID        string           `json:"id"`
+	Name      string           `json:"name,omitempty"`
+	Kind      string           `json:"kind"`
+	BasedOn   *string          `json:"basedOn,omitempty"`
+	Run       *InlineStyle     `json:"run,omitempty"`
+	Paragraph *ParagraphFormat `json:"paragraph,omitempty"`
+}
+type StyleInfo struct {
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Kind      string           `json:"kind"`
+	BasedOn   string           `json:"basedOn,omitempty"`
+	Editable  bool             `json:"editable"`
+	Run       *InlineStyle     `json:"run,omitempty"`
+	Paragraph *ParagraphFormat `json:"paragraph,omitempty"`
+}
 type Operation struct {
-	EndTargetID  string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
-	Paragraphs   []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type         string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, or replace_paragraphs for an editable contiguous paragraph range"`
-	TargetID     string             `json:"targetId" jsonschema:"Editable run ID from the current get_docx snapshot"`
-	ExpectedText string             `json:"expectedText" jsonschema:"Exact current text, including whitespace"`
-	Text         string             `json:"text" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
+	StyleDefinition *StyleDefinition   `json:"styleDefinition,omitempty"`
+	EndTargetID     string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
+	Paragraphs      []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
+	Type            string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, or define_style"`
+	TargetID        string             `json:"targetId,omitempty" jsonschema:"Editable run ID from the current get_docx snapshot"`
+	ExpectedText    string             `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
+	Text            string             `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
 }
 
 type ApplyInput struct {

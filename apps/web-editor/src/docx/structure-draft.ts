@@ -224,7 +224,7 @@ export class StructureDraft {
       const merged={...p.format,...format};
       if(format.firstLine!==undefined)delete merged.hanging;
       if(format.hanging!==undefined)delete merged.firstLine;
-      p.format=merged;p.layout={...p.layout,...format};
+      p.format=merged;if(format.styleId!==undefined)p.styleId=format.styleId;p.layout={...p.layout,...format};
       if(format.firstLine!==undefined)delete p.layout.hanging;
       if(format.hanging!==undefined)delete p.layout.firstLine;
       this.paragraphGroup.get(p.sourceId)!.changed=true;
@@ -247,7 +247,7 @@ export class StructureDraft {
       if (!collapsed && start===end) continue;
       const combined:InlineStyle=style.reset?{...style}:{...run.style,...style};
       const baseline=combined.reset ? {bold:false,italic:false,underline:false,strike:false,color:undefined,font:undefined,sizeHalfPoints:undefined,highlight:undefined,vertical:undefined,...run.baseStyle} : run;
-      const selected:DraftRun={...run,...baseline,...combined,id:this.id(),text:run.text.slice(start,end),style:combined};
+      const selected:DraftRun={...run,...baseline,...combined,...combined.styleId!==undefined?{characterStyleId:combined.styleId}:{},id:this.id(),text:run.text.slice(start,end),style:combined};
       const pieces:DraftRun[]=[];
       if(start) pieces.push({...run,text:run.text.slice(0,start)});
       pieces.push(selected);
@@ -264,6 +264,11 @@ export class StructureDraft {
   replaceRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): DraftFocus | undefined {
     if (!paragraphs.length || paragraphs.length>1000 || paragraphs.some(p=>!p.length)) return;
     return this.replace(selection,paragraphs.map(p=>p.map(r=>r.text).join('')).join('\n'),false,paragraphs);
+  }
+  selectedRuns(selection:TextSelection):Run[] {
+    const range=this.normalized(selection);if(!range)return [];
+    const collapsed=range.start.runId===range.end.runId&&range.start.offset===range.end.offset;
+    return range.runs.filter((item,index)=>collapsed||(index===range.runs.length-1?range.end.offset:item.run.text.length)>(index===0?range.start.offset:0)).map(item=>item.run);
   }
   selectedRich(selection: TextSelection): ClipboardParagraph[] | undefined {
     const range=this.normalized(selection);if (!range) return;

@@ -12,6 +12,9 @@ func validateParagraphFormat(f *ParagraphFormat) error {
 	if f == nil {
 		return nil
 	}
+	if f.StyleID != nil && !styleText(*f.StyleID, true) {
+		return fmt.Errorf("invalid DOCX paragraph style reference")
+	}
 	if f.Align != "" && f.Align != "start" && f.Align != "end" && f.Align != "center" && f.Align != "justify" {
 		return fmt.Errorf("invalid DOCX paragraph alignment")
 	}
@@ -147,6 +150,14 @@ func paragraphProperties(props *node, data []byte, f *ParagraphFormat) (string, 
 			updates[name] = value
 		}
 		return err
+	}
+	if f.StyleID != nil {
+		updates["pStyle"] = ""
+		if *f.StyleID != "" {
+			if err := set("pStyle", map[string]string{"val": *f.StyleID}); err != nil {
+				return "", err
+			}
+		}
 	}
 	if f.Align != "" {
 		value := f.Align
