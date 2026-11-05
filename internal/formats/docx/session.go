@@ -22,6 +22,7 @@ type Session struct {
 	pkg                *documentPackage
 	revision, sequence uint64
 	events             []Event
+	history            *historyStore
 	// Injected only by package tests to verify persistence failures before commit.
 	rename func(string, string) error
 }
@@ -46,7 +47,24 @@ func Open(ctx context.Context, filename string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newSession(resolved, content, pkg)
+	s, err := newSession(resolved, content, pkg)
+	if err != nil {
+		return nil, err
+	}
+	unlock, err := lockFile(resolved)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	if err = s.checkSource(); err != nil {
+		return nil, err
+	}
+	s.history, err = loadHistory(resolved, content)
+	if err != nil {
+		return nil, err
+	}
+	s.revision = s.history.manifest.Revision
+	return s, nil
 }
 
 func newSession(filename string, content []byte, pkg *documentPackage) (*Session, error) {
@@ -55,6 +73,7 @@ func newSession(filename string, content []byte, pkg *documentPackage) (*Session
 		return nil, err
 	}
 	s := &Session{path: filename, id: hex.EncodeToString(id[:]), content: content, pkg: pkg, revision: 1, rename: os.Rename}
+	s.history = &historyStore{dir: historyPath(filename), manifest: historyManifest{Version: 1, Revision: 1, Current: historyHash(content)}}
 	if _, err := s.snapshotLocked(); err != nil {
 		return nil, err
 	}
@@ -100,7 +119,17 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if unsupported {
 		warnings = append(warnings, "지원하지 않는 구조는 읽기 전용으로 표시하거나 화면에서 생략합니다.")
 	}
-	return Snapshot{ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	if s.history.warning != "" {
+		warnings = append(warnings, s.history.warning)
+	}
+	history := HistoryState{Undo: len(s.history.manifest.Undo), Redo: len(s.history.manifest.Redo)}
+	if history.Undo > 0 {
+		history.UndoActor = s.history.manifest.Undo[history.Undo-1].Actor
+	}
+	if history.Redo > 0 {
+		history.RedoActor = s.history.manifest.Redo[history.Redo-1].Actor
+	}
+	return Snapshot{History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -299,25 +328,12 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	if _, _, _, err := inspect(candidate.document, s.id, s.revision+1); err != nil {
 		return Snapshot{}, err
 	}
-	unlock, err := lockFile(s.path)
-	if err != nil {
-		return Snapshot{}, err
+	if actor != "ai" && actor != "human" {
+		return Snapshot{}, fmt.Errorf("DOCX actor must be human or ai")
 	}
-	defer unlock()
-	if err := s.checkSource(); err != nil {
-		return Snapshot{}, err
-	}
-	if err := replaceFile(ctx, s.path, content, s.checkSource, s.rename); err != nil {
-		return Snapshot{}, err
-	}
-	s.content, s.pkg = content, candidate
-	s.revision++
-	s.sequence++
-	s.events = append(s.events, Event{Sequence: s.sequence, Revision: s.revision, Actor: actor, Type: "docx.committed"})
-	if len(s.events) > 128 {
-		s.events = s.events[len(s.events)-128:]
-	}
-	return s.snapshotLocked()
+	m := historyManifest{Version: 1, Revision: s.revision + 1, Current: historyHash(content), Undo: append(append([]historyEntry(nil), s.history.manifest.Undo...), historyEntry{Hash: historyHash(s.content), Size: len(s.content), Actor: actor})}
+	trimHistory(&m)
+	return s.persistHistory(ctx, content, candidate, m, actor)
 }
 func (s *Session) checkSource() error {
 	content, err := readFile(s.path)

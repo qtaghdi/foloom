@@ -86,8 +86,9 @@ inline preview 대신 이 URL을 browser surface에 엽니다. 다른 도구는 
 전 명확한 오류를 반환합니다. MCP `document-xlsx` prompt와 host별 skill은 전체
 workbook 대신 metadata와 필요한 범위만 읽는 workflow를 제공합니다.
 
-DOCX는 `create_docx`, `open_docx`, `get_docx`, `apply_docx_operations` 전용 도구,
-`/api/docx`와 `/api/docx/operations`, `/api/docx/events`, `/docx` 브라우저를
+DOCX는 `create_docx`, `open_docx`, `get_docx`, `apply_docx_operations`,
+`restore_docx_history` 전용 도구, `/api/docx`, `/api/docx/operations`,
+`/api/docx/history`, `/api/docx/events`, `/docx` 브라우저를
 사용합니다. DOCX event는 별도 bounded replay와 sequence·revision을 가지며
 SSE 전송은 1초 간격으로 새로운 commit을 확인합니다. 문서 교체나 gap은 reload를
 요청하고 local draft가 있으면 복구 전 저장을 차단합니다.

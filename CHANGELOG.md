@@ -8,6 +8,11 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- #86 DOCX의 사람·AI 확정 batch를 같은 순서의 서버 이력으로 보관합니다.
+  전체 패키지를 복원하는 실행 취소·다시 실행 API와 MCP 도구, 최대 10개·64 MiB
+  이력 한도와 재시작 시 hash 기반 pending 복구를 추가합니다. 외부 변경,
+  stale revision, 손상된 snapshot과 저장 실패는 문서·리비전을 바꾸지 않습니다.
+
 - #84 DOCX corpus 출처·SHA-256 검사, 서로 다른 내용의 반복 저장 보존 회귀와
   native 검사용 복사본 내보내기를 추가했습니다. 기능별 지원표와 native 품질
   승격 기준을 기록하고 Word 읽기 검증과 미검증 범위를 구분했습니다.

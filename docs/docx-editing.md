@@ -251,3 +251,38 @@ HTML은 live DOM에 붙이지 않고 inert template에서 제한된 텍스트·�
 입력을 복사하고 명시적으로 다시 불러오기 전에는 자동 재시도하지 않습니다.
 OS의 실제 한국어·일본어·중국어 입력기 검증은 DOM composition 회귀와
 구분하며 실행하지 않은 조합은 검증 완료로 간주하지 않습니다.
+
+### 확정된 DOCX 이력
+
+`get_docx`와 HTTP snapshot의 `history`는 undo·redo 개수와 다음 복원 대상
+batch의 actor(`human` 또는 `ai`)를 반환합니다. 사람·AI의 확정 batch는 하나의
+시간순 이력에 쌓입니다. 실행 취소는 다음 actor를 확인한 뒤 현재 `sessionId`,
+`baseRevision`, `direction: undo`로 `restore_docx_history` 또는
+`POST /api/docx/history`를 호출합니다. 다시 실행은 `direction: redo`입니다.
+복원 자체도 새 revision과 ordered event를 발행하며 과거 revision으로
+되돌아가지 않습니다. 빈 이력·잘못된 방향·다른 세션·stale revision은 거부합니다.
+
+이력은 개별 XML 역연산이 아닌 전체 DOCX snapshot입니다. 지원 batch의 문단·
+글자 서식 외에 표·그림·미지원 part도 해당 확정 시점의 바이트로 복원합니다.
+새 편집을 확정하면 redo 분기를 폐기합니다. undo와 redo를 합해 최대 10개,
+64 MiB의 과거 snapshot을 유지하며 초과 시 오래된 undo부터 줄입니다.
+현재 문서와 임시 저장 공간은 이 보관 한도와 별개입니다.
+
+정규화한 원본 경로별 `.document-workspace-docx-history/<경로 SHA-256>`에
+비공개 snapshot과 manifest를 저장합니다. 이 디렉터리에는 문서 내용이
+포함되므로 Git에서 제외합니다. 작업 복사본은 해당 복사본 디렉터리 안에 이력을
+두며 파일 닫기 시 함께 정리됩니다. 원본 경로의 이력은 재시작 후에도 남습니다.
+파일을 이동하면 별도 이력으로 시작합니다. 원본 파일만 복사해서는 이력이
+이동하지 않습니다.
+
+파일 writer lock 안에서 현재 hash를 확인하고 이전 snapshot과 다음 manifest를
+먼저 준비합니다. DOCX를 같은 디렉터리의 임시 파일로 원자 교체한 다음
+manifest를 확정합니다. 교체 전 실패는 원본과 revision을 유지합니다. 교체 후
+manifest 확정만 실패하면 문서는 확정된 것으로 응답하고 경고를 표시합니다.
+재시작은 pending의 현재 hash가 실제 DOCX와 같을 때만 확정 이력을 복구합니다.
+다른 hash의 pending은 폐기하며 손상·누락된 이력은 경고 후 새 이력으로
+시작합니다. 잘못된 이력을 문서에 자동 적용하지 않습니다. sidecar 경로와
+snapshot은 symlink를 거부하고 크기·hash·manifest 경로를 검증합니다.
+
+이 보장은 프로세스 중단 후 재열기 기준입니다. 파일 시스템·전원 장애로 저장
+장치가 동기화된 데이터를 잃는 경우까지 완전한 내구성을 주장하지 않습니다.

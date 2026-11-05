@@ -108,6 +108,22 @@ func (s *Server) applyDOCX(ctx context.Context, input docx.ApplyInput, actor str
 	defer release()
 	return session.Apply(ctx, input, actor)
 }
+func (s *Server) restoreDOCX(ctx context.Context, input docx.HistoryInput, actor string) (docx.Snapshot, error) {
+	if !s.scoped && input.SessionID != "" {
+		s.sessionMu.RLock()
+		document := s.documents[input.SessionID]
+		s.sessionMu.RUnlock()
+		if document != nil && document.Kind == "docx" {
+			return document.server.restoreDOCX(ctx, input, actor)
+		}
+	}
+	session, release, err := s.acquireDOCX()
+	if err != nil {
+		return docx.Snapshot{}, err
+	}
+	defer release()
+	return session.RestoreHistory(ctx, input, actor)
+}
 func (s *Server) docxLaunchURL(id string) (string, error) {
 	url, err := s.issueBrowserLaunchURL()
 	if url != "" {
@@ -142,6 +158,10 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		snapshot, err := s.applyDOCX(ctx, input, "ai")
 		return nil, snapshot, err
 	})
+	mcp.AddTool(server, &mcp.Tool{Name: "restore_docx_history", Title: "DOCX 실행 취소·다시 실행", Description: "Restore one complete accepted DOCX batch from the shared chronological human/AI history. Inspect history, sessionId and current revision first. direction is undo or redo. New writes discard redo. Refresh after conflicts.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.HistoryInput) (*mcp.CallToolResult, docx.Snapshot, error) {
+		snapshot, err := s.restoreDOCX(ctx, input, "ai")
+		return nil, snapshot, err
+	})
 }
 func (s *Server) docxRoutes() {
 	s.mux.HandleFunc("GET /docx", s.docxIndex)
@@ -167,6 +187,30 @@ func (s *Server) docxRoutes() {
 			return
 		}
 		snapshot, err := s.applyDOCX(r.Context(), input, "human")
+		if err != nil {
+			status := http.StatusBadRequest
+			if errors.Is(err, docx.ErrRevisionConflict) || errors.Is(err, docx.ErrExternalChange) || errors.Is(err, docx.ErrWriterBusy) {
+				status = http.StatusConflict
+			}
+			writeError(w, status, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, snapshot)
+	})))
+	s.mux.Handle("POST /api/docx/history", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var input docx.HistoryInput
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid DOCX history request: %w", err))
+			return
+		}
+		if err := decoder.Decode(new(any)); err != io.EOF {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("DOCX history request must contain one JSON value"))
+			return
+		}
+		snapshot, err := s.restoreDOCX(r.Context(), input, "human")
 		if err != nil {
 			status := http.StatusBadRequest
 			if errors.Is(err, docx.ErrRevisionConflict) || errors.Is(err, docx.ErrExternalChange) || errors.Is(err, docx.ErrWriterBusy) {
