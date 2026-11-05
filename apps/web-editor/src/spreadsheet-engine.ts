@@ -12,9 +12,12 @@ import type {
 } from './contracts';
 
 export interface SpreadsheetEngine {
+  setHistoryBusy?(busy: boolean): void;
+  getSelection?(): SelectionChange | undefined;
   locateRange?(target: SelectionChange): boolean;
   setHistoryState?(canUndo: boolean, canRedo: boolean): void;
   initialize(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void;
+  replaceWorkbook(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void;
   onCellEdit(listener: (edit: CellEdit) => void): void;
   onRangeEdit(listener: (edit: RangeEdit) => void): void;
   onSelectionChange(listener: (selection: SelectionChange) => void): void;

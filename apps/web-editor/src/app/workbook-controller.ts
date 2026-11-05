@@ -4,6 +4,8 @@ import type {
   SelectionChange,
   ViewportChange,
   HistoryDirection,
+  SheetObjects,
+  WorkbookRange,
   WorkbookEvent,
   WorkbookOperation,
   WorkbookSnapshot,
@@ -52,20 +54,9 @@ export class WorkbookController {
       const snapshot = await this.client.getWorkbook();
       if (this.disposed) return;
       this.snapshot = snapshot;
-      const initialRanges = planInitialRanges(snapshot);
-      const ranges = [];
-      for (const ref of initialRanges.refs) {
-        ranges.push(await this.client.readRange(ref.sheet, ref.range));
-        if (this.disposed) return;
-      }
-      const objects = [];
-      for (const sheet of snapshot.sheets) {
-        objects.push(await this.client.readSheetObjects(sheet));
-        if (this.disposed) return;
-      }
-      const confirmed = await this.client.getWorkbook();
+      const { initialRanges, ranges, objects, confirmed } = await this.readWorkbookPreview(snapshot);
       if (this.disposed) return;
-      if (confirmed.id !== snapshot.id || confirmed.revision !== snapshot.revision) {
+      if (confirmed && (confirmed.id !== snapshot.id || confirmed.revision !== snapshot.revision)) {
         this.requireRecovery(new Error('The workbook changed while loading.'));
         return;
       }
@@ -98,13 +89,34 @@ export class WorkbookController {
       for (const range of ranges) {
         this.recordLoadedRange(range.sheet, range.ref);
       }
-      this.eventSubscription = this.client.subscribe((event) => this.handleWorkbookEvent(event), snapshot);
-      this.eventSubscription.onerror = () => {
-        this.requireRecovery(new Error('The live connection was interrupted.'));
-      };
+      this.subscribeToWorkbook(snapshot);
     } catch (error) {
       if (!this.disposed) this.view.showError(error, this.revision);
     }
+  }
+
+  private async readWorkbookPreview(snapshot: WorkbookSnapshot) {
+    const initialRanges = planInitialRanges(snapshot);
+    const ranges: WorkbookRange[] = [];
+    const objects: SheetObjects[] = [];
+    for (const ref of initialRanges.refs) {
+      ranges.push(await this.client.readRange(ref.sheet, ref.range));
+      if (this.disposed) return { initialRanges, ranges, objects };
+    }
+    for (const sheet of snapshot.sheets) {
+      objects.push(await this.client.readSheetObjects(sheet));
+      if (this.disposed) return { initialRanges, ranges, objects };
+    }
+    const confirmed = await this.client.getWorkbook();
+    return { initialRanges, ranges, objects, confirmed };
+  }
+
+  private subscribeToWorkbook(snapshot: WorkbookSnapshot): void {
+    this.eventSubscription?.close();
+    this.eventSubscription = this.client.subscribe((event) => this.handleWorkbookEvent(event), snapshot);
+    this.eventSubscription.onerror = () => {
+      this.requireRecovery(new Error('The live connection was interrupted.'));
+    };
   }
 
   private queueHistoryAction(direction: HistoryDirection): void {
@@ -114,7 +126,9 @@ export class WorkbookController {
       this.view.showRevision(direction === 'undo' ? 'Nothing to undo' : 'Nothing to redo', this.revision);
       return;
     }
+    const selection = this.engine?.getSelection?.();
     this.historyPending = true;
+    this.engine?.setHistoryBusy?.(true);
     this.syncHistoryControls();
     this.saveQueue = this.saveQueue.then(async () => {
       if (this.recoveryRequired || this.disposed) return;
@@ -122,17 +136,27 @@ export class WorkbookController {
       try {
         const response = await this.client.restoreHistory(this.revision, direction);
         if (this.recoveryRequired || this.disposed) return;
-        this.revision = response.workbook.revision;
-        this.snapshot = response.workbook;
-        this.setHistoryState(response.workbook.canUndo, response.workbook.canRedo);
-        this.recoveryRequired = true;
-        this.navigationRequested = true;
-        window.location.reload();
+        const snapshot = response.workbook;
+        const { ranges, objects, confirmed } = await this.readWorkbookPreview(snapshot);
+        if (this.recoveryRequired || this.disposed) return;
+        if (confirmed?.id !== snapshot.id || confirmed.revision !== snapshot.revision) {
+          throw new Error('The workbook changed while loading.');
+        }
+        this.revision = snapshot.revision;
+        this.snapshot = snapshot;
+        this.loadedRanges.clear();
+        for (const range of ranges) this.recordLoadedRange(range.sheet, range.ref);
+        this.engine?.replaceWorkbook(snapshot, ranges, objects);
+        if (selection) this.engine?.locateRange?.(selection);
+        this.subscribeToWorkbook(snapshot);
+        this.view.showRevision('Saved', this.revision, 'success');
       } catch (error) {
         this.requireRecovery(error);
       } finally {
         this.historyPending = false;
+        this.engine?.setHistoryBusy?.(this.recoveryRequired);
         this.syncHistoryControls();
+        if (this.pendingViewport && !this.recoveryRequired) this.queueViewportLoad(this.pendingViewport);
       }
     });
   }
@@ -168,7 +192,7 @@ export class WorkbookController {
   }
 
   private queueOperation(operation: WorkbookOperation): void {
-    if (this.recoveryRequired || this.disposed) return;
+    if (this.recoveryRequired || this.disposed || this.historyPending) return;
     this.pendingWrites++;
     this.syncHistoryControls();
     const target = operationTarget(operation);
@@ -213,7 +237,7 @@ export class WorkbookController {
   }
 
   private async loadViewport(viewport: ViewportChange): Promise<void> {
-    if (this.recoveryRequired || this.disposed) return;
+    if (this.recoveryRequired || this.disposed || this.historyPending) return;
     const snapshot = this.snapshot;
     const dimensions = snapshot?.sheetDimensions.find((candidate) => candidate.name === viewport.sheet);
     if (!snapshot || !dimensions) {
@@ -224,14 +248,14 @@ export class WorkbookController {
       return;
     }
     const ref = toA1Range(rectangle.startRow, rectangle.startColumn, rectangle.endRow, rectangle.endColumn);
-    const key = `${viewport.sheet}!${ref}`;
+    const key = `${snapshot.revision}:${viewport.sheet}!${ref}`;
     if (this.pendingRangeLoads.has(key)) {
       return;
     }
     this.pendingRangeLoads.add(key);
     try {
       const range = await this.client.readRange(viewport.sheet, ref);
-      if (this.recoveryRequired || this.disposed) return;
+      if (this.recoveryRequired || this.disposed || this.historyPending || this.snapshot?.revision !== snapshot.revision) return;
       this.engine?.applyRange(range);
       this.recordLoadedRange(viewport.sheet, range.ref);
       this.view.showRevision(`Loaded ${viewport.sheet}!${ref}`, this.revision);
@@ -277,6 +301,8 @@ export class WorkbookController {
       this.requireRecovery(new Error('Live event history is incomplete or the server restarted.'));
       return;
     }
+    // Reconnect from the confirmed history checkpoint after replacing the preview.
+    if (this.historyPending) return;
     const commitsWorkbook = event.type !== 'presence.update' && event.type !== 'cell.typing';
     if (commitsWorkbook && event.type !== 'workbook.reload' && event.revision > this.revision && (event.actor === 'ai' || this.pendingWrites === 0)) {
       const target = 'cell' in event ? event.cell : 'range' in event ? event.range : `${event.index}:${event.index + event.count - 1}`;

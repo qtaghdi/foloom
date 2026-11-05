@@ -32,8 +32,9 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     ...snapshotOverrides };
   const window = { clearTimeout() {}, setTimeout: () => 1, location: { reload: () => state.reloads++ } };
   const { WorkbookController } = loadModule(resolve(root, 'src/app/workbook-controller.ts'), { window });
+  let current = snapshot;
   const client = {
-    connect: async () => {}, getWorkbook: async () => snapshot,
+    connect: async () => {}, getWorkbook: async () => current,
     readRange: async () => ({ sheet: 'Sheet1', ref: 'A1', rows: [] }),
     readSheetObjects: async () => ({ sheet: 'Sheet1' }),
     applyOperations: async (revision, operations) => { state.writes++; state.appliedRevisions.push(revision); state.operations.push(...operations); return { workbook: { ...snapshot, revision: 3 }, applied: 1 }; },
@@ -45,6 +46,15 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     },
     ...overrides,
   };
+  let restoreHistory = client.restoreHistory;
+  Object.defineProperty(client, 'restoreHistory', {
+    get: () => async (...args) => {
+      const response = await restoreHistory(...args);
+      current = response.workbook;
+      return response;
+    },
+    set: (fn) => { restoreHistory = fn; },
+  });
   const view = { spreadsheet: {}, setWorkbookName() {}, showWarnings() {},
     recordActivity: (entry) => { state.activities ??= []; state.activities.push(entry); },
     showRevision: (message, revision, status) => { state.statuses.push(message); state.revisionStates.push([message, revision, status]); },
@@ -52,7 +62,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     showAIPresence() {}, dispose() {},
   };
   const engine = {
-    initialize() {}, dispose() {},
+    initialize() {}, dispose() {}, replaceWorkbook: (workbook) => { state.replaced = workbook; }, getSelection: () => state.selection, locateRange: (selection) => { state.located = selection; return true; },
     setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
     applyRemoteEvent: (event) => state.remoteEvents.push(event),
   };
@@ -148,7 +158,8 @@ test('spreadsheet keyboard undo delegates to server-owned history', async () => 
   state.callbacks.onHistoryAction('undo');
   await flush();
   assert.deepEqual(state.historyDirections, ['undo']);
-  assert.equal(state.reloads, 1);
+  assert.equal(state.reloads, 0);
+  assert.equal(state.replaced.revision, 3);
 });
 
 test('unavailable history remains disabled and never calls the server', async () => {
@@ -222,11 +233,11 @@ test('successful undo cancels queued edits based on the previous grid', async ()
   state.callbacks.onOperation(edit);
   await flush();
   assert.equal(state.writes, 1);
-  assert.equal(state.reloads, 1);
-  assert.deepEqual(state.historyStates.at(-1), [false, false]);
+  assert.equal(state.reloads, 0);
+  assert.deepEqual(state.historyStates.at(-1), [false, true]);
 });
 
-test('successful redo reloads and keeps history disabled during navigation', async () => {
+test('successful redo replaces the workbook in place', async () => {
   const { state, client, snapshot } = await fixture({}, { canUndo: false, canRedo: true });
   client.restoreHistory = async () => {
     state.writes++;
@@ -235,8 +246,23 @@ test('successful redo reloads and keeps history disabled during navigation', asy
   state.callbacks.onHistoryAction('redo');
   await flush();
   assert.equal(state.writes, 1);
-  assert.equal(state.reloads, 1);
-  assert.deepEqual(state.historyStates.at(-1), [false, false]);
+  assert.equal(state.reloads, 0);
+  assert.deepEqual(state.historyStates.at(-1), [true, false]);
+});
+
+test('undo keeps the view and selection when the live event precedes the response', async () => {
+  const { state, client, snapshot } = await fixture();
+  client.restoreHistory = async () => {
+    state.onEvent({ type: 'workbook.reload', state: 'undo', actor: 'human', sequence: 6, revision: 3 });
+    assert.equal(state.reloads, 0);
+    return { workbook: { ...snapshot, sequence: 6, revision: 3 }, applied: 1 };
+  };
+  state.selection = { sheet: 'Sheet1', range: 'C7', state: 'selecting' };
+  state.callbacks.onHistoryAction('undo');
+  await flush();
+  assert.equal(state.reloads, 0);
+  assert.equal(state.located?.range, 'C7');
+  assert.equal(state.checkpoint.sequence, 6);
 });
 
 test('unmount while connecting never mounts an engine or opens a subscription', async () => {
@@ -253,10 +279,10 @@ test('unmount while connecting never mounts an engine or opens a subscription', 
   controller.dispose();
 });
 
-test('confirmed history restore reloads without warning about nonexistent unsaved edits', async () => {
+test('confirmed history restore completes without warning about nonexistent unsaved edits', async () => {
   const { state, controller } = await fixture();
   state.callbacks.onHistoryAction('undo'); await flush();
-  assert.equal(state.reloads, 1);
+  assert.equal(state.reloads, 0);
   assert.equal(controller.shouldWarnBeforeUnload(), false);
   controller.dispose();
 });
