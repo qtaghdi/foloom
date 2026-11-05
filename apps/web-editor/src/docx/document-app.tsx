@@ -76,7 +76,7 @@ export function DocumentApp() {
         if (field) { field.focus({ preventScroll: true }); field.setSelectionRange(focus.start, focus.end); }
         else {
           const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
-          if (editor) restoreTextSelection(editor, { anchor: { runId: focus.runId, offset: focus.start }, focus: { runId: focus.runId, offset: focus.end } });
+          if (editor) restoreTextSelection(editor, focus.selection ?? { anchor: { runId: focus.runId, offset: focus.start }, focus: { runId: focus.runId, offset: focus.end } });
         }
       });
     } else if (richSelection && restoringSave) {

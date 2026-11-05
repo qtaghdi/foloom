@@ -328,3 +328,17 @@ it('preserves selected source text when writing a cut clipboard fails', async ()
   rich(root).dispatchEvent(new ClipboardEvent('cut',{clipboardData:clipboard,bubbles:true,cancelable:true}));await settle();
   expect(spans(root)[0]?.textContent).toBe('keep');expect(root.querySelector('#save-status')?.textContent).toBe('저장됨');
 });
+
+it('restores the entire reversed selection when IME composition is cancelled', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
+    {id:'r1',text:'앞부분',editable:true,bold:true,italic:false}, {id:'r2',text:'뒷부분',editable:true,bold:false,italic:true},
+  ]}}] };
+  docxFixture(initial); const root=mount(()=><DocumentApp/>); await settle();
+  selectRich(root,1,2,0,1);
+  const before=readTextSelection(rich(root));
+  rich(root).dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));
+  spans(root)[0]!.textContent='임시';
+  rich(root).dispatchEvent(new CompositionEvent('compositionend',{data:'',bubbles:true})); await settle();
+  expect(spans(root).map(s=>s.textContent)).toEqual(['앞부분','뒷부분']);
+  expect(readTextSelection(rich(root))).toEqual(before);
+});

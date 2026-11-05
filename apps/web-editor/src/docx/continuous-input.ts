@@ -96,8 +96,7 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
     compositionend(event: CompositionEvent) {
       if (!composition) return;
       const original = composition; composition = undefined;
-      if (event.data) apply(original, event.data);
-      else callbacks.refresh(original);
+      if (!event.data || !apply(original, event.data)) callbacks.refresh(original);
       composed = true; queueMicrotask(() => { composed = false; });
       callbacks.composition(false);
     },

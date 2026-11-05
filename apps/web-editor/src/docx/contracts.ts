@@ -45,5 +45,5 @@ export type ParagraphOperation = {
  paragraphs: Array<{ sourceId: string; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type Operation = TextOperation | ParagraphOperation;
-export type DraftFocus = { runId: string; start: number; end: number };
+export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

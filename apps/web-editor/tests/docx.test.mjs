@@ -124,3 +124,37 @@ test('DOCX rejects unsupported draft text before sending and accepts corrected e
   assert.equal(f.state.enabled.at(-1), true); await f.controller.save();
   assert.equal(f.state.writes.length, 1);
 });
+
+test('DOCX coalesces save requests until IME commits its final draft', async () => {
+  const f = fixture(); await f.controller.load(); f.controller.composition(true);
+  const first = f.controller.save(), second = f.controller.save();
+  assert.equal(f.state.writes.length, 0);
+  await f.controller.load();
+  assert.equal(f.state.renders.length, 1);
+  f.controller.edit({ ...edit, text: '한글 日本語 中文' });
+  f.controller.composition(false);
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  assert.equal(f.state.writes.length, 1);
+  assert.equal(f.state.writes[0].operations[0].text, '한글 日本語 中文');
+});
+
+test('DOCX cancels queued IME saves on remote conflict and preserves final input', async () => {
+  const f = fixture(); await f.controller.load(); f.controller.composition(true);
+  const pending = f.controller.save();
+  f.state.events.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
+  assert.equal(await pending, false);
+  assert.equal(f.state.statuses.at(-1)[1], 'conflicted');
+  f.controller.edit({ ...edit, text: '조합 보존' }); f.controller.composition(false);
+  assert.equal(await f.controller.save(), false);
+  assert.equal(f.state.writes.length, 0);
+  assert.equal(f.controller.hasDrafts(), true);
+  assert.equal(f.state.renders.length, 1);
+});
+
+test('DOCX disposal resolves an outstanding composition save without writing', async () => {
+  const f = fixture(); await f.controller.load(); f.controller.composition(true);
+  const pending = f.controller.save(); f.controller.dispose();
+  assert.equal(await pending, false);
+  f.controller.composition(false);
+  assert.equal(f.state.writes.length, 0);
+});

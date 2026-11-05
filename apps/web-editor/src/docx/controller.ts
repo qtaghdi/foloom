@@ -30,6 +30,7 @@ export class DocumentController {
   private expectedText = new Map<string, string>();
   private busy = false;
   private composing = false;
+  private compositionSaves: Array<(saved: boolean) => void> = [];
   private blocked = true;
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
@@ -60,7 +61,14 @@ export class DocumentController {
     return true;
   }
 
-  composition(active: boolean): void { this.composing = active; this.updateSave(); }
+  composition(active: boolean): void {
+    this.composing = active;
+    this.updateSave();
+    if (!active && this.compositionSaves.length) {
+      const waiting = this.compositionSaves.splice(0);
+      void this.save().then(saved => { for (const finish of waiting) finish(saved); });
+    }
+  }
   replaceSelection(selection: TextSelection, text: string, inline = false): boolean {
     if (this.busy || this.loading || this.disposed) return false;
     const focus = this.structureDraft?.replace(selection, text, inline);
@@ -83,7 +91,7 @@ export class DocumentController {
     return Boolean(range && this.replaceSelection(range, ''));
   }
   refreshSelection(selection: TextSelection): void {
-    if (this.structureDraft) this.view.render(this.structureDraft.snapshot(), { runId: selection.focus.runId, start: selection.focus.offset, end: selection.focus.offset });
+    if (this.structureDraft) this.view.render(this.structureDraft.snapshot(), { runId: selection.focus.runId, start: selection.focus.offset, end: selection.focus.offset, selection });
   }
   selectionText(selection: TextSelection): string | undefined { return this.structureDraft?.selectedText(selection); }
 
@@ -102,7 +110,7 @@ export class DocumentController {
   }
 
   async load(observed?: { sequence: number; revision: number; actor?: string }): Promise<void> {
-    if (this.busy || this.loading || this.disposed) return;
+    if (this.busy || this.loading || this.disposed || this.composing) return;
     this.loading = true;
     this.disconnect();
     this.blocked = true;
@@ -131,6 +139,9 @@ export class DocumentController {
   }
 
   async save(): Promise<boolean> {
+    if (this.composing && !this.blocked && !this.disposed) {
+      return new Promise(resolve => { this.compositionSaves.push(resolve); });
+    }
     if (this.blocked || this.busy || this.composing || this.loading || this.disposed || !this.snapshot || this.draftError()) return false;
     const hasChanges = this.hasDrafts();
     this.busy = true;
@@ -194,8 +205,8 @@ export class DocumentController {
       try { const parsed = errorResponseSchema.safeParse(await response.json()); if (parsed.success) details = parsed.data.error; } catch { /* Keep the recovery message if the response is unreadable. */ }
       const error = new Error(response.status === 409
       ? '문서 리비전 충돌 또는 외부 변경이 있습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'
-      : '문서를 읽거나 저장하지 못했습니다. 입력 내용을 복사한 뒤 다시 불러오세요.') as Error & { details?: string };
-      error.details = details; throw error;
+      : '문서를 읽거나 저장하지 못했습니다. 입력 내용을 복사한 뒤 다시 불러오세요.') as Error & { details?: string; conflict?: boolean };
+      error.details = details; error.conflict = response.status === 409; throw error;
     }
     return snapshotSchema.parse(await response.json());
   }
@@ -213,7 +224,7 @@ export class DocumentController {
         }
         if (event.type === 'docx.reload' || event.revision > (this.snapshot?.revision ?? 0)) {
           if (this.hasDrafts()) {
-            this.fail(new Error('다른 편집이 저장되었습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'));
+            this.fail(new Error('다른 편집이 저장되었습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'), true);
           } else { void this.load(event.type === 'docx.committed' ? event : undefined); }
         }
       } catch (error) { this.fail(error); }
@@ -223,10 +234,12 @@ export class DocumentController {
     };
   }
 
-  private fail(error: unknown): void {
+  private fail(error: unknown, conflict = false): void {
     this.blocked = true;
+    this.cancelCompositionSaves();
     this.disconnect();
-    this.view.status('편집 중단 · 다시 불러오기 필요', 'failed');
+    const conflicted = conflict || error instanceof Error && Boolean((error as Error & { conflict?: boolean }).conflict);
+    this.view.status(conflicted ? '편집 충돌 · 다시 불러오기 필요' : '편집 중단 · 다시 불러오기 필요', conflicted ? 'conflicted' : 'failed');
     this.view.error(error instanceof Error ? error.message : '문서 처리에 실패했습니다.', error instanceof Error ? ((error as Error & { details?: string }).details || error.message) : String(error));
     this.updateSave();
   }
@@ -239,5 +252,8 @@ export class DocumentController {
     this.view.validation?.(error);
     this.view.canSave(!this.blocked && !this.busy && this.hasDrafts() && !this.composing && !error);
   }
-  dispose(): void { this.disposed = true; this.disconnect(); }
+  private cancelCompositionSaves(): void {
+    for (const finish of this.compositionSaves.splice(0)) finish(false);
+  }
+  dispose(): void { this.disposed = true; this.cancelCompositionSaves(); this.disconnect(); }
 }
