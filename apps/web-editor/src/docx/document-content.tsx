@@ -12,6 +12,17 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     }
     return result;
   });
+  const pages = createMemo(() => {
+    const pages: Array<Array<{ block: Snapshot['blocks'][number]; index: number }>> = [[]];
+    let nextPage = false;
+    props.snapshot.blocks.forEach((block, index) => {
+      const paragraph = block.type === 'paragraph' ? block.paragraph : undefined;
+      if ((nextPage || paragraph?.pageBreakBefore) && pages.at(-1)!.length) pages.push([]);
+      pages.at(-1)!.push({ block, index });
+      nextPage = Boolean(paragraph?.pageBreakAfter);
+    });
+    return pages;
+  });
   const paragraph = (p: Paragraph, kind: Operation['type'], key: string) => <section
     class="docx-paragraph relative min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
     style={{
@@ -38,15 +49,17 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
       </div>}
     </Show>
   </section>;
-  return <Show when={props.snapshot.blocks.length} fallback={<p>표시할 수 있는 본문이 없습니다. 원본 문서는 보존됩니다.</p>}>
-    <For each={props.snapshot.blocks}>{(block, blockIndex) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${blockIndex()}`) :
+  return <For each={pages()}>{(page) => <div class="docx-paper w-full border border-slate-200 bg-white shadow-sm">
+    <Show when={page.length} fallback={<p>표시할 수 있는 본문이 없습니다. 원본 문서는 보존됩니다.</p>}>
+    <For each={page}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
       <div class="docx-table overflow-x-auto" tabindex={0} aria-label="문서 표. 좁은 화면에서는 좌우로 스크롤하세요.">
         <table class="w-full border-collapse text-left"><tbody><For each={block.rows}>{(row, rowIndex) => <tr><For each={row.cells}>{(cell, cellIndex) =>
-          <td class="min-w-24 border border-slate-300 px-2 py-1 align-top"><For each={cell.paragraphs}>{(p, pIndex) => paragraph(p, 'replace_cell_text', `${blockIndex()}-${rowIndex()}-${cellIndex()}-${pIndex()}`)}</For></td>
+          <td class="min-w-24 border border-slate-300 px-2 py-1 align-top"><For each={cell.paragraphs}>{(p, pIndex) => paragraph(p, 'replace_cell_text', `${index}-${rowIndex()}-${cellIndex()}-${pIndex()}`)}</For></td>
         }</For></tr>}</For></tbody></table>
       </div>
     }</For>
-  </Show>;
+    </Show>
+  </div>}</For>;
 }
 
 function runStyle(run: Run) {

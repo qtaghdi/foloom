@@ -1,5 +1,8 @@
+import type { HistoryContentChange } from './spreadsheet/history-content';
+import { clearContentOperations } from './spreadsheet/clear-content';
+import { bindToolbarAccessibility } from './univer-toolbar';
 import { EDITOR_ACTIVATED, FOCUSING_FX_BAR_EDITOR, IContextService, LocaleType, mergeLocales, RedoCommand, UndoCommand } from '@univerjs/core';
-import type { IRange } from '@univerjs/core';
+import type { ICellData, IRange } from '@univerjs/core';
 import { UniverDocsPlugin } from '@univerjs/docs';
 import { UniverDocsDrawingPlugin } from '@univerjs/docs-drawing';
 import { UniverDocsUIPlugin } from '@univerjs/docs-ui';
@@ -9,13 +12,13 @@ import DrawingUIKoKR from '@univerjs/drawing-ui/locale/ko-KR';
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula';
 import { UniverRenderEnginePlugin } from '@univerjs/engine-render';
 import { createUniver } from '@univerjs/presets';
-import { UniverSheetsPlugin } from '@univerjs/sheets';
+import { ClearSelectionContentCommand, SetRangeValuesMutation, UniverSheetsPlugin } from '@univerjs/sheets';
 import type { FWorksheet, FWorkbook } from '@univerjs/sheets/facade';
 import { UniverSheetsFormulaPlugin } from '@univerjs/sheets-formula';
 import { UniverSheetsFormulaUIPlugin } from '@univerjs/sheets-formula-ui';
 import { UniverSheetsNumfmtPlugin } from '@univerjs/sheets-numfmt';
 import { UniverSheetsNumfmtUIPlugin } from '@univerjs/sheets-numfmt-ui';
-import { UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
+import { SetScrollOperation, UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
 import { UniverSheetsDrawingPlugin } from '@univerjs/sheets-drawing';
 import { UniverSheetsDrawingUIPlugin } from '@univerjs/sheets-drawing-ui';
 import SheetsDrawingUIKoKR from '@univerjs/sheets-drawing-ui/locale/ko-KR';
@@ -73,13 +76,15 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   private readonly univer;
   private readonly univerAPI;
   private workbook: FWorkbook | undefined;
+  private rendered = false;
+  private selectionSubscription?: { dispose(): void };
   private canUndo = false;
   private canRedo = false;
   private updateHistoryMenu?: () => void;
   private editListener: ((edit: CellEdit) => void) | undefined;
   private rangeEditListener: ((edit: RangeEdit) => void) | undefined;
   private selectionListener: ((selection: SelectionChange) => void) | undefined;
-  private operationListener: ((operation: WorkbookOperation) => void) | undefined;
+  private operationListener: ((operation: WorkbookOperation, additional?: WorkbookOperation[]) => void) | undefined;
   private viewportListener: ((viewport: ViewportChange) => void) | undefined;
   private historyListener: ((direction: HistoryDirection) => void) | undefined;
   private readonly subscriptions: Array<{ dispose(): void }> = [];
@@ -123,27 +128,24 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         UniverSheetsConditionalFormattingPlugin,
       ],
     });
+    this.subscriptions.push({ dispose: bindToolbarAccessibility(container) });
     this.univer = univer;
     this.univerAPI = univerAPI;
   }
 
   initialize(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void {
-    let objectsApplied = false;
     this.subscriptions.push(this.univerAPI.addEvent(
       this.univerAPI.Event.LifeCycleChanged,
       ({ stage }) => {
-        if (objectsApplied || stage !== this.univerAPI.Enum.LifecycleStages.Rendered) {
+        if (this.rendered || stage !== this.univerAPI.Enum.LifecycleStages.Rendered) {
           return;
         }
-        objectsApplied = true;
+        this.rendered = true;
         this.bindHistoryMenu();
         void this.applySheetObjects(objects);
       },
     ));
-    this.workbook = this.univerAPI.createWorkbook(toUniverWorkbook(snapshot, ranges));
-    for (const range of ranges) {
-      this.applyWorkbookFeatures(range);
-    }
+    this.loadWorkbook(snapshot, ranges);
     this.subscriptions.push(this.univerAPI.addEvent(
       this.univerAPI.Event.SheetEditEnded,
       ({ worksheet, row, column, isConfirm }) => {
@@ -180,6 +182,19 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
       this.univerAPI.Event.CommandExecuted,
       ({ id, params }) => {
         if (this.applyingRemote || !this.operationListener) {
+          return;
+        }
+        if (id === SetRangeValuesMutation.id) {
+          const mutation = params as { trigger?: string; unitId?: string; subUnitId?: string; cellValue?: Record<number, Record<number, unknown>> } | undefined;
+          const workbook = this.workbook;
+          if (workbook && mutation?.trigger === ClearSelectionContentCommand.id &&
+              mutation.unitId === workbook.getId() && mutation.subUnitId && mutation.cellValue) {
+            const sheet = workbook.getSheetBySheetId(mutation.subUnitId);
+            if (sheet) {
+              const [first, ...remaining] = clearContentOperations(sheet.getSheetName(), mutation.cellValue);
+              if (first) this.operationListener(first, remaining);
+            }
+          }
           return;
         }
         const worksheet = this.workbook?.getActiveSheet();
@@ -251,13 +266,6 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
         });
       },
     ));
-    this.subscriptions.push(this.workbook.onSelectionChange((selections) => {
-      const selection = selections.at(-1);
-      const worksheet = this.workbook?.getActiveSheet();
-      if (!selection || !worksheet) return;
-      this.selectionListener?.({ sheet: worksheet.getSheetName(),
-        range: toA1Range(selection.startRow, selection.startColumn, selection.endRow, selection.endColumn), state: 'selecting' });
-    }));
     this.subscriptions.push(this.univerAPI.addEvent(
       this.univerAPI.Event.ClipboardPasted,
       ({ worksheet }) => {
@@ -275,7 +283,84 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     ));
   }
 
-  locateRange(target: SelectionChange): boolean {
+  private loadWorkbook(snapshot: WorkbookSnapshot, ranges: WorkbookRange[]): void {
+    this.workbook = this.univerAPI.createWorkbook(toUniverWorkbook(snapshot, ranges));
+    for (const range of ranges) this.applyWorkbookFeatures(range);
+    this.selectionSubscription = this.workbook.onSelectionChange((selections) => {
+      const selection = selections.at(-1);
+      const worksheet = this.workbook?.getActiveSheet();
+      if (!selection || !worksheet) return;
+      this.selectionListener?.({ sheet: worksheet.getSheetName(),
+        range: toA1Range(selection.startRow, selection.startColumn, selection.endRow, selection.endColumn), state: 'selecting' });
+    });
+  }
+
+  applyHistoryCells(changes: HistoryContentChange[]): boolean {
+    const workbook = this.workbook;
+    if (!workbook) return false;
+    this.applyingRemote = true;
+    try {
+      for (const { sheet, cells } of changes) {
+        const worksheet = workbook.getSheetByName(sheet);
+        if (!worksheet) return false;
+        const cellValue: Record<number, Record<number, ICellData>> = {};
+        for (const change of cells) {
+          const { row, column } = parseCellAddress(change.cell);
+          cellValue[row] ??= {};
+          cellValue[row][column] = {
+            ...toUniverCellData(change.formula ? null : change.value),
+            f: change.formula ? normalizeFormula(change.formula) : null,
+            p: null,
+            si: null,
+            t: null,
+          };
+        }
+        if (!this.univerAPI.syncExecuteCommand(SetRangeValuesMutation.id, {
+          unitId: workbook.getId(), subUnitId: worksheet.getSheetId(), cellValue,
+        })) return false;
+      }
+      return true;
+    } finally {
+      this.applyingRemote = false;
+    }
+  }
+
+  replaceWorkbook(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void {
+    const previousSheet = this.workbook?.getActiveSheet();
+    const sheetName = previousSheet?.getSheetName();
+    const selection = previousSheet?.getActiveRange()?.getA1Notation();
+    const scroll = previousSheet?.getScrollState();
+    this.clearRemoteHighlight();
+    this.selectionSubscription?.dispose();
+    if (this.workbook) this.univerAPI.disposeUnit(this.workbook.getId());
+    this.appliedValidations.clear();
+    this.appliedConditionalFormats.clear();
+    this.objectBindings.clear();
+    this.loadWorkbook(snapshot, ranges);
+    const worksheet = sheetName ? this.workbook?.getSheetByName(sheetName) : undefined;
+    if (worksheet && scroll && this.workbook) {
+      this.workbook.setActiveSheet(worksheet);
+      // Selection restoration must not reveal a cell outside the viewport.
+      if (selection) this.locateRange({ sheet: worksheet.getSheetName(), range: selection, state: 'selecting' }, false);
+      const row = Math.min(scroll.sheetViewStartRow, worksheet.getMaxRows() - 1);
+      const column = Math.min(scroll.sheetViewStartColumn, worksheet.getMaxColumns() - 1);
+      this.univerAPI.syncExecuteCommand(SetScrollOperation.id, {
+        unitId: this.workbook.getId(),
+        sheetId: worksheet.getSheetId(),
+        sheetViewStartRow: row,
+        sheetViewStartColumn: column,
+        offsetY: row === scroll.sheetViewStartRow ? scroll.offsetY : 0,
+        offsetX: column === scroll.sheetViewStartColumn ? scroll.offsetX : 0,
+      });
+    }
+    void this.applySheetObjects(objects);
+  }
+
+  setHistoryBusy(busy: boolean): void {
+    this.workbook?.setEditable(!busy);
+  }
+
+  locateRange(target: SelectionChange, reveal = true): boolean {
     const workbook = this.workbook;
     const worksheet = workbook?.getSheetByName(target.sheet);
     if (!workbook || !worksheet || !/^[A-Z]{1,3}[1-9][0-9]{0,6}(?::[A-Z]{1,3}[1-9][0-9]{0,6})?$/i.test(target.range)) return false;
@@ -285,9 +370,11 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     if (start.row > end.row || start.column > end.column || end.row >= worksheet.getMaxRows() || end.column >= worksheet.getMaxColumns()) return false;
     workbook.setActiveSheet(worksheet);
     worksheet.setActiveRange(worksheet.getRange(target.range));
-    const visible = worksheet.getVisibleRange();
-    if (!visible || start.row < visible.startRow || start.row > visible.endRow || start.column < visible.startColumn || start.column > visible.endColumn) {
-      worksheet.scrollToCell(start.row, start.column);
+    if (reveal) {
+      const visible = worksheet.getVisibleRange();
+      if (!visible || start.row < visible.startRow || start.row > visible.endRow || start.column < visible.startColumn || start.column > visible.endColumn) {
+        worksheet.scrollToCell(start.row, start.column);
+      }
     }
     this.selectionListener?.(target);
     return true;
@@ -349,7 +436,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     this.selectionListener = listener;
   }
 
-  onOperation(listener: (operation: WorkbookOperation) => void): void {
+  onOperation(listener: (operation: WorkbookOperation, additional?: WorkbookOperation[]) => void): void {
     this.operationListener = listener;
   }
 
@@ -497,6 +584,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
             .setWidth(source.width)
             .setHeight(source.height)
             .buildAsync();
+          if (this.workbook !== workbook) return;
           image.drawingId = sheetObjectDrawingID(group.sheet, 'image', source.id);
           this.objectBindings.set(image.drawingId, { kind: 'image', source });
           worksheet.insertImages([image]);
@@ -511,6 +599,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
             .setWidth(chart.width)
             .setHeight(chart.height)
             .buildAsync();
+          if (this.workbook !== workbook) return;
           image.drawingId = sheetObjectDrawingID(group.sheet, 'chart', chart.id);
           this.objectBindings.set(image.drawingId, { kind: 'chart', source: chart });
           worksheet.insertImages([image]);
@@ -696,6 +785,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   }
 
   dispose(): void {
+    this.selectionSubscription?.dispose();
     this.clearRemoteHighlight();
     for (const subscription of this.subscriptions) {
       subscription.dispose();

@@ -17,6 +17,7 @@ type part struct {
 type documentPackage struct {
 	parts    []part
 	document []byte
+	styles   previewStyles
 }
 
 func loadPackage(content []byte) (*documentPackage, error) {
@@ -79,6 +80,7 @@ func loadPackage(content []byte) (*documentPackage, error) {
 		return nil, fmt.Errorf("missing DOCX package parts")
 	}
 	mainFound := false
+	stylesPath := ""
 	contentTypeFound := false
 	for _, part := range p.parts {
 		if part.header.Name == "[Content_Types].xml" {
@@ -148,10 +150,20 @@ func loadPackage(content []byte) (*documentPackage, error) {
 			if part.header.Name == "_rels/.rels" && kind == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" && resolved == "word/document.xml" {
 				mainFound = true
 			}
+			if part.header.Name == "word/_rels/document.xml.rels" && kind == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" {
+				stylesPath = resolved
+			}
 		}
 	}
 	if !mainFound || !contentTypeFound {
 		return nil, fmt.Errorf("unsupported DOCX main document mapping")
+	}
+	for _, part := range p.parts {
+		if part.header.Name == stylesPath {
+			root, _ := parseXML(part.data)
+			p.styles = readPreviewStyles(root)
+			break
+		}
 	}
 	return p, nil
 }

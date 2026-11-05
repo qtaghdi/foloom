@@ -48,8 +48,7 @@ func pageLayout(body *node) *PageLayout {
 	return page
 }
 
-func paragraphLayout(props *node) *ParagraphLayout {
-	var layout ParagraphLayout
+func applyParagraphPreview(layout *ParagraphLayout, props *node) {
 	switch props.child("jc").attr("val") {
 	case "left", "start":
 		layout.Align = "start"
@@ -61,12 +60,12 @@ func paragraphLayout(props *node) *ParagraphLayout {
 		layout.Align = "justify"
 	}
 	spacing := props.child("spacing")
-	layout.Before = previewNumber(spacing.attr("before"), 0, 2880)
-	layout.After = previewNumber(spacing.attr("after"), 0, 2880)
-	if layout.Align == "" && layout.Before == nil && layout.After == nil {
-		return nil
+	if before := previewNumber(spacing.attr("before"), 0, 2880); before != nil {
+		layout.Before = before
 	}
-	return &layout
+	if after := previewNumber(spacing.attr("after"), 0, 2880); after != nil {
+		layout.After = after
+	}
 }
 
 func applyRunPreview(run *Run, props *node) {
@@ -75,6 +74,9 @@ func applyRunPreview(run *Run, props *node) {
 	}
 	color := props.child("color")
 	value := color.attr("val")
+	if color != nil {
+		run.Color = ""
+	}
 	if len(value) == 6 && color.attr("themeColor") == "" {
 		if _, err := hex.DecodeString(value); err == nil {
 			run.Color = "#" + value
@@ -90,4 +92,26 @@ func applyRunPreview(run *Run, props *node) {
 			break
 		}
 	}
+}
+
+// A break followed by text would split a paragraph mid-run. Only a trailing
+// break can be represented at a block boundary without changing edit targets.
+func trailingPageBreak(paragraph *node) *node {
+	var last *node
+	for _, run := range paragraph.children {
+		switch {
+		case run.is("r"):
+			for _, item := range run.children {
+				if !item.is("rPr") {
+					last = item
+				}
+			}
+		case !run.is("pPr"):
+			last = run
+		}
+	}
+	if last != nil && last.is("br") && last.attr("type") == "page" {
+		return last
+	}
+	return nil
 }

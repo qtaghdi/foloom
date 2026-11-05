@@ -47,9 +47,11 @@ type ParagraphLayout struct {
 }
 
 type Paragraph struct {
-	ID     string           `json:"id"`
-	Runs   []Run            `json:"runs"`
-	Layout *ParagraphLayout `json:"layout,omitempty"`
+	PageBreakBefore bool             `json:"pageBreakBefore,omitempty"`
+	PageBreakAfter  bool             `json:"pageBreakAfter,omitempty"`
+	ID              string           `json:"id"`
+	Runs            []Run            `json:"runs"`
+	Layout          *ParagraphLayout `json:"layout,omitempty"`
 }
 
 type Cell struct {

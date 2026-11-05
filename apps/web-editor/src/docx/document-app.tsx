@@ -116,14 +116,14 @@ export function DocumentApp() {
     <div class="editor-workspace flex min-h-0 flex-1 overflow-hidden" data-activity-open={activity.open()}>
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
-      <article id="document-content" aria-label="DOCX 본문과 표 편집" aria-busy={!state().snapshot} class="docx-paper w-full border border-slate-200 bg-white text-[11pt] leading-[1.35] text-stone-900 shadow-sm" tabindex={-1}>
+      <article id="document-content" aria-label="DOCX 본문과 표 편집" aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
         <Show when={state().snapshot}>{(snapshot) => <DocumentContent snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
           onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => controller.edit(operation)}/>}</Show>
       </article>
       <details class="mt-2 rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
         <summary class="editor-action min-h-11 w-fit rounded px-1 py-2 font-medium">편집 범위와 원본 보존</summary>
-        <p>용지와 일부 직접 지정 서식을 미리 봅니다. Word의 페이지 나누기와 스타일 상속은 재현하지 않습니다. 본문과 표의 기존 텍스트를 편집할 수 있습니다.</p>
+        <p>용지, 일부 스타일과 명시적으로 나눈 페이지를 미리 봅니다. 내용의 길이에 따른 자동 페이지 매김은 지원하지 않습니다. 본문과 표의 기존 텍스트를 편집할 수 있습니다.</p>
         <Show when={state().snapshot?.warnings.length}><p class="whitespace-pre-wrap">{state().snapshot?.warnings.join('\n')}</p></Show>
       </details>
       </div>

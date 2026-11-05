@@ -9,6 +9,7 @@ export const runSchema = z.object({
 const spacing = z.number().int().min(0).max(2880).optional();
 const paragraphSchema = z.object({
   id: z.string(), runs: z.array(runSchema),
+  pageBreakBefore: z.boolean().optional(), pageBreakAfter: z.boolean().optional(),
   layout: z.object({ align: z.enum(['start', 'center', 'end', 'justify']).optional(), before: spacing, after: spacing }).optional(),
 });
 const paperSize = z.number().int().min(2000).max(50000);
