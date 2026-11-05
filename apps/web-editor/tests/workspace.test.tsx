@@ -8,13 +8,13 @@ afterEach(() => { cleanup(); document.body.replaceChildren(); vi.unstubAllGlobal
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 const first = { id: 'first', path: '/tmp/a/report.docx', name: 'report.docx', kind: 'docx' };
 const second = { id: 'second', path: '/tmp/b/book.xlsx', name: 'book.xlsx', kind: 'xlsx' };
-function fixture() {
+function fixture(initial: typeof first & { uploaded?: boolean } = first) {
   const report = console.error.bind(console);
   vi.spyOn(console, 'error').mockImplementation((...args) => {
     if (!String(args[0]).includes('Iframe page loading is disabled')) report(...args);
   });
   (window as unknown as HappyWindow).happyDOM.settings.disableIframePageLoading = true;
-  let documents = [first];
+  let documents = [initial];
   const fetcher = vi.fn(async (_path: string, init?: RequestInit) => {
     if (init?.method === 'POST') { documents = [first, second]; return { ok: true, status: 200, json: async () => second }; }
     if (init?.method === 'DELETE') return { ok: true, status: 204 };
@@ -97,4 +97,18 @@ it('rejects unsupported selected files before uploading', async () => {
   input.dispatchEvent(new Event('change', { bubbles: true })); await settle();
   expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   expect(document.body.textContent).toContain('XLSX는 100 MB');
+});
+
+it('confirms closing a saved working copy so downloaded edits cannot be silently lost', async () => {
+  const fetcher = fixture({ ...first, uploaded: true, path: '' }); await settle();
+  const frame = document.querySelector('iframe')!;
+  Object.defineProperty(frame, 'contentWindow', { configurable: true, value: window });
+  const reply = (request: string) => window.dispatchEvent(new MessageEvent('message', { origin: window.location.origin, source: frame.contentWindow,
+    data: { type: 'workspace:checked', id: first.id, request, dirty: false, busy: false, message: '저장됨' } }));
+  button('report.docx 닫기').click(); reply('1'); await settle();
+  expect(document.body.textContent).toContain('필요한 수정본을 먼저 다운로드하세요');
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  expect(button('저장 후 닫기')).toBeUndefined();
+  button('복사본 닫기').click(); reply('2'); await settle();
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
 });

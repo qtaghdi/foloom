@@ -1020,7 +1020,10 @@ export const catalog = {
   "workingCopy": {"ko": "작업 복사본", "en": "Working copy", "ja": "作業用コピー", "zh-CN": "工作副本"},
   "chooseFilesHint": {"ko": "XLSX·DOCX 파일을 선택해 여러 문서를 함께 편집하세요.", "en": "Select XLSX or DOCX files to edit multiple documents together.", "ja": "XLSX・DOCX を選択して複数の文書を編集できます。", "zh-CN": "选择 XLSX 或 DOCX 文件，同时编辑多个文档。"},
   "fileSelectionInvalid": {"ko": "XLSX는 100 MB, DOCX는 32 MB 이하의 파일을 선택하세요.", "en": "Select XLSX files up to 100 MB or DOCX files up to 32 MB.", "ja": "XLSX は 100 MB、DOCX は 32 MB 以下を選択してください。", "zh-CN": "请选择不超过 100 MB 的 XLSX 或不超过 32 MB 的 DOCX 文件。"},
-  "openLimit": {"ko": "열린 파일은 최대 8개입니다. 파일을 닫은 뒤 다시 여세요.", "en": "You can open up to 8 files. Close a file and try again.", "ja": "開けるファイルは 8 個までです。ファイルを閉じて再試行してください。", "zh-CN": "最多可打开 8 个文件。请关闭文件后重试。"}
+  "openLimit": {"ko": "열린 파일은 최대 8개입니다. 파일을 닫은 뒤 다시 여세요.", "en": "You can open up to 8 files. Close a file and try again.", "ja": "開けるファイルは 8 個までです。ファイルを閉じて再試行してください。", "zh-CN": "最多可打开 8 个文件。请关闭文件后重试。"},
+  "typeHere": {"ko":"여기에 입력하세요", "en":"Type here", "ja":"ここに入力", "zh-CN":"在此输入"},
+  "closeWorkingCopyWarning": {"ko": "{name}의 작업 복사본을 닫으면 이 앱에 저장한 내용도 삭제됩니다. 필요한 수정본을 먼저 다운로드하세요.", "en": "Closing the working copy of {name} also deletes its saved edits from this app. Download your edited file first.", "ja": "{name} の作業用コピーを閉じると、このアプリに保存した編集内容も削除されます。先に編集済みファイルをダウンロードしてください。", "zh-CN": "关闭 {name} 的工作副本也会删除此应用中已保存的编辑。请先下载修改后的文件。"},
+  "closeWorkingCopy": {"ko": "복사본 닫기", "en": "Close working copy", "ja": "作業用コピーを閉じる", "zh-CN": "关闭工作副本"}
 } as const;
 export type MessageKey = keyof typeof catalog;
 export type Locale = keyof (typeof catalog)[MessageKey];
