@@ -17,6 +17,8 @@ func TestInstallStatusAndUninstallPreserveOtherHostSettings(t *testing.T) {
 	}
 	installer := &Installer{Home: home, SourceExecutable: source, GOOS: "darwin"}
 
+	legacySkill := filepath.Join(home, ".codex", "skills", "document-xlsx", "SKILL.md")
+	writeTestFile(t, legacySkill, []byte("user's XLSX skill"))
 	claudePath := installer.claudeConfigPath()
 	writeTestFile(t, claudePath, []byte(`{
   "theme": "dark",
@@ -71,12 +73,19 @@ func TestInstallStatusAndUninstallPreserveOtherHostSettings(t *testing.T) {
 		t.Fatalf("managed Codex block count = %d", count)
 	}
 
+	writeTestFile(t, installer.codexSkillPath(), []byte("custom workspace skill"))
 	removed, err := installer.Uninstall()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if removed.Binary || removed.ClaudeMCP || removed.CodexMCP || removed.ClaudeSkill || removed.CodexSkill {
 		t.Fatalf("status after uninstall = %#v", removed)
+	}
+	if got := string(readTestFile(t, installer.codexSkillPath())); got != "custom workspace skill" {
+		t.Fatalf("custom workspace skill was changed: %q", got)
+	}
+	if got := string(readTestFile(t, legacySkill)); got != "user's XLSX skill" {
+		t.Fatalf("legacy skill was changed: %q", got)
 	}
 	claude = readTestFile(t, claudePath)
 	if bytes.Contains(claude, []byte(serverName)) || !bytes.Contains(claude, []byte(`"other"`)) {
@@ -123,13 +132,13 @@ func TestInstallRejectsMalformedManagedCodexBlockBeforeWriting(t *testing.T) {
 }
 
 func TestRepositorySkillMatchesInstalledSkill(t *testing.T) {
-	path := filepath.Join("..", "..", ".agents", "skills", "document-xlsx", "SKILL.md")
+	path := filepath.Join("..", "..", ".agents", "skills", "document-workspace", "SKILL.md")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(content, documentXLSXSkill) {
-		t.Fatal("repository and installed document-xlsx skills differ")
+	if !bytes.Equal(content, documentWorkspaceSkill) {
+		t.Fatal("repository and installed document-workspace skills differ")
 	}
 }
 

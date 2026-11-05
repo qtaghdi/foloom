@@ -21,8 +21,8 @@ const (
 	installedBinMode = 0o755
 )
 
-//go:embed assets/document-xlsx/SKILL.md
-var documentXLSXSkill []byte
+//go:embed assets/document-workspace/SKILL.md
+var documentWorkspaceSkill []byte
 
 type Installer struct {
 	Home             string
@@ -92,10 +92,10 @@ func (i *Installer) Install() (Status, error) {
 	for _, path := range []string{i.claudeSkillPath(), i.codexSkillPath()} {
 		current, err := readOptionalFile(path)
 		if err != nil {
-			return Status{}, fmt.Errorf("기존 document-xlsx 스킬 읽기: %w", err)
+			return Status{}, fmt.Errorf("기존 document-workspace 스킬 읽기: %w", err)
 		}
-		if err := writeChangedConfig(path, current, documentXLSXSkill); err != nil {
-			return Status{}, fmt.Errorf("document-xlsx 스킬 설치: %w", err)
+		if err := writeChangedConfig(path, current, documentWorkspaceSkill); err != nil {
+			return Status{}, fmt.Errorf("document-workspace 스킬 설치: %w", err)
 		}
 	}
 	return i.Status()
@@ -120,8 +120,8 @@ func (i *Installer) Status() (Status, error) {
 		return Status{}, err
 	}
 	status.CodexMCP = codexConfigMatches(codex, status.BinaryPath)
-	status.ClaudeSkill = fileEquals(i.claudeSkillPath(), documentXLSXSkill)
-	status.CodexSkill = fileEquals(i.codexSkillPath(), documentXLSXSkill)
+	status.ClaudeSkill = fileEquals(i.claudeSkillPath(), documentWorkspaceSkill)
+	status.CodexSkill = fileEquals(i.codexSkillPath(), documentWorkspaceSkill)
 	return status, nil
 }
 
@@ -152,10 +152,15 @@ func (i *Installer) Uninstall() (Status, error) {
 	if err := writeChangedConfig(codexPath, codexCurrent, removeCodexConfig(codexCurrent)); err != nil {
 		return Status{}, fmt.Errorf("Codex 설정 저장: %w", err)
 	}
-	for _, path := range []string{i.claudeSkillPath(), i.codexSkillPath(), i.binaryPath()} {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return Status{}, fmt.Errorf("설치 파일 제거: %w", err)
+	for _, path := range []string{i.claudeSkillPath(), i.codexSkillPath()} {
+		if fileEquals(path, documentWorkspaceSkill) {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return Status{}, fmt.Errorf("설치 스킬 제거: %w", err)
+			}
 		}
+	}
+	if err := os.Remove(i.binaryPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Status{}, fmt.Errorf("설치 파일 제거: %w", err)
 	}
 	return i.Status()
 }
@@ -186,11 +191,11 @@ func (i *Installer) codexConfigPath() string {
 }
 
 func (i *Installer) claudeSkillPath() string {
-	return filepath.Join(i.Home, ".claude", "skills", "document-xlsx", "SKILL.md")
+	return filepath.Join(i.Home, ".claude", "skills", "document-workspace", "SKILL.md")
 }
 
 func (i *Installer) codexSkillPath() string {
-	return filepath.Join(i.Home, ".codex", "skills", "document-xlsx", "SKILL.md")
+	return filepath.Join(i.Home, ".codex", "skills", "document-workspace", "SKILL.md")
 }
 
 func mergeClaudeConfig(current []byte, binaryPath string) ([]byte, error) {
