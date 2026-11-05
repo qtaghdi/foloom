@@ -3,7 +3,7 @@ GO_TOOLCHAIN ?= go1.25.0
 GO_CACHE ?= /tmp/document-workspace-go-cache
 XLSX_PERFORMANCE_PROFILE ?= ci
 
-.PHONY: audit build compatibility-test dev docx-verify go-build go-test package-check package-smoke package-test package-verify release-build release-package-test release-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
+.PHONY: audit build compatibility-test dev docx-compatibility-test docx-verify go-build go-test package-check package-smoke package-test package-verify release-build release-package-test release-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
 
 VERSION ?= 0.1.0-alpha.local
 HOST_OS := $(shell $(GO) env GOOS)
@@ -29,6 +29,9 @@ docx-verify: web-build
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./internal/transport/httpapi -run DOCX -count=1
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test -race ./internal/transport/httpapi -run DOCX -count=1
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) vet ./internal/formats/docx ./internal/transport/httpapi
+
+docx-compatibility-test:
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./internal/formats/docx -run Compatibility -count=1
 
 go-test:
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./...
