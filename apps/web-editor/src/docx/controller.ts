@@ -1,3 +1,4 @@
+import { errorResponseSchema } from '../transport/schemas';
 import { documentEvents } from '../transport/document-events';
 import { scopedDocumentURL } from '../transport/document-scope';
 import { compareParagraphs } from './paragraphs';
@@ -10,7 +11,7 @@ export interface DocumentView {
   activity?(entry: ActivityEntry): void;
   render(snapshot: Snapshot): void;
   status(message: string, state: 'pending' | 'committed' | 'failed' | 'conflicted'): void;
-  error(message: string): void;
+  error(message: string, details?: string): void;
   canSave(enabled: boolean): void;
 }
 
@@ -96,9 +97,14 @@ export class DocumentController {
 
   private async request(url: string, init?: RequestInit): Promise<Snapshot> {
     const response = await fetch(scopedDocumentURL(url), { ...init, credentials: 'same-origin', cache: 'no-store' });
-    if (!response.ok) throw new Error(response.status === 409
+    if (!response.ok) {
+      let details = '';
+      try { const parsed = errorResponseSchema.safeParse(await response.json()); if (parsed.success) details = parsed.data.error; } catch { /* Keep the recovery message if the response is unreadable. */ }
+      const error = new Error(response.status === 409
       ? '문서 리비전 충돌 또는 외부 변경이 있습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'
-      : '문서를 읽거나 저장하지 못했습니다. 입력 내용을 복사한 뒤 다시 불러오세요.');
+      : '문서를 읽거나 저장하지 못했습니다. 입력 내용을 복사한 뒤 다시 불러오세요.') as Error & { details?: string };
+      error.details = details; throw error;
+    }
     return snapshotSchema.parse(await response.json());
   }
 
@@ -129,7 +135,7 @@ export class DocumentController {
     this.blocked = true;
     this.disconnect();
     this.view.status('편집 중단 · 다시 불러오기 필요', 'failed');
-    this.view.error(error instanceof Error ? error.message : '문서 처리에 실패했습니다.');
+    this.view.error(error instanceof Error ? error.message : '문서 처리에 실패했습니다.', error instanceof Error ? ((error as Error & { details?: string }).details || error.message) : String(error));
     this.updateSave();
   }
   private disconnect(): void { this.events?.close(); this.events = undefined; }

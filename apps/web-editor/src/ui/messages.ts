@@ -1,3 +1,4 @@
+import { knownMessage, localizeMessage, source } from '../i18n';
 import type { FeatureWarning } from '../contracts';
 
 const featureMessages: Record<string, string> = {
@@ -12,7 +13,7 @@ const featureMessages: Record<string, string> = {
 };
 
 export function featureMessage(warning: FeatureWarning): string {
-  return featureMessages[warning.feature] ?? `${warning.feature}: ${warning.message}`;
+  return featureMessages[warning.feature] ?? source('unknownWarning');
 }
 
 export function problemMessage(reason: string): string {
@@ -20,5 +21,12 @@ export function problemMessage(reason: string): string {
   if (/live connection was interrupted|connection lost|network unavailable|failed to fetch|offline/i.test(reason)) return '문서 연결이 끊겼습니다. 연결 상태를 확인하세요.';
   if (/revision conflict|changed outside|external change|newer workbook|writer lock|writer.*busy/i.test(reason)) return '다른 작업이 먼저 저장되었거나 외부 앱이 문서를 변경했습니다.';
   if (/changed while loading|changed while local edits were pending/i.test(reason)) return '문서를 읽거나 입력을 저장하는 동안 다른 변경이 확인되었습니다.';
-  return reason;
+  if (/document.*closed|unknown.*document|documentId|multiple workbooks/i.test(reason)) return source('targetError');
+  if (/unauthorized|forbidden|origin rejected|authentication/i.test(reason)) return source('accessError');
+  if (/path|permission denied|no such file|access.*denied/i.test(reason)) return source('pathError');
+  return knownMessage(reason) ? reason : source('theDocumentCouldNotBeProcessed');
+}
+
+export function warningMessage(message: string): string {
+  return knownMessage(message) ? localizeMessage(message) : localizeMessage(source('unknownWarning'));
 }

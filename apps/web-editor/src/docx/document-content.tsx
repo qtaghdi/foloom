@@ -1,3 +1,4 @@
+import { t, localizeMessage } from '../i18n';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
@@ -31,28 +32,28 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     }}>
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
-        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title="읽기 전용: 원본 구조를 보존합니다.">{run.text || '표시되지 않는 구조'}</span>}>
+        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>
           <RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
-            label={`${kind === 'replace_cell_text' ? '표' : '본문'} 텍스트 ${positions().get(run.id)}`} saving={props.saving}
+            label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
             onFocus={() => props.onFocusRun(run)}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/>
         </Show>}</For>
       </Show>
     </div>
-    <Show when={props.changes.get(key)}>{(entry) => <button type="button" class="editor-action change-marker" aria-label={`AI 변경 보기 · ${entry().location}`} aria-expanded={props.selected?.documentChange?.key === key}
+    <Show when={props.changes.get(key)}>{(entry) => <button type="button" class="editor-action change-marker" aria-label={t('viewAI', { location: localizeMessage(entry().location ?? '') })} aria-expanded={props.selected?.documentChange?.key === key}
       onClick={() => props.onChangeSelect(entry())}>AI</button>}</Show>
     <Show when={props.selected?.documentChange?.key === key ? props.selected : undefined}>{(entry) =>
-      <div class="mt-3 space-y-2 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-stone-800" role="region" aria-label="AI 변경 전후">
-        <p class="font-semibold text-teal-900">AI 변경 · 리비전 {entry().revision}</p>
-        <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">이전</span><del>{entry().documentChange?.before || '빈 텍스트'}</del></p>
-        <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">이후</span>{entry().documentChange?.after || '빈 텍스트'}</p>
+      <div class="mt-3 space-y-2 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-stone-800" role="region" aria-label={t('aiChangesBeforeAndAfter')}>
+        <p class="font-semibold text-teal-900">{t('aiRevision', { revision: entry().revision! })}</p>
+        <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">{t('before')}</span><del>{entry().documentChange?.before || t('emptyText')}</del></p>
+        <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">{t('after')}</span>{entry().documentChange?.after || t('emptyText')}</p>
       </div>}
     </Show>
   </section>;
   return <For each={pages()}>{(page) => <div class="docx-paper w-full border border-slate-200 bg-white shadow-sm">
-    <Show when={page.length} fallback={<p>표시할 수 있는 본문이 없습니다. 원본 문서는 보존됩니다.</p>}>
+    <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
     <For each={page}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
-      <div class="docx-table overflow-x-auto" tabindex={0} aria-label="문서 표. 좁은 화면에서는 좌우로 스크롤하세요.">
+      <div class="docx-table overflow-x-auto" tabindex={0} aria-label={t('documentTableScrollHorizontallyOnNarrowScreens')}>
         <table class="w-full border-collapse text-left"><tbody><For each={block.rows}>{(row, rowIndex) => <tr><For each={row.cells}>{(cell, cellIndex) =>
           <td class="min-w-24 border border-slate-300 px-2 py-1 align-top"><For each={cell.paragraphs}>{(p, pIndex) => paragraph(p, 'replace_cell_text', `${index}-${rowIndex()}-${cellIndex()}-${pIndex()}`)}</For></td>
         }</For></tr>}</For></tbody></table>
@@ -97,6 +98,6 @@ function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'cent
         next.setSelectionRange(position, position);
       }}
       onInput={(event) => { const text = event.currentTarget.value; setError(validateRunText(text)); props.onEdit(text); }}/>
-    <Show when={error()}><span id={descriptionId} class="w-full py-1 text-xs leading-5 text-red-700">{error()}</span></Show>
+    <Show when={error()}><span id={descriptionId} class="w-full py-1 text-xs leading-5 text-red-700">{localizeMessage(error())}</span></Show>
   </>;
 }

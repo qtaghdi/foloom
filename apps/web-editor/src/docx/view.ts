@@ -5,7 +5,7 @@ import type { Snapshot } from './contracts';
 
 export interface DocumentViewState {
   snapshot?: Snapshot; message: string; status: 'pending' | 'committed' | 'failed' | 'conflicted';
-  error: string; validation: string; canSave: boolean; saving: boolean; loading: boolean;
+  error: string; errorDetails?: string; validation: string; canSave: boolean; saving: boolean; loading: boolean;
 }
 export function createDocumentView() {
   const activity = createActivityModel();
@@ -16,7 +16,7 @@ export function createDocumentView() {
     validation: (validation) => patch({ validation }),
     render: (snapshot) => patch({ snapshot }),
     status: (message, status) => patch({ message, status, saving: status === 'pending' && message === '저장 중', loading: status === 'pending' && message === '문서를 불러오는 중' }),
-    error: (error) => patch({ error }),
+    error: (error, errorDetails) => patch({ error, errorDetails }),
     canSave: (canSave) => patch({ canSave }),
   };
   return { state, view, activity };
