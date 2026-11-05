@@ -1,4 +1,5 @@
 import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction } from './contracts';
+import { isTextBoundary, graphemeOffsets, type TextSelection, type TextPoint } from './selection';
 import { validateRunText } from './validation';
 
 type DraftRun = Run & { sourceId: string };
@@ -88,6 +89,103 @@ export class StructureDraft {
       focus = { runId, start, end };
     }
     group.changed = true;
+    return focus;
+  }
+  private orderedRuns() {
+    const snapshot = this.snapshot();
+    return snapshot.blocks.flatMap(block => (block.type === 'paragraph' ? [block.paragraph] : block.rows.flatMap(r => r.cells.flatMap(c => c.paragraphs)))
+      .flatMap(paragraph => paragraph.runs.map(run => ({ paragraph, run }))));
+  }
+  normalized(selection: TextSelection) {
+    const runs = this.orderedRuns();
+    const a = runs.findIndex(x => x.run.id === selection.anchor.runId), b = runs.findIndex(x => x.run.id === selection.focus.runId);
+    if (a < 0 || b < 0) return;
+    const backward = a > b || a === b && selection.anchor.offset > selection.focus.offset;
+    const start = backward ? selection.focus : selection.anchor, end = backward ? selection.anchor : selection.focus;
+    const first = backward ? b : a, last = backward ? a : b;
+    if (!isTextBoundary(runs[first]!.run.text, start.offset) || !isTextBoundary(runs[last]!.run.text, end.offset)) return;
+    return { start, end, runs: runs.slice(first, last + 1) };
+  }
+  selectedText(selection: TextSelection): string | undefined {
+    const range = this.normalized(selection); if (!range) return;
+    let previous: string | undefined;
+    return range.runs.map(({ paragraph, run }, index) => {
+      const separator = previous && previous !== paragraph.id ? '\n' : '';
+      previous = paragraph.id;
+      return separator + run.text.slice(index === 0 ? range.start.offset : 0, index === range.runs.length - 1 ? range.end.offset : undefined);
+    }).join('');
+  }
+  deletion(selection: TextSelection, direction: 'backward' | 'forward', unit: 'grapheme' | 'word' = 'grapheme'): TextSelection | undefined {
+    const normalized = this.normalized(selection); if (!normalized) return;
+    if (normalized.start.runId !== normalized.end.runId || normalized.start.offset !== normalized.end.offset) return selection;
+    const runs = this.orderedRuns(); const index = runs.findIndex(x => x.run.id === selection.anchor.runId);
+    const { run, paragraph } = runs[index]!;
+    const offset = selection.anchor.offset;
+    const boundaries = graphemeOffsets(run.text);
+    let target: TextPoint | undefined;
+    if (direction === 'backward' && offset > 0 || direction === 'forward' && offset < run.text.length) {
+      let next = direction === 'backward' ? boundaries.filter(n => n < offset).at(-1)! : boundaries.find(n => n > offset)!;
+      if (unit === 'word' && typeof Intl.Segmenter === 'function') {
+        const words = [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(run.text)];
+        if (direction === 'backward') {
+          const candidates = words.filter(word => word.index < offset);
+          while (candidates.length > 1 && !candidates.at(-1)!.segment.trim()) candidates.pop();
+          next = candidates.at(-1)?.index ?? 0;
+        } else {
+          const candidates = words.filter(word => word.index + word.segment.length > offset);
+          while (candidates.length > 1 && !candidates[0]!.segment.trim()) candidates.shift();
+          const word = candidates[0]; next = word ? word.index + word.segment.length : run.text.length;
+        }
+      }
+      target = { runId: run.id, offset: next };
+    } else {
+      const neighbor = runs[index + (direction === 'backward' ? -1 : 1)];
+      if (!neighbor || !neighbor.run.editable) return;
+      const current = this.find(run.id), adjacent = this.find(neighbor.run.id);
+      if (!current || !adjacent || current.group !== adjacent.group) return;
+      if (neighbor.paragraph.id !== paragraph.id) target = { runId: neighbor.run.id, offset: direction === 'backward' ? neighbor.run.text.length : 0 };
+      else {
+        const offsets = graphemeOffsets(neighbor.run.text);
+        target = { runId: neighbor.run.id, offset: direction === 'backward' ? offsets.at(-2) ?? 0 : offsets[1] ?? 0 };
+      }
+    }
+    return { anchor: selection.anchor, focus: target };
+  }
+  replace(selection: TextSelection, text: string, inline = false): DraftFocus | undefined {
+    if (text.length > 1024 * 1024 || text.split('\n').some(value => validateRunText(value))) return;
+    const range = this.normalized(selection);
+    if (!range || range.runs.some(x => !x.run.editable)) return;
+    const first = this.find(range.start.runId), last = this.find(range.end.runId);
+    if (!first || !last) return;
+    // Cells and discontinuous body groups remain separate structural containers.
+    // One selection may clear several containers, but never merge their topology.
+    const spans = new Map<Group, { first: ReturnType<StructureDraft['find']> & {}; last: ReturnType<StructureDraft['find']> & {}; start: number; end: number }>();
+    for (const [index, item] of range.runs.entries()) {
+      const found = this.find(item.run.id); if (!found) return;
+      const existing = spans.get(found.group);
+      if (existing) { existing.last = found; existing.end = index === range.runs.length - 1 ? range.end.offset : found.run.text.length; }
+      else spans.set(found.group, { first: found, last: found, start: index === 0 ? range.start.offset : 0, end: index === range.runs.length - 1 ? range.end.offset : found.run.text.length });
+    }
+    const prepared: Array<{ group: Group; from: number; count: number; paragraphs: DraftParagraph[] }> = [];
+    let focus: DraftFocus | undefined;
+    for (const [group, span] of spans) {
+      const insertion = group === first.group ? text : '';
+      const pieces = inline ? [insertion] : insertion.split('\n');
+      const { first: a, last: b } = span;
+      if (group.current.length - (b.p - a.p + 1) + pieces.length > 1000) return;
+      const left = { ...a.run, text: a.run.text.slice(0, span.start) + pieces[0] };
+      const result: DraftParagraph[] = [{ ...a.paragraph, runs: [...a.paragraph.runs.slice(0, a.r), left] }];
+      for (const piece of pieces.slice(1)) result.push({ ...a.paragraph, id: this.id(), runs: [{ ...a.run, id: this.id(), text: piece }] });
+      const final = result.at(-1)!, inserted = final.runs.at(-1)!;
+      if (group === first.group) focus = { runId: inserted.id, start: inserted.text.length, end: inserted.text.length };
+      const suffix = { ...b.run, id: a.run.id === b.run.id ? this.id() : b.run.id, text: b.run.text.slice(span.end) };
+      // Retain a suffix run only when it carries content. A zero-width typing
+      // position already uses the insertion run's original formatting source.
+      if (suffix.text) final.runs.push(suffix);
+      final.runs.push(...b.paragraph.runs.slice(b.r + 1));
+      prepared.push({ group, from: a.p, count: b.p - a.p + 1, paragraphs: result });
+    }
+    for (const item of prepared) { item.group.current.splice(item.from, item.count, ...item.paragraphs); item.group.changed = true; }
     return focus;
   }
   snapshot(): Snapshot {

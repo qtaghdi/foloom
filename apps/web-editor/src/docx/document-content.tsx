@@ -1,10 +1,20 @@
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { continuousInput } from './continuous-input';
+import type { TextSelection } from './selection';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
-export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onEdit: (operation: TextOperation) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+  let editor!: HTMLDivElement;
+  const [notice, setNotice] = createSignal('');
+  const input = continuousInput(() => editor, {
+    snapshot: () => props.snapshot, saving: () => props.saving, edit: operation => props.onEdit(operation),
+    replace: (...args) => props.onRange(...args), delete: (...args) => props.onDelete(...args), structure: (...args) => props.onStructure(...args),
+    composition: active => props.onComposition(active), refresh: selection => props.onRefresh(selection), text: selection => props.selectionText(selection),
+    focus: run => props.onFocusRun(run), notice: message => setNotice(message === 'protected' ? source('paragraphStructureUnavailable') : message === 'invalid' ? source('thisInputContainsLineBreaksTabsOrUnsupported') : ''),
+  });
   const positions = createMemo(() => {
     const result = new Map<string, number>();
     for (const block of props.snapshot.blocks) {
@@ -25,7 +35,7 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     return pages;
   });
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
-    class="docx-paragraph relative min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
+    contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
     style={{
       'margin-block-start': p.layout?.before === undefined ? undefined : `${p.layout.before / 20}pt`,
       'margin-block-end': p.layout?.after === undefined ? undefined : `${p.layout.after / 20}pt`,
@@ -33,25 +43,34 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
         <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>
-          <RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
+          <Show when={p.structureEditable} fallback={<RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
             onFocus={() => props.onFocusRun(run)}
             onStructure={p.structureEditable ? (action, start, end, insertion) => props.onStructure(action, run.id, start, end, insertion) : undefined}
-            onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/>
+            onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/> }>
+            <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text || (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
+          </Show>
         </Show>}</For>
       </Show>
     </div>
-    <Show when={props.changes.get(key)}>{(entry) => <button type="button" class="editor-action change-marker" aria-label={t('viewAI', { location: localizeMessage(entry().location ?? '') })} aria-expanded={props.selected?.documentChange?.key === key}
+    <Show when={props.changes.get(key)}>{(entry) => <button contentEditable={false} type="button" class="editor-action change-marker" aria-label={t('viewAI', { location: localizeMessage(entry().location ?? '') })} aria-expanded={props.selected?.documentChange?.key === key}
       onClick={() => props.onChangeSelect(entry())}>AI</button>}</Show>
     <Show when={props.selected?.documentChange?.key === key ? props.selected : undefined}>{(entry) =>
-      <div class="mt-3 space-y-2 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-stone-800" role="region" aria-label={t('aiChangesBeforeAndAfter')}>
+      <div contentEditable={false} class="mt-3 space-y-2 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-stone-800" role="region" aria-label={t('aiChangesBeforeAndAfter')}>
         <p class="font-semibold text-teal-900">{t('aiRevision', { revision: entry().revision! })}</p>
         <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">{t('before')}</span><del>{entry().documentChange?.before || t('emptyText')}</del></p>
         <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">{t('after')}</span>{entry().documentChange?.after || t('emptyText')}</p>
       </div>}
     </Show>
   </section>;
-  return <For each={pages()}>{(page) => <div class="docx-paper w-full border border-slate-200 bg-white shadow-sm">
+  return <>
+    <Show when={notice()}><p class="text-sm text-red-800" role="status">{localizeMessage(notice())}</p></Show>
+    <div ref={editor} data-continuous-editor role="textbox" aria-multiline="true" aria-readonly={props.saving} aria-label={t('docxBodyAndTableEditor')}
+      contentEditable={!props.saving} tabindex={0} class="space-y-5 cursor-text outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+      onKeyDown={input.keydown} onKeyUp={input.focus} onPointerUp={input.focus} onFocusIn={input.focus}
+      onBeforeInput={input.beforeinput} onInput={input.input} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
+      onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
+    <For each={pages()}>{(page) => <div class="docx-paper w-full border border-slate-200 bg-white shadow-sm">
     <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
     <For each={page}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
       <div class="docx-table overflow-x-auto" tabindex={0} aria-label={t('documentTableScrollHorizontallyOnNarrowScreens')}>
@@ -61,7 +80,7 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
       </div>
     }</For>
     </Show>
-  </div>}</For>;
+  </div>}</For></div></>;
 }
 
 function runStyle(run: Run) {

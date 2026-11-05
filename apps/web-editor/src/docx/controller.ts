@@ -3,6 +3,7 @@ import { source } from '../i18n/index';
 import { errorResponseSchema } from '../transport/schemas';
 import { documentEvents } from '../transport/document-events';
 import { scopedDocumentURL } from '../transport/document-scope';
+import type { TextSelection } from './selection';
 import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
@@ -27,6 +28,7 @@ export class DocumentController {
   private structureDraft?: StructureDraft;
   private expectedText = new Map<string, string>();
   private busy = false;
+  private composing = false;
   private blocked = true;
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
@@ -34,7 +36,7 @@ export class DocumentController {
 
   constructor(private view: DocumentView) {}
 
-  hasDrafts(): boolean { return this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy; }
+  hasDrafts(): boolean { return this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
   edit(operation: TextOperation): void {
     if (this.busy || this.loading) return;
@@ -56,6 +58,24 @@ export class DocumentController {
     this.updateSave();
     return true;
   }
+
+  composition(active: boolean): void { this.composing = active; this.updateSave(); }
+  replaceSelection(selection: TextSelection, text: string, inline = false): boolean {
+    if (this.busy || this.loading || this.disposed) return false;
+    const focus = this.structureDraft?.replace(selection, text, inline);
+    if (!focus || !this.structureDraft) return false;
+    this.view.render(this.structureDraft.snapshot(), focus);
+    if (!this.blocked) this.view.status('미저장 변경', 'pending');
+    this.updateSave(); return true;
+  }
+  deleteSelection(selection: TextSelection, direction: 'backward' | 'forward', word: boolean): boolean {
+    const range = this.structureDraft?.deletion(selection, direction, word ? 'word' : 'grapheme');
+    return Boolean(range && this.replaceSelection(range, ''));
+  }
+  refreshSelection(selection: TextSelection): void {
+    if (this.structureDraft) this.view.render(this.structureDraft.snapshot(), { runId: selection.focus.runId, start: selection.focus.offset, end: selection.focus.offset });
+  }
+  selectionText(selection: TextSelection): string | undefined { return this.structureDraft?.selectedText(selection); }
 
   private pendingOperations(): Operation[] {
     const text = [...this.drafts.values()].filter(op => !this.structureDraft?.ownsOriginal(op.targetId));
@@ -101,7 +121,7 @@ export class DocumentController {
   }
 
   async save(): Promise<boolean> {
-    if (this.blocked || this.busy || this.loading || this.disposed || !this.snapshot || this.draftError()) return false;
+    if (this.blocked || this.busy || this.composing || this.loading || this.disposed || !this.snapshot || this.draftError()) return false;
     const hasChanges = this.hasDrafts();
     this.busy = true;
     this.disconnect();
@@ -207,7 +227,7 @@ export class DocumentController {
   private updateSave(): void {
     const error = this.draftError();
     this.view.validation?.(error);
-    this.view.canSave(!this.blocked && !this.busy && this.hasDrafts() && !error);
+    this.view.canSave(!this.blocked && !this.busy && this.hasDrafts() && !this.composing && !error);
   }
   dispose(): void { this.disposed = true; this.disconnect(); }
 }

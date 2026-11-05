@@ -304,3 +304,10 @@ XLSX는 셀 편집 종료와 직렬 작업 대기를 마치고, DOCX는 초안�
 원본 보존 방식과 달리 변경한 문단 내부는 재구성할 수 있지만 대상 밖 XML·다른
 package part를 유지합니다. 구조 초안이나 다른 revision의 활동은 이전 위치에
 매핑하지 않습니다. 서버 이력과 안정적인 원격 anchor는 별도 이슈를 따릅니다.
+
+## DOCX 연속 입력
+
+지원 일반 문단의 DOM 선택을 source run 위치로 변환하여 기존 문단 계획에
+반영합니다. native within-run 입력은 DOM을 유지하고, 구조·범위 변경은 초안에서
+합쳐 저장합니다. 선택·커서·composition은 브라우저의 임시 상태이며 저장 authority는
+기존 adapter에 있습니다. [ADR 0005](adr/0005-docx-continuous-input.md)를 따릅니다.
