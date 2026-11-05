@@ -85,16 +85,16 @@ docs/                         아키텍처, 계획, 결정
 결과물 선택, 체크섬 검증, 서명되지 않은 앱 경고, 로컬 Claude Desktop 및 Codex
 설정은 [비공개 XLSX 알파 안내](docs/getting-started.md)를 참고하세요.
 
-macOS에서는 압축을 푼 실행 파일로 MCP와 `document-xlsx` 스킬을 함께 설치할 수
+macOS에서는 압축을 푼 실행 파일로 MCP와 `document-workspace` 스킬을 함께 설치할 수
 있습니다.
 
 ```bash
 ./document-workspace mcp install
 ```
 
-Claude Desktop과 Codex를 다시 시작한 뒤 Claude의 `document-xlsx` MCP prompt
-또는 Codex의 `$document-xlsx` 스킬에 XLSX 절대 경로와 작업을 전달합니다. MCP는
-필요한 범위만 읽고, 쓰기는 호스트의 승인 흐름과 최신 리비전을 사용합니다.
+Claude Desktop과 Codex를 다시 시작한 뒤 `document-workspace` 스킬에 XLSX 또는
+DOCX 절대 경로와 작업을 전달합니다. Codex에서는 `$document-workspace`로 호출할
+수 있습니다. 기존 XLSX용 `document-xlsx` MCP 프롬프트도 사용할 수 있습니다.
 
 ## 소스에서 빌드
 

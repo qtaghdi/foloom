@@ -244,8 +244,8 @@ Current repository skills include:
 
 - `document-workspace-architecture` for changes spanning format adapters, Go,
   MCP, realtime, and browser editor boundaries.
-- `document-xlsx` for focused, revision-safe XLSX work through the installed
-  MCP server.
+- `document-workspace` for revision-safe XLSX and DOCX work through the
+  installed MCP server.
 - `xlsx-compatibility-qa` for workbook corpus verification.
 - `document-editor-ui` for editor interaction and visual verification.
 

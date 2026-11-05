@@ -8,6 +8,9 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- #70 macOS MCP 설치에 XLSX 편집과 DOCX 생성·편집을 안내하는
+  `document-workspace` 스킬을 포함합니다.
+
 - #65 DOCX에서 기본·문단·글자 스타일 일부를 상속하고, 문단 경계에 저장된 명시적
   페이지 나눔을 별도 용지로 표시합니다.
 

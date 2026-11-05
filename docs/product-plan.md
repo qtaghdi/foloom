@@ -40,7 +40,7 @@ commit, conflict, undo, 형식별 안전 저장을 제공합니다.
 - 생성 및 LibreOffice 호환성 fixture
 - Excel 전 자동 safety, regression, packaging, performance gate
 - 미서명 macOS, Linux, Windows 비공개 archive pipeline
-- macOS 단일 명령 MCP 설치, 동적 XLSX 열기, `document-xlsx` prompt 및 skill
+- macOS 단일 명령 MCP 설치, 동적 XLSX 열기, `document-xlsx` 프롬프트와 XLSX·DOCX 통합 스킬
 
 안정 릴리스 전 남은 작업:
 

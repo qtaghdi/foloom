@@ -52,7 +52,7 @@ make release-verify VERSION=0.1.0-alpha.local
 `dist/`에는 AMD64와 ARM64용 macOS, Linux, Windows 미서명 압축 파일과
 `SHA256SUMS`가 생성됩니다. 각 압축 파일에는 실행 파일, README, 시작 안내, 형식
 지원표, 호스트 호환성 안내, 로컬 보안 안내가 들어갑니다. Go 바이너리는 앞서
-빌드한 브라우저 및 MCP App 번들과 설치할 `document-xlsx` skill을 포함합니다.
+빌드한 브라우저 및 MCP App 번들과 설치할 `document-workspace` 스킬을 포함합니다.
 
 `Private alpha package` workflow는 권한 있는 사용자의 수동 실행으로만 동작합니다.
 비공개 저장소 범위의 workflow artifact를 올리고 저장소 내용에는 읽기 권한만

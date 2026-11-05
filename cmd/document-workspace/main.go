@@ -218,7 +218,7 @@ func runMCPCommand(args []string, stdout, stderr io.Writer) int {
 	case "install":
 		status, err = installer.Install()
 		if err == nil {
-			fmt.Fprintln(stdout, "MCP와 document-xlsx 스킬을 설치했습니다.")
+			fmt.Fprintln(stdout, "MCP와 document-workspace 스킬을 설치했습니다.")
 			fmt.Fprintln(stdout, "Claude Desktop과 Codex를 완전히 다시 시작해 주세요.")
 		}
 	case "status":
@@ -243,9 +243,9 @@ func runMCPCommand(args []string, stdout, stderr io.Writer) int {
 func printMCPStatus(output io.Writer, status hostinstall.Status) {
 	fmt.Fprintf(output, "실행 파일: %s (%s)\n", installedLabel(status.Binary), status.BinaryPath)
 	fmt.Fprintf(output, "Claude Desktop MCP: %s\n", installedLabel(status.ClaudeMCP))
-	fmt.Fprintf(output, "Claude document-xlsx 스킬: %s\n", installedLabel(status.ClaudeSkill))
+	fmt.Fprintf(output, "Claude document-workspace 스킬: %s\n", installedLabel(status.ClaudeSkill))
 	fmt.Fprintf(output, "Codex MCP: %s\n", installedLabel(status.CodexMCP))
-	fmt.Fprintf(output, "Codex document-xlsx 스킬: %s\n", installedLabel(status.CodexSkill))
+	fmt.Fprintf(output, "Codex document-workspace 스킬: %s\n", installedLabel(status.CodexSkill))
 }
 
 func installedLabel(installed bool) string {

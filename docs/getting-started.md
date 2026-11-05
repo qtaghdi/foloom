@@ -80,7 +80,7 @@ MCP 호스트를 설정하기 전에 사전 검사를 실행합니다.
 
 - 실행 파일을 사용자 Application Support 아래의 고정 경로로 복사합니다.
 - 기존 항목을 보존하면서 Claude Desktop과 Codex에 stdio MCP를 등록합니다.
-- Claude와 Codex의 사용자 skill 디렉터리에 `document-xlsx`를 설치합니다.
+- Claude와 Codex의 사용자 스킬 디렉터리에 XLSX·DOCX용 `document-workspace`를 설치합니다.
 - 변경한 host 설정의 직전 내용을 `.document-workspace.bak`으로 보관합니다.
 
 설치 뒤 Claude Desktop과 Codex를 완전히 종료하고 다시 실행하세요. 상태 확인과
@@ -93,7 +93,8 @@ MCP 호스트를 설정하기 전에 사전 검사를 실행합니다.
 
 자동 설치는 현재 macOS만 지원합니다. 손상된 JSON이나 `document-workspace` 관리
 구간이 있는 설정은 덮어쓰지 않고 오류를 반환합니다. 제거는 이 프로그램이
-관리하는 MCP 항목, skill, 복사된 실행 파일만 제거합니다.
+관리하는 MCP 항목, 설치본과 내용이 같은 스킬, 복사된 실행 파일을 제거합니다.
+이전에 설치한 `document-xlsx` 스킬은 기존 경로에 남습니다.
 
 ## 문서 작업 시작
 
@@ -108,7 +109,8 @@ host 버전에 따라 명령이 MCP server namespace 아래에 표시될 수 있
 다음처럼 명시적으로 skill을 호출합니다.
 
 ```text
-$document-xlsx "/absolute/path/to/workbook.xlsx" 자산 분류 지침대로 수정해줘
+$document-workspace "/absolute/path/to/workbook.xlsx" 자산 분류 지침대로 수정해줘
+$document-workspace "/absolute/path/to/report.docx" 첫 문단의 날짜를 수정해줘
 ```
 
 두 host 모두 자연어로 절대 경로와 작업을 전달해도 MCP 도구를 사용할 수 있습니다.
