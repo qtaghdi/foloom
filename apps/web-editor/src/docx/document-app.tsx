@@ -36,8 +36,9 @@ export function DocumentApp() {
       '--paper-insets': [top, right, bottom, left].map(inset).join(' '),
     };
   };
+  const [structuralDraft, setStructuralDraft] = createSignal(false);
   const [selectedChange, setSelectedChange] = createSignal<ActivityEntry>();
-  const canLocate = (entry: ActivityEntry) => Boolean(entry.documentChange && entry.documentChange.session === state().snapshot?.id);
+  const canLocate = (entry: ActivityEntry) => Boolean(!structuralDraft() && entry.documentChange && entry.documentChange.session === state().snapshot?.id && entry.revision === state().snapshot?.revision);
   const changes = createMemo(() => {
     const latest = new Map<string, ActivityEntry>();
     for (const entry of activity.entries()) {
@@ -51,16 +52,24 @@ export function DocumentApp() {
     setSelectedChange(entry);
     queueMicrotask(() => document.getElementById(`docx-paragraph-${entry.documentChange!.key}`)?.focus());
   };
-  const controller = new DocumentController({ ...view, render: (snapshot) => {
+  const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
+    setStructuralDraft(Boolean(focus));
     const article = document.getElementById('document-content');
     const active = document.activeElement;
     const fields = [...article?.querySelectorAll('textarea') ?? []];
-    const index = active instanceof HTMLTextAreaElement && state().snapshot?.id === snapshot.id ? fields.indexOf(active) : -1;
-    const selection = index >= 0 && active instanceof HTMLTextAreaElement
-      ? [active.selectionStart, active.selectionEnd] as const : undefined;
+    const previousField = active instanceof HTMLTextAreaElement ? active
+      : state().saving ? fields.find(field => field.name === focusedRun()?.id) : undefined;
+    const index = previousField && state().snapshot?.id === snapshot.id ? fields.indexOf(previousField) : -1;
+    const selection = index >= 0 && previousField ? [previousField.selectionStart, previousField.selectionEnd] as const : undefined;
+    const restoringSave = state().saving;
     if (state().snapshot?.id !== snapshot.id) setFocusedRun(undefined);
     view.render(snapshot);
-    if (selection && document.activeElement === document.body) {
+    if (focus) {
+      queueMicrotask(() => {
+        const field = [...article?.querySelectorAll('textarea') ?? []].find(field => field.name === focus.runId);
+        field?.focus({ preventScroll: true }); field?.setSelectionRange(focus.start, focus.end);
+      });
+    } else if (selection && (restoringSave || document.activeElement === document.body)) {
       const field = article?.querySelectorAll('textarea')[index];
       field?.focus({ preventScroll: true });
       field?.setSelectionRange(...selection);
@@ -133,11 +142,12 @@ export function DocumentApp() {
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
         <Show when={state().snapshot}>{(snapshot) => <DocumentContent snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
+          onStructure={(action, id, start, end, insertion) => { const changed = controller.changeStructure(action, id, start, end, insertion); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => { controller.edit(operation); setDraftVersion((version) => version + 1); }}/>}</Show>
       </article>
       <details class="mt-2 rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
         <summary class="editor-action min-h-11 w-fit rounded px-1 py-2 font-medium">{t('editingSupportAndPreservation')}</summary>
-        <p>{t('previewPageSizeSomeStylesAndExplicitPage')}</p>
+        <p>{t('previewPageSizeSomeStylesAndExplicitPage')}</p><p>{t('paragraphEditingHelp')}</p>
         <Show when={state().snapshot?.warnings.length}><p class="whitespace-pre-wrap">{state().snapshot?.warnings.map(warningMessage).join('\n')}</p></Show>
       <DiagnosticDetails value={state().snapshot?.warnings.join('\n')}/>
       </details>

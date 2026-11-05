@@ -8,7 +8,7 @@ export const runSchema = z.object({
 });
 const spacing = z.number().int().min(0).max(2880).optional();
 const paragraphSchema = z.object({
-  id: z.string(), runs: z.array(runSchema),
+  id: z.string(), runs: z.array(runSchema), structureEditable: z.boolean().optional(),
   pageBreakBefore: z.boolean().optional(), pageBreakAfter: z.boolean().optional(),
   layout: z.object({ align: z.enum(['start', 'center', 'end', 'justify']).optional(), before: spacing, after: spacing }).optional(),
 });
@@ -35,6 +35,14 @@ export const eventSchema = z.object({
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type Paragraph = z.infer<typeof paragraphSchema>;
 export type Run = z.infer<typeof runSchema>;
-export type Operation = {
+export type TextOperation = {
   type: 'replace_run_text' | 'replace_cell_text'; targetId: string; expectedText: string; text: string;
 };
+
+export type ParagraphOperation = {
+ type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';
+ paragraphs: Array<{ sourceId: string; runs: Array<{ sourceId: string; text: string }> }>;
+};
+export type Operation = TextOperation | ParagraphOperation;
+export type DraftFocus = { runId: string; start: number; end: number };
+export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

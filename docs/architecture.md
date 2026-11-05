@@ -59,7 +59,7 @@ version, commit, date로 주입합니다.
 현재 `internal/formats/xlsx`가 유일한 production adapter입니다. Excelize package,
 session, typed operation, 리비전, event, persistence, history, compatibility notice를
 소유합니다. `internal/formats/docx`는 비공개 실험 adapter로 paragraph·단순 table 생성과
-일반 run text 교체를 제공합니다. namespace-aware 검사와 원본 byte offset 표적
+일반 run text 교체와 제한된 문단 구조 계획을 제공합니다. namespace-aware 검사와 원본 byte offset 표적
 수정으로 주변 XML과 다른 package part를 보존합니다. DOCX는 별도 구체 session을
 사용하고 shared runtime은 추출하지 않습니다. PPTX, HWPX, PDF는 계획입니다.
 
@@ -289,3 +289,18 @@ XLSX는 셀 편집 종료와 직렬 작업 대기를 마치고, DOCX는 초안�
 응답의 ID·리비전·MIME을 확인한 뒤 파일명과 원래 확장자로 다운로드를 요청합니다.
 브라우저 다운로드 요청과 사용자 디스크 저장 완료는 구분합니다. MCP inline에서는
 `confirm_workbook_save`로 저장 확인을 제공하고 파일 다운로드는 브라우저를 안내합니다.
+
+## DOCX 문단 구조 계획
+
+[ADR 0004](adr/0004-docx-paragraph-plans.md)에 따라 adapter가 지원하는 연속
+문단만 `replace_paragraphs`로 교체합니다. 브라우저는 원본 문단·run의 서식 참조와
+별도 초안 ID를 유지합니다. 연속 입력 중에는 입력 node를 유지하고 구조 변경 시
+커서를 새 초안 위치로 복원합니다. 저장은 원본 revision과 계획을 함께 전송하고
+서버의 전체 검증·원자 저장·단일 commit을 거칩니다. HTTP와 MCP는 같은 typed
+작업을 사용하며 전송 계층은 OOXML을 생성하지 않습니다.
+
+계획은 원본 run·문단 서식을 참조하되 새 문단의 고유 ID를 복제하지 않습니다.
+본문/셀 경계를 넘거나 보호된 구역·필드·참조를 포함한 계획은 거부합니다. 기존
+원본 보존 방식과 달리 변경한 문단 내부는 재구성할 수 있지만 대상 밖 XML·다른
+package part를 유지합니다. 구조 초안이나 다른 revision의 활동은 이전 위치에
+매핑하지 않습니다. 서버 이력과 안정적인 원격 anchor는 별도 이슈를 따릅니다.

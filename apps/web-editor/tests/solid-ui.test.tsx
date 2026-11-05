@@ -174,8 +174,8 @@ it('localizes known workbook notices while retaining unknown diagnostic text', (
 it('keeps unsupported pasted text editable and restores saving after correction', async () => {
   const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
   const input = root.querySelector('textarea')!;
-  edit(input, '붙여넣은\n여러 줄');
-  expect(input.value).toBe('붙여넣은\n여러 줄'); expect(input.getAttribute('aria-invalid')).toBe('true');
+  edit(input, '붙여넣은\t탭 문자');
+  expect(input.value).toBe('붙여넣은\t탭 문자'); expect(input.getAttribute('aria-invalid')).toBe('true');
   expect(button(root, '저장').disabled).toBe(true);
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
   expect(document.activeElement).toBe(input); expect(f.fetcher).toHaveBeenCalledTimes(1);
@@ -249,4 +249,47 @@ it('clears the visible AI presence when the session reports idle', () => {
   view.showAIPresence({ ...event, sequence: 2, state: 'idle' }, 1);
   expect(root.querySelector('#ai-presence')).toBeNull();
   view.dispose();
+});
+
+it('keeps split paragraphs as drafts, preserves typing and restores the caret without saving per Enter', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: '앞뒤', editable: true, bold: true, italic: false }] } }] };
+  const f = docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle();
+  let input = root.querySelector('textarea')!;
+  edit(input, '앞중간뒤'); input.focus(); input.setSelectionRange(1, 3);
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
+  expect([...root.querySelectorAll('textarea')].map(f => f.value)).toEqual(['앞', '뒤']);
+  input = root.querySelectorAll('textarea')[1]!;
+  expect(document.activeElement).toBe(input); expect(input.selectionStart).toBe(0);
+  edit(input, '이어쓰기');
+  expect(root.querySelectorAll('textarea')[1]).toBe(input);
+  expect(f.fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  button(root, '저장').click(); await settle();
+  const body = JSON.parse(f.fetcher.mock.calls.find(([, init]) => init?.method === 'POST')![1]!.body as string);
+  expect(body.operations).toEqual([{ type: 'replace_paragraphs', targetId: 'p', endTargetId: 'p', expectedText: '앞뒤', text: '', paragraphs: [
+    { sourceId: 'p', runs: [{ sourceId: 'r', text: '앞' }] }, { sourceId: 'p', runs: [{ sourceId: 'r', text: '이어쓰기' }] },
+  ] }]);
+});
+it('does not split a paragraph while IME composition owns Enter', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: '', editable: true, bold: false, italic: false }] } }] };
+  docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle();
+  const input = root.querySelector('textarea')!; input.focus();
+  input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); edit(input, '한');
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  expect(root.querySelector('textarea')).toBe(input); expect(input.value).toBe('한');
+  input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })); input.setSelectionRange(1,1);
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
+  expect(root.querySelectorAll('textarea')).toHaveLength(2);
+});
+it('uses mobile beforeinput paragraph intent and preserves structure drafts after a lost response', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: 'mobile', editable: true, bold: false, italic: false }] } }] };
+  const f = docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle();
+  const input = root.querySelector('textarea')!; input.focus(); input.setSelectionRange(6,6);
+  input.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertLineBreak', bubbles: true, cancelable: true })); await settle();
+  expect(root.querySelectorAll('textarea')).toHaveLength(2);
+  edit(root.querySelectorAll('textarea')[1]!, 'recover draft');
+  f.fetcher.mockRejectedValueOnce(new Error('response lost'));
+  button(root, '저장').click(); await settle();
+  expect([...root.querySelectorAll('textarea')].map(f => f.value)).toEqual(['mobile','recover draft']);
+  expect(button(root, '저장').disabled).toBe(true);
+  expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
 });

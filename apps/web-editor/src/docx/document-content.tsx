@@ -1,10 +1,10 @@
-import { t, localizeMessage } from '../i18n';
+import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import type { Snapshot, Run, Paragraph, Operation } from './contracts';
+import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
-export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onEdit: (operation: Operation) => void; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; onEdit: (operation: TextOperation) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   const positions = createMemo(() => {
     const result = new Map<string, number>();
     for (const block of props.snapshot.blocks) {
@@ -24,7 +24,7 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     });
     return pages;
   });
-  const paragraph = (p: Paragraph, kind: Operation['type'], key: string) => <section
+  const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
     class="docx-paragraph relative min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
     style={{
       'margin-block-start': p.layout?.before === undefined ? undefined : `${p.layout.before / 20}pt`,
@@ -36,6 +36,7 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
           <RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
             onFocus={() => props.onFocusRun(run)}
+            onStructure={p.structureEditable ? (action, start, end, insertion) => props.onStructure(action, run.id, start, end, insertion) : undefined}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/>
         </Show>}</For>
       </Show>
@@ -73,19 +74,31 @@ function runStyle(run: Run) {
   };
 }
 
-function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onEdit: (text: string) => void }) {
+function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onStructure?: (action: StructureAction, start: number, end: number, insertion?: string) => boolean; onEdit: (text: string) => void }) {
   const [error, setError] = createSignal('');
+  const [hint, setHint] = createSignal('');
+  const [composing, setComposing] = createSignal(false);
+  let softBreak = false;
   const descriptionId = `input-error-${props.run.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   return <>
     <textarea value={props.run.text} rows={Math.max(1, Math.ceil(props.run.text.length / 72))} readOnly={props.saving}
-      placeholder={props.run.text ? undefined : t('typeHere')} name={props.run.id} autocomplete="off" aria-label={props.label} aria-invalid={Boolean(error())} aria-describedby={error() ? descriptionId : undefined}
+      title={props.onStructure ? undefined : t('paragraphStructureUnavailable')} placeholder={props.run.text ? undefined : t('typeHere')} name={props.run.id} autocomplete="off" aria-label={props.label} aria-invalid={Boolean(error())} aria-describedby={error() || hint() ? descriptionId : undefined}
       class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit]"
       style={{ ...runStyle(props.run), 'text-align': props.align }}
       classList={{ 'docx-run-wide': props.fullWidth }}
       onFocus={props.onFocus}
+      onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
       onKeyDown={(event) => {
-        if (event.isComposing || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
+        if (event.isComposing || composing() || props.saving) return;
         const field = event.currentTarget;
+        softBreak = event.key === 'Enter' && event.shiftKey;
+        const action: StructureAction | undefined = event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey
+          ? (event.key === 'ArrowUp' ? 'moveUp' : event.key === 'ArrowDown' ? 'moveDown' : undefined)
+          : !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
+            ? event.key === 'Enter' ? 'split' : event.key === 'Backspace' ? 'mergeBackward' : event.key === 'Delete' ? 'mergeForward' : undefined : undefined;
+        if (action && props.onStructure?.(action, field.selectionStart, field.selectionEnd)) { event.preventDefault(); return; }
+        if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); setHint(source('paragraphStructureUnavailable')); return; }
+        if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
         const down = event.key === 'ArrowDown' && field.selectionStart === field.value.length;
         const up = event.key === 'ArrowUp' && field.selectionStart === 0;
         if ((!down && !up) || field.selectionStart !== field.selectionEnd) return;
@@ -97,7 +110,22 @@ function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'cent
         const position = down ? 0 : next.value.length;
         next.setSelectionRange(position, position);
       }}
-      onInput={(event) => { const text = event.currentTarget.value; setError(validateRunText(text)); props.onEdit(text); }}/>
-    <Show when={error()}><span id={descriptionId} class="w-full py-1 text-xs leading-5 text-red-700">{localizeMessage(error())}</span></Show>
+      onBeforeInput={(event) => {
+        if (composing() || event.isComposing || props.saving || !event.cancelable) return;
+        const lineBreak = event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak' && !softBreak;
+        softBreak = false;
+        if (!lineBreak) return;
+        const field = event.currentTarget;
+        if (props.onStructure?.('split', field.selectionStart, field.selectionEnd)) event.preventDefault();
+        else { event.preventDefault(); setHint(source('paragraphStructureUnavailable')); }
+      }}
+      onPaste={(event) => {
+        const text = event.clipboardData?.getData('text/plain');
+        if (!text || !/[\r\n]/.test(text) || props.saving) return;
+        const field = event.currentTarget;
+        if (props.onStructure?.('split', field.selectionStart, field.selectionEnd, text)) event.preventDefault();
+      }}
+      onInput={(event) => { const text = event.currentTarget.value; setHint(''); setError(validateRunText(text)); props.onEdit(text); }}/>
+    <Show when={error() || hint()}><span id={descriptionId} class="w-full py-1 text-xs leading-5 text-red-700">{localizeMessage(error() || hint())}</span></Show>
   </>;
 }
