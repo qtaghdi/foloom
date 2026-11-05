@@ -8,6 +8,10 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- #72 XLSX·DOCX 검색 버튼과 Ctrl/Cmd+F, 검색 위치 이동을 추가합니다. XLSX는
+  모든 시트의 저장값을 서버에서 검색하고 DOCX는 본문·표의 미저장 입력을 포함합니다.
+  결과는 최대 200개이며 XLSX 탐색 한도 도달 시 일부 결과임을 안내합니다.
+
 - #70 macOS MCP 설치에 XLSX 편집과 DOCX 생성·편집을 안내하는
   `document-workspace` 스킬을 포함합니다.
 

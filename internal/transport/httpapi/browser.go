@@ -252,3 +252,18 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+func (s *Server) searchWorkbook(w http.ResponseWriter, r *http.Request) {
+	session, release, err := s.acquireSession()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	defer release()
+	result, err := session.Search(r.Context(), r.URL.Query().Get("query"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}

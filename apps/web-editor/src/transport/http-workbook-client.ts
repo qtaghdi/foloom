@@ -2,6 +2,7 @@ import type { z } from 'zod';
 
 import type { HistoryDirection, SelectionChange, WorkbookEvent, WorkbookOperation, WorkbookSnapshot } from '../contracts';
 import {
+  searchResultSchema,
   applyResponseSchema,
   errorResponseSchema,
   workbookEventSchema,
@@ -23,6 +24,11 @@ async function requestJSON<T>(url: string, schema: z.ZodType<T>, init?: RequestI
 
 export class HTTPWorkbookClient implements WorkbookClient {
   async connect(): Promise<void> {}
+
+  async search(query: string) {
+    const params = new URLSearchParams({ query });
+    return requestJSON(`/api/search?${params}`, searchResultSchema);
+  }
 
   async getWorkbook() {
     return requestJSON('/api/workbook', workbookSnapshotSchema);

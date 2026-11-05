@@ -1,3 +1,5 @@
+import { DocumentSearch } from '../ui/document-search';
+import { searchDocument } from './search';
 import { Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
 import { createDocumentView } from './view';
@@ -15,6 +17,7 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
+  const [draftVersion, setDraftVersion] = createSignal(0);
   const [zoom, setZoom] = createSignal(100);
   const [focusedRun, setFocusedRun] = createSignal<Run>();
   const paper = () => state().snapshot?.page ?? defaultPaper;
@@ -103,6 +106,7 @@ export function DocumentApp() {
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
     <EditorHeader name={state().snapshot?.name ?? '문서를 여는 중'} kind="문서" nameId="document-name" statusId="save-status"
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
+      actions={<DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint="본문과 표에서 미저장 입력을 포함해 찾습니다. 대소문자를 구분하지 않습니다."/>}
     />
     <DocumentToolbar canSave={state().canSave} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
@@ -119,7 +123,7 @@ export function DocumentApp() {
       <article id="document-content" aria-label="DOCX 본문과 표 편집" aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
         <Show when={state().snapshot}>{(snapshot) => <DocumentContent snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
-          onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => controller.edit(operation)}/>}</Show>
+          onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => { controller.edit(operation); setDraftVersion((version) => version + 1); }}/>}</Show>
       </article>
       <details class="mt-2 rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
         <summary class="editor-action min-h-11 w-fit rounded px-1 py-2 font-medium">편집 범위와 원본 보존</summary>

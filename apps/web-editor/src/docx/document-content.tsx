@@ -31,7 +31,7 @@ export function DocumentContent(props: { snapshot: Snapshot; saving: boolean; on
     }}>
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
-        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span class="whitespace-pre-wrap" style={runStyle(run)} title="읽기 전용: 원본 구조를 보존합니다.">{run.text || '표시되지 않는 구조'}</span>}>
+        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title="읽기 전용: 원본 구조를 보존합니다.">{run.text || '표시되지 않는 구조'}</span>}>
           <RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={`${kind === 'replace_cell_text' ? '표' : '본문'} 텍스트 ${positions().get(run.id)}`} saving={props.saving}
             onFocus={() => props.onFocusRun(run)}

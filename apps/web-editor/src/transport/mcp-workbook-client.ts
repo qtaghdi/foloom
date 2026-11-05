@@ -3,6 +3,7 @@ import type { z } from 'zod';
 
 import type { HistoryDirection, SelectionChange, WorkbookEvent, WorkbookOperation, WorkbookSnapshot } from '../contracts';
 import {
+  searchResultSchema,
   applyResponseSchema,
   eventPollResponseSchema,
   presenceResponseSchema,
@@ -22,6 +23,10 @@ export class MCPWorkbookClient implements WorkbookClient {
       { autoResize: true },
     );
     await this.app.connect(new PostMessageTransport(window.parent, window.parent));
+  }
+
+  async search(query: string) {
+    return this.callTool('search_workbook', { query }, searchResultSchema);
   }
 
   async getWorkbook() {
