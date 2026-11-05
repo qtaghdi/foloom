@@ -1,3 +1,5 @@
+import { documentEvents } from '../transport/document-events';
+import { scopedDocumentURL } from '../transport/document-scope';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
@@ -20,7 +22,7 @@ export class DocumentController {
   private drafts = new Map<string, Operation>();
   private busy = false;
   private blocked = true;
-  private events?: EventSource;
+  private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
   private loading = false;
 
@@ -93,7 +95,7 @@ export class DocumentController {
   }
 
   private async request(url: string, init?: RequestInit): Promise<Snapshot> {
-    const response = await fetch(url, { ...init, credentials: 'same-origin', cache: 'no-store' });
+    const response = await fetch(scopedDocumentURL(url), { ...init, credentials: 'same-origin', cache: 'no-store' });
     if (!response.ok) throw new Error(response.status === 409
       ? '문서 리비전 충돌 또는 외부 변경이 있습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'
       : '문서를 읽거나 저장하지 못했습니다. 입력 내용을 복사한 뒤 다시 불러오세요.');
@@ -102,7 +104,7 @@ export class DocumentController {
 
   private connect(snapshot: Snapshot): void {
     this.disconnect();
-    const events = new EventSource(`/api/docx/events?session=${encodeURIComponent(snapshot.id)}&after=${snapshot.sequence}`);
+    const events = documentEvents(scopedDocumentURL(`/api/docx/events?session=${encodeURIComponent(snapshot.id)}&after=${snapshot.sequence}`));
     this.events = events;
     events.addEventListener('docx', (raw) => {
       if (this.events !== events || this.disposed) return;

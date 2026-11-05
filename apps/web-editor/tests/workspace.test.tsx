@@ -1,0 +1,76 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import type { Window as HappyWindow } from 'happy-dom';
+import { render } from 'solid-js/web';
+import { WorkspaceApp } from '../src/workspace/workspace-app';
+import { scopedDocumentURL } from '../src/transport/document-scope';
+let cleanup = () => {};
+afterEach(() => { cleanup(); document.body.replaceChildren(); vi.unstubAllGlobals(); localStorage.clear(); window.history.replaceState({}, '', '/'); });
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+const first = { id: 'first', path: '/tmp/a/report.docx', name: 'report.docx', kind: 'docx' };
+const second = { id: 'second', path: '/tmp/b/book.xlsx', name: 'book.xlsx', kind: 'xlsx' };
+function fixture() {
+  const report = console.error.bind(console);
+  vi.spyOn(console, 'error').mockImplementation((...args) => {
+    if (!String(args[0]).includes('Iframe page loading is disabled')) report(...args);
+  });
+  (window as unknown as HappyWindow).happyDOM.settings.disableIframePageLoading = true;
+  let documents = [first];
+  const fetcher = vi.fn(async (_path: string, init?: RequestInit) => {
+    if (init?.method === 'POST') { documents = [first, second]; return { ok: true, status: 200, json: async () => second }; }
+    if (init?.method === 'DELETE') return { ok: true, status: 204 };
+    return { ok: true, status: 200, json: async () => ({ documents, maxOpen: 8 }) };
+  });
+  vi.stubGlobal('fetch', fetcher);
+  cleanup = render(() => <WorkspaceApp/>, document.body);
+  return fetcher;
+}
+function button(name: string) { return [...document.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent === name || item.getAttribute('aria-label') === name)!; }
+it('opens another document without replacing an existing frame and supports keyboard tab navigation', async () => {
+  fixture(); await settle();
+  const frame = document.querySelector('iframe')!;
+  const paths = document.querySelector('textarea')!; paths.value = second.path; paths.dispatchEvent(new Event('input', { bubbles: true }));
+  button('파일 열기').click(); await settle();
+  expect(document.querySelectorAll('iframe')).toHaveLength(2);
+  expect(document.querySelector('iframe')).toBe(frame);
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  expect(tabs[1]!.getAttribute('aria-selected')).toBe('true');
+  tabs[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+  expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
+  expect(document.querySelector('iframe')).toBe(frame);
+  expect(localStorage.getItem('document-workspace:recent:v1')).toContain(second.path);
+});
+it('does not close a mounted editor without a response from that frame', async () => {
+  const fetcher = fixture(); await settle();
+  button('report.docx 닫기').click();
+  window.dispatchEvent(new MessageEvent('message', { origin: 'https://evil.example', data: { type: 'workspace:checked', request: '1', id: first.id, busy: false, dirty: false, message: '저장됨' } }));
+  await settle();
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  expect(document.querySelector('iframe')).not.toBeNull();
+});
+it('pins URLs to the document ID rather than the current workspace tab', () => {
+  window.history.replaceState({}, '', '/?document=first&embedded=1');
+  expect(scopedDocumentURL('/api/range?sheet=Sheet1&range=A1')).toBe('/api/range?sheet=Sheet1&range=A1&document=first');
+  expect(scopedDocumentURL('/api/docx/operations')).toBe('/api/docx/operations?document=first');
+});
+
+it('requires explicit draft discard and accepts only the owning frame response', async () => {
+  const fetcher = fixture(); await settle();
+  const frame = document.querySelector('iframe')!;
+  Object.defineProperty(frame, 'contentWindow', { configurable: true, value: window });
+  const reply = (request: string, dirty: boolean) => window.dispatchEvent(new MessageEvent('message', {
+    origin: window.location.origin, source: frame.contentWindow,
+    data: { type: 'workspace:checked', id: first.id, request, dirty, busy: false, message: dirty ? '미저장 변경' : '저장됨' },
+  }));
+  button('report.docx 닫기').click(); reply('1', true); await settle();
+  expect(document.querySelector('[aria-label="파일 닫기 확인"]')).not.toBeNull();
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  button('취소').click();
+  expect(document.querySelector('iframe')).toBe(frame);
+  button('report.docx 닫기').click(); reply('2', true); await settle();
+  button('입력 버리고 닫기').click(); reply('3', true); await settle();
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
+  expect(document.querySelector('iframe')).toBeNull();
+  const unload = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(unload);
+  expect(unload.defaultPrevented).toBe(false);
+});

@@ -1,3 +1,4 @@
+import { WorkspaceApp } from './workspace/workspace-app';
 import './styles.css';
 import { render } from 'solid-js/web';
 import { createComponent } from 'solid-js';
@@ -7,7 +8,8 @@ import { UniverSpreadsheetEngine } from './univer-engine';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing application root');
-render(() => createComponent(WorkbookApp, {
+const embedded = new URLSearchParams(window.location.search).get('embedded') === '1';
+render(() => !embedded && window.parent === window ? createComponent(WorkspaceApp, {}) : createComponent(WorkbookApp, {
   client: createWorkbookClient(),
   createEngine: (container) => new UniverSpreadsheetEngine(container),
 }), root);

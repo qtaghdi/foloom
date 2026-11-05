@@ -14,6 +14,7 @@ import {
 import type { EventSubscription, WorkbookClient } from './workbook-client';
 
 export class MCPWorkbookClient implements WorkbookClient {
+  private documentId?: string;
   private app: App | undefined;
 
   async connect(): Promise<void> {
@@ -26,27 +27,29 @@ export class MCPWorkbookClient implements WorkbookClient {
   }
 
   async search(query: string) {
-    return this.callTool('search_workbook', { query }, searchResultSchema);
+    return this.callTool('search_workbook', { query, documentId: this.documentId }, searchResultSchema);
   }
 
   async getWorkbook() {
-    return this.callTool('get_workbook', {}, workbookSnapshotSchema);
+    const snapshot = await this.callTool('get_workbook', { documentId: this.documentId }, workbookSnapshotSchema);
+    this.documentId = snapshot.id;
+    return snapshot;
   }
 
   async readRange(sheet: string, range: string) {
-    return this.callTool('read_range', { sheet, range }, workbookRangeSchema);
+    return this.callTool('read_range', { sheet, range, documentId: this.documentId }, workbookRangeSchema);
   }
 
   async readSheetObjects(sheet: string) {
-    return this.callTool('get_sheet_objects', { sheet }, sheetObjectsSchema);
+    return this.callTool('get_sheet_objects', { sheet, documentId: this.documentId }, sheetObjectsSchema);
   }
 
   async applyOperations(baseRevision: number, operations: WorkbookOperation[]) {
-    return this.callTool('apply_user_operations', { baseRevision, operations }, applyResponseSchema);
+    return this.callTool('apply_user_operations', { baseRevision, operations, documentId: this.documentId }, applyResponseSchema);
   }
 
   async restoreHistory(baseRevision: number, direction: HistoryDirection) {
-    return this.callTool('restore_user_history', { baseRevision, direction }, applyResponseSchema);
+    return this.callTool('restore_user_history', { baseRevision, direction, documentId: this.documentId }, applyResponseSchema);
   }
 
   async updatePresence(selection: SelectionChange): Promise<void> {
@@ -66,7 +69,7 @@ export class MCPWorkbookClient implements WorkbookClient {
     };
     const poll = async (): Promise<void> => {
       try {
-        const response = await this.callTool('get_events', { afterSequence }, eventPollResponseSchema);
+        const response = await this.callTool('get_events', { afterSequence, documentId: this.documentId }, eventPollResponseSchema);
         if (closed) return;
         if (response.workbook.id !== checkpoint.id) {
           onEvent({ type: 'workbook.reload', state: 'resync', actor: 'system',

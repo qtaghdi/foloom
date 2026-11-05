@@ -232,3 +232,32 @@ XLSX `search_workbook`과 인증된 `GET /api/search?query=...`는 adapter의 �
 표의 run을 문단별로 이어서 미저장 입력까지 포함하고 문단당 한 위치를 반환합니다.
 두 편집기는 검색 버튼, Ctrl/Cmd+F, Escape와 결과 위치 이동을 제공합니다.
 검색은 문서나 리비전을 변경하지 않습니다. 바꾸기와 다중 파일 검색은 포함하지 않습니다.
+
+## 다중 문서 작업 공간
+
+브라우저의 기본 진입점은 열린 문서 목록과 탭을 표시하는 작업 공간입니다.
+같은 프로세스에서 최대 8개의 XLSX·DOCX를 보관하며 정규화된 절대 경로가 같은
+파일은 기존 세션을 재사용합니다. 폴더를 스캔하거나 업로드 복사본으로 바꾸지 않습니다.
+최근 10개 경로는 해당 브라우저의 localStorage에만 기록하고 지울 수 있습니다.
+
+전송 계층 registry는 각 세션에 고정된 작은 서버 facade를 보관합니다.
+`GET/POST /api/documents`와 `DELETE /api/documents/{id}`가 목록·열기·닫기를
+담당하고 기존 API 및 MCP에 `?document=<id>`를 붙이면 해당 세션으로만 전달합니다.
+닫히거나 잘못된 ID는 활성 문서로 fallback하지 않습니다. 기존 MCP 열기는 마지막으로
+명시적으로 연 문서를 기본 대상으로 유지하고 `documentId`로 읽기·쓰기·이력을 지정할
+수 있습니다. 여러 XLSX가 열린 상태의 대상 없는 쓰기는 거부합니다. DOCX 쓰기는
+기존 `sessionId`로 열린 문서를 선택합니다. 각 adapter의 저장과 리비전 규칙은 유지합니다.
+
+편집기는 인증된 same-origin iframe 안에서 독립적으로 동작합니다. 기존 Univer와
+DOCX의 전역 focus·단축키·DOM ID를 격리하고 탭 전환 시 unmount하지 않아 초안과
+선택 위치를 보존합니다. 처음 선택한 문서만 편집기를 생성하고 숨긴 편집기는 같은
+크기로 유지합니다. 각 frame의 HTTP·SSE는 URL의 문서 ID에 고정됩니다. 숨긴 탭의 SSE 연결은
+닫고 돌아올 때 마지막 event ID부터 replay합니다. HTTP/1 연결 수가 열린 문서 수만큼
+늘어 저장 요청을 막지 않게 하며, 놓친 변경이나 replay gap은 기존 복구 규칙을 따릅니다.
+`embedded=1`인 문서 화면만 CSP frame-ancestors self와 X-Frame-Options SAMEORIGIN을
+사용하며, 일반 화면은 외부 embedding을 계속 거부합니다. 외부 origin은 허용하지 않습니다.
+
+저장 상태와 닫기 확인은 origin·frame source·Zod payload 검증을 거친 postMessage로
+전달합니다. 저장·로딩 중에는 닫지 않고 DOCX는 저장 후 닫기, 입력 폐기 또는 취소를
+제공합니다. 전환은 저장을 유발하거나 초안을 폐기하지 않습니다. 프로세스 종료 후
+초안 복원, 문서 간 원자적 저장, 비교와 나란히 보기는 제공하지 않습니다.

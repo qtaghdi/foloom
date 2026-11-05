@@ -1,6 +1,7 @@
+import { connectWorkspaceBridge, publishEditorState } from '../ui/workspace-bridge';
 import { DocumentSearch } from '../ui/document-search';
 import { searchDocument } from './search';
-import { Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
 import { createDocumentView } from './view';
 import { StatusPanel } from '../ui/status-panel';
@@ -85,6 +86,9 @@ export function DocumentApp() {
       void controller.save();
     }
   };
+  const editorState = () => ({ message: state().message, dirty: controller.hasDrafts(), busy: state().saving || state().loading });
+  createEffect(() => { state(); draftVersion(); queueMicrotask(() => publishEditorState(editorState())); });
+  let disconnectWorkspace = () => {};
   let disposed = false;
   const dispose = () => {
     if (disposed) return;
@@ -92,9 +96,11 @@ export function DocumentApp() {
     window.removeEventListener('beforeunload', beforeUnload);
     window.removeEventListener('keydown', keydown);
     window.removeEventListener('pagehide', dispose);
+    disconnectWorkspace();
     controller.dispose();
   };
   onMount(() => {
+    disconnectWorkspace = connectWorkspaceBridge(editorState, () => controller.save());
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
     window.addEventListener('pagehide', dispose, { once: true });
