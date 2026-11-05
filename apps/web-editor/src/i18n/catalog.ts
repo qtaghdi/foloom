@@ -1013,7 +1013,14 @@ export const catalog = {
     "en": "The file action could not be completed.",
     "ja": "ファイル操作を完了できませんでした。",
     "zh-CN": "无法完成文件操作。"
-  }
+  },
+  "chooseLocalFiles": {"ko": "내 컴퓨터에서 열기", "en": "Open from computer", "ja": "パソコンから開く", "zh-CN": "从电脑打开"},
+  "openByPath": {"ko": "경로로 열기", "en": "Open by path", "ja": "パスで開く", "zh-CN": "通过路径打开"},
+  "workingCopyHint": {"ko": "선택한 파일은 작업 복사본으로 열립니다. 원본은 유지되며 수정본은 다운로드할 수 있습니다.", "en": "Selected files open as working copies. Originals stay unchanged; download your edited files.", "ja": "選択したファイルは作業用コピーで開きます。元のファイルは変更せず、編集後にダウンロードできます。", "zh-CN": "所选文件以工作副本打开。原文件保持不变，编辑后可下载。"},
+  "workingCopy": {"ko": "작업 복사본", "en": "Working copy", "ja": "作業用コピー", "zh-CN": "工作副本"},
+  "chooseFilesHint": {"ko": "XLSX·DOCX 파일을 선택해 여러 문서를 함께 편집하세요.", "en": "Select XLSX or DOCX files to edit multiple documents together.", "ja": "XLSX・DOCX を選択して複数の文書を編集できます。", "zh-CN": "选择 XLSX 或 DOCX 文件，同时编辑多个文档。"},
+  "fileSelectionInvalid": {"ko": "XLSX는 100 MB, DOCX는 32 MB 이하의 파일을 선택하세요.", "en": "Select XLSX files up to 100 MB or DOCX files up to 32 MB.", "ja": "XLSX は 100 MB、DOCX は 32 MB 以下を選択してください。", "zh-CN": "请选择不超过 100 MB 的 XLSX 或不超过 32 MB 的 DOCX 文件。"},
+  "openLimit": {"ko": "열린 파일은 최대 8개입니다. 파일을 닫은 뒤 다시 여세요.", "en": "You can open up to 8 files. Close a file and try again.", "ja": "開けるファイルは 8 個までです。ファイルを閉じて再試行してください。", "zh-CN": "最多可打开 8 个文件。请关闭文件后重试。"}
 } as const;
 export type MessageKey = keyof typeof catalog;
 export type Locale = keyof (typeof catalog)[MessageKey];

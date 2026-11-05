@@ -74,3 +74,27 @@ it('requires explicit draft discard and accepts only the owning frame response',
   window.dispatchEvent(unload);
   expect(unload.defaultPrevented).toBe(false);
 });
+
+it('opens browser-selected files as uploads and keeps local paths out of recent history', async () => {
+  const fetcher = fixture(); await settle();
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+  expect(input.multiple).toBe(true);
+  expect(input.accept).toBe('.xlsx,.docx');
+  const file = new File(['test package'], '선택 문서.xlsx');
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+  input.dispatchEvent(new Event('change', { bubbles: true })); await settle();
+  const call = fetcher.mock.calls.find(([path]) => path === '/api/documents/upload')!;
+  expect(call[1]?.body).toBeInstanceOf(FormData);
+  expect((call[1]?.body as FormData).get('file')).toBeInstanceOf(File);
+  expect(document.querySelectorAll('[role="tab"]')).toHaveLength(2);
+  expect(localStorage.getItem('document-workspace:recent:v1')).toBeNull();
+});
+
+it('rejects unsupported selected files before uploading', async () => {
+  const fetcher = fixture(); await settle();
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+  Object.defineProperty(input, 'files', { configurable: true, value: [new File(['bad'], 'file.exe')] });
+  input.dispatchEvent(new Event('change', { bubbles: true })); await settle();
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  expect(document.body.textContent).toContain('XLSX는 100 MB');
+});

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -100,6 +101,9 @@ func (s *Server) Close() error {
 	if len(documents) > 0 {
 		for _, document := range documents {
 			_ = document.server.Close()
+			if document.cleanupDir != "" {
+				_ = os.RemoveAll(document.cleanupDir)
+			}
 		}
 		return nil
 	}
