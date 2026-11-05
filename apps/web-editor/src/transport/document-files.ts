@@ -38,8 +38,11 @@ export async function downloadSavedDocument(checkpoint: DocumentCheckpoint, form
 export function startBrowserDownload(file: DownloadedFile): void {
   const url = URL.createObjectURL(file.blob);
   try {
-    const link = document.createElement('a');
+    // Start workspace downloads from its top-level document so embedded browser
+    // download handlers receive the action from the visible workspace surface.
+    const owner = window.frameElement?.hasAttribute('data-document-editor') ? window.parent.document : document;
+    const link = owner.createElement('a');
     link.href = url; link.download = file.name;
-    document.body.append(link); link.click(); link.remove();
+    owner.body.append(link); link.click(); link.remove();
   } finally { window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }
 }
