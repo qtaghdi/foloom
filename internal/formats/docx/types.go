@@ -47,11 +47,12 @@ type ParagraphLayout struct {
 }
 
 type Paragraph struct {
-	PageBreakBefore bool             `json:"pageBreakBefore,omitempty"`
-	PageBreakAfter  bool             `json:"pageBreakAfter,omitempty"`
-	ID              string           `json:"id"`
-	Runs            []Run            `json:"runs"`
-	Layout          *ParagraphLayout `json:"layout,omitempty"`
+	StructureEditable bool             `json:"structureEditable"`
+	PageBreakBefore   bool             `json:"pageBreakBefore,omitempty"`
+	PageBreakAfter    bool             `json:"pageBreakAfter,omitempty"`
+	ID                string           `json:"id"`
+	Runs              []Run            `json:"runs"`
+	Layout            *ParagraphLayout `json:"layout,omitempty"`
 }
 
 type Cell struct {
@@ -80,11 +81,35 @@ type Snapshot struct {
 	Warnings []string    `json:"warnings"`
 }
 
+// ParagraphContent references formatting in the inspected revision. Repeated
+// source paragraphs create new identities rather than cloning OOXML IDs.
+type ParagraphContent struct {
+	SourceID string       `json:"sourceId"`
+	Runs     []RunContent `json:"runs"`
+}
+
+// InlineStyle contains explicit, bounded clipboard formatting overrides. Source
+// run properties not named here remain unchanged.
+type InlineStyle struct {
+	Bold           *bool  `json:"bold,omitempty"`
+	Italic         *bool  `json:"italic,omitempty"`
+	Color          string `json:"color,omitempty"`
+	Font           string `json:"font,omitempty"`
+	SizeHalfPoints *int   `json:"sizeHalfPoints,omitempty"`
+}
+type RunContent struct {
+	Style    *InlineStyle `json:"style,omitempty"`
+	SourceID string       `json:"sourceId"`
+	Text     string       `json:"text"`
+}
+
 type Operation struct {
-	Type         string `json:"type" jsonschema:"replace_run_text for body runs or replace_cell_text for simple table runs"`
-	TargetID     string `json:"targetId" jsonschema:"Editable run ID from the current get_docx snapshot"`
-	ExpectedText string `json:"expectedText" jsonschema:"Exact current text, including whitespace"`
-	Text         string `json:"text" jsonschema:"Replacement plain text without tabs or line breaks"`
+	EndTargetID  string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
+	Paragraphs   []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
+	Type         string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, or replace_paragraphs for an editable contiguous paragraph range"`
+	TargetID     string             `json:"targetId" jsonschema:"Editable run ID from the current get_docx snapshot"`
+	ExpectedText string             `json:"expectedText" jsonschema:"Exact current text, including whitespace"`
+	Text         string             `json:"text" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
 }
 
 type ApplyInput struct {

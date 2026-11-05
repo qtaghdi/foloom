@@ -96,7 +96,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	warnings := []string{"본문과 단순 표의 일반 텍스트 run만 편집합니다. 용지, 기본·문단·글자 스타일 일부와 문단 경계의 명시적 페이지 나눔을 미리 봅니다. 자동 페이지 매김, 이미지, 머리글과 필드는 화면에서 재현하지 않습니다. 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지와 일부 스타일을 미리 보며 자동 페이지 매김, 이미지, 머리글과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if unsupported {
 		warnings = append(warnings, "지원하지 않는 구조는 읽기 전용으로 표시하거나 화면에서 생략합니다.")
 	}
@@ -129,8 +129,42 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	seen := map[string]bool{}
 	var edits []replacement
 	textBytes := 0
+	structuralBytes := 0
 	for _, op := range input.Operations {
 		t, ok := targets[op.TargetID]
+		if op.Type == "replace_paragraphs" {
+			last, exists := targets[op.EndTargetID]
+			if !ok || !exists || t.kind != "replace_paragraphs" || last.kind != "replace_paragraphs" || seen[op.TargetID] {
+				return Snapshot{}, fmt.Errorf("unsupported, duplicate or stale DOCX paragraph target")
+			}
+			for _, edit := range edits {
+				if t.node.start < edit.end && edit.start < last.node.end || edit.start == edit.end && edit.start >= t.node.start && edit.start < last.node.end {
+					return Snapshot{}, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
+				}
+			}
+			seen[op.TargetID] = true
+			edit, err := paragraphReplacement(s.pkg.document, targets, op)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			for _, paragraph := range op.Paragraphs {
+				for _, run := range paragraph.Runs {
+					textBytes += len(run.Text)
+				}
+			}
+			if textBytes > 4<<20 {
+				return Snapshot{}, fmt.Errorf("DOCX batch text exceeds 4 MiB")
+			}
+			structuralBytes += len(edit.data)
+			if structuralBytes > maxPartBytes {
+				return Snapshot{}, fmt.Errorf("DOCX batch replacement XML exceeds 16 MiB limit")
+			}
+			edits = append(edits, edit)
+			continue
+		}
+		if op.EndTargetID != "" || op.Paragraphs != nil {
+			return Snapshot{}, fmt.Errorf("unexpected paragraph fields on text operation")
+		}
 		if !ok || t.kind != op.Type || seen[op.TargetID] {
 			return Snapshot{}, fmt.Errorf("unsupported, duplicate or stale DOCX target")
 		}
@@ -142,18 +176,32 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		if textBytes > 4<<20 {
 			return Snapshot{}, fmt.Errorf("DOCX batch text exceeds 4 MiB")
 		}
-		if !validText(op.Text) {
-			return Snapshot{}, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters, tabs or line breaks")
+		if !validInlineText(op.Text) {
+			return Snapshot{}, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters or tabs")
 		}
 		if op.Text == t.text {
 			continue
 		}
 		n := t.node
+		for _, edit := range edits {
+			if n.start < edit.end && edit.start < n.end {
+				return Snapshot{}, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
+			}
+		}
 		opening := string(s.pkg.document[n.start:n.inner])
 		if n.is("p") || n.is("r") {
 			// Insert into a verified empty container. A local namespace declaration
 			// makes this independent of the imported document's chosen prefix.
-			content := `<w:t xmlns:w="` + wordNS + `" xml:space="preserve">` + escapeText(op.Text) + `</w:t>`
+			content := inlineXML(op.Text)
+			if n.is("r") {
+				opening, closing := scopedOpening(n, s.pkg.document, false)
+				var props string
+				if p := n.child("rPr"); p != nil {
+					props = string(s.pkg.document[p.start:p.end])
+				}
+				edits = append(edits, replacement{n.start, n.end, []byte(opening + props + content + closing)})
+				continue
+			}
 			if n.is("p") {
 				content = `<w:r xmlns:w="` + wordNS + `">` + content + `</w:r>`
 			}
@@ -163,6 +211,13 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 			} else {
 				edits = append(edits, replacement{n.endStart, n.endStart, []byte(content)})
 			}
+			continue
+		}
+		if strings.Contains(op.Text, "\n") {
+			if !plainTextAttributes(n) {
+				return Snapshot{}, fmt.Errorf("DOCX inline break cannot replace opaque text attributes")
+			}
+			edits = append(edits, replacement{n.start, n.end, []byte(inlineXML(op.Text))})
 			continue
 		}
 		// Self-closing text elements need an explicit close tag after insertion.
@@ -213,6 +268,11 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		return s.snapshotLocked()
 	}
 	sort.Slice(edits, func(i, j int) bool { return edits[i].start < edits[j].start })
+	for i := 1; i < len(edits); i++ {
+		if edits[i].start < edits[i-1].end || edits[i].start == edits[i-1].start {
+			return Snapshot{}, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
+		}
+	}
 	size := len(s.pkg.document)
 	for _, e := range edits {
 		size += len(e.data) - (e.end - e.start)

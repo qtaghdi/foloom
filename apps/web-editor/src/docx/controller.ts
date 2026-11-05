@@ -3,15 +3,18 @@ import { source } from '../i18n/index';
 import { errorResponseSchema } from '../transport/schemas';
 import { documentEvents } from '../transport/document-events';
 import { scopedDocumentURL } from '../transport/document-scope';
+import type { ClipboardParagraph } from './clipboard';
+import type { TextSelection } from './selection';
+import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, type Snapshot, type Operation } from './contracts';
+import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type DraftFocus, type StructureAction } from './contracts';
 
 export interface DocumentView {
   validation?(message: string): void;
   activity?(entry: ActivityEntry): void;
-  render(snapshot: Snapshot): void;
+  render(snapshot: Snapshot, focus?: DraftFocus): void;
   status(message: string, state: 'pending' | 'committed' | 'failed' | 'conflicted'): void;
   error(message: string, details?: string): void;
   canSave(enabled: boolean): void;
@@ -22,8 +25,12 @@ export interface DocumentView {
 export class DocumentController {
   private snapshot?: Snapshot;
   private activitySequence = 0;
-  private drafts = new Map<string, Operation>();
+  private drafts = new Map<string, TextOperation>();
+  private structureDraft?: StructureDraft;
+  private expectedText = new Map<string, string>();
   private busy = false;
+  private composing = false;
+  private compositionSaves: Array<(saved: boolean) => void> = [];
   private blocked = true;
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
@@ -31,18 +38,79 @@ export class DocumentController {
 
   constructor(private view: DocumentView) {}
 
-  hasDrafts(): boolean { return this.drafts.size > 0 || this.busy; }
+  hasDrafts(): boolean { return this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
-  edit(operation: Operation): void {
+  edit(operation: TextOperation): void {
     if (this.busy || this.loading) return;
-    if (operation.text === operation.expectedText) this.drafts.delete(operation.targetId);
-    else this.drafts.set(operation.targetId, operation);
-    if (!this.blocked) this.view.status(this.drafts.size ? '미저장 변경' : '저장됨', this.drafts.size ? 'pending' : 'committed');
+    if (!this.structureDraft?.edit(operation.targetId, operation.text)) {
+      const expectedText = this.expectedText.get(operation.targetId) ?? operation.expectedText;
+      if (operation.text === expectedText) this.drafts.delete(operation.targetId);
+      else this.drafts.set(operation.targetId, { ...operation, expectedText });
+    }
+    if (!this.blocked) this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
     this.updateSave();
   }
 
+  changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string): boolean {
+    if (this.busy || this.loading || this.disposed) return false;
+    const focus = this.structureDraft?.change(action, runId, start, end, insertion);
+    if (!focus || !this.structureDraft) return false;
+    this.view.render(this.structureDraft.snapshot(), focus);
+    if (!this.blocked) this.view.status('미저장 변경', 'pending');
+    this.updateSave();
+    return true;
+  }
+
+  composition(active: boolean): void {
+    this.composing = active;
+    this.updateSave();
+    if (!active && this.compositionSaves.length) {
+      const waiting = this.compositionSaves.splice(0);
+      void this.save().then(saved => { for (const finish of waiting) finish(saved); });
+    }
+  }
+  replaceSelection(selection: TextSelection, text: string, inline = false): boolean {
+    if (this.busy || this.loading || this.disposed) return false;
+    const focus = this.structureDraft?.replace(selection, text, inline);
+    if (!focus || !this.structureDraft) return false;
+    this.view.render(this.structureDraft.snapshot(), focus);
+    if (!this.blocked) this.view.status('미저장 변경', 'pending');
+    this.updateSave(); return true;
+  }
+  pasteRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): boolean {
+    if (this.busy || this.loading || this.disposed || this.composing) return false;
+    const focus=this.structureDraft?.replaceRich(selection,paragraphs);
+    if (!focus || !this.structureDraft) return false;
+    this.view.render(this.structureDraft.snapshot(),focus);
+    if (!this.blocked) this.view.status('미저장 변경','pending');
+    this.updateSave();return true;
+  }
+  richSelection(selection: TextSelection): ClipboardParagraph[] | undefined {return this.structureDraft?.selectedRich(selection);}
+  deleteSelection(selection: TextSelection, direction: 'backward' | 'forward', word: boolean): boolean {
+    const range = this.structureDraft?.deletion(selection, direction, word ? 'word' : 'grapheme');
+    return Boolean(range && this.replaceSelection(range, ''));
+  }
+  refreshSelection(selection: TextSelection): void {
+    if (this.structureDraft) this.view.render(this.structureDraft.snapshot(), { runId: selection.focus.runId, start: selection.focus.offset, end: selection.focus.offset, selection });
+  }
+  selectionText(selection: TextSelection): string | undefined { return this.structureDraft?.selectedText(selection); }
+
+  private pendingOperations(): Operation[] {
+    const text = [...this.drafts.values()].filter(op => !this.structureDraft?.ownsOriginal(op.targetId));
+    return [...text, ...this.structureDraft?.operations() ?? []];
+  }
+  private resetDraft(snapshot: Snapshot): void {
+    this.drafts.clear();
+    this.structureDraft = new StructureDraft(snapshot);
+    this.expectedText.clear();
+    for (const block of snapshot.blocks) {
+      const paragraphs = block.type === 'paragraph' ? [block.paragraph] : block.rows.flatMap(r => r.cells.flatMap(c => c.paragraphs));
+      for (const p of paragraphs) for (const run of p.runs) this.expectedText.set(run.id, run.text);
+    }
+  }
+
   async load(observed?: { sequence: number; revision: number; actor?: string }): Promise<void> {
-    if (this.busy || this.loading || this.disposed) return;
+    if (this.busy || this.loading || this.disposed || this.composing) return;
     this.loading = true;
     this.disconnect();
     this.blocked = true;
@@ -60,7 +128,7 @@ export class DocumentController {
         }
       }
       this.snapshot = snapshot;
-      this.drafts.clear();
+      this.resetDraft(snapshot);
       this.blocked = false;
       this.view.error('');
       this.view.render(snapshot);
@@ -71,27 +139,30 @@ export class DocumentController {
   }
 
   async save(): Promise<boolean> {
-    if (this.blocked || this.busy || this.loading || this.disposed || !this.snapshot || this.draftError()) return false;
-    const hasChanges = this.drafts.size > 0;
+    if (this.composing && !this.blocked && !this.disposed) {
+      return new Promise(resolve => { this.compositionSaves.push(resolve); });
+    }
+    if (this.blocked || this.busy || this.composing || this.loading || this.disposed || !this.snapshot || this.draftError()) return false;
+    const hasChanges = this.hasDrafts();
     this.busy = true;
     this.disconnect();
     this.updateSave();
     this.view.status(hasChanges ? '저장 중' : source('checkingSave'), 'pending');
     const activityId = `local:${++this.activitySequence}`;
-    if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.drafts.size}개 수정` });
+    if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.pendingOperations().length}개 수정` });
     try {
       let snapshot = this.snapshot;
       if (hasChanges) {
         snapshot = await this.request('/api/docx/operations', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: snapshot.id, baseRevision: snapshot.revision, operations: [...this.drafts.values()] }),
+          body: JSON.stringify({ sessionId: snapshot.id, baseRevision: snapshot.revision, operations: this.pendingOperations() }),
         });
       } else { await confirmSavedDocument(snapshot); }
       if (this.disposed) return false;
       this.snapshot = snapshot;
       if (hasChanges) {
         this.view.activity?.({ id: activityId, actor: 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: snapshot.revision });
-        this.drafts.clear();
+        this.resetDraft(snapshot);
         this.view.render(snapshot);
       }
       this.view.status('저장됨', 'committed');
@@ -134,8 +205,8 @@ export class DocumentController {
       try { const parsed = errorResponseSchema.safeParse(await response.json()); if (parsed.success) details = parsed.data.error; } catch { /* Keep the recovery message if the response is unreadable. */ }
       const error = new Error(response.status === 409
       ? '문서 리비전 충돌 또는 외부 변경이 있습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'
-      : '문서를 읽거나 저장하지 못했습니다. 입력 내용을 복사한 뒤 다시 불러오세요.') as Error & { details?: string };
-      error.details = details; throw error;
+      : '문서를 읽거나 저장하지 못했습니다. 입력 내용을 복사한 뒤 다시 불러오세요.') as Error & { details?: string; conflict?: boolean };
+      error.details = details; error.conflict = response.status === 409; throw error;
     }
     return snapshotSchema.parse(await response.json());
   }
@@ -153,7 +224,7 @@ export class DocumentController {
         }
         if (event.type === 'docx.reload' || event.revision > (this.snapshot?.revision ?? 0)) {
           if (this.hasDrafts()) {
-            this.fail(new Error('다른 편집이 저장되었습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'));
+            this.fail(new Error('다른 편집이 저장되었습니다. 입력 내용을 복사한 뒤 다시 불러오세요.'), true);
           } else { void this.load(event.type === 'docx.committed' ? event : undefined); }
         }
       } catch (error) { this.fail(error); }
@@ -163,21 +234,26 @@ export class DocumentController {
     };
   }
 
-  private fail(error: unknown): void {
+  private fail(error: unknown, conflict = false): void {
     this.blocked = true;
+    this.cancelCompositionSaves();
     this.disconnect();
-    this.view.status('편집 중단 · 다시 불러오기 필요', 'failed');
+    const conflicted = conflict || error instanceof Error && Boolean((error as Error & { conflict?: boolean }).conflict);
+    this.view.status(conflicted ? '편집 충돌 · 다시 불러오기 필요' : '편집 중단 · 다시 불러오기 필요', conflicted ? 'conflicted' : 'failed');
     this.view.error(error instanceof Error ? error.message : '문서 처리에 실패했습니다.', error instanceof Error ? ((error as Error & { details?: string }).details || error.message) : String(error));
     this.updateSave();
   }
   private disconnect(): void { this.events?.close(); this.events = undefined; }
   private draftError(): string {
-    return validateDrafts(this.snapshot?.id ?? '', this.snapshot?.revision ?? 0, [...this.drafts.values()]);
+    return validateDrafts(this.snapshot?.id ?? '', this.snapshot?.revision ?? 0, this.pendingOperations());
   }
   private updateSave(): void {
     const error = this.draftError();
     this.view.validation?.(error);
-    this.view.canSave(!this.blocked && !this.busy && this.drafts.size > 0 && !error);
+    this.view.canSave(!this.blocked && !this.busy && this.hasDrafts() && !this.composing && !error);
   }
-  dispose(): void { this.disposed = true; this.disconnect(); }
+  private cancelCompositionSaves(): void {
+    for (const finish of this.compositionSaves.splice(0)) finish(false);
+  }
+  dispose(): void { this.disposed = true; this.cancelCompositionSaves(); this.disconnect(); }
 }
