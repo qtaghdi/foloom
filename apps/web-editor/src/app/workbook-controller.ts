@@ -126,7 +126,6 @@ export class WorkbookController {
       this.view.showRevision(direction === 'undo' ? 'Nothing to undo' : 'Nothing to redo', this.revision);
       return;
     }
-    const selection = this.engine?.getSelection?.();
     this.historyPending = true;
     this.engine?.setHistoryBusy?.(true);
     this.syncHistoryControls();
@@ -147,7 +146,6 @@ export class WorkbookController {
         this.loadedRanges.clear();
         for (const range of ranges) this.recordLoadedRange(range.sheet, range.ref);
         this.engine?.replaceWorkbook(snapshot, ranges, objects);
-        if (selection) this.engine?.locateRange?.(selection);
         this.subscribeToWorkbook(snapshot);
         this.view.showRevision('Saved', this.revision, 'success');
       } catch (error) {

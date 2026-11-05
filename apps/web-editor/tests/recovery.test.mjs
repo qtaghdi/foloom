@@ -62,7 +62,7 @@ const fixture = async (overrides = {}, snapshotOverrides = {}) => {
     showAIPresence() {}, dispose() {},
   };
   const engine = {
-    initialize() {}, dispose() {}, replaceWorkbook: (workbook) => { state.replaced = workbook; }, getSelection: () => state.selection, locateRange: (selection) => { state.located = selection; return true; },
+    initialize() {}, dispose() {}, replaceWorkbook: (workbook) => { state.replaced = workbook; },
     setHistoryState: (canUndo, canRedo) => state.historyStates.push([canUndo, canRedo]),
     applyRemoteEvent: (event) => state.remoteEvents.push(event),
   };
@@ -250,18 +250,17 @@ test('successful redo replaces the workbook in place', async () => {
   assert.deepEqual(state.historyStates.at(-1), [true, false]);
 });
 
-test('undo keeps the view and selection when the live event precedes the response', async () => {
+test('undo replaces the preview once when the live event precedes the response', async () => {
   const { state, client, snapshot } = await fixture();
   client.restoreHistory = async () => {
     state.onEvent({ type: 'workbook.reload', state: 'undo', actor: 'human', sequence: 6, revision: 3 });
     assert.equal(state.reloads, 0);
     return { workbook: { ...snapshot, sequence: 6, revision: 3 }, applied: 1 };
   };
-  state.selection = { sheet: 'Sheet1', range: 'C7', state: 'selecting' };
   state.callbacks.onHistoryAction('undo');
   await flush();
   assert.equal(state.reloads, 0);
-  assert.equal(state.located?.range, 'C7');
+  assert.equal(state.replaced.revision, 3);
   assert.equal(state.checkpoint.sequence, 6);
 });
 

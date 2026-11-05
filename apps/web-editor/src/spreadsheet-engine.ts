@@ -13,7 +13,6 @@ import type {
 
 export interface SpreadsheetEngine {
   setHistoryBusy?(busy: boolean): void;
-  getSelection?(): SelectionChange | undefined;
   locateRange?(target: SelectionChange): boolean;
   setHistoryState?(canUndo: boolean, canRedo: boolean): void;
   initialize(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void;

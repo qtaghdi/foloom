@@ -16,7 +16,7 @@ import { UniverSheetsFormulaPlugin } from '@univerjs/sheets-formula';
 import { UniverSheetsFormulaUIPlugin } from '@univerjs/sheets-formula-ui';
 import { UniverSheetsNumfmtPlugin } from '@univerjs/sheets-numfmt';
 import { UniverSheetsNumfmtUIPlugin } from '@univerjs/sheets-numfmt-ui';
-import { UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
+import { SetScrollOperation, UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
 import { UniverSheetsDrawingPlugin } from '@univerjs/sheets-drawing';
 import { UniverSheetsDrawingUIPlugin } from '@univerjs/sheets-drawing-ui';
 import SheetsDrawingUIKoKR from '@univerjs/sheets-drawing-ui/locale/ko-KR';
@@ -281,6 +281,10 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
   }
 
   replaceWorkbook(snapshot: WorkbookSnapshot, ranges: WorkbookRange[], objects: SheetObjects[]): void {
+    const previousSheet = this.workbook?.getActiveSheet();
+    const sheetName = previousSheet?.getSheetName();
+    const selection = previousSheet?.getActiveRange()?.getA1Notation();
+    const scroll = previousSheet?.getScrollState();
     this.clearRemoteHighlight();
     this.selectionSubscription?.dispose();
     if (this.workbook) this.univerAPI.disposeUnit(this.workbook.getId());
@@ -288,6 +292,22 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     this.appliedConditionalFormats.clear();
     this.objectBindings.clear();
     this.loadWorkbook(snapshot, ranges);
+    const worksheet = sheetName ? this.workbook?.getSheetByName(sheetName) : undefined;
+    if (worksheet && scroll && this.workbook) {
+      this.workbook.setActiveSheet(worksheet);
+      // Selection restoration must not reveal a cell outside the viewport.
+      if (selection) this.locateRange({ sheet: worksheet.getSheetName(), range: selection, state: 'selecting' }, false);
+      const row = Math.min(scroll.sheetViewStartRow, worksheet.getMaxRows() - 1);
+      const column = Math.min(scroll.sheetViewStartColumn, worksheet.getMaxColumns() - 1);
+      this.univerAPI.syncExecuteCommand(SetScrollOperation.id, {
+        unitId: this.workbook.getId(),
+        sheetId: worksheet.getSheetId(),
+        sheetViewStartRow: row,
+        sheetViewStartColumn: column,
+        offsetY: row === scroll.sheetViewStartRow ? scroll.offsetY : 0,
+        offsetX: column === scroll.sheetViewStartColumn ? scroll.offsetX : 0,
+      });
+    }
     void this.applySheetObjects(objects);
   }
 
@@ -295,13 +315,7 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     this.workbook?.setEditable(!busy);
   }
 
-  getSelection(): SelectionChange | undefined {
-    const sheet = this.workbook?.getActiveSheet();
-    const range = this.workbook?.getActiveRange();
-    if (sheet && range) return { sheet: sheet.getSheetName(), range: range.getA1Notation(), state: 'selecting' };
-  }
-
-  locateRange(target: SelectionChange): boolean {
+  locateRange(target: SelectionChange, reveal = true): boolean {
     const workbook = this.workbook;
     const worksheet = workbook?.getSheetByName(target.sheet);
     if (!workbook || !worksheet || !/^[A-Z]{1,3}[1-9][0-9]{0,6}(?::[A-Z]{1,3}[1-9][0-9]{0,6})?$/i.test(target.range)) return false;
@@ -311,9 +325,11 @@ export class UniverSpreadsheetEngine implements SpreadsheetEngine {
     if (start.row > end.row || start.column > end.column || end.row >= worksheet.getMaxRows() || end.column >= worksheet.getMaxColumns()) return false;
     workbook.setActiveSheet(worksheet);
     worksheet.setActiveRange(worksheet.getRange(target.range));
-    const visible = worksheet.getVisibleRange();
-    if (!visible || start.row < visible.startRow || start.row > visible.endRow || start.column < visible.startColumn || start.column > visible.endColumn) {
-      worksheet.scrollToCell(start.row, start.column);
+    if (reveal) {
+      const visible = worksheet.getVisibleRange();
+      if (!visible || start.row < visible.startRow || start.row > visible.endRow || start.column < visible.startColumn || start.column > visible.endColumn) {
+        worksheet.scrollToCell(start.row, start.column);
+      }
     }
     this.selectionListener?.(target);
     return true;
