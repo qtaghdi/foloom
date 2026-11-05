@@ -89,6 +89,9 @@ function runStyle(run: Run) {
     'font-size': run.sizeHalfPoints === undefined ? undefined : `${run.sizeHalfPoints / 2}pt`,
     'font-family': run.font ? `${JSON.stringify(run.font)}, system-ui, sans-serif` : undefined,
     color: run.color,
+    'text-decoration': [run.underline?'underline':'',run.strike?'line-through':''].filter(Boolean).join(' ') || undefined,
+    'background-color': ({yellow:'#ffff00',green:'#00ff00',cyan:'#00ffff',magenta:'#ff00ff',blue:'#0000ff',red:'#ff0000',darkBlue:'#000080',darkCyan:'#008080',darkGreen:'#008000',darkMagenta:'#800080',darkRed:'#800000',darkYellow:'#808000',darkGray:'#808080',lightGray:'#c0c0c0',black:'#000000',white:'#ffffff'} as Record<string,string>)[run.highlight??''],
+    'vertical-align': run.vertical==='superscript'?'super':run.vertical==='subscript'?'sub':undefined,
     'font-weight': run.bold ? '700' : undefined,
     'font-style': run.italic ? 'italic' : undefined,
   };

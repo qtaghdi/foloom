@@ -25,6 +25,7 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
   const [draftVersion, setDraftVersion] = createSignal(0);
+  const [formattingSelection,setFormattingSelection]=createSignal<import('./selection').TextSelection>();
   const [pasteMode, setPasteMode] = createSignal<PasteMode>('text');
   const [zoom, setZoom] = createSignal(100);
   const [focusedRun, setFocusedRun] = createSignal<Run>();
@@ -57,6 +58,7 @@ export function DocumentApp() {
   };
   const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
     setStructuralDraft(Boolean(focus));
+    if(focus?.selection)setFormattingSelection(focus.selection);
     const article = document.getElementById('document-content');
     const active = document.activeElement;
     const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
@@ -97,6 +99,17 @@ export function DocumentApp() {
       field?.setSelectionRange(...selection);
     }
   } });
+  const selectionChanged = () => {
+    const editor=document.querySelector<HTMLElement>('[data-continuous-editor]');
+    const range=editor && readTextSelection(editor);if(range)setFormattingSelection(range);
+  };
+  const selectedStyles = createMemo(() => {
+    draftVersion();const selection=formattingSelection();
+    return selection ? controller.richSelection(selection)?.flatMap(p=>p.map(r=>r.style??{}))??[] : [];
+  });
+  const applyFormat = (style: import('./contracts').InlineStyle) => {
+    const selection=formattingSelection();if(selection && controller.format(selection,style))setDraftVersion(v=>v+1);
+  };
   const [confirmReload, setConfirmReload] = createSignal(false);
   const cancelReload = () => { setConfirmReload(false); document.getElementById('reload-document')?.focus(); };
   const requestReload = () => {
@@ -120,6 +133,12 @@ export function DocumentApp() {
   const keydown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && confirmReload()) { event.preventDefault(); cancelReload(); return; }
     const key = event.key.toLowerCase();
+    const styleKey = ({b:'bold',i:'italic',u:'underline'} as const)[key as 'b'|'i'|'u'];
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && styleKey && (event.target as HTMLElement | null)?.closest('[data-continuous-editor]')) {
+      if(event.isComposing)return;
+      event.preventDefault();selectionChanged();
+      applyFormat({[styleKey]:!selectedStyles().every(style=>style[styleKey]===true)});return;
+    }
     if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) {
       const target = event.target as HTMLElement | null;
       if (event.isComposing || target?.closest('input, select') || target?.closest('textarea') && !target.closest('#document-content')) return;
@@ -138,6 +157,7 @@ export function DocumentApp() {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    document.removeEventListener('selectionchange',selectionChanged);
     window.removeEventListener('beforeunload', beforeUnload);
     window.removeEventListener('keydown', keydown);
     window.removeEventListener('pagehide', dispose);
@@ -146,6 +166,7 @@ export function DocumentApp() {
   };
   onMount(() => {
     disconnectWorkspace = connectWorkspaceBridge(editorState, async () => { await controller.save(); });
+    document.addEventListener('selectionchange',selectionChanged);
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
     window.addEventListener('pagehide', dispose, { once: true });
@@ -159,7 +180,7 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentToolbar history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
+    <DocumentToolbar styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>

@@ -5,7 +5,7 @@ import type { DocumentView, HistoryControls } from './controller';
 import type { Snapshot } from './contracts';
 
 export interface DocumentViewState {
-  history?: HistoryControls; snapshot?: Snapshot; message: string; status: 'pending' | 'committed' | 'failed' | 'conflicted';
+  composing?: boolean; history?: HistoryControls; snapshot?: Snapshot; message: string; status: 'pending' | 'committed' | 'failed' | 'conflicted';
   error: string; errorDetails?: string; validation: string; canSave: boolean; saving: boolean; loading: boolean;
 }
 export function createDocumentView() {
@@ -14,6 +14,7 @@ export function createDocumentView() {
   const patch = (update: Partial<DocumentViewState>) => setState((previous) => ({ ...previous, ...update }));
   const view: DocumentView = {
     activity: activity.record,
+    composition: composing => patch({ composing }),
     history: history => patch({ history }),
     validation: (validation) => patch({ validation }),
     render: (snapshot) => patch({ snapshot }),

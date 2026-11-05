@@ -1,12 +1,14 @@
+import { DocumentFormatToolbar } from './document-format-toolbar';
 import { For } from 'solid-js';
 import { buttonClass, quietButtonClass } from '../ui/editor-chrome';
 import type { PasteMode } from './clipboard';
 import type { HistoryControls } from './controller';
-import type { Run } from './contracts';
+import type { Run, InlineStyle } from './contracts';
 
 const scales = [75, 90, 100, 110, 125, 150];
 
 export function DocumentToolbar(props: {
+  styles: InlineStyle[]; formatDisabled: boolean; onFormat: (style: InlineStyle) => void;
   pasteMode: PasteMode; onPasteMode: (mode: PasteMode) => void;
   history?: HistoryControls; onHistory: (direction: 'undo' | 'redo') => void;
   saving: boolean; loading: boolean; needsRecovery: boolean;
@@ -46,5 +48,6 @@ export function DocumentToolbar(props: {
         </select>
       </label>
     </div>
+    <DocumentFormatToolbar styles={props.styles} disabled={props.formatDisabled} onFormat={props.onFormat}/>
   </div>;
 }

@@ -9,11 +9,12 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
 type DraftCheckpoint = { structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
+  composition?(active: boolean): void;
   history?(controls: HistoryControls): void;
   validation?(message: string): void;
   activity?(entry: ActivityEntry): void;
@@ -89,6 +90,7 @@ export class DocumentController {
 
   composition(active: boolean): void {
     this.composing = active;
+    this.view.composition?.(active);
     this.updateSave();
     if (!active && this.compositionSaves.length) {
       const waiting = this.compositionSaves.splice(0);
@@ -114,6 +116,13 @@ export class DocumentController {
     this.view.render(this.structureDraft.snapshot(),focus);
     if (!this.blocked) this.view.status('미저장 변경','pending');
     this.updateSave();return true;
+  }
+  format(selection: TextSelection, style: InlineStyle): boolean {
+    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    const before=this.checkpoint(selection),focus=this.structureDraft.format(selection,style);
+    if(!focus)return false;
+    this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
+    if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
   }
   richSelection(selection: TextSelection): ClipboardParagraph[] | undefined {return this.structureDraft?.selectedRich(selection);}
   deleteSelection(selection: TextSelection, direction: 'backward' | 'forward', word: boolean): boolean {

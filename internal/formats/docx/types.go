@@ -20,14 +20,19 @@ const (
 )
 
 type Run struct {
-	ID             string `json:"id"`
-	Text           string `json:"text"`
-	Editable       bool   `json:"editable"`
-	Bold           bool   `json:"bold"`
-	Italic         bool   `json:"italic"`
-	SizeHalfPoints int    `json:"sizeHalfPoints,omitempty"`
-	Color          string `json:"color,omitempty"`
-	Font           string `json:"font,omitempty"`
+	BaseStyle      *InlineStyle `json:"baseStyle,omitempty"`
+	Underline      bool         `json:"underline,omitempty"`
+	Strike         bool         `json:"strike,omitempty"`
+	Highlight      string       `json:"highlight,omitempty"`
+	Vertical       string       `json:"vertical,omitempty"`
+	ID             string       `json:"id"`
+	Text           string       `json:"text"`
+	Editable       bool         `json:"editable"`
+	Bold           bool         `json:"bold"`
+	Italic         bool         `json:"italic"`
+	SizeHalfPoints int          `json:"sizeHalfPoints,omitempty"`
+	Color          string       `json:"color,omitempty"`
+	Font           string       `json:"font,omitempty"`
 }
 
 // Layout fields are bounded preview hints. They never participate in writes.
@@ -103,6 +108,11 @@ type ParagraphContent struct {
 // InlineStyle contains explicit, bounded clipboard formatting overrides. Source
 // run properties not named here remain unchanged.
 type InlineStyle struct {
+	Reset          bool   `json:"reset,omitempty"`
+	Underline      *bool  `json:"underline,omitempty"`
+	Strike         *bool  `json:"strike,omitempty"`
+	Highlight      string `json:"highlight,omitempty"`
+	Vertical       string `json:"vertical,omitempty"`
 	Bold           *bool  `json:"bold,omitempty"`
 	Italic         *bool  `json:"italic,omitempty"`
 	Color          string `json:"color,omitempty"`

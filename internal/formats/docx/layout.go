@@ -69,6 +69,22 @@ func applyParagraphPreview(layout *ParagraphLayout, props *node) {
 }
 
 func applyRunPreview(run *Run, props *node) {
+	if n := props.child("u"); n != nil {
+		run.Underline = n.attr("val") != "none"
+	}
+	if n := props.child("strike"); n != nil {
+		run.Strike = onOff(n.attr("val"), true)
+	}
+	if n := props.child("dstrike"); n != nil && onOff(n.attr("val"), true) {
+		run.Strike = true
+	}
+	if n := props.child("highlight"); n != nil {
+		run.Highlight = n.attr("val")
+	}
+	if n := props.child("vertAlign"); n != nil {
+		run.Vertical = n.attr("val")
+	}
+
 	if size := previewNumber(props.child("sz").attr("val"), 8, 288); size != nil {
 		run.SizeHalfPoints = *size
 	}

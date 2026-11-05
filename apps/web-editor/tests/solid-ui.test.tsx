@@ -356,3 +356,16 @@ it('uses one draft history for range edits, native undo intent and keyboard redo
   expect(f.fetcher.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0);
   expect(button(root,'실행 취소').disabled).toBe(false);
 });
+
+it('reports mixed formatting and writes only the selected range through the toolbar',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'a',text:'AB',editable:true,bold:true,italic:false},{id:'b',text:'CD',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1,1,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ expect(button(root,'굵게').getAttribute('aria-pressed')).toBe('mixed');
+ button(root,'밑줄').click();await settle();
+ expect(spans(root).map(s=>s.textContent)).toEqual(['A','B','C','D']);
+ expect(spans(root)[1]?.style.textDecoration).toBe('underline');expect(spans(root)[2]?.style.textDecoration).toBe('underline');
+ expect(button(root,'밑줄').getAttribute('aria-pressed')).toBe('true');
+ button(root,'저장').click();await settle();
+ const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+ expect(body.operations[0].paragraphs[0].runs.map((r:any)=>r.style)).toEqual([undefined,{underline:true},{underline:true},undefined]);
+});

@@ -43,3 +43,21 @@ it('keeps inline line breaks separate from paragraph insertion', () => {
  expect(draft.operations()[0]?.paragraphs).toHaveLength(2);
  expect(draft.operations()[0]?.paragraphs[0]?.runs.map(r=>r.text).join('')).toBe('a\nb😀CDe\u0301');
 });
+
+it('splits only selected formatting runs and keeps reversed selection and source properties',()=>{
+ const draft=new StructureDraft(snapshot);
+ const focus=draft.format(selection('p1:1',2,'p1:0',1),{underline:true,color:'#112233'});
+ expect(focus?.selection?.anchor.offset).toBe(2);
+ const op=draft.operations()[0]!;
+ expect(op.paragraphs[0]!.runs.map(r=>[r.sourceId,r.text,r.style])).toEqual([
+  ['p1:0','a',undefined],['p1:0','b😀',{underline:true,color:'#112233'}],['p1:1','CD',{underline:true,color:'#112233'}],['p1:1','e\u0301',undefined],
+ ]);
+ expect(op.paragraphs[1]!.runs.every(r=>!r.style)).toBe(true);
+});
+it('formats a collapsed typing position and restores inherited style on direct reset',()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'ab',editable:true,bold:true,italic:true,font:'Direct',baseStyle:{bold:true,italic:false,font:'Inherited'}}]}}]};
+ const draft=new StructureDraft(initial);const focus=draft.format(selection('r',1),{reset:true});
+ expect(focus).toBeDefined();const p=draft.snapshot().blocks[0];if(p?.type!=='paragraph')throw new Error('paragraph missing');
+ expect(p.paragraph.runs.map(r=>[r.text,r.bold,r.italic,r.font])).toEqual([['a',true,true,'Direct'],['',true,false,'Inherited'],['b',true,true,'Direct']]);
+ draft.edit(focus!.runId,'new');expect(draft.operations()[0]!.paragraphs[0]!.runs[1]).toMatchObject({text:'new',style:{reset:true}});
+});

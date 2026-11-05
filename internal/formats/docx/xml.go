@@ -302,6 +302,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			for i := len(characters) - 1; i >= 0; i-- {
 				styleRun(&run, characters[i].child("rPr"))
 			}
+			base := run
+			run.BaseStyle = &InlineStyle{Bold: &base.Bold, Italic: &base.Italic, Underline: &base.Underline, Strike: &base.Strike, Color: base.Color, Font: base.Font, Highlight: base.Highlight, Vertical: base.Vertical}
+			if base.SizeHalfPoints != 0 {
+				run.BaseStyle.SizeHalfPoints = &base.SizeHalfPoints
+			}
 			directRun(&run, runProps)
 			out.Runs = append(out.Runs, run)
 			if editable {

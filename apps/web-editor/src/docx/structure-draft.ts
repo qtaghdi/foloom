@@ -215,6 +215,32 @@ export class StructureDraft {
     for (const item of prepared) { item.group.current.splice(item.from, item.count, ...item.paragraphs); item.group.changed = true; }
     return focus;
   }
+  format(selection: TextSelection, style: InlineStyle): DraftFocus | undefined {
+    const range=this.normalized(selection);if (!range) return;
+    const found=range.runs.map(item=>this.find(item.run.id));
+    if (found.some(item=>!item)) return;
+    const collapsed=range.start.runId===range.end.runId && range.start.offset===range.end.offset;
+    let first:TextPoint|undefined,last:TextPoint|undefined;
+    for (const [index,item] of found.entries()) {
+      const {run,paragraph,group}=item!;
+      const start=index===0?range.start.offset:0,end=index===found.length-1?range.end.offset:run.text.length;
+      if (!collapsed && start===end) continue;
+      const combined:InlineStyle=style.reset?{...style}:{...run.style,...style};
+      const baseline=combined.reset ? {bold:false,italic:false,underline:false,strike:false,color:undefined,font:undefined,sizeHalfPoints:undefined,highlight:undefined,vertical:undefined,...run.baseStyle} : run;
+      const selected:DraftRun={...run,...baseline,...combined,id:this.id(),text:run.text.slice(start,end),style:combined};
+      const pieces:DraftRun[]=[];
+      if(start) pieces.push({...run,text:run.text.slice(0,start)});
+      pieces.push(selected);
+      if(end<run.text.length)pieces.push({...run,id:this.id(),text:run.text.slice(end)});
+      const position=paragraph.runs.findIndex(r=>r.id===run.id);
+      paragraph.runs.splice(position,1,...pieces);group.changed=true;
+      first??={runId:selected.id,offset:0};last={runId:selected.id,offset:selected.text.length};
+    }
+    if(!first || !last)return;
+    const forward=selection.anchor.runId===range.start.runId && selection.anchor.offset===range.start.offset;
+    const selected={anchor:forward?first:last,focus:forward?last:first};
+    return {runId:selected.focus.runId,start:selected.focus.offset,end:selected.focus.offset,selection:selected};
+  }
   replaceRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): DraftFocus | undefined {
     if (!paragraphs.length || paragraphs.length>1000 || paragraphs.some(p=>!p.length)) return;
     return this.replace(selection,paragraphs.map(p=>p.map(r=>r.text).join('')).join('\n'),false,paragraphs);
@@ -224,7 +250,7 @@ export class StructureDraft {
     const result:ClipboardParagraph[]=[];let previous:string|undefined;
     for (const [index,{paragraph,run}] of range.runs.entries()) {
       if (previous!==paragraph.id) result.push([]);previous=paragraph.id;
-      result.at(-1)!.push({text:run.text.slice(index===0?range.start.offset:0,index===range.runs.length-1?range.end.offset:undefined),style:{bold:run.bold,italic:run.italic,...run.font?{font:run.font}:{},...run.color?{color:run.color}:{},...run.sizeHalfPoints?{sizeHalfPoints:run.sizeHalfPoints}:{}}});
+      result.at(-1)!.push({text:run.text.slice(index===0?range.start.offset:0,index===range.runs.length-1?range.end.offset:undefined),style:{bold:run.bold,italic:run.italic,underline:Boolean(run.underline),strike:Boolean(run.strike),highlight:run.highlight??'none',vertical:run.vertical??'baseline',...run.font?{font:run.font}:{},...run.color?{color:run.color}:{},...run.sizeHalfPoints?{sizeHalfPoints:run.sizeHalfPoints}:{}}});
     }
     return result;
   }

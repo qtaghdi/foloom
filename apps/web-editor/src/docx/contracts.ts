@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
+const baseStyleSchema = z.object({bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
 export const runSchema = z.object({
+  baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), bold: z.boolean(), italic: z.boolean(),
   sizeHalfPoints: z.number().int().min(8).max(288).optional(),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
@@ -40,7 +42,7 @@ export type TextOperation = {
   type: 'replace_run_text' | 'replace_cell_text'; targetId: string; expectedText: string; text: string;
 };
 
-export type InlineStyle = { bold?: boolean; italic?: boolean; color?: string; font?: string; sizeHalfPoints?: number };
+export type InlineStyle = { reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; sizeHalfPoints?: number };
 export type ParagraphOperation = {
  type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';
  paragraphs: Array<{ sourceId: string; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
