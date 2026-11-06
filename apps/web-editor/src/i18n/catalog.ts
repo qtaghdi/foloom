@@ -702,6 +702,30 @@ export const catalog = {
     "ja": "言語",
     "zh-CN": "语言"
   },
+  "brandName": {
+    "ko": "폴룸 · Foloom",
+    "en": "Foloom",
+    "ja": "Foloom",
+    "zh-CN": "Foloom"
+},
+  "brandTagline": {
+    "ko": "같은 문서에서, 함께.",
+    "en": "One document. Working together.",
+    "ja": "同じ文書で、一緒に。",
+    "zh-CN": "同一份文档，一起完成。"
+},
+  "brandDescription": {
+    "ko": "사람과 AI가 함께 일하는 문서 공간",
+    "en": "A document workspace for people and AI.",
+    "ja": "人とAIが一緒に作業する文書スペース",
+    "zh-CN": "人与 AI 共同工作的文档空间"
+},
+  "experimental": {
+    "ko": "실험 기능",
+    "en": "Experimental",
+    "ja": "試験機能",
+    "zh-CN": "实验功能"
+},
   "workspace": {
     "ko": "문서 작업 공간",
     "en": "Document workspace",

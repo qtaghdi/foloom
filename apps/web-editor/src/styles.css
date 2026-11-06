@@ -9,9 +9,33 @@
 @import "@univerjs/sheets-formula-ui/lib/index.css";
 @import "@univerjs/sheets-data-validation-ui/lib/index.css";
 
+@theme {
+  --color-teal-50: #EDF4F1;
+  --color-teal-100: #D9E8E1;
+  --color-teal-200: #B7D2C5;
+  --color-teal-300: #90B6A5;
+  --color-teal-400: #699B85;
+  --color-teal-500: #4F826D;
+  --color-teal-600: #3E6F5E;
+  --color-teal-700: #315C50;
+  --color-teal-800: #294F46;
+  --color-teal-900: #234A45;
+  --color-teal-950: #142F2B;
+  --color-slate-50: #FAF9F6;
+  --color-slate-100: #F6F4EF;
+  --color-slate-200: #E6E5DF;
+  --color-slate-300: #CFD2CB;
+  --color-slate-400: #919C94;
+  --color-slate-500: #67776F;
+  --color-slate-600: #53645C;
+  --color-slate-700: #3E5149;
+  --color-slate-800: #2B3E36;
+  --color-slate-900: #22302E;
+}
+
 :root {
   color-scheme: light;
-  --editor-focus: #0f766e;
+  --editor-focus: #315C50;
   font-family: Inter, "Pretendard", "Noto Sans KR", system-ui, sans-serif;
   font-synthesis: none;
 }
