@@ -17,8 +17,8 @@ for target in $release_targets; do
   os=${target%%_*}
   arch=${target#*_}
   archive=$(find "$dist_directory" -maxdepth 1 -type f \( \
-    -name "document-workspace_*_${os}_${arch}.tar.gz" -o \
-    -name "document-workspace_*_${os}_${arch}.zip" \) | head -n 1)
+    -name "foloom_*_${os}_${arch}.tar.gz" -o \
+    -name "foloom_*_${os}_${arch}.zip" \) | head -n 1)
   if [ -z "$archive" ]; then
     echo "Release verification failed: archive for $os/$arch is missing." >&2
     exit 1
@@ -28,9 +28,9 @@ for target in $release_targets; do
   filename=$(basename "$archive")
   package_name=${filename%.tar.gz}
   package_name=${package_name%.zip}
-  binary_name=document-workspace
+  binary_name=foloom
   if [ "$os" = windows ]; then
-    binary_name=document-workspace.exe
+    binary_name=foloom.exe
     entries=$(unzip -Z1 "$archive")
   else
     entries=$(tar -tzf "$archive")
@@ -43,7 +43,12 @@ for target in $release_targets; do
     "$package_name/docs/format-support.md" \
     "$package_name/docs/docx-editing.md" \
     "$package_name/docs/host-compatibility.md" \
-    "$package_name/docs/security.md"; do
+    "$package_name/docs/security.md" \
+    "$package_name/docs/brand.md" \
+    "$package_name/docs/foloom-migration.md" \
+    "$package_name/docs/brand/foloom-wordmark.svg" \
+    "$package_name/docs/brand/foloom-app-icon.png" \
+    "$package_name/docs/brand/foloom-social.png"; do
     if ! printf '%s\n' "$entries" | grep -Fx "$required" >/dev/null; then
       echo "Release verification failed: $filename does not contain $required." >&2
       exit 1

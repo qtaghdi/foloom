@@ -16,7 +16,7 @@ make package-verify
 제공 경로를 검사합니다. GitHub Actions도 Pull Request와 `main` 푸시에서 깨끗한
 checkout으로 같은 검사를 실행합니다.
 
-`make build`는 `bin/document-workspace`를 컴파일하기 전에 두 인터페이스를 다시
+`make build`는 `bin/foloom`을 컴파일하기 전에 두 인터페이스를 다시
 빌드하고 검증합니다. `make go-build`는 개발용 Go 전용 명령이며 누락된
 프론트엔드 출력을 만들지 않습니다.
 
@@ -51,8 +51,8 @@ make release-verify VERSION=0.1.0-alpha.local
 
 `dist/`에는 AMD64와 ARM64용 macOS, Linux, Windows 미서명 압축 파일과
 `SHA256SUMS`가 생성됩니다. 각 압축 파일에는 실행 파일, README, 시작 안내, 형식
-지원표, 호스트 호환성 안내, 로컬 보안 안내가 들어갑니다. Go 바이너리는 앞서
-빌드한 브라우저 및 MCP App 번들과 설치할 `document-workspace` 스킬을 포함합니다.
+지원표, 호스트 호환성 안내, 로컬 보안 안내, 브랜드 원본·PNG 및 이름 전환 안내가 들어갑니다. Go 바이너리는 앞서
+빌드한 브라우저 및 MCP App 번들과 설치할 `foloom` 스킬을 포함합니다.
 
 `Private alpha package` workflow는 권한 있는 사용자의 수동 실행으로만 동작합니다.
 비공개 저장소 범위의 workflow artifact를 올리고 저장소 내용에는 읽기 권한만
@@ -67,15 +67,15 @@ make release-verify VERSION=0.1.0-alpha.local
 ## 빌드 정보와 사전 검사
 
 릴리스 빌드는 요청한 버전, 소스 commit, commit 날짜를 포함합니다. 사용자는
-`document-workspace -version`으로 이를 기록할 수 있습니다. 기존 연동은
+`foloom -version`으로 이를 기록할 수 있습니다. 기존 연동은
 `-file`을 계속 사용하고 대화형 사용자는 통합 문서 경로 하나를 위치 인자로
 전달할 수 있습니다.
 
-`document-workspace -check workbook.xlsx`는 서비스와 같은 XLSX 세션 경계를
+`foloom -check workbook.xlsx`는 서비스와 같은 XLSX 세션 경계를
 통해 통합 문서를 열고 구조 호환성과 수식 정책 metadata를 출력한 뒤 종료합니다.
 HTTP나 stdio 전송을 시작하지 않고 셀 내용도 출력하지 않습니다.
 
-macOS의 `document-workspace mcp install`은 현재 실행 파일을 사용자 Application
+macOS의 `foloom mcp install`은 현재 실행 파일을 사용자 Application
 Support에 복사하고 Claude Desktop 및 Codex stdio 설정과 skill을 설치합니다.
 package 자동 테스트는 실제 사용자 설정 대신 임시 홈을 사용합니다.
 

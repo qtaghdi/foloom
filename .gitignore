@@ -25,6 +25,7 @@ internal/transport/httpapi/static/app.html
 
 # Go build and test outputs
 /document-workspace
+/foloom
 /bin/
 /dist/
 *.test

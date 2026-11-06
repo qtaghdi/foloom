@@ -6,7 +6,7 @@
 기록되기 전에는 X-07 native fidelity와 X-08 수식 기대값이 blocked입니다.
 Excelize나 LibreOffice reopen은 유용하지만 Microsoft Excel을 대신하지 않습니다.
 
-항상 복사본을 사용하고 document-workspace와 Excel을 같은 파일의 동시 writer로
+항상 복사본을 사용하고 폴룸과 Excel을 같은 파일의 동시 writer로
 실행하지 않습니다. source hash 검사만으로 비협조 앱과의 마지막 race를 제거할 수
 없습니다.
 
@@ -19,7 +19,7 @@ Excelize나 LibreOffice reopen은 유용하지만 Microsoft Excel을 대신하�
 - Excel 제품 version, build, license channel, architecture
 - locale, 계산 mode, 외부 link 허용 여부
 - fixture 경로, 출처, 재배포 권리, 크기, SHA-256
-- document-workspace binary hash와 편집 transport 또는 UI mode
+- foloom binary hash와 편집 transport 또는 UI mode
 
 출처와 권리가 알려진 비민감 fixture만 사용합니다. 고객 문서, 개인정보, 인증 정보,
 외부 link token, 식별 metadata를 commit하지 않습니다.

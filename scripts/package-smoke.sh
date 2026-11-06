@@ -2,7 +2,7 @@
 set -eu
 
 repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-binary_path="$repository_root/bin/document-workspace"
+binary_path="$repository_root/bin/foloom"
 fixture_path="$repository_root/testdata/xlsx/compatibility/libreoffice.xlsx"
 
 if [ ! -x "$binary_path" ]; then
@@ -11,7 +11,7 @@ if [ ! -x "$binary_path" ]; then
   exit 1
 fi
 
-temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/document-workspace-package.XXXXXX")
+temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/foloom-package.XXXXXX")
 cleanup() {
   rm -rf "$temporary_root"
 }

@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -40,7 +40,7 @@ type evidence struct {
 }
 
 func run(ctx context.Context, profile workload) (evidence, error) {
-	tempDir, err := os.MkdirTemp("", "document-workspace-xlsx-performance-")
+	tempDir, err := os.MkdirTemp("", "foloom-xlsx-performance-")
 	if err != nil {
 		return evidence{}, fmt.Errorf("create temporary directory: %w", err)
 	}

@@ -22,7 +22,7 @@ trap 'rm -rf "$work_dir"' EXIT HUP INT TERM
 
 export CI=true
 export GOTOOLCHAIN=${GO_TOOLCHAIN:-go1.25.0}
-export GOCACHE=${GO_CACHE:-/tmp/document-workspace-go-cache}
+export GOCACHE=${GO_CACHE:-/tmp/foloom-go-cache}
 
 checksum() {
   if command -v sha256sum >/dev/null 2>&1; then

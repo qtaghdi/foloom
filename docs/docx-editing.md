@@ -10,11 +10,11 @@ Microsoft Word와 LibreOffice native reopen 및 시각 증거는 아직 없습�
 최신 소스에서 `make build`로 바이너리를 만든 뒤 실행합니다. 기존에 설치한 MCP
 바이너리는 이 소스 변경만으로 갱신되지 않습니다. 설치 workflow를 사용하는 경우
 새 실행 파일로 `mcp install`을 수행한 뒤 호스트를 완전히 다시 시작합니다.
-설치된 `document-workspace` 스킬에 DOCX 절대 경로와 작업을 전달할 수 있습니다.
+설치된 `foloom` 스킬에 DOCX 절대 경로와 작업을 전달할 수 있습니다.
 
 ```sh
-./bin/document-workspace -check /absolute/path/to/document.docx
-./bin/document-workspace /absolute/path/to/document.docx
+./bin/foloom -check /absolute/path/to/document.docx
+./bin/foloom /absolute/path/to/document.docx
 ```
 
 출력되는 인증 URL로 DOCX 브라우저 편집기를 엽니다. 지원하는 각 run이 입력칸으로

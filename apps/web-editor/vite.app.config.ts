@@ -30,7 +30,7 @@ export default defineConfig({
 
 function pruneUnusedHyphenationLocales(): Plugin {
   return {
-    name: 'document-workspace-prune-univer-hyphenation-locales',
+    name: 'foloom-prune-univer-hyphenation-locales',
     enforce: 'pre',
     transform(code, id) {
       if (!id.includes('@univerjs/engine-render/lib/es/index.js')) {

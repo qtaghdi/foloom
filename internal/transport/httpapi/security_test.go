@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/docx"
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/formats/docx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 	"github.com/xuri/excelize/v2"
 )
 

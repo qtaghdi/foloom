@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 	"github.com/xuri/excelize/v2"
 )
 

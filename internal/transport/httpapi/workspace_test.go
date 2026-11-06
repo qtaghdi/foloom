@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 )
 
 func workspaceRequest(api *Server, method, path, body string) *httptest.ResponseRecorder {

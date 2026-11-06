@@ -1,4 +1,4 @@
-# document-workspace Engineering Guide
+# Foloom Engineering Guide
 
 This file is the repository-level source of truth for agents and contributors.
 It applies to the entire repository unless a more specific `AGENTS.md` exists in
@@ -6,7 +6,7 @@ a subdirectory.
 
 ## Product Mission
 
-document-workspace is an AI-collaborative workspace for office documents. A
+Foloom is an AI-collaborative workspace for office documents. A
 person and an AI agent can inspect and edit the same document while the UI shows
 the AI's presence, changes, and commit progress.
 
@@ -75,7 +75,7 @@ a concrete requirement and a short architecture note.
 
 ## Repository Layout
 
-- `cmd/document-workspace`: executable entry point.
+- `cmd/foloom`: executable entry point.
 - `internal/formats/xlsx`: first format adapter, workbook domain, and persistence.
 - `internal/hostinstall`: local host configuration, binary installation, and
   packaged workflow skills.
@@ -244,7 +244,7 @@ Current repository skills include:
 
 - `document-workspace-architecture` for changes spanning format adapters, Go,
   MCP, realtime, and browser editor boundaries.
-- `document-workspace` for revision-safe XLSX and DOCX work through the
+- `foloom` for revision-safe XLSX and DOCX work through the
   installed MCP server.
 - `xlsx-compatibility-qa` for workbook corpus verification.
 - `document-editor-ui` for editor interaction and visual verification.

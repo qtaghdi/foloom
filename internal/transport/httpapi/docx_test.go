@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/qtaghdi/document-workspace/internal/formats/docx"
+	"github.com/qtaghdi/foloom/internal/formats/docx"
 )
 
 func docxClient(t *testing.T, api *Server) *mcp.ClientSession {

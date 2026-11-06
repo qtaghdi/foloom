@@ -1,6 +1,6 @@
 # 비공개 XLSX 알파 시작 안내
 
-document-workspace는 현재 기존 XLSX 통합 문서 하나를 여는 로컬 프로세스로
+폴룸은 현재 기존 XLSX 통합 문서 하나를 여는 로컬 프로세스로
 동작합니다. stdio로 Claude Desktop 또는 Codex에 연결하고, 인증된 loopback
 browser editor를 기본 스프레드시트 UI로 제공합니다. MCP App resource는 호환성을
 위해 함께 제공합니다.
@@ -46,7 +46,7 @@ shasum -a 256 -c SHA256SUMS
 MCP 호스트를 설정하기 전에 사전 검사를 실행합니다.
 
 ```bash
-./document-workspace -check /absolute/path/to/workbook.xlsx
+./foloom -check /absolute/path/to/workbook.xlsx
 ```
 
 이 명령은 OOXML 패키지, 지원 크기와 압축 경계, 시트 메타데이터, 호환성 경고,
@@ -58,40 +58,40 @@ MCP 호스트를 설정하기 전에 사전 검사를 실행합니다.
 통합 문서를 위치 경로로 전달합니다.
 
 ```bash
-./document-workspace /absolute/path/to/workbook.xlsx
+./foloom /absolute/path/to/workbook.xlsx
 ```
 
 터미널에 출력된 viewer URL을 그대로 여세요. URL에는 로컬 세션 인증 정보가
 포함됩니다. 터미널 출력이나 URL을 공유하지 마세요. 서비스는 기본적으로
 `127.0.0.1:8765`에만 연결되므로 통합 문서를 네트워크에 공개하지 않습니다.
 
-주소, 전송, 대체 화면 옵션은 `./document-workspace -help`로 확인합니다. 버그를
-신고할 때는 `./document-workspace -version` 결과를 기록하세요.
+주소, 전송, 대체 화면 옵션은 `./foloom -help`로 확인합니다. 버그를
+신고할 때는 `./foloom -version` 결과를 기록하세요.
 
 ## macOS MCP 자동 설치
 
 압축을 푼 실행 파일에서 다음 명령을 한 번 실행합니다.
 
 ```bash
-./document-workspace mcp install
+./foloom mcp install
 ```
 
 이 명령은 다음 작업을 수행합니다.
 
 - 실행 파일을 사용자 Application Support 아래의 고정 경로로 복사합니다.
 - 기존 항목을 보존하면서 Claude Desktop과 Codex에 stdio MCP를 등록합니다.
-- Claude와 Codex의 사용자 스킬 디렉터리에 XLSX·DOCX용 `document-workspace`를 설치합니다.
+- Claude와 Codex의 사용자 스킬 디렉터리에 XLSX·DOCX용 `foloom`를 설치합니다.
 - 변경한 host 설정의 직전 내용을 `.document-workspace.bak`으로 보관합니다.
 
 설치 뒤 Claude Desktop과 Codex를 완전히 종료하고 다시 실행하세요. 상태 확인과
 제거는 다음 명령을 사용합니다.
 
 ```bash
-./document-workspace mcp status
-./document-workspace mcp uninstall
+./foloom mcp status
+./foloom mcp uninstall
 ```
 
-자동 설치는 현재 macOS만 지원합니다. 손상된 JSON이나 `document-workspace` 관리
+자동 설치는 현재 macOS만 지원합니다. 손상된 JSON이나 `foloom` 관리
 구간이 있는 설정은 덮어쓰지 않고 오류를 반환합니다. 제거는 이 프로그램이
 관리하는 MCP 항목, 설치본과 내용이 같은 스킬, 복사된 실행 파일을 제거합니다.
 이전에 설치한 `document-xlsx` 스킬은 기존 경로에 남습니다.
@@ -109,8 +109,8 @@ host 버전에 따라 명령이 MCP server namespace 아래에 표시될 수 있
 다음처럼 명시적으로 skill을 호출합니다.
 
 ```text
-$document-workspace "/absolute/path/to/workbook.xlsx" 자산 분류 지침대로 수정해줘
-$document-workspace "/absolute/path/to/report.docx" 첫 문단의 날짜를 수정해줘
+$foloom "/absolute/path/to/workbook.xlsx" 자산 분류 지침대로 수정해줘
+$foloom "/absolute/path/to/report.docx" 첫 문단의 날짜를 수정해줘
 ```
 
 두 host 모두 자연어로 절대 경로와 작업을 전달해도 MCP 도구를 사용할 수 있습니다.
@@ -132,8 +132,8 @@ surface에 먼저 열어 사람이 전체 grid에 접근하고 직접 수정할 
 ```json
 {
   "mcpServers": {
-    "document-workspace": {
-      "command": "/absolute/path/to/document-workspace",
+    "foloom": {
+      "command": "/absolute/path/to/foloom",
       "args": ["-transport", "stdio"]
     }
   }
@@ -143,8 +143,8 @@ surface에 먼저 열어 사람이 전체 grid에 접근하고 직접 수정할 
 Codex `config.toml`의 수동 설정은 다음과 같습니다.
 
 ```toml
-[mcp_servers.document_workspace]
-command = "/absolute/path/to/document-workspace"
+[mcp_servers.foloom]
+command = "/absolute/path/to/foloom"
 args = ["-transport", "stdio"]
 ```
 
