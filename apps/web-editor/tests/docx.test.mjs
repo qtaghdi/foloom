@@ -207,3 +207,25 @@ test('DOCX style inheritance can be corrected before an invalid draft reaches th
  f.controller.editStyle({id:'B',kind:'paragraph',basedOn:''});
  assert.equal(await f.controller.save(),true);assert.equal(f.state.writes.length,1);
 });
+
+test('DOCX section drafts share one revisioned save and undo history with text',async()=>{
+ const f=fixture();
+ const section={id:'section-current',startBlock:0,endBlock:0,page:{width:11906,height:16838,top:1440,right:1440,bottom:1440,left:1440},orientation:'portrait',columns:1,columnSpace:720,breakType:'nextPage',editable:true};
+ const operations=[];
+ f.fetch(async(_url,init)=>{
+  if(init?.method==='POST')operations.push(JSON.parse(init.body));
+  return {ok:true,json:async()=>({...snapshot,sections:[section],revision:init?.method==='POST'?2:1})};
+ });
+ await f.controller.load();
+ assert.equal(f.controller.editSection(section.id,{width:16838,height:11906,orientation:'landscape'}),true);
+ assert.equal(f.controller.sections()[0].page.width,16838);
+ await f.controller.restore('undo');assert.equal(f.controller.sections()[0].page.width,11906);
+ await f.controller.restore('redo');assert.equal(f.controller.sections()[0].page.width,16838);
+ assert.equal(f.controller.editSection(section.id,{left:50000}),false);
+ assert.equal(f.controller.editSection('stale',{columns:2}),false);
+ f.controller.edit(edit);await f.controller.save();
+ assert.equal(operations.length,1);
+ assert.equal(operations[0].baseRevision,1);
+ assert.deepEqual(operations[0].operations.map(op=>op.type),['update_section','replace_run_text']);
+ assert.equal(operations[0].operations[0].section.orientation,'landscape');
+});

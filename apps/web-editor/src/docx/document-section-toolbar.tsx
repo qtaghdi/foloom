@@ -1,0 +1,28 @@
+import { For,Show,createEffect,createMemo,createSignal } from 'solid-js';
+import type { SectionFormat,SectionInfo } from './contracts';
+import { buttonClass } from '../ui/editor-chrome';
+import { previewSection,validateSection } from './sections';
+
+export function DocumentSectionToolbar(props:{sections:SectionInfo[];disabled:boolean;onApply:(id:string,format:SectionFormat)=>boolean}) {
+ const [id,setId]=createSignal(''),[values,setValues]=createSignal<SectionFormat>({}),[error,setError]=createSignal('');
+ const selected=createMemo(()=>props.sections.find(section=>section.id===id())??props.sections[0]);
+ createEffect(()=>{const section=selected();if(section){setValues({...section.page,orientation:section.orientation,columns:section.columns,columnSpace:section.columnSpace,breakType:['continuous','nextPage','nextColumn','evenPage','oddPage'].includes(section.breakType)?section.breakType as SectionFormat['breakType']:'nextPage'});setError('');}});
+ const update=(patch:SectionFormat)=>setValues(previous=>({...previous,...patch}));
+ const disabled=()=>props.disabled||!selected()?.editable;
+ const field=(key:'width'|'height'|'top'|'right'|'bottom'|'left'|'columnSpace',label:string)=><label class="flex min-h-11 items-center gap-1">{label}<input type="number" aria-label={label} class="w-20 min-h-11 rounded border border-slate-300 px-2" min={key==='width'||key==='height'?100:0} max={key==='columnSpace'?720:2500} step="0.05" value={values()[key]===undefined?'':values()[key]!/20} disabled={disabled()} onChange={e=>update({[key]:Math.round(e.currentTarget.valueAsNumber*20)})}/>pt</label>;
+ const apply=()=>{const section=selected();if(!section)return;const message=validateSection(previewSection(section,values()));if(message){setError(message);return;}const original={...section.page,orientation:section.orientation,columns:section.columns,columnSpace:section.columnSpace,breakType:section.breakType};const patch=Object.fromEntries(Object.entries(values()).filter(([key,value])=>value!==original[key as keyof typeof original])) as SectionFormat;if(!Object.keys(patch).length){setError('변경한 설정이 없습니다.');return;}setError(props.onApply(section.id,patch)?'':'설정 범위와 문서 연결 상태를 확인하세요.');};
+ return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
+  <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">구역·용지 설정</summary>
+  <div role="group" aria-label="구역 용지 설정" class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto overscroll-contain pb-2">
+   <select aria-label="편집할 구역" class="editor-select min-h-11 max-w-full" value={selected()?.id??''} onChange={e=>setId(e.currentTarget.value)}><For each={props.sections}>{(section,index)=><option value={section.id}>구역 {index()+1}{section.editable?'':' (보호됨)'}</option>}</For></select>
+   <select aria-label="용지 크기" class="editor-select min-h-11" disabled={disabled()} value="custom" onChange={e=>{const [width,height]=e.currentTarget.value==='letter'?[12240,15840]:[11906,16838];update({width:values().orientation==='landscape'?height:width,height:values().orientation==='landscape'?width:height});}}><option value="custom" disabled>사용자 지정 크기</option><option value="a4">A4</option><option value="letter">Letter</option></select>
+   <select aria-label="용지 방향" class="editor-select min-h-11" disabled={disabled()} value={values().orientation} onChange={e=>{const orientation=e.currentTarget.value as 'portrait'|'landscape',width=values().width!,height=values().height!;update({orientation,width:orientation==='landscape'?Math.max(width,height):Math.min(width,height),height:orientation==='landscape'?Math.min(width,height):Math.max(width,height)});}}><option value="portrait">세로 용지</option><option value="landscape">가로 용지</option></select>
+   {field('width','용지 폭')}{field('height','용지 높이')}{field('top','위 여백')}{field('right','오른쪽 여백')}{field('bottom','아래 여백')}{field('left','왼쪽 여백')}
+   <label class="flex min-h-11 items-center gap-1">단 수<input type="number" aria-label="단 수" min="1" max="12" class="w-16 min-h-11 rounded border border-slate-300 px-2" value={values().columns} disabled={disabled()} onChange={e=>update({columns:e.currentTarget.valueAsNumber})}/></label>{field('columnSpace','단 간격')}
+   <select aria-label="구역 나누기 유형" class="editor-select min-h-11" disabled={disabled()} value={values().breakType} onChange={e=>update({breakType:e.currentTarget.value as SectionFormat['breakType']})}><option value="nextPage">다음 페이지</option><option value="continuous">연속 구역</option><option value="evenPage">짝수 페이지</option><option value="oddPage">홀수 페이지</option><option value="nextColumn">다음 단</option></select>
+   <button type="button" class={buttonClass} disabled={disabled()} onClick={apply}>선택 구역 적용</button>
+   <p class="basis-full text-slate-600">구역 미리보기는 경계를 분리해 표시합니다. 자동 페이지 수와 연속 구역의 실제 조판은 검증 중입니다.</p>
+   <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
+  </div>
+ </details>;
+}

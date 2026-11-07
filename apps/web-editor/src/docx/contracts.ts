@@ -15,7 +15,7 @@ const paragraphFormatSchema = z.object({styleId:z.string().max(120).optional(),
  line:z.number().int().min(20).max(2880).optional(),lineRule:z.enum(['auto','exact','atLeast']).optional(),bidi:z.boolean().optional(),textDirection:z.string().max(20).optional(),
 });
 const paragraphSchema = z.object({
-  styleId:z.string().max(120).optional(),id: z.string(), runs: z.array(runSchema), structureEditable: z.boolean().optional(),
+  sectionId:z.string().optional(),styleId:z.string().max(120).optional(),id: z.string(), runs: z.array(runSchema), structureEditable: z.boolean().optional(),
   pageBreakBefore: z.boolean().optional(), pageBreakAfter: z.boolean().optional(),
   layout: paragraphFormatSchema.optional(),
 });
@@ -25,8 +25,14 @@ const pageSchema = z.object({
   width: paperSize, height: paperSize,
   top: paperMargin, right: paperMargin, bottom: paperMargin, left: paperMargin,
 }).refine(page => page.left + page.right <= page.width - 1200 && page.top + page.bottom <= page.height - 1200);
+export const sectionFormatSchema=z.object({width:paperSize.optional(),height:paperSize.optional(),top:paperMargin.optional(),right:paperMargin.optional(),bottom:paperMargin.optional(),left:paperMargin.optional(),orientation:z.enum(['portrait','landscape']).optional(),columns:z.number().int().min(1).max(12).optional(),columnSpace:z.number().int().min(0).max(14400).optional(),breakType:z.enum(['nextPage','continuous','evenPage','oddPage','nextColumn']).optional()});
+const sectionSchema=z.object({id:z.string(),startBlock:z.number().int().nonnegative(),endBlock:z.number().int().min(-1),page:pageSchema,orientation:z.enum(['portrait','landscape']),columns:z.number().int().min(1).max(12),columnSpace:z.number().int().min(0).max(14400),breakType:z.string().max(40),editable:z.boolean()});
+export type SectionFormat=z.infer<typeof sectionFormatSchema>;
+export type SectionInfo=z.infer<typeof sectionSchema>;
+export type SectionOperation={type:'update_section';sectionId:string;section:SectionFormat};
 const styleInfoSchema=z.object({id:z.string().max(120),name:z.string().max(256),kind:z.enum(['paragraph','character']),basedOn:z.string().optional(),editable:z.boolean(),run:baseStyleSchema.extend({reset:z.boolean().optional()}).optional(),paragraph:paragraphFormatSchema.optional()});
 export const snapshotSchema = z.object({
+ sections:z.array(sectionSchema).max(128).optional(),
   styles:z.array(styleInfoSchema).max(500).optional(),id: z.string(), name: z.string(), revision: z.number().int().nonnegative(),
   sequence: z.number().int().nonnegative(), page: pageSchema.optional(), warnings: z.array(z.string()),
   history: z.object({ undo: z.number().int().min(0).max(10), redo: z.number().int().min(0).max(10), undoActor: z.enum(['human', 'ai']).optional(), redoActor: z.enum(['human', 'ai']).optional() }).optional(),
@@ -57,6 +63,6 @@ export type ParagraphOperation = {
  paragraphs: Array<{ sourceId: string; format?: ParagraphFormat; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation;
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

@@ -1,3 +1,4 @@
+import { DocumentSectionToolbar } from './document-section-toolbar';
 import { FileActions } from '../ui/file-actions';
 import { warningMessage } from '../ui/messages';
 import { DiagnosticDetails } from '../i18n/diagnostic-details';
@@ -29,7 +30,7 @@ export function DocumentApp() {
   const [pasteMode, setPasteMode] = createSignal<PasteMode>('text');
   const [zoom, setZoom] = createSignal(100);
   const [focusedRun, setFocusedRun] = createSignal<Run>();
-  const paper = () => state().snapshot?.page ?? defaultPaper;
+  const paper = () => {const pages=state().snapshot?.sections?.map(section=>section.page)??[];return pages.length?pages.reduce((largest,page)=>page.width>largest.width?page:largest):state().snapshot?.page??defaultPaper;};
   const paperStyle = () => {
     const { width, height, top, right, bottom, left } = paper();
     const inset = (twips: number) => `${100 * twips / width}%`;
@@ -190,6 +191,7 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
+    <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
