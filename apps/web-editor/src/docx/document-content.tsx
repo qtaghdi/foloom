@@ -6,6 +6,7 @@ import { continuousInput } from './continuous-input';
 import type { TextSelection } from './selection';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
+import { printPaperFor } from './print-layout';
 import { scopedDocumentURL } from '../transport/document-scope';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
@@ -40,9 +41,9 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
   });
   const pageSection=(page:ReturnType<typeof pages>[number])=>{const block=page[0]?.block;const id=block?.type==='paragraph'?block.paragraph.sectionId:block?.rows[0]?.cells[0]?.paragraphs[0]?.sectionId;return props.snapshot.sections?.find(section=>section.id===id);};
   const sectionStyle=(page:ReturnType<typeof pages>[number])=>{
-   const info=pageSection(page);if(!info)return {};
+   const info=pageSection(page);if(!info)return {'--docx-print-paper':printPaperFor(props.snapshot)};
    const p=info.page,width=`min(100cqi, ${p.width/15}px)`;
-   return {width:`${p.width/15}px`,'max-width':'100%','min-block-size':`calc(${width} * ${p.height/p.width})`,'--paper-insets':[p.top,p.right,p.bottom,p.left].map(value=>`calc(${width} * ${value/p.width})`).join(' ')};
+   return {'--docx-print-paper':printPaperFor(props.snapshot,info),width:`${p.width/15}px`,'max-width':'100%','min-block-size':`calc(${width} * ${p.height/p.width})`,'--paper-insets':[p.top,p.right,p.bottom,p.left].map(value=>`calc(${width} * ${value/p.width})`).join(' ')};
   };
   const pageOrdinals=createMemo(()=>{
    let previous:string|undefined, ordinal=0;
@@ -78,11 +79,11 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
             width={Math.max(1,Math.round(run.picture!.widthEmu/9525))} height={Math.max(1,Math.round(run.picture!.heightEmu/9525))}
             style={{height:'auto'}}/>
         </Show>}>
-          <Show when={p.structureEditable} fallback={<RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
+          <Show when={p.structureEditable} fallback={<><span aria-hidden="true" data-docx-print-text class="hidden whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text}</span><RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
             onFocus={() => props.onFocusRun(run)} onComposition={props.onComposition} onHistory={props.onHistory}
             onStructure={p.structureEditable ? (action, start, end, insertion) => props.onStructure(action, run.id, start, end, insertion) : undefined}
-            onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/> }>
+            onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/></> }>
             <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text || (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
           </Show>
         </Show>}</For>
@@ -91,7 +92,7 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
     <Show when={props.changes.get(key)}>{(entry) => <button contentEditable={false} type="button" class="editor-action change-marker" aria-label={t('viewAI', { location: localizeMessage(entry().location ?? '') })} aria-expanded={props.selected?.documentChange?.key === key}
       onClick={() => props.onChangeSelect(entry())}>AI</button>}</Show>
     <Show when={props.selected?.documentChange?.key === key ? props.selected : undefined}>{(entry) =>
-      <div contentEditable={false} class="mt-3 space-y-2 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-stone-800" role="region" aria-label={t('aiChangesBeforeAndAfter')}>
+      <div contentEditable={false} data-docx-print-hide class="mt-3 space-y-2 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-stone-800" role="region" aria-label={t('aiChangesBeforeAndAfter')}>
         <p class="font-semibold text-teal-900">{t('aiRevision', { revision: entry().revision! })}</p>
         <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">{t('before')}</span><del>{entry().documentChange?.before || t('emptyText')}</del></p>
         <p class="break-words whitespace-pre-wrap"><span class="mr-2 font-medium">{t('after')}</span>{entry().documentChange?.after || t('emptyText')}</p>
@@ -108,7 +109,7 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
     <For each={pages()}>{(page,index) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id}>
     <Show when={headerText(page,index(),'header')}>{text=><div contentEditable={false} aria-label="머리글 미리보기" class="mb-4 whitespace-pre-wrap border-b border-dashed border-slate-200 pb-2 text-xs text-stone-600">{text()}</div>}</Show>
     <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
-    <Show when={pageSection(page)}>{section=><p contentEditable={false} class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
+    <Show when={pageSection(page)}>{section=><p contentEditable={false} data-docx-print-hide class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
     <div style={{'column-count':pageSection(page)?.columns,'column-gap':pageSection(page)?`${pageSection(page)!.columnSpace/20}pt`:undefined}}>
     <For each={page}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
       <div class="docx-table overflow-x-auto" tabindex={0} aria-label={t('documentTableScrollHorizontallyOnNarrowScreens')}>
