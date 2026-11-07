@@ -31,7 +31,13 @@ func (s *Server) listDOCXRecovery(w http.ResponseWriter, r *http.Request) {
 	entries := []recoveryEntry{}
 	root, err := s.recoveryRoot(false)
 	if err == nil {
-		entries, _, err = scanRecovery(root, time.Now())
+		unlock, lockErr := lockRecovery(root)
+		if lockErr != nil {
+			err = lockErr
+		} else {
+			defer unlock()
+			entries, _, err = scanRecovery(root, time.Now())
+		}
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("복구 사본 목록을 읽지 못했습니다"))
@@ -69,6 +75,13 @@ func (s *Server) checkpointDOCXRecovery(w http.ResponseWriter, r *http.Request) 
 	if !consent && errors.Is(err, os.ErrNotExist) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("복구 보관에 동의한 문서가 아닙니다"))
 		return
+	}
+	if err == nil {
+		var unlock func()
+		unlock, err = lockRecovery(root)
+		if err == nil {
+			defer unlock()
+		}
 	}
 	now := time.Now().UTC()
 	if err == nil {
@@ -117,6 +130,13 @@ func (s *Server) reopenDOCXRecovery(w http.ResponseWriter, r *http.Request) {
 	var entry recoveryEntry
 	var content []byte
 	if err == nil {
+		var unlock func()
+		unlock, err = lockRecovery(root)
+		if err == nil {
+			defer unlock()
+		}
+	}
+	if err == nil {
 		if _, _, err = scanRecovery(root, time.Now()); err == nil {
 			entry, content, err = readRecovery(root, r.PathValue("id"), true)
 		}
@@ -151,7 +171,13 @@ func (s *Server) deleteDOCXRecovery(w http.ResponseWriter, r *http.Request) {
 	defer s.openMu.Unlock()
 	root, err := s.recoveryRoot(false)
 	if err == nil {
-		err = os.Remove(recoveryPath(root, id))
+		unlock, lockErr := lockRecovery(root)
+		if lockErr != nil {
+			err = lockErr
+		} else {
+			defer unlock()
+			err = os.Remove(recoveryPath(root, id))
+		}
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("복구 사본을 삭제하지 못했습니다"))
