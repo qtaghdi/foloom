@@ -5,7 +5,7 @@ on:
     types: [opened, reopened, synchronize, edited, ready_for_review]
 
 concurrency:
-  group: pr-checks-${{ (github.event.action != 'edited' || github.event.changes.base != null) && format('pr-{0}', github.event.pull_request.number) || format('metadata-{0}', github.run_id) }}
+  group: pr-checks-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -14,7 +14,6 @@ permissions:
 jobs:
   scope:
     name: Select checks for changed files
-    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-latest
     outputs:
       regression: ${{ steps.scope.outputs.regression }}
@@ -91,7 +90,7 @@ jobs:
 
   result:
     name: Verify selected PR checks
-    if: always() && (github.event.action != 'edited' || github.event.changes.base != null)
+    if: always()
     needs: [scope, regression, docx, web, safety, performance, package]
     runs-on: ubuntu-latest
     env:
