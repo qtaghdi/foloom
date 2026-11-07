@@ -264,7 +264,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				continue
 			}
 			if !r.is("r") {
-				if r.is("bookmarkStart") || r.is("bookmarkEnd") {
+				if r.is("bookmarkStart") || r.is("bookmarkEnd") || r.is("commentRangeStart") || r.is("commentRangeEnd") {
 					continue
 				}
 				run := Run{ID: id(), Text: textContent(r)}
@@ -274,6 +274,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					unsupported = true
 				}
 				out.Runs = append(out.Runs, run)
+				continue
+			}
+			if r.child("commentReference") != nil && len(r.children) == 1 {
 				continue
 			}
 			texts := []*node{}

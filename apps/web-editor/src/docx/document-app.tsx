@@ -22,6 +22,7 @@ import { DocumentBoundaryToolbar } from './document-boundary-toolbar';
 import { DocumentImageToolbar } from './document-image-toolbar';
 import { DocumentOutline } from './document-outline';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
+import { DocumentComments } from './document-comments';
 import { paragraphs } from './paragraphs';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
@@ -78,7 +79,7 @@ export function DocumentApp() {
       if(current)document.getElementById(`docx-paragraph-${current.documentChange!.key}`)?.focus();
     });
   };
-  const referencePending = () => { state().snapshot; draftVersion(); return controller.pendingReference(); };
+  const annotationPending = () => { state().snapshot; draftVersion(); return controller.pendingAnnotation(); };
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
   const imagePending = () => { state().snapshot; draftVersion(); return controller.pendingImage(); };
@@ -259,7 +260,10 @@ export function DocumentApp() {
       const changed=controller.replaceSearchMatches(ranges,text);
       if(changed)setDraftVersion(version=>version+1);
       return changed;
-    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading}/></>}
+    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentComments snapshot={state().snapshot} target={referenceParagraph()} pending={annotationPending()}
+      disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
+      onApply={operation=>{const changed=controller.editAnnotation(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}
+      onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading}/></>}
     />
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
@@ -268,9 +272,9 @@ export function DocumentApp() {
     <DocumentImageToolbar target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentReferenceToolbar target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={referencePending()}
+    <DocumentReferenceToolbar target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={annotationPending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
-      onApply={operation=>{const changed=controller.editReference(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+      onApply={operation=>{const changed=controller.editAnnotation(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
@@ -284,7 +288,7 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending() || imagePending() || referencePending()} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending() || imagePending() || annotationPending()} changes={changes()}
           selected={resolvedEntry(selectedChange())}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onDelete={(selection, direction, word) => { const changed = controller.deleteSelection(selection, direction, word); if (changed) setDraftVersion(v => v + 1); return changed; }}

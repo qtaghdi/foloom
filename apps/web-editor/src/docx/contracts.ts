@@ -43,6 +43,8 @@ export type SectionInfo=z.infer<typeof sectionSchema>;
 export type SectionOperation={type:'update_section';sectionId:string;section:SectionFormat};
 const styleInfoSchema=z.object({outlineLevel,id:z.string().max(120),name:z.string().max(256),kind:z.enum(['paragraph','character']),basedOn:z.string().optional(),editable:z.boolean(),run:baseStyleSchema.extend({reset:z.boolean().optional()}).optional(),paragraph:paragraphFormatSchema.optional()});
 export const snapshotSchema = z.object({
+  trackedChanges:z.boolean().optional(),
+  comments:z.array(z.object({id:z.string(),author:z.string(),date:z.string().optional(),text:z.string(),paragraphId:z.string().optional()})).max(100).optional(),
   bookmarks:z.array(z.object({name:bookmarkName,paragraphId:z.string()})).max(500).optional(),
   evenAndOddHeaders: z.boolean().optional(),
  sections:z.array(sectionSchema).max(128).optional(),
@@ -83,6 +85,7 @@ export type ImageOperation = {type:'update_image';targetId:string;image:{action:
 export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} |
   {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation;
+export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string}};
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

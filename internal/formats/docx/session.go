@@ -178,7 +178,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			}
 		}
 	}
-	return Snapshot{Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -222,6 +222,24 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	var bookmarks *bookmarkIndex
 	referenceCount := 0
 	for _, op := range input.Operations {
+		if op.Type == "add_comment" {
+			t, ok := targets[op.TargetID]
+			key := "comment:" + op.TargetID
+			if !ok || seen[key] || op.Comment == nil || op.Reference != nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
+				return Snapshot{}, fmt.Errorf("invalid or duplicate DOCX comment operation")
+			}
+			seen[key] = true
+			changes, err := s.pkg.appendComment(root, t, *op.Comment, actor, parts)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			edits = append(edits, changes...)
+			referenceCount++
+			continue
+		}
+		if op.Comment != nil {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX comment fields")
+		}
 		if op.Type == "update_reference" {
 			t, ok := targets[op.TargetID]
 			if !ok || op.Reference == nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
