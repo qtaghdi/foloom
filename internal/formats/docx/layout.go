@@ -49,6 +49,43 @@ func pageLayout(body *node) *PageLayout {
 }
 
 func applyParagraphPreview(layout *ParagraphLayout, props *node) {
+	ind := props.child("ind")
+	for _, pair := range []struct {
+		name string
+		dest **int
+		min  int
+	}{{"left", &layout.Left, -14400}, {"right", &layout.Right, -14400}, {"firstLine", &layout.FirstLine, 0}, {"hanging", &layout.Hanging, 0}} {
+		if n := previewNumber(ind.attr(pair.name), pair.min, 14400); n != nil {
+			*pair.dest = n
+		}
+	}
+	if ind.attr("firstLine") != "" {
+		layout.Hanging = nil
+	}
+	if ind.attr("hanging") != "" {
+		layout.FirstLine = nil
+	}
+	if n := props.child("bidi"); n != nil {
+		layout.Bidi = onOff(n.attr("val"), true)
+	}
+	if n := props.child("textDirection"); n != nil {
+		layout.TextDirection = n.attr("val")
+	}
+	if spacing := props.child("spacing"); spacing.attr("line") != "" {
+		rule := spacing.attr("lineRule")
+		if rule == "" {
+			rule = "auto"
+		}
+		lo, hi := 120, 2400
+		if rule != "auto" {
+			lo, hi = 20, 2880
+		}
+		if n := previewNumber(spacing.attr("line"), lo, hi); n != nil && (rule == "auto" || rule == "exact" || rule == "atLeast") {
+			layout.Line = n
+			layout.LineRule = rule
+		}
+	}
+
 	switch props.child("jc").attr("val") {
 	case "left", "start":
 		layout.Align = "start"
@@ -69,6 +106,22 @@ func applyParagraphPreview(layout *ParagraphLayout, props *node) {
 }
 
 func applyRunPreview(run *Run, props *node) {
+	if n := props.child("u"); n != nil {
+		run.Underline = n.attr("val") != "none"
+	}
+	if n := props.child("strike"); n != nil {
+		run.Strike = onOff(n.attr("val"), true)
+	}
+	if n := props.child("dstrike"); n != nil && onOff(n.attr("val"), true) {
+		run.Strike = true
+	}
+	if n := props.child("highlight"); n != nil {
+		run.Highlight = n.attr("val")
+	}
+	if n := props.child("vertAlign"); n != nil {
+		run.Vertical = n.attr("val")
+	}
+
 	if size := previewNumber(props.child("sz").attr("val"), 8, 288); size != nil {
 		run.SizeHalfPoints = *size
 	}

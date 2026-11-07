@@ -1,3 +1,4 @@
+import { restoreTextSelection } from './selection';
 import type { SearchResults } from '../ui/document-search';
 
 // Read current fields so local drafts participate without saving or rerendering.
@@ -7,7 +8,7 @@ export function searchDocument(root: HTMLElement | null, query: string): SearchR
   const needle = query.toLowerCase();
   if (!needle.trim() || !root) return { items };
   for (const paragraph of root.querySelectorAll<HTMLElement>('.docx-paragraph')) {
-    const fields = [...paragraph.querySelectorAll<HTMLElement>('textarea, [data-docx-text]')];
+    const fields = [...paragraph.querySelectorAll<HTMLElement>('textarea, [data-docx-run], [data-docx-text]')];
     const values = fields.map((field) => field instanceof HTMLTextAreaElement ? field.value : field.textContent ?? '');
     const text = values.join('');
     const index = text.toLowerCase().indexOf(needle);
@@ -20,7 +21,15 @@ export function searchDocument(root: HTMLElement | null, query: string): SearchR
         if (index < offset + values[i]!.length) {
           const field = fields[i]!;
           if (field instanceof HTMLTextAreaElement) { field.focus({ preventScroll: true }); field.setSelectionRange(index - offset, Math.min(values[i]!.length, index - offset + query.length)); }
-          else paragraph.focus({ preventScroll: true });
+          else if (field.dataset.docxRun) {
+            const editor = paragraph.closest<HTMLElement>('[data-continuous-editor]');
+            if (editor) {
+              let last = i, endOffset = index - offset + query.length;
+              while (last + 1 < fields.length && endOffset > values[last]!.length) { endOffset -= values[last]!.length; last++; }
+              const end = fields[last]!;
+              if (end.dataset.docxRun) restoreTextSelection(editor, { anchor: { runId: field.dataset.docxRun, offset: index - offset }, focus: { runId: end.dataset.docxRun, offset: Math.min(values[last]!.length, endOffset) } });
+            }
+          } else paragraph.focus({ preventScroll: true });
           break;
         }
         offset += values[i]!.length;

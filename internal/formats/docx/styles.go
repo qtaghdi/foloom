@@ -53,7 +53,16 @@ func (s previewStyles) chain(id, kind string) []*node {
 }
 
 func styleRun(run *Run, props *node) {
+	strike := run.Strike
 	applyRunPreview(run, props)
+	if props.child("strike") != nil || props.child("dstrike") != nil {
+		run.Strike = strike
+		for _, name := range []string{"strike", "dstrike"} {
+			if n := props.child(name); n != nil && onOff(n.attr("val"), true) {
+				run.Strike = !run.Strike
+			}
+		}
+	}
 	if b := props.child("b"); b != nil && onOff(b.attr("val"), true) {
 		run.Bold = !run.Bold
 	}

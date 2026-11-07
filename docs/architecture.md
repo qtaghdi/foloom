@@ -59,7 +59,7 @@ version, commit, date로 주입합니다.
 현재 `internal/formats/xlsx`가 유일한 production adapter입니다. Excelize package,
 session, typed operation, 리비전, event, persistence, history, compatibility notice를
 소유합니다. `internal/formats/docx`는 비공개 실험 adapter로 paragraph·단순 table 생성과
-일반 run text 교체를 제공합니다. namespace-aware 검사와 원본 byte offset 표적
+일반 run text 교체와 제한된 문단 구조 계획을 제공합니다. namespace-aware 검사와 원본 byte offset 표적
 수정으로 주변 XML과 다른 package part를 보존합니다. DOCX는 별도 구체 session을
 사용하고 shared runtime은 추출하지 않습니다. PPTX, HWPX, PDF는 계획입니다.
 
@@ -86,8 +86,9 @@ inline preview 대신 이 URL을 browser surface에 엽니다. 다른 도구는 
 전 명확한 오류를 반환합니다. MCP `document-xlsx` prompt와 host별 skill은 전체
 workbook 대신 metadata와 필요한 범위만 읽는 workflow를 제공합니다.
 
-DOCX는 `create_docx`, `open_docx`, `get_docx`, `apply_docx_operations` 전용 도구,
-`/api/docx`와 `/api/docx/operations`, `/api/docx/events`, `/docx` 브라우저를
+DOCX는 `create_docx`, `open_docx`, `get_docx`, `apply_docx_operations`,
+`restore_docx_history` 전용 도구, `/api/docx`, `/api/docx/operations`,
+`/api/docx/history`, `/api/docx/events`, `/docx` 브라우저를
 사용합니다. DOCX event는 별도 bounded replay와 sequence·revision을 가지며
 SSE 전송은 1초 간격으로 새로운 commit을 확인합니다. 문서 교체나 gap은 reload를
 요청하고 local draft가 있으면 복구 전 저장을 차단합니다.
@@ -289,3 +290,50 @@ XLSX는 셀 편집 종료와 직렬 작업 대기를 마치고, DOCX는 초안�
 응답의 ID·리비전·MIME을 확인한 뒤 파일명과 원래 확장자로 다운로드를 요청합니다.
 브라우저 다운로드 요청과 사용자 디스크 저장 완료는 구분합니다. MCP inline에서는
 `confirm_workbook_save`로 저장 확인을 제공하고 파일 다운로드는 브라우저를 안내합니다.
+
+## DOCX 문단 구조 계획
+
+[ADR 0004](adr/0004-docx-paragraph-plans.md)에 따라 adapter가 지원하는 연속
+문단만 `replace_paragraphs`로 교체합니다. 브라우저는 원본 문단·run의 서식 참조와
+별도 초안 ID를 유지합니다. 연속 입력 중에는 입력 node를 유지하고 구조 변경 시
+커서를 새 초안 위치로 복원합니다. 저장은 원본 revision과 계획을 함께 전송하고
+서버의 전체 검증·원자 저장·단일 commit을 거칩니다. HTTP와 MCP는 같은 typed
+작업을 사용하며 전송 계층은 OOXML을 생성하지 않습니다.
+
+계획은 원본 run·문단 서식을 참조하되 새 문단의 고유 ID를 복제하지 않습니다.
+본문/셀 경계를 넘거나 보호된 구역·필드·참조를 포함한 계획은 거부합니다. 기존
+원본 보존 방식과 달리 변경한 문단 내부는 재구성할 수 있지만 대상 밖 XML·다른
+package part를 유지합니다. 구조 초안이나 다른 revision의 활동은 이전 위치에
+매핑하지 않습니다. 서버 이력과 안정적인 원격 anchor는 별도 이슈를 따릅니다.
+
+## DOCX 연속 입력
+
+지원 일반 문단의 DOM 선택을 source run 위치로 변환하여 기존 문단 계획에
+반영합니다. native within-run 입력은 DOM을 유지하고, 구조·범위 변경은 초안에서
+합쳐 저장합니다. 선택·커서·composition은 브라우저의 임시 상태이며 저장 authority는
+기존 adapter에 있습니다. [ADR 0005](adr/0005-docx-continuous-input.md)를 따릅니다.
+
+DOCX clipboard HTML은 inert 문서에서 텍스트와 한정된 글자 서식만 추출합니다.
+active DOM·저장 API로 외부 HTML이나 URL을 넘기지 않습니다. 문단 계획 run의
+선택적 `style`은 adapter가 다시 검증하고 원본 rPr의 지정한 속성만 교체합니다.
+이 계약은 향후 서식 도구에서 재사용할 수 있으나 전체 Word 서식 지원을 의미하지 않습니다.
+
+DOCX 글자 도구는 source run의 일부 범위를 분리한 뒤 typed `InlineStyle`을
+문단 계획에 기록합니다. `reset`은 지원하는 직접 글자 속성만 제거하고 스타일
+참조·언어·나머지 rPr를 보존합니다. snapshot의 `baseStyle`은 직접 서식을
+제외한 상속 미리 보기이며 쓰기 권한이나 source formatting 참조가 아닙니다.
+문단 계획의 source ID·전체 검증·원자 저장·확정 이력 경계는 유지합니다.
+
+같은 문단 계획의 `paragraphs[].format`은 문단 배치·길이·방향의 선택적
+변경입니다. adapter는 원본 pPr의 대상 속성과 충돌하는 대체 길이 속성만
+교체합니다. UI는 pt, API는 twips와 240분율 줄 간격을 사용하며 초안과 확정
+이력은 글자 서식과 같은 transaction 경계를 따릅니다.
+
+DOCX 스타일 작성은 `define_style` operation과 문단·run의 `styleId` 참조를
+기존 batch에 결합합니다. format adapter가 스타일 part와 관계·content type을
+검증하고 필요한 part만 교체합니다. 처음 part를 추가할 때도 기존 이름을
+덮어쓰지 않습니다. `serializeParts`는 바꾸지 않는 ZIP header와 part payload를
+유지합니다. 문서 XML·스타일·관계 변경은 하나의 파일 교체와 revision·이력으로
+확정합니다. UI의 스타일 정의 초안은 controller에서 관리하며 저장 후 canonical
+snapshot으로 상속 미리 보기를 갱신합니다. 스타일 정의의 토글과 직접 run의
+절대 속성은 각각 Word 상속 규칙을 유지합니다.

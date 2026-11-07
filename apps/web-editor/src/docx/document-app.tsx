@@ -4,6 +4,7 @@ import { DiagnosticDetails } from '../i18n/diagnostic-details';
 import { t, localizeMessage } from '../i18n';
 import { connectWorkspaceBridge, publishEditorState } from '../ui/workspace-bridge';
 import { DocumentSearch } from '../ui/document-search';
+import { readTextSelection, restoreTextSelection, revealTextSelection } from './selection';
 import { searchDocument } from './search';
 import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
@@ -13,6 +14,7 @@ import type { ActivityEntry } from '../ui/activity';
 import { ActivityPanel } from '../ui/activity-panel';
 import { DocumentContent } from './document-content';
 import { DocumentToolbar } from './document-toolbar';
+import type { PasteMode } from './clipboard';
 import type { Run } from './contracts';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
@@ -23,6 +25,8 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
   const [draftVersion, setDraftVersion] = createSignal(0);
+  const [formattingSelection,setFormattingSelection]=createSignal<import('./selection').TextSelection>();
+  const [pasteMode, setPasteMode] = createSignal<PasteMode>('text');
   const [zoom, setZoom] = createSignal(100);
   const [focusedRun, setFocusedRun] = createSignal<Run>();
   const paper = () => state().snapshot?.page ?? defaultPaper;
@@ -36,8 +40,9 @@ export function DocumentApp() {
       '--paper-insets': [top, right, bottom, left].map(inset).join(' '),
     };
   };
+  const [structuralDraft, setStructuralDraft] = createSignal(false);
   const [selectedChange, setSelectedChange] = createSignal<ActivityEntry>();
-  const canLocate = (entry: ActivityEntry) => Boolean(entry.documentChange && entry.documentChange.session === state().snapshot?.id);
+  const canLocate = (entry: ActivityEntry) => Boolean(!structuralDraft() && entry.documentChange && entry.documentChange.session === state().snapshot?.id && entry.revision === state().snapshot?.revision);
   const changes = createMemo(() => {
     const latest = new Map<string, ActivityEntry>();
     for (const entry of activity.entries()) {
@@ -51,21 +56,67 @@ export function DocumentApp() {
     setSelectedChange(entry);
     queueMicrotask(() => document.getElementById(`docx-paragraph-${entry.documentChange!.key}`)?.focus());
   };
-  const controller = new DocumentController({ ...view, render: (snapshot) => {
+  const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
+    setStructuralDraft(Boolean(focus));
+    if(focus)setFormattingSelection(focus.selection??{anchor:{runId:focus.runId,offset:focus.start},focus:{runId:focus.runId,offset:focus.end}});
     const article = document.getElementById('document-content');
     const active = document.activeElement;
+    const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
+    const richSelection = previousEditor && (readTextSelection(previousEditor) ?? (state().snapshot?.id===snapshot.id ? formattingSelection() : undefined));
+    const previousRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
     const fields = [...article?.querySelectorAll('textarea') ?? []];
-    const index = active instanceof HTMLTextAreaElement && state().snapshot?.id === snapshot.id ? fields.indexOf(active) : -1;
-    const selection = index >= 0 && active instanceof HTMLTextAreaElement
-      ? [active.selectionStart, active.selectionEnd] as const : undefined;
+    const previousField = active instanceof HTMLTextAreaElement ? active
+      : state().saving ? fields.find(field => field.name === focusedRun()?.id) : undefined;
+    const index = previousField && state().snapshot?.id === snapshot.id ? fields.indexOf(previousField) : -1;
+    const selection = index >= 0 && previousField ? [previousField.selectionStart, previousField.selectionEnd] as const : undefined;
+    const restoringSave = state().saving;
+    if(!focus && !restoringSave){setFormattingSelection(undefined);setFocusedRun(undefined);}
     if (state().snapshot?.id !== snapshot.id) setFocusedRun(undefined);
     view.render(snapshot);
-    if (selection && document.activeElement === document.body) {
+    if (focus) {
+      queueMicrotask(() => {
+        const field = [...article?.querySelectorAll('textarea') ?? []].find(field => field.name === focus.runId);
+        if (field) { field.focus({ preventScroll: true }); field.setSelectionRange(focus.start, focus.end); }
+        else {
+          const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
+          if (editor) restoreTextSelection(editor, focus.selection ?? { anchor: { runId: focus.runId, offset: focus.start }, focus: { runId: focus.runId, offset: focus.end } });
+        }
+      });
+    } else if (richSelection && restoringSave) {
+      queueMicrotask(() => {
+        const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
+        const currentRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
+        const remap = (point: typeof richSelection.anchor) => {
+          const index = previousRuns.findIndex(run => run.dataset.docxRun === point.runId);
+          const run = index >= 0 ? currentRuns[Math.min(index, currentRuns.length - 1)] : undefined;
+          return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
+        };
+        const anchor = remap(richSelection.anchor), focus = remap(richSelection.focus);
+        if (editor && anchor && focus) {setFormattingSelection({anchor,focus});restoreTextSelection(editor, { anchor, focus });}
+      });
+    } else if (selection && (restoringSave || document.activeElement === document.body)) {
       const field = article?.querySelectorAll('textarea')[index];
       field?.focus({ preventScroll: true });
       field?.setSelectionRange(...selection);
     }
   } });
+  const selectionChanged = () => {
+    const editor=document.querySelector<HTMLElement>('[data-continuous-editor]');
+    const range=editor && readTextSelection(editor);if(range)setFormattingSelection(range);
+  };
+  const selectedStyles = createMemo(() => {
+    draftVersion();state().snapshot;const selection=formattingSelection();
+    return selection ? controller.selectedRuns(selection).map(run=>({...run,underline:Boolean(run.underline),strike:Boolean(run.strike),highlight:run.highlight??'none',vertical:run.vertical??'baseline'})) : [];
+  });
+  const selectedParagraphFormats=createMemo(()=>{draftVersion();state().snapshot;const selection=formattingSelection();return selection?controller.selectedParagraphs(selection).map(p=>p.layout??{}):[];});
+  const applyParagraphFormat=(format:import('./contracts').ParagraphFormat)=>{const selection=formattingSelection();if(selection&&controller.formatParagraph(selection,format))setDraftVersion(v=>v+1);};
+  const stylesCatalog=createMemo(()=>{draftVersion();state().snapshot;return controller.styles();});
+  const selectedParagraphStyleIds=createMemo(()=>{draftVersion();state().snapshot;const selection=formattingSelection();return selection?controller.selectedParagraphs(selection).map(p=>p.styleId??''):[];});
+  const selectedCharacterStyleIds=createMemo(()=>{draftVersion();state().snapshot;const selection=formattingSelection();return selection?controller.selectedRuns(selection).map(run=>run.characterStyleId??''):[];});
+  const stylePending=createMemo(()=>{draftVersion();state().snapshot;return controller.hasStyleDrafts();});
+  const applyFormat = (style: import('./contracts').InlineStyle) => {
+    const selection=formattingSelection();if(selection && controller.format(selection,style))setDraftVersion(v=>v+1);
+  };
   const [confirmReload, setConfirmReload] = createSignal(false);
   const cancelReload = () => { setConfirmReload(false); document.getElementById('reload-document')?.focus(); };
   const requestReload = () => {
@@ -79,11 +130,28 @@ export function DocumentApp() {
       document.getElementById(state().error ? 'document-error' : 'document-content')?.focus();
     });
   };
+  const resized = () => {window.requestAnimationFrame(()=>{const editor=document.querySelector<HTMLElement>('[data-continuous-editor]');if(editor?.contains(document.activeElement))revealTextSelection(editor);});};
   const beforeUnload = (event: BeforeUnloadEvent) => {
     if (controller.hasDrafts()) { event.preventDefault(); event.returnValue = ''; }
   };
+  const restoreHistory = (direction: 'undo' | 'redo') => {
+    const editor = document.querySelector<HTMLElement>('[data-continuous-editor]');
+    void controller.restore(direction, editor ? readTextSelection(editor) : undefined).then(changed => { if (changed) setDraftVersion(v => v + 1); });
+  };
   const keydown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && confirmReload()) { event.preventDefault(); cancelReload(); return; }
+    const key = event.key.toLowerCase();
+    const styleKey = ({b:'bold',i:'italic',u:'underline'} as const)[key as 'b'|'i'|'u'];
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && styleKey && (event.target as HTMLElement | null)?.closest('[data-continuous-editor]')) {
+      if(event.isComposing)return;
+      event.preventDefault();selectionChanged();
+      applyFormat({[styleKey]:!selectedStyles().every(style=>style[styleKey]===true)});return;
+    }
+    if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) {
+      const target = event.target as HTMLElement | null;
+      if (event.isComposing || target?.closest('input, select') || target?.closest('textarea') && !target.closest('#document-content')) return;
+      event.preventDefault(); restoreHistory(key === 'y' || event.shiftKey ? 'redo' : 'undo'); return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
       if (state().validation) { document.querySelector<HTMLTextAreaElement>('textarea[aria-invalid="true"]')?.focus(); return; }
@@ -97,6 +165,8 @@ export function DocumentApp() {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    window.removeEventListener('resize',resized);
+    document.removeEventListener('selectionchange',selectionChanged);
     window.removeEventListener('beforeunload', beforeUnload);
     window.removeEventListener('keydown', keydown);
     window.removeEventListener('pagehide', dispose);
@@ -105,6 +175,8 @@ export function DocumentApp() {
   };
   onMount(() => {
     disconnectWorkspace = connectWorkspaceBridge(editorState, async () => { await controller.save(); });
+    window.addEventListener('resize',resized);
+    document.addEventListener('selectionchange',selectionChanged);
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('keydown', keydown);
     window.addEventListener('pagehide', dispose, { once: true });
@@ -118,7 +190,7 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentToolbar saving={state().saving} loading={state().loading}
+    <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
@@ -131,13 +203,17 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
-          onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => { controller.edit(operation); setDraftVersion((version) => version + 1); }}/>}</Show>
+          onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}
+          onDelete={(selection, direction, word) => { const changed = controller.deleteSelection(selection, direction, word); if (changed) setDraftVersion(v => v + 1); return changed; }}
+          onComposition={active => controller.composition(active)} onRefresh={selection => controller.refreshSelection(selection)} selectionText={selection => controller.selectionText(selection)}
+          onStructure={(action, id, start, end, insertion) => { const changed = controller.changeStructure(action, id, start, end, insertion); if (changed) setDraftVersion(v => v + 1); return changed; }}
+          onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation, selection) => { controller.edit(operation, selection); setDraftVersion((version) => version + 1); }}/>}</Show>
       </article>
       <details class="mt-2 rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
         <summary class="editor-action min-h-11 w-fit rounded px-1 py-2 font-medium">{t('editingSupportAndPreservation')}</summary>
-        <p>{t('previewPageSizeSomeStylesAndExplicitPage')}</p>
+        <p>{t('previewPageSizeSomeStylesAndExplicitPage')}</p><p>{t('paragraphEditingHelp')}</p>
         <Show when={state().snapshot?.warnings.length}><p class="whitespace-pre-wrap">{state().snapshot?.warnings.map(warningMessage).join('\n')}</p></Show>
       <DiagnosticDetails value={state().snapshot?.warnings.join('\n')}/>
       </details>

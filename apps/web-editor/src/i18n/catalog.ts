@@ -1,5 +1,23 @@
 // Application-owned copy only. Document content and editor toolbars are not translated.
 export const catalog = {
+  "clipboardNormalized": {
+    "ko": "기본 글자 서식과 텍스트만 붙입니다. 지원하지 않는 링크·그림·목록·서식은 포함하지 않습니다.",
+    "en": "Pasting text and basic character formatting only. Unsupported links, images, lists and formatting are not included.",
+    "ja": "テキストと基本的な文字書式のみ貼り付けます。未対応のリンク、画像、リスト、書式は含めません。",
+    "zh-CN": "仅粘贴文本和基本字符格式。不包含不支持的链接、图片、列表及格式。"
+  },
+  "paragraphStructureUnavailable": {
+    "ko": "이 문단의 구조는 원본 보존을 위해 보호됩니다. 지원되는 텍스트만 편집할 수 있습니다.",
+    "en": "This paragraph structure is protected to preserve the original. You can edit supported text.",
+    "ja": "元の構造を保持するため、この段落の構造は保護されています。対応するテキストのみ編集できます。",
+    "zh-CN": "此段落结构受保护以保留原始内容。您可以编辑支持的文本。"
+  },
+  "paragraphEditingHelp": {
+    "ko": "지원 문단에서 Enter는 새 문단, Shift+Enter는 문단 안 줄바꿈입니다. 문단 경계의 Backspace·Delete는 병합하고 Alt+Shift+↑/↓는 문단을 이동합니다.",
+    "en": "In supported paragraphs, Enter creates a paragraph and Shift+Enter adds a line break. Backspace/Delete at a paragraph boundary merges paragraphs. Alt+Shift+Up/Down moves a paragraph.",
+    "ja": "対応する段落でEnterは新しい段落、Shift+Enterは段落内改行です。段落境界のBackspace・Deleteで結合し、Alt+Shift+↑/↓で段落を移動します。",
+    "zh-CN": "在支持的段落中，Enter创建段落，Shift+Enter插入段内换行。在段落边界使用Backspace/Delete可合并段落，Alt+Shift+↑/↓可移动段落。"
+  },
   "openingDocument": {
     "ko": "문서를 여는 중",
     "en": "Opening document",
@@ -385,10 +403,10 @@ export const catalog = {
     "zh-CN": "重新加载已保存的文档"
   },
   "thisInputContainsLineBreaksTabsOrUnsupported": {
-    "ko": "이 입력에는 줄바꿈·탭 또는 지원하지 않는 문자가 있습니다. 내용을 복사한 뒤 한 줄 텍스트로 수정하세요.",
-    "en": "This input contains line breaks, tabs or unsupported characters. Copy it, then change it to single-line text.",
-    "ja": "改行、タブ、未対応の文字が含まれています。内容をコピーしてから1行のテキストに修正してください。",
-    "zh-CN": "输入包含换行、制表符或不支持的字符。请先复制内容，再改为单行文本。"
+    "ko": "이 입력에는 탭 또는 지원하지 않는 문자가 있습니다. 내용을 복사한 뒤 지원하지 않는 문자를 수정하세요.",
+    "en": "This input contains tabs or unsupported characters. Copy it, then remove the unsupported characters.",
+    "ja": "タブまたは未対応の文字が含まれています。内容をコピーしてから未対応の文字を修正してください。",
+    "zh-CN": "输入包含制表符或不支持的字符。请先复制内容，再修改不支持的字符。"
   },
   "eachInputMustBeAtMost64Kib": {
     "ko": "한 입력은 UTF-8 64 KiB 이하여야 합니다. 내용을 줄인 뒤 저장하세요.",
@@ -931,10 +949,10 @@ export const catalog = {
     "zh-CN": "无法访问文档或身份验证已过期，请重新打开文档。"
   },
   "docxSupport": {
-    "ko": "본문과 단순 표의 일반 텍스트 run만 편집합니다. 용지, 기본·문단·글자 스타일 일부와 문단 경계의 명시적 페이지 나눔을 미리 봅니다. 자동 페이지 매김, 이미지, 머리글과 필드는 화면에서 재현하지 않습니다. 원본 OOXML은 보존합니다.",
-    "en": "Only plain text runs in body paragraphs and simple tables are editable. Page size, some styles and explicit paragraph page breaks are previewed. Automatic pagination, images, headers and fields are not rendered. Original OOXML is preserved.",
-    "ja": "本文と単純な表の通常のテキストrunのみ編集できます。用紙、一部のスタイル、段落境界の明示的な改ページをプレビューします。自動改ページ、画像、ヘッダー、フィールドは再現しません。元のOOXMLを保持します。",
-    "zh-CN": "仅可编辑正文和简单表格中的普通文本 run。预览页面尺寸、部分样式和段落边界的显式分页。不呈现自动分页、图片、页眉和域。保留原始 OOXML。"
+    "ko": "본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지와 일부 스타일을 미리 보며 자동 페이지 매김, 이미지, 머리글과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.",
+    "en": "Edit supported text and ordinary paragraph structure in the body and simple tables. Section boundaries, explicit page breaks and references are protected from structural edits. Page size and some styles are previewed. Automatic pagination, images, headers and fields are not rendered. OOXML outside the supported range is preserved.",
+    "ja": "本文と単純な表の対応テキストと通常の段落構造を編集できます。セクション境界、明示的な改ページ、参照は構造編集から保護します。用紙と一部のスタイルをプレビューします。自動改ページ、画像、ヘッダー、フィールドは再現しません。対応範囲外のOOXMLを保持します。",
+    "zh-CN": "可编辑正文和简单表格中支持的文本及普通段落结构。节边界、显式分页和引用受结构编辑保护。预览页面尺寸和部分样式。不呈现自动分页、图片、页眉和域。保留支持范围外的OOXML。"
   },
   "docxNative": {
     "ko": "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요.",
