@@ -148,6 +148,7 @@ func (s *Server) workspaceRoutes() {
 		}{documents, maxOpenDocuments})
 	})))
 	s.mux.Handle("POST /api/documents/new-docx", s.requireSession(http.HandlerFunc(s.newDOCX)))
+	s.mux.Handle("POST /api/documents/copy-docx", s.requireSession(http.HandlerFunc(s.copyDOCX)))
 	s.mux.Handle("POST /api/documents/upload", s.requireSession(http.HandlerFunc(s.uploadDocument)))
 	s.mux.Handle("POST /api/documents", s.requireSession(http.HandlerFunc(s.openDocument)))
 	s.mux.Handle("DELETE /api/documents/{id}", s.requireSession(http.HandlerFunc(s.closeDocument)))

@@ -101,10 +101,17 @@ export function WorkspaceApp() {
     } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : t('theFileCouldNotBeOpened')); }
     finally { if (!disposed) setOpening(false); }
   };
-  const createDocument=async(name:string):Promise<boolean>=>{
+  const activeDOCX = () => documents().find(item => item.id === active() && item.kind === 'docx');
+  const createDocument=async(name:string, copySource?:OpenDocument):Promise<boolean>=>{
     if(opening())return false;setOpening(true);mutationVersion++;setError('');
     try{
-      const opened=documentSchema.parse(await request('/api/documents/new-docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}));
+      let payload: {name: string; sessionId?: string; baseRevision?: number} = {name};
+      if (copySource) {
+        const session = z.object({id: z.literal(copySource.id), revision: z.number().int().positive()})
+          .parse(await request(`/api/docx?document=${encodeURIComponent(copySource.id)}`));
+        payload = {name, sessionId: session.id, baseRevision: session.revision};
+      }
+      const opened=documentSchema.parse(await request(copySource ? '/api/documents/copy-docx' : '/api/documents/new-docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));
       if(disposed)return false;setDocuments(previous=>[...previous,opened]);select(opened.id);return true;
     }catch(problem){if(!disposed)setError(problem instanceof Error?problem.message:t('theFileOperationFailed'));return false;}
     finally{if(!disposed)setOpening(false);}
@@ -176,7 +183,8 @@ export function WorkspaceApp() {
       <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <input ref={fileInput} id="workspace-file-input" type="file" accept=".xlsx,.docx" multiple class="hidden" disabled={opening() || documents().length >= 8} onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ''; void uploadFiles(files); }}/>
         <button id="workspace-file-picker" type="button" class={primaryButtonClass} disabled={opening() || documents().length >= 8} onClick={() => fileInput?.click()}>{opening() ? t('opening') : t('chooseLocalFiles')}</button>
-        <CreateDocument names={documents().map(item=>item.name)} busy={opening()} disabled={opening()||documents().length>=8} error={error()} onCreate={createDocument}/>
+        <CreateDocument onOpen={()=>setError('')} names={documents().map(item=>item.name)} busy={opening()} disabled={opening()||documents().length>=8} error={error()} onCreate={createDocument}/>
+        <Show when={activeDOCX()} keyed>{source=><CreateDocument copy onOpen={()=>setError('')} names={documents().map(item=>item.name)} busy={opening()} disabled={opening()||documents().length>=8} error={error()} onCreate={name=>createDocument(name,source)}/>}</Show>
         <p class="max-w-2xl text-xs leading-5 text-slate-500">{t('workingCopyHint')}</p>
       </div>
       <details class="mt-2"><summary class="editor-action w-fit cursor-pointer rounded text-xs text-slate-600 focus-visible:outline-2 focus-visible:outline-teal-700">{t('openByPath')}</summary>

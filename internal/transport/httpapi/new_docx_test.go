@@ -29,25 +29,7 @@ func TestNewDOCXNameValidation(t *testing.T) {
 func TestNewDOCXWorkspaceCreatesEditablePrivateCopy(t *testing.T) {
 	api := NewWithTokens(nil, "browser-token", "mcp-token")
 	defer api.Close()
-	request := func(method, path, origin string, body any, authenticated bool) *httptest.ResponseRecorder {
-		t.Helper()
-		var b bytes.Buffer
-		if body != nil {
-			if err := json.NewEncoder(&b).Encode(body); err != nil {
-				t.Fatal(err)
-			}
-		}
-		r := httptest.NewRequest(method, path, &b)
-		if authenticated {
-			r.AddCookie(&http.Cookie{Name: "xlsx_session", Value: "browser-token"})
-		}
-		if origin != "" {
-			r.Header.Set("Origin", origin)
-		}
-		w := httptest.NewRecorder()
-		api.Handler().ServeHTTP(w, r)
-		return w
-	}
+	request := documentWorkspaceRequest(t, api)
 	input := map[string]string{"name": "한글 메모"}
 	if w := request("POST", "/api/documents/new-docx", "", input, false); w.Code != 401 {
 		t.Fatal("unauthenticated create accepted", w.Code)
@@ -108,5 +90,28 @@ func TestNewDOCXWorkspaceCreatesEditablePrivateCopy(t *testing.T) {
 	}
 	if _, err = os.Lstat(dir); !os.IsNotExist(err) {
 		t.Fatal("closed working copy not removed", err)
+	}
+}
+
+func documentWorkspaceRequest(t *testing.T, api *Server) func(string, string, string, any, bool) *httptest.ResponseRecorder {
+	t.Helper()
+	return func(method, path, origin string, body any, authenticated bool) *httptest.ResponseRecorder {
+		t.Helper()
+		var b bytes.Buffer
+		if body != nil {
+			if err := json.NewEncoder(&b).Encode(body); err != nil {
+				t.Fatal(err)
+			}
+		}
+		r := httptest.NewRequest(method, path, &b)
+		if authenticated {
+			r.AddCookie(&http.Cookie{Name: "xlsx_session", Value: "browser-token"})
+		}
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		w := httptest.NewRecorder()
+		api.Handler().ServeHTTP(w, r)
+		return w
 	}
 }
