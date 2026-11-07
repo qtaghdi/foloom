@@ -7,6 +7,9 @@ Microsoft Word와 LibreOffice native reopen 및 시각 증거는 아직 없습�
 
 ## 새 DOCX 문서
 
+열 파일이 없다면 `document-workspace -workspace`를 실행하고 터미널에 나온
+브라우저 링크를 엽니다.
+
 작업 공간에서 **새 DOCX 문서**를 선택하고 파일 이름을 입력합니다. 이름에
 확장자가 없으면 `.docx`를 붙입니다. 경로, 예약 이름, 열려 있는 문서와
 중복되는 이름은 사용할 수 없습니다.

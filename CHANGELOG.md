@@ -8,6 +8,8 @@ Semantic Versioning을 적용할 예정입니다.
 
 ### 추가
 
+- #88 `document-workspace -workspace`로 기존 파일 없이 빈 작업 공간을 시작합니다.
+
 - #88 동의한 DOCX의 확정 버전을 비공개 로컬 복구 사본으로 보관하고,
   재시작 후 새 작업 탭으로 열거나 폐기할 수 있는 API를 추가합니다.
 

@@ -41,6 +41,18 @@ func TestParseOptionsRejectsAmbiguousOrMissingWorkbook(t *testing.T) {
 	}
 }
 
+func TestParseOptionsAllowsExplicitEmptyHTTPWorkspace(t *testing.T) {
+	options, err := parseOptions([]string{"-workspace"}, &bytes.Buffer{})
+	if err != nil || !options.workspace || options.file != "" || options.transport != "http" {
+		t.Fatalf("options = %#v, err = %v", options, err)
+	}
+	for _, args := range [][]string{{"-workspace", "book.xlsx"}, {"-workspace", "-check"}, {"-workspace", "-transport", "stdio"}} {
+		if _, err := parseOptions(args, &bytes.Buffer{}); err == nil {
+			t.Fatalf("unexpectedly accepted %q", args)
+		}
+	}
+}
+
 func TestParseOptionsAllowsWorkbookFreeStdioServer(t *testing.T) {
 	options, err := parseOptions([]string{"-transport", "stdio"}, &bytes.Buffer{})
 	if err != nil {
