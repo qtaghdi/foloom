@@ -7,27 +7,31 @@ import (
 )
 
 type SectionFormat struct {
-	Width       *int   `json:"width,omitempty"`
-	Height      *int   `json:"height,omitempty"`
-	Orientation string `json:"orientation,omitempty"`
-	Top         *int   `json:"top,omitempty"`
-	Right       *int   `json:"right,omitempty"`
-	Bottom      *int   `json:"bottom,omitempty"`
-	Left        *int   `json:"left,omitempty"`
-	Columns     *int   `json:"columns,omitempty"`
-	ColumnSpace *int   `json:"columnSpace,omitempty"`
-	BreakType   string `json:"breakType,omitempty"`
+	HeaderFooters []HeaderFooterUpdate `json:"headerFooters,omitempty"`
+	FirstPage     *bool                `json:"firstPage,omitempty"`
+	Width         *int                 `json:"width,omitempty"`
+	Height        *int                 `json:"height,omitempty"`
+	Orientation   string               `json:"orientation,omitempty"`
+	Top           *int                 `json:"top,omitempty"`
+	Right         *int                 `json:"right,omitempty"`
+	Bottom        *int                 `json:"bottom,omitempty"`
+	Left          *int                 `json:"left,omitempty"`
+	Columns       *int                 `json:"columns,omitempty"`
+	ColumnSpace   *int                 `json:"columnSpace,omitempty"`
+	BreakType     string               `json:"breakType,omitempty"`
 }
 type SectionInfo struct {
-	ID          string     `json:"id"`
-	StartBlock  int        `json:"startBlock"`
-	EndBlock    int        `json:"endBlock"`
-	Page        PageLayout `json:"page"`
-	Orientation string     `json:"orientation"`
-	Columns     int        `json:"columns"`
-	ColumnSpace int        `json:"columnSpace"`
-	BreakType   string     `json:"breakType"`
-	Editable    bool       `json:"editable"`
+	HeaderFooters []HeaderFooterInfo `json:"headerFooters"`
+	FirstPage     bool               `json:"firstPage"`
+	ID            string             `json:"id"`
+	StartBlock    int                `json:"startBlock"`
+	EndBlock      int                `json:"endBlock"`
+	Page          PageLayout         `json:"page"`
+	Orientation   string             `json:"orientation"`
+	Columns       int                `json:"columns"`
+	ColumnSpace   int                `json:"columnSpace"`
+	BreakType     string             `json:"breakType"`
+	Editable      bool               `json:"editable"`
 }
 type sectionTarget struct {
 	info  SectionInfo
@@ -107,7 +111,7 @@ func inspectSections(root *node, session string, revision uint64) []sectionTarge
 	return out
 }
 
-func sectionReplacement(data []byte, root *node, session string, revision uint64, op Operation) (replacement, error) {
+func (p *documentPackage) sectionReplacement(data []byte, root *node, session string, revision uint64, op Operation, changes map[string][]byte) (replacement, error) {
 	if op.Section == nil || op.TargetID != "" || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || op.StyleDefinition != nil {
 		return replacement{}, fmt.Errorf("invalid DOCX section operation fields")
 	}
@@ -126,7 +130,9 @@ func sectionReplacement(data []byte, root *node, session string, revision uint64
 		return replacement{}, fmt.Errorf("duplicate final DOCX section")
 	}
 	f := op.Section
-	if *f == (SectionFormat{}) {
+	scalar := *f
+	scalar.HeaderFooters = nil
+	if scalar.Width == nil && scalar.Height == nil && scalar.Top == nil && scalar.Right == nil && scalar.Bottom == nil && scalar.Left == nil && scalar.Columns == nil && scalar.ColumnSpace == nil && scalar.Orientation == "" && scalar.BreakType == "" && scalar.FirstPage == nil && len(f.HeaderFooters) == 0 {
 		return replacement{}, fmt.Errorf("DOCX section update requires a property")
 	}
 	page := target.info.Page
@@ -218,7 +224,40 @@ func sectionReplacement(data []byte, root *node, session string, revision uint64
 			return replacement{}, err
 		}
 	}
+	if f.FirstPage != nil {
+		value := "0"
+		if *f.FirstPage {
+			value = "1"
+		}
+		if err := set("titlePg", map[string]string{"val": value}); err != nil {
+			return replacement{}, err
+		}
+	}
 	raw := patchSectionChildren(props, data, updates)
+	if len(f.HeaderFooters) > 0 {
+		index := 0
+		for i := range sections {
+			if sections[i].info.ID == op.SectionID {
+				index = i
+				break
+			}
+		}
+		headers := p.headerFooterCatalog(sections)[index]
+		for _, update := range f.HeaderFooters {
+			if !update.LinkPrevious {
+				for _, info := range headers {
+					if info.Kind == update.Kind && info.Variant == update.Variant && !info.Editable {
+						return replacement{}, fmt.Errorf("protected inherited DOCX header/footer cannot be flattened")
+					}
+				}
+			}
+		}
+		var err error
+		raw, err = p.patchHeaderFooters(raw, f.HeaderFooters, index, changes)
+		if err != nil {
+			return replacement{}, err
+		}
+	}
 	if props == nil {
 		return replacement{target.body.endStart, target.body.endStart, []byte(raw)}, nil
 	}

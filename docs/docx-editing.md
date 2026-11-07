@@ -428,3 +428,30 @@ nextColumn을 사용합니다. 생략한 속성, 머리글·바닥글 참조, �
 확정 이력을 함께 사용합니다. 화면은 구역별 용지·여백·단을 구분하고, 연속
 구역도 경계 확인을 위해 별도 미리보기로 표시합니다. 이 분리 표시를 실제
 페이지 나눔이나 실제 쪽 수로 간주하지 않습니다.
+
+
+### 머리글·바닥글의 구역 계약
+
+`update_section.section.headerFooters`는 최대 여섯 가지 `kind: header|footer`,
+`variant: default|first|even` 조합을 받습니다. 새 텍스트는 `text`, 이전 구역
+연결은 `linkPrevious: true`를 사용하고 둘을 함께 지정하지 않습니다. 첫 구역은
+이전 연결을 지정할 수 없습니다. 빈 텍스트는 명시적인 빈 머리글이며 이전
+구역 상속과 구분합니다. 한 batch에서 최대 32개 내용을 변경합니다.
+
+항상 새 part와 relationship을 만들고 대상 구역의 참조만 교체합니다. 원래
+part, 다른 구역의 명시적 참조와 다른 variant는 그대로 보존합니다. 연결을
+복원하면 그 구역의 참조를 제거하며 원래 part는 삭제하지 않습니다. 같은
+batch의 스타일 생성도 content type과 relationship을 함께 유지합니다.
+
+snapshot은 각 variant의 직접·상속 상태, 내용 원본 구역, 단순 텍스트와
+편집 가능 여부를 반환합니다. 상속 내용은 원본 구역 ID로 찾아 중복 전송하지
+않습니다. 내용 미리보기 총량은 1 MiB이며 한 내용은 64 KiB까지입니다. 한도를
+넘으면 `truncated`와 읽기 전용 상태를 반환해 빈 내용으로 오인해 저장하지
+않습니다. 서식·필드·그림·추적 변경 등 단순 텍스트가 아닌 기존 내용은 보호합니다.
+
+`firstPage`는 구역의 `titlePg`만 바꾸며 첫 페이지 머리글과 바닥글을 구분합니다.
+even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 설정을 새로 켜는
+화면과 실제 쪽 선택은 아직 구현 중입니다. 화면 작성 도구는 다음 커밋에서
+연결하며 native Word 조판은 미검증입니다.
+
+이전 구역 상속과 첫·홀짝 구분은 [Microsoft Open XML 문서](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.headerreference)를 기준으로 구현합니다.

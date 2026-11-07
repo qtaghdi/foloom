@@ -133,7 +133,13 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 		history.RedoActor = s.history.manifest.Redo[history.Redo-1].Actor
 	}
 	sections := []SectionInfo{}
-	for _, target := range inspectSections(root, s.id, s.revision) {
+	targets := inspectSections(root, s.id, s.revision)
+	headers := s.pkg.headerFooterCatalog(targets)
+	for index, target := range targets {
+		target.info.HeaderFooters = headers[index]
+		if n := target.props.child("titlePg"); n != nil {
+			target.info.FirstPage = onOff(n.attr("val"), true)
+		}
 		sections = append(sections, target.info)
 		for index := target.info.StartBlock; index <= target.info.EndBlock && index < len(blocks); index++ {
 			block := &blocks[index]
@@ -185,6 +191,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	}
 	seen := map[string]bool{}
 	var edits []replacement
+	headerCount := 0
 	textBytes := 0
 	structuralBytes := 0
 	for _, op := range input.Operations {
@@ -194,7 +201,14 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 				return Snapshot{}, fmt.Errorf("duplicate DOCX section update")
 			}
 			seen[key] = true
-			edit, err := sectionReplacement(s.pkg.document, root, s.id, s.revision, op)
+			if op.Section == nil {
+				return Snapshot{}, fmt.Errorf("DOCX section update requires settings")
+			}
+			headerCount += len(op.Section.HeaderFooters)
+			if headerCount > 32 {
+				return Snapshot{}, fmt.Errorf("DOCX batch permits 32 header/footer updates")
+			}
+			edit, err := s.pkg.sectionReplacement(s.pkg.document, root, s.id, s.revision, op, parts)
 			if err != nil {
 				return Snapshot{}, err
 			}
