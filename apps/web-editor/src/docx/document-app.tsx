@@ -1,3 +1,4 @@
+import { SaveDOCXCopyAction } from './save-copy-action';
 import { RecoveryControls } from './recovery-controls';
 import type { RecoveryStatus } from './recovery';
 import { FileActions } from '../ui/file-actions';
@@ -195,7 +196,7 @@ export function DocumentApp() {
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
     <EditorHeader name={state().snapshot?.name ?? t('openingDocument')} kind={t('document')} nameId="document-name" statusId="save-status"
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
-      actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
+      actions={<><SaveDOCXCopyAction name={state().snapshot?.name??'document.docx'} disabled={!state().snapshot||state().saving||state().loading||Boolean(state().composing||state().validation)} onExport={name=>controller.exportCopy(name)}/><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
     <Show when={recoveryAvailable && state().snapshot}>
       <RecoveryControls status={recovery()} disabled={state().saving || state().loading || Boolean(state().composing || state().validation)}

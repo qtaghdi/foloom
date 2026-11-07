@@ -1,3 +1,4 @@
+import { exportDOCXCopy } from '../transport/save-docx-copy';
 import { DraftRecovery, type RecoveryStatus } from './recovery';
 import { confirmSavedDocument, downloadSavedDocument, DocumentFileError, type DownloadedFile } from '../transport/document-files';
 import { source } from '../i18n/index';
@@ -294,6 +295,14 @@ export class DocumentController {
       this.connect(next);return true;
     } catch(error) {
       this.view.activity?.({id:activityId,actor:'human',state:'uncertain',title:'이력 복원 결과 확인 필요'});this.fail(error);return false;
+    } finally {this.busy=false;this.updateSave();}
+  }
+
+  async exportCopy(name: string): Promise<DownloadedFile | undefined> {
+    if (this.disposed || this.busy || this.loading || this.composing || !this.snapshot || this.draftError()) return;
+    this.busy=true; this.updateSave();
+    try {
+      return await exportDOCXCopy({sessionId:this.snapshot.id,baseRevision:this.snapshot.revision,operations:this.pendingOperations(),name});
     } finally {this.busy=false;this.updateSave();}
   }
 
