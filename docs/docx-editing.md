@@ -467,6 +467,16 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 
 보호된 머리글 내용도 `첫 페이지 구분 적용`으로 구분 설정만 바꿀 수 있습니다. 이 동작은 내용이나 참조를 평탄화하지 않습니다.
 
+### 문서 전체의 홀수·짝수 구분
+
+`머리글·바닥글`에서 문서 전체 홀수·짝수 구분을 설정하고, 각 구역의 기본·홀수와
+짝수 내용을 따로 편집할 수 있습니다. `update_header_parity`는
+`evenAndOddHeaders`에 불리언을 받으며 문서의 settings part에서 해당 속성만
+바꿉니다. 다른 머리글 참조와 첫 페이지 구분은 그대로 유지됩니다. 브라우저
+미리보기는 같은 구역에 속한 명시적 페이지 그룹을 세며, 정확한 자동 페이지
+구성과 홀짝 계산은 #93에서 다룹니다.
+[Open XML 홀짝 설정](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.evenandoddheaders)을 따릅니다.
+
 ### 구역별 쪽 번호
 
 `구역·용지 설정`에서 번호를 이어가거나 0 이상의 정수에서 다시 시작하고,
