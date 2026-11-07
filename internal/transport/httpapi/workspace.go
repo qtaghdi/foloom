@@ -134,6 +134,7 @@ func (s *Server) serveDocument(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) workspaceRoutes() {
+	s.docxRecoveryRoutes()
 	s.mux.Handle("GET /api/documents", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.sessionMu.RLock()
 		documents := make([]*openedDocument, 0, len(s.documents))
