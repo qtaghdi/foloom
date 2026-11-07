@@ -133,7 +133,7 @@ func patchStyle(root *node, data []byte, d StyleDefinition) ([]byte, error) {
 	if d.BasedOn != nil && !styleText(*d.BasedOn, true) {
 		return nil, fmt.Errorf("invalid DOCX style base")
 	}
-	if d.Run != nil && d.Run.StyleID != nil || d.Paragraph != nil && d.Paragraph.StyleID != nil {
+	if d.Run != nil && d.Run.StyleID != nil || d.Paragraph != nil && (d.Paragraph.StyleID != nil || d.Paragraph.List != nil) {
 		return nil, fmt.Errorf("style definitions use basedOn rather than style references")
 	}
 	if err := validateInlineStyle(d.Run); err != nil {
@@ -277,64 +277,12 @@ func (p *documentPackage) prepareStyles(operations []Operation) (map[string][]by
 	}
 	filename, data := p.stylesPath, p.styleData()
 	if filename == "" {
-		names := map[string]bool{}
-		for _, part := range p.parts {
-			names[part.header.Name] = true
-		}
-		filename = "word/styles.xml"
-		for i := 1; names[filename]; i++ {
-			filename = fmt.Sprintf("word/styles-%d.xml", i)
+		var err error
+		filename, err = p.addWordPart(changes, "styles", "rIdDocxStyles")
+		if err != nil {
+			return nil, previewStyles{}, err
 		}
 		data = []byte(`<w:styles xmlns:w="` + wordNS + `"></w:styles>`)
-		ct := []byte{}
-		rels := []byte{}
-		for _, part := range p.parts {
-			if part.header.Name == "[Content_Types].xml" {
-				ct = part.data
-			}
-			if part.header.Name == "word/_rels/document.xml.rels" {
-				rels = part.data
-			}
-		}
-		insert := func(data []byte, child string) ([]byte, error) {
-			root, err := parseXML(data)
-			if err != nil {
-				return nil, err
-			}
-			if strings.HasSuffix(string(data[root.start:root.inner]), "/>") {
-				open, close := scopedOpening(root, data, false)
-				return []byte(open + child + close), nil
-			}
-			return append(append(append([]byte(nil), data[:root.endStart]...), []byte(child)...), data[root.endStart:]...), nil
-		}
-		var err error
-		changes["[Content_Types].xml"], err = insert(ct, `<dwct:Override xmlns:dwct="http://schemas.openxmlformats.org/package/2006/content-types" PartName="/`+filename+`" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>`)
-		if err != nil {
-			return nil, previewStyles{}, err
-		}
-		if len(rels) == 0 {
-			rels = []byte(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`)
-		}
-		root, err := parseXML(rels)
-		if err != nil {
-			return nil, previewStyles{}, err
-		}
-		ids := map[string]bool{}
-		for _, n := range root.children {
-			for _, a := range n.attrs {
-				if a.Name.Local == "Id" {
-					ids[a.Value] = true
-				}
-			}
-		}
-		id := "rIdDocxStyles"
-		for ids[id] {
-			id += "X"
-		}
-		changes["word/_rels/document.xml.rels"], err = insert(rels, `<dwr:Relationship xmlns:dwr="http://schemas.openxmlformats.org/package/2006/relationships" Id="`+id+`" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="`+strings.TrimPrefix(filename, "word/")+`"/>`)
-		if err != nil {
-			return nil, previewStyles{}, err
-		}
 	}
 	for _, d := range defs {
 		root, err := parseXML(data)

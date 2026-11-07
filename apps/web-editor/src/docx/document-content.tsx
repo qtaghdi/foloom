@@ -7,11 +7,12 @@ import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
-export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export function DocumentContent(props: { onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
   const input = continuousInput(() => editor, {
     history: direction => props.onHistory(direction), snapshot: () => props.snapshot, saving: () => props.saving, edit: (operation, selection) => props.onEdit(operation, selection),
+    listLevel:(selection,delta)=>props.onListLevel?.(selection,delta)??false,
     replace: (...args) => props.onRange(...args), delete: (...args) => props.onDelete(...args), structure: (...args) => props.onStructure(...args),
     composition: active => props.onComposition(active), refresh: selection => props.onRefresh(selection), text: selection => props.selectionText(selection),
     focus: run => props.onFocusRun(run), pasteMode: () => props.pasteMode, pasteRich: (...args) => props.onPasteRich(...args), richText: selection => props.richSelection(selection), notice: message => setNotice(message === 'protected' ? source('paragraphStructureUnavailable') : message === 'invalid' ? source('thisInputContainsLineBreaksTabsOrUnsupported') : message === 'clipboard' ? source('clipboardNormalized') : ''),
@@ -38,9 +39,9 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
     contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
     style={{
-      'margin-left': p.layout?.left===undefined?undefined:`${p.layout.left/20}pt`,
+      'margin-left': p.layout?.left===undefined?p.listLabel?`${36+(p.list?.level??0)*18}pt`:undefined:`${p.layout.left/20}pt`,
       'margin-right': p.layout?.right===undefined?undefined:`${p.layout.right/20}pt`,
-      'text-indent': p.layout?.hanging!==undefined?`${-p.layout.hanging/20}pt`:p.layout?.firstLine===undefined?undefined:`${p.layout.firstLine/20}pt`,
+      'text-indent': p.layout?.hanging!==undefined?`${-p.layout.hanging/20}pt`:p.layout?.firstLine===undefined?p.listLabel?'-18pt':undefined:`${p.layout.firstLine/20}pt`,
       'line-height': p.layout?.line===undefined?undefined:p.layout.lineRule==='exact'?`${p.layout.line/20}pt`:p.layout.lineRule==='atLeast'?`max(1.35em, ${p.layout.line/20}pt)`:String(p.layout.line/240),
       direction: p.layout?.bidi?'rtl':undefined,
       'writing-mode': p.layout?.textDirection==='tbRl'?'vertical-rl':p.layout?.textDirection==='btLr'?'vertical-lr':undefined,
@@ -48,6 +49,7 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
       'margin-block-end': p.layout?.after === undefined ? undefined : `${p.layout.after / 20}pt`,
     }}>
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
+    <Show when={p.listLabel}><span data-docx-list-marker contentEditable={false} aria-label={`목록 ${p.listLabel}`} class="inline-block min-w-[18pt] select-none" style={{'text-indent':'0'}}>{p.listLabel}</span></Show>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
         <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>
           <Show when={p.structureEditable} fallback={<RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}

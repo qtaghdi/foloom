@@ -132,7 +132,10 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if history.Redo > 0 {
 		history.RedoActor = s.history.manifest.Redo[history.Redo-1].Actor
 	}
-	return Snapshot{Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	listRoot, _ := parseXML(s.pkg.partData(s.pkg.numberingPath, nil))
+	numbering := readNumbering(listRoot)
+	applyListLabels(blocks, numbering)
+	return Snapshot{Lists: listCatalog(numbering), Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -158,6 +161,10 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	if err != nil {
 		return Snapshot{}, err
 	}
+	listKeys, numbering, err := s.pkg.prepareNumbering(input.Operations, parts)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	_, targets, _, err := inspect(s.pkg.document, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
@@ -167,7 +174,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	textBytes := 0
 	structuralBytes := 0
 	for _, op := range input.Operations {
-		if op.Type == "define_style" {
+		if op.Type == "define_style" || op.Type == "define_list" {
 			continue
 		}
 		for _, p := range op.Paragraphs {
@@ -196,6 +203,10 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 				}
 			}
 			seen[op.TargetID] = true
+			op, err := resolveParagraphLists(op, listKeys, numbering)
+			if err != nil {
+				return Snapshot{}, err
+			}
 			edit, err := paragraphReplacement(s.pkg.document, targets, op)
 			if err != nil {
 				return Snapshot{}, err

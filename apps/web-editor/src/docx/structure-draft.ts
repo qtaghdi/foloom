@@ -1,4 +1,5 @@
-import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat } from './contracts';
+import { previewLists } from './lists';
+import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat, ListDefinition } from './contracts';
 import type { ClipboardParagraph } from './clipboard';
 import { isTextBoundary, graphemeOffsets, type TextSelection, type TextPoint } from './selection';
 import { validateRunText } from './validation';
@@ -224,7 +225,7 @@ export class StructureDraft {
       const merged={...p.format,...format};
       if(format.firstLine!==undefined)delete merged.hanging;
       if(format.hanging!==undefined)delete merged.firstLine;
-      p.format=merged;if(format.styleId!==undefined)p.styleId=format.styleId;p.layout={...p.layout,...format};
+      p.format=merged;if(format.list!==undefined)p.list=format.list;if(format.styleId!==undefined)p.styleId=format.styleId;p.layout={...p.layout,...format};
       if(format.firstLine!==undefined)delete p.layout.hanging;
       if(format.hanging!==undefined)delete p.layout.firstLine;
       this.paragraphGroup.get(p.sourceId)!.changed=true;
@@ -279,7 +280,7 @@ export class StructureDraft {
     }
     return result;
   }
-  snapshot(): Snapshot {
+  snapshot(lists: ListDefinition[] = []): Snapshot {
     const expand = (paragraphs: Paragraph[]): Paragraph[] => {
       const emitted = new Set<Group>();
       return paragraphs.flatMap(p => {
@@ -298,6 +299,6 @@ export class StructureDraft {
       else { flush(); blocks.push({ ...block, rows: block.rows.map(row => ({ ...row, cells: row.cells.map(cell => ({ ...cell, paragraphs: expand(cell.paragraphs) })) })) }); }
     }
     flush();
-    return { ...this.original, blocks };
+    return previewLists({ ...this.original, blocks }, lists);
   }
 }

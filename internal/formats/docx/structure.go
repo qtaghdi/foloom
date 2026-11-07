@@ -25,15 +25,7 @@ func structuralParagraph(p *node, data []byte) bool {
 		}
 		return false
 	}
-	countChild := func(n *node, name string) int {
-		count := 0
-		for _, c := range n.children {
-			if c.is(name) {
-				count++
-			}
-		}
-		return count
-	}
+
 	if countChild(p, "pPr") > 1 {
 		return false
 	}
@@ -309,4 +301,17 @@ func plainTextAttributes(n *node) bool {
 		return false
 	}
 	return true
+}
+
+func countChild(n *node, name string) int {
+	if n == nil {
+		return 0
+	}
+	count := 0
+	for _, child := range n.children {
+		if child.is(name) {
+			count++
+		}
+	}
+	return count
 }

@@ -1,3 +1,4 @@
+import { DocumentListToolbar } from './document-list-toolbar';
 import { FileActions } from '../ui/file-actions';
 import { warningMessage } from '../ui/messages';
 import { DiagnosticDetails } from '../i18n/diagnostic-details';
@@ -190,6 +191,10 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
+    <DocumentListToolbar paragraphs={(() => {draftVersion();state().snapshot;return formattingSelection()?controller.selectedParagraphs(formattingSelection()!):[];})()}
+      lists={state().snapshot?.lists??[]} disabled={state().saving||state().loading||Boolean(state().error||state().composing)}
+      onList={list=>{const selection=formattingSelection();if(selection&&controller.applyList(selection,list))setDraftVersion(v=>v+1);}}
+      onLevel={delta=>{const selection=formattingSelection();if(selection&&controller.changeListLevel(selection,delta))setDraftVersion(v=>v+1);}}/>
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
@@ -205,6 +210,7 @@ export function DocumentApp() {
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
         <Show when={state().snapshot}>{(snapshot) => <DocumentContent onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
+          onListLevel={(selection,delta)=>{const changed=controller.changeListLevel(selection,delta);if(changed)setDraftVersion(v=>v+1);return changed;}}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onDelete={(selection, direction, word) => { const changed = controller.deleteSelection(selection, direction, word); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onComposition={active => controller.composition(active)} onRefresh={selection => controller.refreshSelection(selection)} selectionText={selection => controller.selectionText(selection)}

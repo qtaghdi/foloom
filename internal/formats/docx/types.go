@@ -46,19 +46,32 @@ type PageLayout struct {
 	Left   int `json:"left"`
 }
 
+type ListDefinition struct {
+	Key   string `json:"key" jsonschema:"Batch-local reference key for new list paragraphs"`
+	Kind  string `json:"kind" jsonschema:"bullet or decimal"`
+	Start int    `json:"start,omitempty" jsonschema:"Start number from 1 to 9999, default 1"`
+}
+
+type ParagraphList struct {
+	ID    int    `json:"id,omitempty" jsonschema:"Existing list ID or zero to remove numbering"`
+	Key   string `json:"key,omitempty" jsonschema:"Reference a define_list key from the same batch instead of ID"`
+	Level int    `json:"level,omitempty" jsonschema:"Zero-based level from 0 to 8"`
+}
+
 type ParagraphFormat struct {
-	StyleID       *string `json:"styleId,omitempty"`
-	Align         string  `json:"align,omitempty"`
-	Left          *int    `json:"left,omitempty"`
-	Right         *int    `json:"right,omitempty"`
-	FirstLine     *int    `json:"firstLine,omitempty"`
-	Hanging       *int    `json:"hanging,omitempty"`
-	Before        *int    `json:"before,omitempty"`
-	After         *int    `json:"after,omitempty"`
-	Line          *int    `json:"line,omitempty"`
-	LineRule      string  `json:"lineRule,omitempty"`
-	Bidi          *bool   `json:"bidi,omitempty"`
-	TextDirection string  `json:"textDirection,omitempty"`
+	List          *ParagraphList `json:"list,omitempty"`
+	StyleID       *string        `json:"styleId,omitempty"`
+	Align         string         `json:"align,omitempty"`
+	Left          *int           `json:"left,omitempty"`
+	Right         *int           `json:"right,omitempty"`
+	FirstLine     *int           `json:"firstLine,omitempty"`
+	Hanging       *int           `json:"hanging,omitempty"`
+	Before        *int           `json:"before,omitempty"`
+	After         *int           `json:"after,omitempty"`
+	Line          *int           `json:"line,omitempty"`
+	LineRule      string         `json:"lineRule,omitempty"`
+	Bidi          *bool          `json:"bidi,omitempty"`
+	TextDirection string         `json:"textDirection,omitempty"`
 }
 type ParagraphLayout struct {
 	Left          *int   `json:"left,omitempty"`
@@ -74,7 +87,19 @@ type ParagraphLayout struct {
 	After         *int   `json:"after,omitempty"`
 }
 
+type ListInfo struct {
+	ID     int             `json:"id"`
+	Levels []ListLevelInfo `json:"levels"`
+}
+type ListLevelInfo struct {
+	Level int    `json:"level"`
+	Kind  string `json:"kind"`
+	Text  string `json:"text"`
+	Start int    `json:"start"`
+}
 type Paragraph struct {
+	List              *ParagraphList   `json:"list,omitempty"`
+	ListLabel         string           `json:"listLabel,omitempty"`
 	StyleID           string           `json:"styleId,omitempty"`
 	StructureEditable bool             `json:"structureEditable"`
 	PageBreakBefore   bool             `json:"pageBreakBefore,omitempty"`
@@ -112,6 +137,7 @@ type HistoryInput struct {
 	Direction    string `json:"direction" jsonschema:"undo or redo"`
 }
 type Snapshot struct {
+	Lists    []ListInfo   `json:"lists,omitempty"`
 	Styles   []StyleInfo  `json:"styles"`
 	History  HistoryState `json:"history"`
 	ID       string       `json:"id"`
@@ -170,10 +196,11 @@ type StyleInfo struct {
 	Paragraph *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
+	ListDefinition  *ListDefinition    `json:"listDefinition,omitempty"`
 	StyleDefinition *StyleDefinition   `json:"styleDefinition,omitempty"`
 	EndTargetID     string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
 	Paragraphs      []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type            string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, or define_style"`
+	Type            string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, or define_list"`
 	TargetID        string             `json:"targetId,omitempty" jsonschema:"Editable run ID from the current get_docx snapshot"`
 	ExpectedText    string             `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
 	Text            string             `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`

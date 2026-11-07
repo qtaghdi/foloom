@@ -233,6 +233,14 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		var baseRun Run
 		directRun(&baseRun, styles.defaults.child("rPrDefault").child("rPr"))
 		applyParagraph := func(props *node) {
+			if n := props.child("numPr"); n != nil {
+				if id := listInt(n.child("numId").attr("val"), -1); id >= 0 {
+					level := listInt(n.child("ilvl").attr("val"), 0)
+					if level <= 8 {
+						out.List = &ParagraphList{ID: id, Level: level}
+					}
+				}
+			}
 			applyParagraphPreview(&layout, props)
 			if br := props.child("pageBreakBefore"); br != nil {
 				out.PageBreakBefore = onOff(br.attr("val"), true)

@@ -12,6 +12,9 @@ func validateParagraphFormat(f *ParagraphFormat) error {
 	if f == nil {
 		return nil
 	}
+	if f.List != nil && (f.List.Level < 0 || f.List.Level > 8 || f.List.ID < 0 || f.List.ID > 2147483647) {
+		return fmt.Errorf("invalid DOCX paragraph list")
+	}
 	if f.StyleID != nil && !styleText(*f.StyleID, true) {
 		return fmt.Errorf("invalid DOCX paragraph style reference")
 	}
@@ -150,6 +153,16 @@ func paragraphProperties(props *node, data []byte, f *ParagraphFormat) (string, 
 			updates[name] = value
 		}
 		return err
+	}
+	if f.List != nil {
+		if countChild(props, "numPr") > 1 {
+			return "", fmt.Errorf("duplicate DOCX numbering properties")
+		}
+		changed, err := patchParagraphList(props.child("numPr"), data, f.List)
+		if err != nil {
+			return "", err
+		}
+		updates["numPr"] = changed
 	}
 	if f.StyleID != nil {
 		updates["pStyle"] = ""

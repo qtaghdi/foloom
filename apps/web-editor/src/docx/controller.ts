@@ -9,10 +9,10 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, type Snapshot, type ListDefinition, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
-type DraftCheckpoint = { styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { lists: Array<[string,ListDefinition]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   composition?(active: boolean): void;
   history?(controls: HistoryControls): void;
@@ -39,6 +39,7 @@ export class DocumentController {
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
   private loading = false;
+  private listDrafts=new Map<string,ListDefinition>();
   private styleDrafts=new Map<string,StyleDefinition>();
   private undoDraft: DraftCheckpoint[] = [];
   private redoDraft: DraftCheckpoint[] = [];
@@ -46,10 +47,10 @@ export class DocumentController {
 
   constructor(private view: DocumentView) {}
 
-  hasDrafts(): boolean { return this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
+  hasDrafts(): boolean { return this.listDrafts.size > 0 || this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
   private checkpoint(selection?: TextSelection): DraftCheckpoint {
-    return { styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
+    return { lists:[...this.listDrafts],styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
   }
   private remember(before: DraftCheckpoint, key?: string): void {
     const now = Date.now();
@@ -83,7 +84,7 @@ export class DocumentController {
     const focus = this.structureDraft?.change(action, runId, start, end, insertion);
     if (!focus || !this.structureDraft) return false;
     this.remember(before!);
-    this.view.render(this.structureDraft.snapshot(), focus);
+    this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]), focus);
     if (!this.blocked) this.view.status('미저장 변경', 'pending');
     this.updateSave();
     return true;
@@ -100,11 +101,18 @@ export class DocumentController {
   }
   replaceSelection(selection: TextSelection, text: string, inline = false): boolean {
     if (this.busy || this.loading || this.disposed) return false;
+    if (!inline && text==='\n' && selection.anchor.runId===selection.focus.runId && selection.anchor.offset===selection.focus.offset) {
+      const paragraphs=this.structureDraft?.selectedParagraphs(selection)??[];
+      const paragraph=paragraphs.length===1?paragraphs[0]:undefined;
+      if(paragraph?.list && (paragraph.list.id || paragraph.list.key) && paragraph.runs.every(run=>run.text==='')) {
+        return this.applyList(selection,{id:0,level:0});
+      }
+    }
     const before = this.structureDraft && this.checkpoint(selection);
     const focus = this.structureDraft?.replace(selection, text, inline);
     if (!focus || !this.structureDraft) return false;
     this.remember(before!);
-    this.view.render(this.structureDraft.snapshot(), focus);
+    this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]), focus);
     if (!this.blocked) this.view.status('미저장 변경', 'pending');
     this.updateSave(); return true;
   }
@@ -114,7 +122,7 @@ export class DocumentController {
     const focus=this.structureDraft?.replaceRich(selection,paragraphs);
     if (!focus || !this.structureDraft) return false;
     this.remember(before!);
-    this.view.render(this.structureDraft.snapshot(),focus);
+    this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]),focus);
     if (!this.blocked) this.view.status('미저장 변경','pending');
     this.updateSave();return true;
   }
@@ -142,15 +150,46 @@ export class DocumentController {
   formatParagraph(selection:TextSelection,format:ParagraphFormat):boolean {
     if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
     const before=this.checkpoint(selection),focus=this.structureDraft.formatParagraph(selection,format);
-    if(!focus)return false;this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
+    if(!focus)return false;this.remember(before);this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]),focus);
     if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
+  }
+  applyList(selection: TextSelection, list: ParagraphList | {kind:'bullet'|'decimal';start?:number}): boolean {
+    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    const before=this.checkpoint(selection);
+    let reference:ParagraphList;
+    let definition:ListDefinition|undefined;
+    if ('kind' in list) {
+      definition={key:`list_${++this.activitySequence}`,kind:list.kind,start:list.start??1};
+      reference={key:definition.key,level:0};
+    } else reference=list;
+    const focus=this.structureDraft.formatParagraph(selection,{list:reference});
+    if(!focus)return false;
+    if(definition)this.listDrafts.set(definition.key,definition);
+    this.remember(before);
+    this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]),focus);
+    if(!this.blocked)this.view.status('미저장 변경','pending');
+    this.updateSave();return true;
+  }
+  changeListLevel(selection: TextSelection, delta: number): boolean {
+    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    const paragraphs=this.structureDraft.selectedParagraphs(selection);
+    if(!paragraphs.length || paragraphs.some(p=>!p.list||!p.list.id&&!p.list.key||(p.list.level??0)+delta<0||(p.list.level??0)+delta>8))return false;
+    const before=this.checkpoint(selection);
+    for(const p of paragraphs) {
+      const point={runId:p.runs[0]!.id,offset:0};
+      this.structureDraft.formatParagraph({anchor:point,focus:point},{list:{...p.list,level:(p.list!.level??0)+delta}});
+    }
+    this.remember(before);
+    this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]),{runId:selection.focus.runId,start:selection.focus.offset,end:selection.focus.offset,selection});
+    if(!this.blocked)this.view.status('미저장 변경','pending');
+    this.updateSave();return true;
   }
   selectedParagraphs(selection:TextSelection) {return this.structureDraft?.selectedParagraphs(selection)??[];}
   format(selection: TextSelection, style: InlineStyle): boolean {
     if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
     const before=this.checkpoint(selection),focus=this.structureDraft.format(selection,style);
     if(!focus)return false;
-    this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
+    this.remember(before);this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]),focus);
     if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
   }
   selectedRuns(selection:TextSelection){return this.structureDraft?.selectedRuns(selection)??[];}
@@ -160,16 +199,16 @@ export class DocumentController {
     return Boolean(range && this.replaceSelection(range, ''));
   }
   refreshSelection(selection: TextSelection): void {
-    if (this.structureDraft) this.view.render(this.structureDraft.snapshot(), { runId: selection.focus.runId, start: selection.focus.offset, end: selection.focus.offset, selection });
+    if (this.structureDraft) this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]), { runId: selection.focus.runId, start: selection.focus.offset, end: selection.focus.offset, selection });
   }
   selectionText(selection: TextSelection): string | undefined { return this.structureDraft?.selectedText(selection); }
 
   private pendingOperations(): Operation[] {
     const text = [...this.drafts.values()].filter(op => !this.structureDraft?.ownsOriginal(op.targetId));
-    return [...[...this.styleDrafts.values()].map(styleDefinition=>({type:'define_style' as const,styleDefinition})),...text, ...this.structureDraft?.operations() ?? []];
+    return [...[...this.listDrafts.values()].map(listDefinition=>({type:'define_list' as const,listDefinition})),...[...this.styleDrafts.values()].map(styleDefinition=>({type:'define_style' as const,styleDefinition})),...text, ...this.structureDraft?.operations() ?? []];
   }
   private resetDraft(snapshot: Snapshot): void {
-    this.drafts.clear();this.styleDrafts.clear();
+    this.drafts.clear();this.styleDrafts.clear();this.listDrafts.clear();
     this.undoDraft = []; this.redoDraft = []; this.lastTyping = undefined;
     this.structureDraft = new StructureDraft(snapshot);
     this.expectedText.clear();
@@ -253,9 +292,9 @@ export class DocumentController {
     if (from.length) {
       const saved = from.pop()!;
       to.push(this.checkpoint(selection)); this.trimDraftHistory();
-      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.styleDrafts=new Map(saved.styles); this.lastTyping = undefined;
+      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.styleDrafts=new Map(saved.styles);this.listDrafts=new Map(saved.lists); this.lastTyping = undefined;
       const point = saved.selection?.focus;
-      this.view.render(this.structureDraft.snapshot(), point ? {runId:point.runId,start:point.offset,end:point.offset,selection:saved.selection} : undefined);
+      this.view.render(this.structureDraft.snapshot([...this.listDrafts.values()]), point ? {runId:point.runId,start:point.offset,end:point.offset,selection:saved.selection} : undefined);
       this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
       this.updateSave(); return true;
     }

@@ -337,3 +337,15 @@ DOCX 스타일 작성은 `define_style` operation과 문단·run의 `styleId` �
 확정합니다. UI의 스타일 정의 초안은 controller에서 관리하며 저장 후 canonical
 snapshot으로 상속 미리 보기를 갱신합니다. 스타일 정의의 토글과 직접 run의
 절대 속성은 각각 Word 상속 규칙을 유지합니다.
+
+
+## DOCX 목록과 번호 정의
+
+`define_list`는 batch-local key로 새 9수준 글머리 또는 decimal 번호 인스턴스를
+만듭니다. 같은 batch의 문단 계획은 `list.key`를 사용하고, 확정 뒤에는
+`list.id`로 참조합니다. 새 번호 ID는 기존 번호 정의와 모든 원본 XML의
+번호 참조보다 큰 값을 사용해 끊어진 참조가 우연히 활성화되는 것을 막습니다.
+
+번호와 스타일 part를 같은 batch에서 추가할 수 있습니다. 관계와 content type
+변경을 같은 변경 맵에 누적해 어느 한쪽의 신규 관계가 사라지지 않도록 합니다.
+기존 numbering part 경로, 사용자 정의 정의, 미변경 ZIP part는 유지합니다.
