@@ -403,10 +403,10 @@ export const catalog = {
     "zh-CN": "重新加载已保存的文档"
   },
   "thisInputContainsLineBreaksTabsOrUnsupported": {
-    "ko": "이 입력에는 탭 또는 지원하지 않는 문자가 있습니다. 내용을 복사한 뒤 지원하지 않는 문자를 수정하세요.",
-    "en": "This input contains tabs or unsupported characters. Copy it, then remove the unsupported characters.",
-    "ja": "タブまたは未対応の文字が含まれています。内容をコピーしてから未対応の文字を修正してください。",
-    "zh-CN": "输入包含制表符或不支持的字符。请先复制内容，再修改不支持的字符。"
+    "ko": "이 입력에는 지원하지 않는 문자가 있습니다. 내용을 복사한 뒤 지원하지 않는 문자를 수정하세요.",
+    "en": "This input contains unsupported characters. Copy it, then remove the unsupported characters.",
+    "ja": "未対応の文字が含まれています。内容をコピーしてから未対応の文字を修正してください。",
+    "zh-CN": "输入包含不支持的字符。请先复制内容，再修改不支持的字符。"
   },
   "eachInputMustBeAtMost64Kib": {
     "ko": "한 입력은 UTF-8 64 KiB 이하여야 합니다. 내용을 줄인 뒤 저장하세요.",

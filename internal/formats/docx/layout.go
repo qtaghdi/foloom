@@ -2,6 +2,7 @@ package docx
 
 import (
 	"encoding/hex"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -49,6 +50,38 @@ func pageLayout(body *node) *PageLayout {
 }
 
 func applyParagraphPreview(layout *ParagraphLayout, props *node) {
+	if tabs := props.child("tabs"); tabs != nil {
+		merged := map[int]TabStop{}
+		for _, tab := range layout.Tabs {
+			merged[tab.Position] = tab
+		}
+		for _, n := range tabs.children {
+			if !n.is("tab") {
+				continue
+			}
+			position := listInt(n.attr("pos"), -1)
+			if position < 0 || position > 28800 {
+				continue
+			}
+			tab := TabStop{Position: position, Align: n.attr("val"), Leader: n.attr("leader")}
+			if tab.Align == "clear" {
+				delete(merged, position)
+			} else if validateTabs([]TabStop{tab}) == nil {
+				merged[position] = tab
+			}
+		}
+		positions := []int{}
+		for pos := range merged {
+			positions = append(positions, pos)
+		}
+		sort.Ints(positions)
+		layout.Tabs = nil
+		for _, pos := range positions {
+			if len(layout.Tabs) < 32 {
+				layout.Tabs = append(layout.Tabs, merged[pos])
+			}
+		}
+	}
 	ind := props.child("ind")
 	for _, pair := range []struct {
 		name string
@@ -167,4 +200,8 @@ func trailingPageBreak(paragraph *node) *node {
 		return last
 	}
 	return nil
+}
+
+func hasParagraphLayout(l ParagraphLayout) bool {
+	return len(l.Tabs) > 0 || l.Left != nil || l.Right != nil || l.FirstLine != nil || l.Hanging != nil || l.Line != nil || l.LineRule != "" || l.Bidi || l.TextDirection != "" || l.Align != "" || l.Before != nil || l.After != nil
 }

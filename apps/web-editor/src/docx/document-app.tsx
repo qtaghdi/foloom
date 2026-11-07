@@ -1,3 +1,4 @@
+import { DocumentTabsToolbar } from './document-tabs-toolbar';
 import { DocumentListToolbar } from './document-list-toolbar';
 import { FileActions } from '../ui/file-actions';
 import { warningMessage } from '../ui/messages';
@@ -195,6 +196,7 @@ export function DocumentApp() {
       lists={state().snapshot?.lists??[]} disabled={state().saving||state().loading||Boolean(state().error||state().composing)}
       onList={list=>{const selection=formattingSelection();if(selection&&controller.applyList(selection,list))setDraftVersion(v=>v+1);}}
       onLevel={delta=>{const selection=formattingSelection();if(selection&&controller.changeListLevel(selection,delta))setDraftVersion(v=>v+1);}}/>
+    <DocumentTabsToolbar formats={selectedParagraphFormats()} disabled={!selectedStyles().length||state().composing||state().saving||state().loading||Boolean(state().error)} onFormat={applyParagraphFormat} onInsert={()=>{const selection=formattingSelection();if(selection&&controller.replaceSelection(selection,'\t',true))setDraftVersion(v=>v+1);}}/>
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>

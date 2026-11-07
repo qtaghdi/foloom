@@ -76,7 +76,7 @@ func structuralParagraph(p *node, data []byte) bool {
 				return false
 			}
 			for _, part := range child.children {
-				if !part.is("t") && !part.is("rPr") && !plainLineBreak(part) {
+				if !part.is("t") && !part.is("rPr") && !plainLineBreak(part) && !plainTab(part) {
 					return false
 				}
 				if part.is("t") {
@@ -263,18 +263,40 @@ func scopedOpening(n *node, data []byte, fresh bool) (string, string) {
 // LF represents a Word line break inside a run. Paragraph boundaries are
 // represented by ParagraphContent, never by a textarea's visual wrapping.
 func validInlineText(text string) bool {
-	return len(text) <= maxTextBytes && validText(strings.ReplaceAll(text, "\n", ""))
+	return len(text) <= maxTextBytes && validText(strings.NewReplacer("\n", "", "\t", "").Replace(text))
 }
 func inlineXML(text string) string {
-	parts := strings.Split(text, "\n")
 	var out strings.Builder
-	for i, part := range parts {
-		if i > 0 {
-			out.WriteString(`<dw:br xmlns:dw="` + wordNS + `"/>`)
+	for {
+		i := strings.IndexAny(text, "\n\t")
+		part := text
+		if i >= 0 {
+			part = text[:i]
 		}
 		out.WriteString(`<dw:t xmlns:dw="` + wordNS + `" xml:space="preserve">` + escapeText(part) + `</dw:t>`)
+		if i < 0 {
+			break
+		}
+		if text[i] == '\t' {
+			out.WriteString(`<dw:tab xmlns:dw="` + wordNS + `"/>`)
+		} else {
+			out.WriteString(`<dw:br xmlns:dw="` + wordNS + `"/>`)
+		}
+		text = text[i+1:]
 	}
 	return out.String()
+}
+
+func plainTab(n *node) bool {
+	if !n.is("tab") || len(n.children) != 0 || strings.TrimSpace(n.text.String()) != "" {
+		return false
+	}
+	for _, attr := range n.attrs {
+		if attr.Name.Space != "xmlns" && !(attr.Name.Space == "" && attr.Name.Local == "xmlns") {
+			return false
+		}
+	}
+	return true
 }
 
 func plainLineBreak(n *node) bool {

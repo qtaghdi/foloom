@@ -1,5 +1,6 @@
+import { TabText, layoutTabCharacters } from './tab-layout';
 import { t, localizeMessage, source } from '../i18n';
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import type { PasteMode, ClipboardParagraph } from './clipboard';
 import { continuousInput } from './continuous-input';
 import type { TextSelection } from './selection';
@@ -10,6 +11,11 @@ import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from '.
 export function DocumentContent(props: { onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
+  let frame=0;
+  const scheduleTabs=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{if(editor&&!editor.matches(':active'))layoutTabCharacters(editor);});};
+  createEffect(()=>{props.snapshot;queueMicrotask(scheduleTabs);});
+  onMount(()=>{if(typeof ResizeObserver==='undefined')return;const observer=new ResizeObserver(scheduleTabs);observer.observe(editor);onCleanup(()=>observer.disconnect());});
+  onCleanup(()=>cancelAnimationFrame(frame));
   const input = continuousInput(() => editor, {
     history: direction => props.onHistory(direction), snapshot: () => props.snapshot, saving: () => props.saving, edit: (operation, selection) => props.onEdit(operation, selection),
     listLevel:(selection,delta)=>props.onListLevel?.(selection,delta)??false,
@@ -37,7 +43,7 @@ export function DocumentContent(props: { onListLevel?: (selection:TextSelection,
     return pages;
   });
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
-    contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
+    data-docx-tab-stops={JSON.stringify(p.layout?.tabs??[])} contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
     style={{
       'margin-left': p.layout?.left===undefined?p.listLabel?`${36+(p.list?.level??0)*18}pt`:undefined:`${p.layout.left/20}pt`,
       'margin-right': p.layout?.right===undefined?undefined:`${p.layout.right/20}pt`,
@@ -48,6 +54,7 @@ export function DocumentContent(props: { onListLevel?: (selection:TextSelection,
       'margin-block-start': p.layout?.before === undefined ? undefined : `${p.layout.before / 20}pt`,
       'margin-block-end': p.layout?.after === undefined ? undefined : `${p.layout.after / 20}pt`,
     }}>
+    <For each={(p.layout?.tabs??[]).filter(tab=>tab.align==='bar')}>{tab=><span contentEditable={false} aria-hidden="true" class="pointer-events-none absolute top-0 bottom-0 border-l border-slate-500" style={{left:`calc(${tab.position/20}pt - ${p.layout?.left===undefined?p.listLabel?36+(p.list?.level??0)*18:0:p.layout.left/20}pt)`}}/>}</For>
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
     <Show when={p.listLabel}><span data-docx-list-marker contentEditable={false} aria-label={`목록 ${p.listLabel}`} class="inline-block min-w-[18pt] select-none" style={{'text-indent':'0'}}>{p.listLabel}</span></Show>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
@@ -57,7 +64,7 @@ export function DocumentContent(props: { onListLevel?: (selection:TextSelection,
             onFocus={() => props.onFocusRun(run)} onComposition={props.onComposition} onHistory={props.onHistory}
             onStructure={p.structureEditable ? (action, start, end, insertion) => props.onStructure(action, run.id, start, end, insertion) : undefined}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/> }>
-            <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text || (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
+            <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text ? <TabText text={run.text}/> : (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
           </Show>
         </Show>}</For>
       </Show>
@@ -77,7 +84,7 @@ export function DocumentContent(props: { onListLevel?: (selection:TextSelection,
     <div ref={editor} data-continuous-editor role="textbox" aria-multiline="true" aria-readonly={props.saving} aria-label={t('docxBodyAndTableEditor')}
       contentEditable={!props.saving} tabindex={0} class="space-y-5 cursor-text outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
       onKeyDown={input.keydown} onKeyUp={input.focus} onPointerUp={input.focus} onFocusIn={input.focus}
-      onBeforeInput={input.beforeinput} onInput={input.input} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
+      onBeforeInput={input.beforeinput} onInput={event=>{input.input(event);scheduleTabs();}} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
       onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
     <For each={pages()}>{(page) => <div class="docx-paper w-full border border-slate-200 bg-white shadow-sm">
     <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>

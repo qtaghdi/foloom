@@ -241,7 +241,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 			return Snapshot{}, fmt.Errorf("DOCX batch text exceeds 4 MiB")
 		}
 		if !validInlineText(op.Text) {
-			return Snapshot{}, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters or tabs")
+			return Snapshot{}, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters")
 		}
 		if op.Text == t.text {
 			continue
@@ -277,7 +277,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 			}
 			continue
 		}
-		if strings.Contains(op.Text, "\n") {
+		if strings.ContainsAny(op.Text, "\n\t") {
 			if !plainTextAttributes(n) {
 				return Snapshot{}, fmt.Errorf("DOCX inline break cannot replace opaque text attributes")
 			}

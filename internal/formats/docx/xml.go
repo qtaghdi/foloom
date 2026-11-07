@@ -123,6 +123,12 @@ func (n *node) attr(local string) string {
 	return ""
 }
 func textContent(n *node) string {
+	if n.is("tab") {
+		if n.parent != nil && n.parent.is("r") {
+			return "\t"
+		}
+		return ""
+	}
 	if n.is("br") && (n.attr("type") == "" || n.attr("type") == "textWrapping") {
 		return "\n"
 	}
@@ -253,7 +259,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			styleRun(&baseRun, chain[i].child("rPr"))
 		}
 		applyParagraph(props)
-		if layout != (ParagraphLayout{}) {
+		if hasParagraphLayout(layout) {
 			out.Layout = &layout
 		}
 		// Fields and tracked changes can span runs. Fail closed for the paragraph.
@@ -276,18 +282,18 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			for _, c := range r.children {
 				if c.is("t") {
 					texts = append(texts, c)
-				} else if !(c.is("rPr") || plainLineBreak(c)) {
+				} else if !(c.is("rPr") || plainLineBreak(c) || plainTab(c)) {
 					plain = false
 				}
 			}
 			editable := allowed && !protected[r] && plain
 			for _, text := range texts {
 				editable = editable && len(text.children) == 0
-				if len(texts) != 1 || r.has("br") {
+				if len(texts) != 1 || r.has("br") || r.has("tab") {
 					editable = editable && plainTextAttributes(text)
 				}
 			}
-			if len(texts) != 1 || r.has("br") {
+			if len(texts) != 1 || r.has("br") || r.has("tab") {
 				props := 0
 				for _, child := range r.children {
 					if child.is("rPr") {
@@ -325,7 +331,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			out.Runs = append(out.Runs, run)
 			if editable {
 				textNode := r
-				if len(texts) == 1 && !r.has("br") {
+				if len(texts) == 1 && !r.has("br") || r.has("tab") {
 					textNode = texts[0]
 				}
 				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r}

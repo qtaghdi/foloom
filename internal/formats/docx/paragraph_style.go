@@ -12,6 +12,9 @@ func validateParagraphFormat(f *ParagraphFormat) error {
 	if f == nil {
 		return nil
 	}
+	if err := validateTabs(f.Tabs); err != nil {
+		return err
+	}
 	if f.List != nil && (f.List.Level < 0 || f.List.Level > 8 || f.List.ID < 0 || f.List.ID > 2147483647) {
 		return fmt.Errorf("invalid DOCX paragraph list")
 	}
@@ -153,6 +156,16 @@ func paragraphProperties(props *node, data []byte, f *ParagraphFormat) (string, 
 			updates[name] = value
 		}
 		return err
+	}
+	if len(f.Tabs) > 0 {
+		if countChild(props, "tabs") > 1 {
+			return "", fmt.Errorf("duplicate DOCX tab properties")
+		}
+		changed, err := patchTabs(props.child("tabs"), data, f.Tabs)
+		if err != nil {
+			return "", err
+		}
+		updates["tabs"] = changed
 	}
 	if f.List != nil {
 		if countChild(props, "numPr") > 1 {

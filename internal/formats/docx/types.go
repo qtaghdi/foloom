@@ -59,6 +59,7 @@ type ParagraphList struct {
 }
 
 type ParagraphFormat struct {
+	Tabs          []TabStop      `json:"tabs,omitempty"`
 	List          *ParagraphList `json:"list,omitempty"`
 	StyleID       *string        `json:"styleId,omitempty"`
 	Align         string         `json:"align,omitempty"`
@@ -74,17 +75,18 @@ type ParagraphFormat struct {
 	TextDirection string         `json:"textDirection,omitempty"`
 }
 type ParagraphLayout struct {
-	Left          *int   `json:"left,omitempty"`
-	Right         *int   `json:"right,omitempty"`
-	FirstLine     *int   `json:"firstLine,omitempty"`
-	Hanging       *int   `json:"hanging,omitempty"`
-	Line          *int   `json:"line,omitempty"`
-	LineRule      string `json:"lineRule,omitempty"`
-	Bidi          bool   `json:"bidi,omitempty"`
-	TextDirection string `json:"textDirection,omitempty"`
-	Align         string `json:"align,omitempty"`
-	Before        *int   `json:"before,omitempty"`
-	After         *int   `json:"after,omitempty"`
+	Tabs          []TabStop `json:"tabs,omitempty"`
+	Left          *int      `json:"left,omitempty"`
+	Right         *int      `json:"right,omitempty"`
+	FirstLine     *int      `json:"firstLine,omitempty"`
+	Hanging       *int      `json:"hanging,omitempty"`
+	Line          *int      `json:"line,omitempty"`
+	LineRule      string    `json:"lineRule,omitempty"`
+	Bidi          bool      `json:"bidi,omitempty"`
+	TextDirection string    `json:"textDirection,omitempty"`
+	Align         string    `json:"align,omitempty"`
+	Before        *int      `json:"before,omitempty"`
+	After         *int      `json:"after,omitempty"`
 }
 
 type ListInfo struct {
@@ -203,7 +205,7 @@ type Operation struct {
 	Type            string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, or define_list"`
 	TargetID        string             `json:"targetId,omitempty" jsonschema:"Editable run ID from the current get_docx snapshot"`
 	ExpectedText    string             `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
-	Text            string             `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
+	Text            string             `json:"text,omitempty" jsonschema:"Replacement text. Tab is a Word tab character and LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
 }
 
 type ApplyInput struct {
