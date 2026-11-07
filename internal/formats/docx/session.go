@@ -192,9 +192,37 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	seen := map[string]bool{}
 	var edits []replacement
 	headerCount := 0
+	var drawingID uint32
+	imageCount := 0
 	textBytes := 0
 	structuralBytes := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_image" {
+			target, ok := targets[op.TargetID]
+			if !ok || op.Image == nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return Snapshot{}, fmt.Errorf("invalid DOCX image operation")
+			}
+			if imageCount == 0 {
+				drawingID, err = s.pkg.availableDrawingID()
+				if err != nil {
+					return Snapshot{}, err
+				}
+			}
+			if imageCount >= 4 || drawingID == 0 {
+				return Snapshot{}, fmt.Errorf("DOCX batch image limit exceeded")
+			}
+			edit, err := s.pkg.imageInsertion(s.pkg.document, target, *op.Image, drawingID, parts)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			imageCount++
+			drawingID++
+			edits = append(edits, edit)
+			continue
+		}
+		if op.Image != nil {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX image fields")
+		}
 		if op.Type == "update_boundary" {
 			key := "boundary:" + op.TargetID
 			target, ok := targets[op.TargetID]

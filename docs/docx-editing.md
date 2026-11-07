@@ -504,3 +504,14 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 본문이 있고 기존 구역 속성을 안전하게 복제할 수 있을 때만 삽입합니다. 새
 구역은 번호를 이어가며 기존 머리글·바닥글 part를 공유합니다. 기존 구역 경계의
 이동·삭제와 가져온 인라인 페이지 나눔 변경은 보호합니다.
+
+### 인라인 그림 삽입
+
+`update_image`는 현 리비전의 편집 가능한 문단 ID와
+`image: { action: "insert", base64, alt, widthEmu }`를 받습니다.
+본문 또는 단순 표 셀 문단 끝에 인라인 그림을 넣습니다. 폭을 생략하면
+그림의 가로 비율과 최대 기본 폭을 사용합니다. PNG·JPEG, 최대 512 KiB,
+8192px 한 변 및 1,200만 픽셀까지 허용합니다.
+
+그림은 새로운 media part와 관계를 받습니다. 기존 media는 덮어쓰지
+않습니다. [Open XML 인라인 그림 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-picture-into-a-word-processing-document)를 따릅니다.
