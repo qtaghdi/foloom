@@ -217,7 +217,11 @@ export function DocumentApp() {
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
     <EditorHeader name={state().snapshot?.name ?? t('openingDocument')} kind={t('document')} nameId="document-name" statusId="save-status"
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
-      actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
+      actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} docxEditing search={async (query,options) => searchDocument(document.getElementById('document-content'),query,options,(ranges,text)=>{
+      const changed=controller.replaceSearchMatches(ranges,text);
+      if(changed)setDraftVersion(version=>version+1);
+      return changed;
+    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
