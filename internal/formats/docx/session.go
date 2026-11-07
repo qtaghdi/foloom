@@ -132,7 +132,24 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if history.Redo > 0 {
 		history.RedoActor = s.history.manifest.Redo[history.Redo-1].Actor
 	}
-	return Snapshot{Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	sections := []SectionInfo{}
+	for _, target := range inspectSections(root, s.id, s.revision) {
+		sections = append(sections, target.info)
+		for index := target.info.StartBlock; index <= target.info.EndBlock && index < len(blocks); index++ {
+			block := &blocks[index]
+			if block.Paragraph != nil {
+				block.Paragraph.SectionID = target.info.ID
+			}
+			for row := range block.Rows {
+				for cell := range block.Rows[row].Cells {
+					for paragraph := range block.Rows[row].Cells[cell].Paragraphs {
+						block.Rows[row].Cells[cell].Paragraphs[paragraph].SectionID = target.info.ID
+					}
+				}
+			}
+		}
+	}
+	return Snapshot{Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -158,6 +175,10 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	if err != nil {
 		return Snapshot{}, err
 	}
+	root, err := parseXML(s.pkg.document)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	_, targets, _, err := inspect(s.pkg.document, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
@@ -167,6 +188,22 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	textBytes := 0
 	structuralBytes := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_section" {
+			key := "section:" + op.SectionID
+			if seen[key] {
+				return Snapshot{}, fmt.Errorf("duplicate DOCX section update")
+			}
+			seen[key] = true
+			edit, err := sectionReplacement(s.pkg.document, root, s.id, s.revision, op)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
+		if op.Section != nil || op.SectionID != "" {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX section fields")
+		}
 		if op.Type == "define_style" {
 			continue
 		}

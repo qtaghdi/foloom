@@ -364,3 +364,29 @@ func TestDOCXMCPStyleDefinitionAndApplicationWithoutTextFields(t *testing.T) {
 		t.Fatal("MCP style batch was not shared", snapshot)
 	}
 }
+
+func TestDOCXSectionSettingsThroughMCPAndHTTP(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: filepath.Join(t.TempDir(), "sections.docx"), Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "content"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{map[string]any{"type": "update_section", "sectionId": opened.Sections[0].ID, "section": map[string]any{"width": 16838, "height": 11906, "orientation": "landscape", "columns": 2}}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("section MCP: %v %+v", err, result)
+	}
+	req := httptest.NewRequest("GET", "/api/docx", nil)
+	req.AddCookie(&http.Cookie{Name: browserSessionCookieName(req.Host), Value: api.browserToken})
+	recorder := httptest.NewRecorder()
+	api.Handler().ServeHTTP(recorder, req)
+	var after docx.Snapshot
+	if err := json.Unmarshal(recorder.Body.Bytes(), &after); err != nil || recorder.Code != 200 {
+		t.Fatalf("HTTP read: %s", recorder.Body.String())
+	}
+	if after.Revision != opened.Revision+1 || after.Sections[0].Columns != 2 || after.Sections[0].Page.Width != 16838 || after.Blocks[0].Paragraph.Runs[0].Text != "content" {
+		t.Fatal("section settings not shared", after)
+	}
+}

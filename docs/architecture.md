@@ -337,3 +337,12 @@ DOCX 스타일 작성은 `define_style` operation과 문단·run의 `styleId` �
 확정합니다. UI의 스타일 정의 초안은 controller에서 관리하며 저장 후 canonical
 snapshot으로 상속 미리 보기를 갱신합니다. 스타일 정의의 토글과 직접 run의
 절대 속성은 각각 Word 상속 규칙을 유지합니다.
+
+
+### DOCX 구역 설정
+
+구역별 속성은 format adapter의 revision 범위 ID와 OOXML 위치로 관리합니다.
+문단 안 sectPr와 본문 마지막 sectPr를 구분하며, 수정은 지정한 scalar 속성만
+교체하고 참조 관계와 다른 속성의 원문을 보존합니다. 새 전송 계층 없이 기존
+apply batch와 이력을 사용합니다. 구역 범위를 겹쳐 바꾸는 구조 작업은 같은
+batch에서 거절합니다. 구역별 실제 페이지 조판은 #93의 별도 책임입니다.
