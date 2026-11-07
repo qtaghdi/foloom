@@ -539,3 +539,15 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 본문 커서보다 앞선 가장 가까운 제목을 표시하며, 미저장 텍스트와 스타일
 변경도 반영합니다. 페이지·북마크·주석과 변경 위치는 이 목록에서 다루지
 않습니다.
+
+### 링크와 북마크
+
+`update_reference`는 현재 리비전의 편집 가능한 본문 문단 ID를 받습니다.
+`reference.action`이 `insert_bookmark`이면 문단 끝에 이름이 있는 북마크
+위치를 만듭니다. 북마크 이름은 영문자로 시작하는 영문자·숫자·밑줄 1~40자이며
+대소문자만 다른 중복 이름도 거절합니다.
+
+`insert_link`에는 표시 텍스트와 HTTP(S) 주소 또는 기존 북마크 이름 중
+하나를 지정합니다. 사용자 인증 정보가 들어간 주소와 실행형·로컬 파일 주소는
+거절합니다. 주소는 관계로만 저장하며 저장 과정에서 접속하지 않습니다.
+[Open XML 북마크 쌍](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.bookmarkstart)을 따릅니다.

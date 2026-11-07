@@ -218,7 +218,29 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	imageCount := 0
 	textBytes := 0
 	structuralBytes := 0
+	var bookmarks *bookmarkIndex
+	referenceCount := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_reference" {
+			t, ok := targets[op.TargetID]
+			if !ok || op.Reference == nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
+				return Snapshot{}, fmt.Errorf("invalid DOCX reference operation")
+			}
+			if bookmarks == nil {
+				index := readBookmarks(root)
+				bookmarks = &index
+			}
+			replacements, err := s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			edits = append(edits, replacements...)
+			referenceCount++
+			continue
+		}
+		if op.Reference != nil {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX reference fields")
+		}
 		if op.Type == "update_image" {
 			target, ok := targets[op.TargetID]
 			if !ok || op.Image == nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
