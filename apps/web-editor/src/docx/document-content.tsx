@@ -6,6 +6,7 @@ import { continuousInput } from './continuous-input';
 import type { TextSelection } from './selection';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
+import { scopedDocumentURL } from '../transport/document-scope';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
 export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
@@ -71,7 +72,12 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
     }}>
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
-        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>
+        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>
+          <img loading="lazy" class="inline-block max-w-full align-middle" contentEditable={false}
+            src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}
+            width={Math.max(1,Math.round(run.picture!.widthEmu/9525))} height={Math.max(1,Math.round(run.picture!.heightEmu/9525))}
+            style={{height:'auto'}}/>
+        </Show>}>
           <Show when={p.structureEditable} fallback={<RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
             onFocus={() => props.onFocusRun(run)} onComposition={props.onComposition} onHistory={props.onHistory}

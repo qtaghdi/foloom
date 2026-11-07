@@ -7,6 +7,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"path"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -121,4 +122,125 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 func inlinePicture(id, relationship, alt string, width, height int) string {
 	cx, cy := strconv.Itoa(width), strconv.Itoa(height)
 	return `<di:r xmlns:di="` + wordNS + `" xmlns:wp="` + drawingWordNS + `" xmlns:a="` + drawingNS + `" xmlns:pic="` + pictureNS + `" xmlns:r="` + officeRelNS + `"><di:drawing><wp:inline><wp:extent cx="` + cx + `" cy="` + cy + `"/><wp:docPr id="` + id + `" name="Picture ` + id + `" descr="` + escapeText(alt) + `"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="` + pictureNS + `"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="Picture ` + id + `"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="` + relationship + `"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="` + cx + `" cy="` + cy + `"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></di:drawing></di:r>`
+}
+
+type PictureInfo struct {
+	WidthEMU  int    `json:"widthEmu"`
+	HeightEMU int    `json:"heightEmu"`
+	Alt       string `json:"alt"`
+	Preview   bool   `json:"preview"`
+}
+
+type pictureAsset struct {
+	data []byte
+	mime string
+}
+
+func childNS(parent *node, namespace, local string) *node {
+	if parent != nil {
+		for _, child := range parent.children {
+			if child.name.Space == namespace && child.name.Local == local {
+				return child
+			}
+		}
+	}
+	return nil
+}
+
+func inlinePictureInfo(run *node) (*PictureInfo, string) {
+	if sectionChildCount(run, "drawing") != 1 || len(run.children) > 2 || len(run.children) == 2 && run.child("rPr") == nil {
+		return nil, ""
+	}
+	inline := childNS(run.child("drawing"), drawingWordNS, "inline")
+	extent := childNS(inline, drawingWordNS, "extent")
+	width, height := previewNumber(attribute(extent, "", "cx"), 1, maxImageExtent), previewNumber(attribute(extent, "", "cy"), 1, maxImageExtent)
+	if width == nil || height == nil {
+		return nil, ""
+	}
+	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+	pic := childNS(graphic, pictureNS, "pic")
+	blip := childNS(childNS(pic, pictureNS, "blipFill"), drawingNS, "blip")
+	relationship := attribute(blip, officeRelNS, "embed")
+	if relationship == "" || attribute(blip, officeRelNS, "link") != "" {
+		return nil, ""
+	}
+	alt := attribute(childNS(inline, drawingWordNS, "docPr"), "", "descr")
+	if len(alt) > 1024 {
+		alt = alt[:1024]
+		for !utf8.ValidString(alt) {
+			alt = alt[:len(alt)-1]
+		}
+	}
+	return &PictureInfo{WidthEMU: *width, HeightEMU: *height, Alt: alt}, relationship
+}
+
+func (p *documentPackage) picturePartMap() map[string]string {
+	out := make(map[string]string)
+	root, err := parseXML(p.partData(documentRelationships, nil))
+	if err != nil {
+		return out
+	}
+	for _, rel := range root.children {
+		if rel.name.Space != packageRelNS || rel.name.Local != "Relationship" ||
+			attribute(rel, "", "Type") != officeRelNS+"/image" || attribute(rel, "", "TargetMode") == "External" {
+			continue
+		}
+		target := attribute(rel, "", "Target")
+		if strings.HasPrefix(target, "/") {
+			target = strings.TrimPrefix(path.Clean(target), "/")
+		} else {
+			target = path.Clean(path.Join("word", target))
+		}
+		out[attribute(rel, "", "Id")] = target
+	}
+	return out
+}
+
+func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) {
+	s.pictureAssets = make(map[string]pictureAsset)
+	assets := make(map[string]pictureAsset)
+	var relations map[string]string
+	project := func(paragraph *Paragraph) {
+		for index := range paragraph.Runs {
+			run := &paragraph.Runs[index]
+			source, ok := targets[run.ID]
+			if !ok || source.kind != "picture" {
+				continue
+			}
+			info, relationship := inlinePictureInfo(source.run)
+			if info == nil {
+				continue
+			}
+			run.Picture = info
+			if relations == nil {
+				relations = s.pkg.picturePartMap()
+			}
+			part := relations[relationship]
+			asset, cached := assets[part]
+			if !cached {
+				raw := s.pkg.partData(part, nil)
+				if _, kind, err := imageConfig(raw, maxImageReadBytes); err == nil {
+					asset = pictureAsset{raw, "image/" + kind}
+				}
+				assets[part] = asset
+			}
+			if asset.data != nil {
+				info.Preview = true
+				s.pictureAssets[run.ID] = asset
+			}
+		}
+	}
+	for index := range blocks {
+		block := &blocks[index]
+		if block.Paragraph != nil {
+			project(block.Paragraph)
+		}
+		for i := range block.Rows {
+			for j := range block.Rows[i].Cells {
+				for k := range block.Rows[i].Cells[j].Paragraphs {
+					project(&block.Rows[i].Cells[j].Paragraphs[k])
+				}
+			}
+		}
+	}
 }

@@ -315,6 +315,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			}
 			directRun(&run, runProps)
 			out.Runs = append(out.Runs, run)
+			if !editable && r.child("drawing") != nil {
+				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "picture"}
+			}
 			if editable {
 				textNode := r
 				if len(texts) == 1 && !r.has("br") {

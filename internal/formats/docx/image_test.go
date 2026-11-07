@@ -30,8 +30,20 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 		t.Fatal("invalid image was persisted")
 	}
 	batch.Operations = batch.Operations[:2]
-	if _, err := s.Apply(ctx, batch, "human"); err != nil {
+	saved, err := s.Apply(ctx, batch, "human")
+	if err != nil {
 		t.Fatal(err)
+	}
+	pictureRun := saved.Blocks[0].Paragraph.Runs[1]
+	if pictureRun.Picture == nil || !pictureRun.Picture.Preview || pictureRun.Picture.Alt != picture.Alt {
+		t.Fatal("picture metadata not available after commit")
+	}
+	payload, mime, err := s.Picture(ctx, pictureRun.ID)
+	if err != nil || mime != "image/png" || !bytes.Equal(payload, pngBytes.Bytes()) {
+		t.Fatal("picture data not available after commit")
+	}
+	if _, _, err := s.Picture(ctx, snapshot.Blocks[0].Paragraph.Runs[0].ID); err == nil {
+		t.Fatal("old revision read succeeded")
 	}
 	document := string(s.pkg.document)
 	if !strings.Contains(document, `<wp:extent cx="400000" cy="200000"/>`) || !strings.Contains(document, `descr="test &amp; &#34;quoted&#34;"`) {

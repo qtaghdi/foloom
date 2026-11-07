@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const baseStyleSchema = z.object({styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
 export const runSchema = z.object({
+  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), bold: z.boolean(), italic: z.boolean(),
   sizeHalfPoints: z.number().int().min(8).max(288).optional(),
@@ -70,6 +71,7 @@ export type ParagraphOperation = {
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'section_next_page' | 'section_continuous';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation;
+export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}};
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

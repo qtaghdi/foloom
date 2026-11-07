@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -23,6 +25,7 @@ type Session struct {
 	revision, sequence uint64
 	events             []Event
 	history            *historyStore
+	pictureAssets      map[string]pictureAsset
 	// Injected only by package tests to verify persistence failures before commit.
 	rename func(string, string) error
 }
@@ -106,16 +109,35 @@ func (s *Session) Snapshot(ctx context.Context) (Snapshot, error) {
 	defer s.mu.Unlock()
 	return s.snapshotLocked()
 }
+
+// Picture returns only a validated current-revision media asset addressed by a run ID.
+func (s *Session) Picture(ctx context.Context, id string) ([]byte, string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !strings.HasPrefix(id, s.id+":"+strconv.FormatUint(s.revision, 10)+":") {
+		return nil, "", fmt.Errorf("stale DOCX picture")
+	}
+	asset, ok := s.pictureAssets[id]
+	if !ok {
+		return nil, "", fmt.Errorf("DOCX picture unavailable")
+	}
+	return bytes.Clone(asset.data), asset.mime, nil
+}
+
 func (s *Session) snapshotLocked() (Snapshot, error) {
 	root, err := parseXML(s.pkg.document)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	blocks, _, unsupported, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+	blocks, targetsByID, unsupported, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 이미지와 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	s.addPicturePreviews(blocks, targetsByID)
+	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 떠 있는 그림과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
 		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
 	}

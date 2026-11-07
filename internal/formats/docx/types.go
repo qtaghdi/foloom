@@ -20,6 +20,7 @@ const (
 )
 
 type Run struct {
+	Picture          *PictureInfo `json:"picture,omitempty"`
 	CharacterStyleID string       `json:"characterStyleId,omitempty"`
 	BaseStyle        *InlineStyle `json:"baseStyle,omitempty"`
 	Underline        bool         `json:"underline,omitempty"`
