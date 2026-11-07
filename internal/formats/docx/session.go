@@ -195,6 +195,23 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	textBytes := 0
 	structuralBytes := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_boundary" {
+			key := "boundary:" + op.TargetID
+			target, ok := targets[op.TargetID]
+			if seen[key] || !ok || (target.kind != "replace_paragraphs" && (target.kind != "update_boundary" || op.Boundary != "page_before" && op.Boundary != "no_page_before")) || op.ExpectedText != "" || op.EndTargetID != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.Paragraphs != nil || op.Text != "" || op.StyleDefinition != nil {
+				return Snapshot{}, fmt.Errorf("invalid or stale DOCX boundary target")
+			}
+			seen[key] = true
+			replacements, err := boundaryReplacements(target.paragraph.parent.parent, s.pkg.document, s.id, s.revision, target.paragraph, op.Boundary)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			edits = append(edits, replacements...)
+			continue
+		}
+		if op.Boundary != "" {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX boundary field")
+		}
 		if op.Type == "update_header_parity" {
 			if seen[op.Type] || op.EvenAndOddHeaders == nil || op.Section != nil || op.SectionID != "" || op.TargetID != "" || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || op.StyleDefinition != nil {
 				return Snapshot{}, fmt.Errorf("invalid or duplicate DOCX header parity operation")

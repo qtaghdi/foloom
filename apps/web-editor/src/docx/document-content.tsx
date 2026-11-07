@@ -43,8 +43,18 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
    const p=info.page,width=`min(100cqi, ${p.width/15}px)`;
    return {width:`${p.width/15}px`,'max-width':'100%','min-block-size':`calc(${width} * ${p.height/p.width})`,'--paper-insets':[p.top,p.right,p.bottom,p.left].map(value=>`calc(${width} * ${value/p.width})`).join(' ')};
   };
-  const headerText=(page:ReturnType<typeof pages>[number],kind:'header'|'footer')=>{
-   const section=pageSection(page),variant=section?.firstPage?'first':'default';
+  const pageOrdinals=createMemo(()=>{
+   let previous:string|undefined, ordinal=0;
+   return pages().map(page=>{
+    const section=pageSection(page)?.id;
+    ordinal=section===previous?ordinal+1:1;
+    previous=section;
+    return ordinal;
+   });
+  });
+  const headerText=(page:ReturnType<typeof pages>[number],index:number,kind:'header'|'footer')=>{
+   const section=pageSection(page),ordinal=pageOrdinals()[index]??1;
+   const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
    return resolveHeaderText(props.snapshot.sections??[],section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant));
   };
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
@@ -89,8 +99,8 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
       onKeyDown={input.keydown} onKeyUp={input.focus} onPointerUp={input.focus} onFocusIn={input.focus}
       onBeforeInput={input.beforeinput} onInput={input.input} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
       onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
-    <For each={pages()}>{(page) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id}>
-    <Show when={headerText(page,'header')}>{text=><div contentEditable={false} aria-label="머리글 미리보기" class="mb-4 whitespace-pre-wrap border-b border-dashed border-slate-200 pb-2 text-xs text-stone-600">{text()}</div>}</Show>
+    <For each={pages()}>{(page,index) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id}>
+    <Show when={headerText(page,index(),'header')}>{text=><div contentEditable={false} aria-label="머리글 미리보기" class="mb-4 whitespace-pre-wrap border-b border-dashed border-slate-200 pb-2 text-xs text-stone-600">{text()}</div>}</Show>
     <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
     <Show when={pageSection(page)}>{section=><p contentEditable={false} class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
     <div style={{'column-count':pageSection(page)?.columns,'column-gap':pageSection(page)?`${pageSection(page)!.columnSpace/20}pt`:undefined}}>
@@ -103,7 +113,7 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
     }</For>
     </div>
     </Show>
-    <Show when={headerText(page,'footer')}>{text=><div contentEditable={false} aria-label="바닥글 미리보기" class="mt-4 whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 text-xs text-stone-600">{text()}</div>}</Show>
+    <Show when={headerText(page,index(),'footer')}>{text=><div contentEditable={false} aria-label="바닥글 미리보기" class="mt-4 whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 text-xs text-stone-600">{text()}</div>}</Show>
   </div>}</For></div></>;
 }
 

@@ -490,3 +490,17 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 유지합니다. [Open XML 쪽 번호 속성](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.pagenumbertype)을 따릅니다.
 이 설정은 기존 번호 필드에 적용되는 저장 속성입니다. 번호 필드 삽입,
 실제 페이지 수 계산과 화면에서 번호를 매기는 동작은 아직 지원하지 않습니다.
+
+### 문단 페이지 나눔과 구역 나눔
+
+본문 문단에 커서를 놓고 `페이지·구역 나눔`을 열어 문단 앞 페이지 나눔을
+설정·해제하거나 문단 뒤에 다음 페이지 또는 연속 구역 나눔을 삽입합니다.
+다른 초안은 먼저 저장하거나 실행 취소합니다. 새 경계는 저장 후 미리보기에
+반영되며 실행 취소할 수 있습니다.
+
+`update_boundary`는 현 리비전의 본문 문단 ID와 `boundary` 값
+`page_before`, `no_page_before`, `section_next_page`, `section_continuous`를
+받습니다. 문단 앞 나눔은 `pageBreakBefore`만 수정합니다. 구역 나눔은 양쪽에
+본문이 있고 기존 구역 속성을 안전하게 복제할 수 있을 때만 삽입합니다. 새
+구역은 번호를 이어가며 기존 머리글·바닥글 part를 공유합니다. 기존 구역 경계의
+이동·삭제와 가져온 인라인 페이지 나눔 변경은 보호합니다.

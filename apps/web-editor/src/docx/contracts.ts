@@ -36,6 +36,7 @@ export type SectionInfo=z.infer<typeof sectionSchema>;
 export type SectionOperation={type:'update_section';sectionId:string;section:SectionFormat};
 const styleInfoSchema=z.object({id:z.string().max(120),name:z.string().max(256),kind:z.enum(['paragraph','character']),basedOn:z.string().optional(),editable:z.boolean(),run:baseStyleSchema.extend({reset:z.boolean().optional()}).optional(),paragraph:paragraphFormatSchema.optional()});
 export const snapshotSchema = z.object({
+  evenAndOddHeaders: z.boolean().optional(),
  sections:z.array(sectionSchema).max(128).optional(),
   styles:z.array(styleInfoSchema).max(500).optional(),id: z.string(), name: z.string(), revision: z.number().int().nonnegative(),
   sequence: z.number().int().nonnegative(), page: pageSchema.optional(), warnings: z.array(z.string()),
@@ -67,6 +68,8 @@ export type ParagraphOperation = {
  paragraphs: Array<{ sourceId: string; format?: ParagraphFormat; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation;
+export type BoundaryMode = 'page_before' | 'no_page_before' | 'section_next_page' | 'section_continuous';
+export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

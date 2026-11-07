@@ -339,6 +339,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 		if out.StructureEditable {
 			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "replace_paragraphs"}
+		} else if allowed && p.parent == body && (out.PageBreakBefore || props.child("pageBreakBefore") != nil) {
+			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "update_boundary"}
 		}
 		return out
 	}

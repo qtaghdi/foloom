@@ -17,7 +17,8 @@ import { ActivityPanel } from '../ui/activity-panel';
 import { DocumentContent } from './document-content';
 import { DocumentToolbar } from './document-toolbar';
 import type { PasteMode } from './clipboard';
-import type { Run } from './contracts';
+import type { BoundaryMode, Run } from './contracts';
+import { DocumentBoundaryToolbar } from './document-boundary-toolbar';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
 
@@ -57,6 +58,22 @@ export function DocumentApp() {
     if (window.matchMedia('(max-width: 640px)').matches) activity.toggle();
     setSelectedChange(entry);
     queueMicrotask(() => document.getElementById(`docx-paragraph-${entry.documentChange!.key}`)?.focus());
+  };
+  const boundaryPending = () => { state().snapshot; draftVersion(); return Boolean(controller.pendingBoundary()); };
+  const boundaryParagraph = () => {
+    const runId = formattingSelection()?.focus.runId ?? focusedRun()?.id;
+    if (!runId) return undefined;
+    const snapshot = state().snapshot;
+    const index = snapshot?.blocks.findIndex(block => block.type === 'paragraph' && block.paragraph.runs.some(run => run.id === runId)) ?? -1;
+    const block = snapshot?.blocks[index];
+    if (block?.type !== 'paragraph') return undefined;
+    const section = snapshot?.sections?.find(section => section.id === block.paragraph.sectionId);
+    return {paragraph: block.paragraph, canSplit: Boolean(section?.editable && index < section.endBlock)};
+  };
+  const stageBoundary = (targetId: string, boundary: BoundaryMode) => {
+    const changed = controller.editBoundary({type:'update_boundary', targetId, boundary});
+    if (changed) setDraftVersion(version => version + 1);
+    return changed;
   };
   const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
     setStructuralDraft(Boolean(focus));
@@ -192,8 +209,10 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentHeaderFooter sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentBoundaryToolbar target={boundaryParagraph()} pending={boundaryPending()}
+      disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
@@ -207,7 +226,7 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending()} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onDelete={(selection, direction, word) => { const changed = controller.deleteSelection(selection, direction, word); if (changed) setDraftVersion(v => v + 1); return changed; }}

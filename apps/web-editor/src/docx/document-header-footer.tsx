@@ -7,7 +7,7 @@ export function resolveHeaderText(sections:SectionInfo[],slot:HeaderFooterInfo|u
  if(!slot.linked)return slot.text;
  return sections.find(section=>section.id===slot.sourceSectionId)?.headerFooters?.find(info=>info.kind===slot.kind&&info.variant===slot.variant)?.text??'';
 }
-export function DocumentHeaderFooter(props:{sections:SectionInfo[];disabled:boolean;onApply:(id:string,format:SectionFormat)=>boolean}) {
+export function DocumentHeaderFooter(props:{evenAndOddHeaders?:boolean;onParityChange?:(enabled:boolean)=>boolean;sections:SectionInfo[];disabled:boolean;onApply:(id:string,format:SectionFormat)=>boolean}) {
  const [id,setId]=createSignal(''),[kind,setKind]=createSignal<'header'|'footer'>('header'),[variant,setVariant]=createSignal<'default'|'first'|'even'>('default'),[text,setText]=createSignal(''),[firstPage,setFirstPage]=createSignal(false),[error,setError]=createSignal('');
  const selected=createMemo(()=>props.sections.find(section=>section.id===id())??props.sections[0]);
  const slot=createMemo(()=>selected()?.headerFooters?.find(info=>info.kind===kind()&&info.variant===variant()));
@@ -28,12 +28,19 @@ export function DocumentHeaderFooter(props:{sections:SectionInfo[];disabled:bool
    <select aria-label="머리글 바닥글 페이지 구분" class="editor-select min-h-11" value={variant()} onChange={e=>setVariant(e.currentTarget.value as 'default'|'first'|'even')}><option value="default">기본·홀수 페이지</option><option value="first">첫 페이지</option><option value="even">짝수 페이지</option></select>
    <label class="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" aria-label="첫 페이지 머리글 바닥글 구분" disabled={props.disabled||!selected()?.editable} checked={firstPage()} onChange={e=>setFirstPage(e.currentTarget.checked)}/>첫 페이지 구분</label>
    <button type="button" class={quietButtonClass} disabled={props.disabled||!selected()?.editable||firstPage()===Boolean(selected()?.firstPage)} onClick={()=>{const section=selected();if(section)setError(props.onApply(section.id,{firstPage:firstPage()})?'':'문서 연결 상태를 확인하세요.');}}>첫 페이지 구분 적용</button>
+   <Show when={props.evenAndOddHeaders!==undefined&&props.onParityChange}>
+    <label class="flex min-h-11 cursor-pointer items-center gap-2">
+     <input type="checkbox" disabled={props.disabled} checked={props.evenAndOddHeaders}
+      onChange={e=>{if(!props.onParityChange?.(e.currentTarget.checked))e.currentTarget.checked=Boolean(props.evenAndOddHeaders);}}/>
+     문서 전체 홀수·짝수 페이지 구분
+    </label>
+   </Show>
    <p class="basis-full text-slate-600">{slot()?.linked?'이전 구역과 연결됨. 내용을 적용하면 이 구역만 독립된 내용으로 바뀝니다.':'이 구역의 독립된 내용입니다.'}</p>
    <Show when={!slot()?.editable}><p role="status" class="basis-full text-amber-800">원본 서식·필드 또는 내용 한도를 보존하기 위해 읽기 전용입니다.</p></Show>
    <textarea aria-label="머리글 바닥글 내용" rows="3" class="w-full min-w-0 cursor-text rounded border border-slate-300 bg-white p-2" value={text()} disabled={disabled()} onInput={e=>setText(e.currentTarget.value)}/>
    <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>apply()}>내용 적용</button>
    <button type="button" class={quietButtonClass} disabled={disabled()||props.sections[0]?.id===selected()?.id||Boolean(slot()?.linked)} onClick={()=>apply(true)}>이전 구역 연결</button>
-   <p class="basis-full text-slate-600">적용 뒤 저장으로 확정합니다. 빈 내용과 이전 구역 연결은 다릅니다. 짝수 페이지 표시는 원본의 홀짝 구분 설정을 따르며 실제 페이지 조판은 검증 중입니다.</p>
+   <p class="basis-full text-slate-600">적용 뒤 저장으로 확정합니다. 빈 내용과 이전 구역 연결은 다릅니다. 홀수·짝수 구분은 문서 전체에 적용됩니다. 실제 페이지 조판은 검증 중입니다.</p>
    <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
   </div>
   </Show>
