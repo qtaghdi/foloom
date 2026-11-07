@@ -148,19 +148,78 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err
 	}
+	if actor != "ai" && actor != "human" {
+		return Snapshot{}, fmt.Errorf("DOCX actor must be human or ai")
+	}
+	content, err := s.prepareOperations(input)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if content == nil {
+		if err := s.checkSource(); err != nil {
+			return Snapshot{}, err
+		}
+		return s.snapshotLocked()
+	}
+	candidate, err := loadPackage(content)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if _, _, _, err := inspect(candidate.document, s.id, s.revision+1); err != nil {
+		return Snapshot{}, err
+	}
+	m := historyManifest{Version: 1, Revision: s.revision + 1, Current: historyHash(content), Undo: append(append([]historyEntry(nil), s.history.manifest.Undo...), historyEntry{Hash: historyHash(s.content), Size: len(s.content), Actor: actor})}
+	trimHistory(&m)
+	return s.persistHistory(ctx, content, candidate, m, actor)
+}
+
+// RecoveryFile validates a draft against the exact in-memory base. It never
+// touches the source path, even if another application has replaced the file.
+// Draft changes become committed bytes only in an explicitly reopened copy.
+func (s *Session) RecoveryFile(ctx context.Context, input ApplyInput) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if input.SessionID != s.id || input.BaseRevision != s.revision {
-		return Snapshot{}, ErrRevisionConflict
+		return nil, ErrRevisionConflict
+	}
+	if len(input.Operations) == 0 {
+		return append([]byte(nil), s.content...), nil
+	}
+	content, err := s.prepareOperations(input)
+	if err != nil {
+		return nil, err
+	}
+	if content == nil {
+		return append([]byte(nil), s.content...), nil
+	}
+	candidate, err := loadPackage(content)
+	if err != nil {
+		return nil, err
+	}
+	if _, _, _, err := inspect(candidate.document, s.id, s.revision+1); err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
+// prepareOperations runs under mu and does not read or write the source.
+func (s *Session) prepareOperations(input ApplyInput) ([]byte, error) {
+	if input.SessionID != s.id || input.BaseRevision != s.revision {
+		return nil, ErrRevisionConflict
 	}
 	if len(input.Operations) == 0 || len(input.Operations) > maxOperations {
-		return Snapshot{}, fmt.Errorf("DOCX batch requires 1 to 1000 operations")
+		return nil, fmt.Errorf("DOCX batch requires 1 to 1000 operations")
 	}
 	parts, styles, err := s.pkg.prepareStyles(input.Operations)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, err
 	}
 	_, targets, _, err := inspect(s.pkg.document, s.id, s.revision)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, err
 	}
 	seen := map[string]bool{}
 	var edits []replacement
@@ -173,13 +232,13 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		for _, p := range op.Paragraphs {
 			if p.Format != nil {
 				if err := validateStyleReference(styles, p.Format.StyleID, "paragraph"); err != nil {
-					return Snapshot{}, err
+					return nil, err
 				}
 			}
 			for _, r := range p.Runs {
 				if r.Style != nil {
 					if err := validateStyleReference(styles, r.Style.StyleID, "character"); err != nil {
-						return Snapshot{}, err
+						return nil, err
 					}
 				}
 			}
@@ -188,17 +247,17 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		if op.Type == "replace_paragraphs" {
 			last, exists := targets[op.EndTargetID]
 			if !ok || !exists || t.kind != "replace_paragraphs" || last.kind != "replace_paragraphs" || seen[op.TargetID] {
-				return Snapshot{}, fmt.Errorf("unsupported, duplicate or stale DOCX paragraph target")
+				return nil, fmt.Errorf("unsupported, duplicate or stale DOCX paragraph target")
 			}
 			for _, edit := range edits {
 				if t.node.start < edit.end && edit.start < last.node.end || edit.start == edit.end && edit.start >= t.node.start && edit.start < last.node.end {
-					return Snapshot{}, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
+					return nil, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
 				}
 			}
 			seen[op.TargetID] = true
 			edit, err := paragraphReplacement(s.pkg.document, targets, op)
 			if err != nil {
-				return Snapshot{}, err
+				return nil, err
 			}
 			for _, paragraph := range op.Paragraphs {
 				for _, run := range paragraph.Runs {
@@ -206,31 +265,31 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 				}
 			}
 			if textBytes > 4<<20 {
-				return Snapshot{}, fmt.Errorf("DOCX batch text exceeds 4 MiB")
+				return nil, fmt.Errorf("DOCX batch text exceeds 4 MiB")
 			}
 			structuralBytes += len(edit.data)
 			if structuralBytes > maxPartBytes {
-				return Snapshot{}, fmt.Errorf("DOCX batch replacement XML exceeds 16 MiB limit")
+				return nil, fmt.Errorf("DOCX batch replacement XML exceeds 16 MiB limit")
 			}
 			edits = append(edits, edit)
 			continue
 		}
 		if op.EndTargetID != "" || op.Paragraphs != nil {
-			return Snapshot{}, fmt.Errorf("unexpected paragraph fields on text operation")
+			return nil, fmt.Errorf("unexpected paragraph fields on text operation")
 		}
 		if !ok || t.kind != op.Type || seen[op.TargetID] {
-			return Snapshot{}, fmt.Errorf("unsupported, duplicate or stale DOCX target")
+			return nil, fmt.Errorf("unsupported, duplicate or stale DOCX target")
 		}
 		seen[op.TargetID] = true
 		if op.ExpectedText != t.text {
-			return Snapshot{}, fmt.Errorf("DOCX expected text mismatch")
+			return nil, fmt.Errorf("DOCX expected text mismatch")
 		}
 		textBytes += len(op.Text)
 		if textBytes > 4<<20 {
-			return Snapshot{}, fmt.Errorf("DOCX batch text exceeds 4 MiB")
+			return nil, fmt.Errorf("DOCX batch text exceeds 4 MiB")
 		}
 		if !validInlineText(op.Text) {
-			return Snapshot{}, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters or tabs")
+			return nil, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters or tabs")
 		}
 		if op.Text == t.text {
 			continue
@@ -238,7 +297,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		n := t.node
 		for _, edit := range edits {
 			if n.start < edit.end && edit.start < n.end {
-				return Snapshot{}, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
+				return nil, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
 			}
 		}
 		opening := string(s.pkg.document[n.start:n.inner])
@@ -268,7 +327,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		}
 		if strings.Contains(op.Text, "\n") {
 			if !plainTextAttributes(n) {
-				return Snapshot{}, fmt.Errorf("DOCX inline break cannot replace opaque text attributes")
+				return nil, fmt.Errorf("DOCX inline break cannot replace opaque text attributes")
 			}
 			edits = append(edits, replacement{n.start, n.end, []byte(inlineXML(op.Text))})
 			continue
@@ -282,7 +341,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 				if a.Name.Space == "http://www.w3.org/XML/1998/namespace" && a.Name.Local == "space" {
 					space = true
 					if a.Value != "preserve" && strings.TrimSpace(op.Text) != op.Text {
-						return Snapshot{}, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
+						return nil, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
 					}
 				}
 			}
@@ -305,7 +364,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 				// Existing default whitespace semantics cannot preserve new edge spaces.
 				for _, a := range n.attrs {
 					if a.Name.Local == "space" && a.Value != "preserve" && strings.TrimSpace(op.Text) != op.Text {
-						return Snapshot{}, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
+						return nil, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
 					}
 				}
 			} else {
@@ -315,15 +374,12 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		}
 	}
 	if len(edits) == 0 && len(parts) == 0 {
-		if err := s.checkSource(); err != nil {
-			return Snapshot{}, err
-		}
-		return s.snapshotLocked()
+		return nil, nil
 	}
 	sort.Slice(edits, func(i, j int) bool { return edits[i].start < edits[j].start })
 	for i := 1; i < len(edits); i++ {
 		if edits[i].start < edits[i-1].end || edits[i].start == edits[i-1].start {
-			return Snapshot{}, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
+			return nil, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
 		}
 	}
 	size := len(s.pkg.document)
@@ -331,7 +387,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		size += len(e.data) - (e.end - e.start)
 	}
 	if size > maxPartBytes {
-		return Snapshot{}, fmt.Errorf("DOCX document XML exceeds 16 MiB limit")
+		return nil, fmt.Errorf("DOCX document XML exceeds 16 MiB limit")
 	}
 	document := make([]byte, 0, size)
 	offset := 0
@@ -341,24 +397,9 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 		offset = e.end
 	}
 	document = append(document, s.pkg.document[offset:]...)
-	content, err := s.pkg.serializeParts(document, parts)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	candidate, err := loadPackage(content)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	if _, _, _, err := inspect(candidate.document, s.id, s.revision+1); err != nil {
-		return Snapshot{}, err
-	}
-	if actor != "ai" && actor != "human" {
-		return Snapshot{}, fmt.Errorf("DOCX actor must be human or ai")
-	}
-	m := historyManifest{Version: 1, Revision: s.revision + 1, Current: historyHash(content), Undo: append(append([]historyEntry(nil), s.history.manifest.Undo...), historyEntry{Hash: historyHash(s.content), Size: len(s.content), Actor: actor})}
-	trimHistory(&m)
-	return s.persistHistory(ctx, content, candidate, m, actor)
+	return s.pkg.serializeParts(document, parts)
 }
+
 func (s *Session) checkSource() error {
 	content, err := readFile(s.path)
 	if err != nil || sha256.Sum256(content) != sha256.Sum256(s.content) {

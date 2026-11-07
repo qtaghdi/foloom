@@ -1,3 +1,5 @@
+import { RecoveryControls } from './recovery-controls';
+import type { RecoveryStatus } from './recovery';
 import { FileActions } from '../ui/file-actions';
 import { warningMessage } from '../ui/messages';
 import { DiagnosticDetails } from '../i18n/diagnostic-details';
@@ -24,6 +26,8 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
+  const recoveryAvailable = new URLSearchParams(window.location.search).has('document');
+  const [recovery, setRecovery] = createSignal<RecoveryStatus>({});
   const [draftVersion, setDraftVersion] = createSignal(0);
   const [formattingSelection,setFormattingSelection]=createSignal<import('./selection').TextSelection>();
   const [pasteMode, setPasteMode] = createSignal<PasteMode>('text');
@@ -56,7 +60,7 @@ export function DocumentApp() {
     setSelectedChange(entry);
     queueMicrotask(() => document.getElementById(`docx-paragraph-${entry.documentChange!.key}`)?.focus());
   };
-  const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
+  const controller = new DocumentController({ ...view, recovery: setRecovery, render: (snapshot, focus) => {
     setStructuralDraft(Boolean(focus));
     if(focus)setFormattingSelection(focus.selection??{anchor:{runId:focus.runId,offset:focus.start},focus:{runId:focus.runId,offset:focus.end}});
     const article = document.getElementById('document-content');
@@ -165,6 +169,7 @@ export function DocumentApp() {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    window.removeEventListener('online', retryRecovery);
     window.removeEventListener('resize',resized);
     document.removeEventListener('selectionchange',selectionChanged);
     window.removeEventListener('beforeunload', beforeUnload);
@@ -173,7 +178,9 @@ export function DocumentApp() {
     disconnectWorkspace();
     controller.dispose();
   };
+  const retryRecovery = () => controller.retryRecovery();
   onMount(() => {
+    window.addEventListener('online', retryRecovery);
     disconnectWorkspace = connectWorkspaceBridge(editorState, async () => { await controller.save(); });
     window.addEventListener('resize',resized);
     document.addEventListener('selectionchange',selectionChanged);
@@ -190,6 +197,10 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
+    <Show when={recoveryAvailable && state().snapshot}>
+      <RecoveryControls status={recovery()} disabled={state().saving || state().loading || Boolean(state().composing || state().validation)}
+        onEnable={() => controller.enableRecovery()} onDelete={() => controller.removeRecovery()} onRetry={retryRecovery}/>
+    </Show>
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>

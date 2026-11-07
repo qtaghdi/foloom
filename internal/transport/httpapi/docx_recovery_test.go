@@ -2,12 +2,15 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/qtaghdi/document-workspace/internal/formats/docx"
 )
 
 func TestDOCXRecoveryPersistsAcrossWorkspaceRestart(t *testing.T) {
@@ -95,5 +98,72 @@ func TestDOCXRecoveryExpiresAndRejectsDamagedContent(t *testing.T) {
 	}
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
 		t.Fatal("expired record still on disk", err)
+	}
+}
+
+func TestDOCXRecoveryRetainsDraftAfterSourceReplacement(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "original.docx")
+	if _, err := docx.Create(context.Background(), path, []docx.InitialBlock{{Type: "paragraph", Text: "원본"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	api.recoveryDir = filepath.Join(t.TempDir(), "recovery")
+	request := documentWorkspaceRequest(t, api)
+	open := request("POST", "/api/documents", "", map[string]string{"path": path}, true)
+	var source openedDocument
+	if open.Code != 200 || json.Unmarshal(open.Body.Bytes(), &source) != nil {
+		t.Fatal(open.Code, open.Body.String())
+	}
+	var base docx.Snapshot
+	w := request("GET", "/api/docx?document="+source.ID, "", nil, true)
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &base) != nil {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	input := docx.ApplyInput{SessionID: base.ID, BaseRevision: base.Revision, Operations: []docx.Operation{{
+		Type: "replace_run_text", TargetID: base.Blocks[0].Paragraph.Runs[0].ID, ExpectedText: "원본", Text: "복구할 초안",
+	}}}
+	if w = request("PUT", recoveryRoute, "", input, true); w.Code != 404 {
+		t.Fatal("updated without consent", w.Code)
+	}
+	if w = request("POST", recoveryRoute, "", savedFileInput{SessionID: base.ID, BaseRevision: base.Revision}, true); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	external := []byte("external replacement")
+	if err := os.WriteFile(path, external, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if w = request("PUT", recoveryRoute, "", input, true); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = request("POST", "/api/docx/operations?document="+source.ID, "", input, true); w.Code != 409 {
+		t.Fatal("source write did not detect replacement", w.Code)
+	}
+	input.Operations[0].ExpectedText = "stale text"
+	if w = request("PUT", recoveryRoute, "", input, true); w.Code != 400 {
+		t.Fatal("invalid update replaced checkpoint", w.Code)
+	}
+	w = request("POST", recoveryRoute+"/"+source.ID+"/open", "", nil, true)
+	var opened openedDocument
+	if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &opened) != nil {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = request("GET", "/api/docx?document="+opened.ID, "", nil, true)
+	var recovered docx.Snapshot
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &recovered) != nil {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if recovered.ID == base.ID || recovered.Revision != 1 || recovered.Blocks[0].Paragraph.Runs[0].Text != "복구할 초안" {
+		t.Fatal("draft was not reopened in its own session")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(external, actual) {
+		t.Fatal("recovery wrote to original", err)
+	}
+	if w = request("DELETE", recoveryRoute+"/"+source.ID, "", nil, true); w.Code != 204 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = request("PUT", recoveryRoute, "", input, true); w.Code != 404 {
+		t.Fatal("background update restored deleted consent", w.Code)
 	}
 }

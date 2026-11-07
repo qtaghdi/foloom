@@ -1,3 +1,5 @@
+import { RecoveryPanel } from './recovery-panel';
+import { recoveryRoute } from '../transport/docx-recovery';
 import { CreateDocument } from './create-document';
 import { LocaleSelect } from '../i18n/locale-select';
 import { StatusPanel } from '../ui/status-panel';
@@ -116,6 +118,20 @@ export function WorkspaceApp() {
     }catch(problem){if(!disposed)setError(problem instanceof Error?problem.message:t('theFileOperationFailed'));return false;}
     finally{if(!disposed)setOpening(false);}
   };
+  const openRecovery = async (id: string): Promise<boolean> => {
+    if (opening()) return false;
+    setOpening(true); mutationVersion++; setError('');
+    try {
+      const opened = documentSchema.parse(await request(`${recoveryRoute}/${encodeURIComponent(id)}/open`, { method: 'POST' }));
+      if (disposed) return false;
+      setDocuments(previous => [...previous, opened]); select(opened.id);
+      queueMicrotask(() => document.getElementById(`tab-${opened.id}`)?.focus());
+      return true;
+    } catch (problem) {
+      if (!disposed) setError(problem instanceof Error ? problem.message : t('theFileOperationFailed'));
+      return false;
+    } finally { if (!disposed) setOpening(false); }
+  };
   const clearPending = () => { if (pending) clearTimeout(pending.timer); pending = undefined; setChecking(''); };
   const close = async (item: OpenDocument) => {
     if (closing()) return;
@@ -178,8 +194,8 @@ export function WorkspaceApp() {
   const timer = setInterval(() => { void refresh(); }, 4000);
   onCleanup(() => { disposed = true; clearPending(); clearInterval(timer); window.removeEventListener('message', message); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('keydown', keydown); });
   return <div class="flex h-dvh min-h-0 flex-col bg-slate-100 text-slate-900">
-    <header class="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
-      <div class="flex flex-wrap items-center justify-between gap-3"><h1 class="font-semibold">{t('workspace')} <span class="ml-2 text-xs font-normal text-slate-500">{t('openCount', { count: documents().length })}</span></h1><div class="ml-auto flex items-center gap-2"><LocaleSelect/><details class="relative"><summary class={`${quietButtonClass} flex items-center`}>{t('recent')}</summary><div class="absolute right-0 top-full z-50 mt-2 max-h-72 w-[min(28rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg"><Show when={recent().length} fallback={<p class="p-2 text-sm text-slate-500">{t('noRecent')}</p>}><For each={recent()}>{path => <button class="editor-action block w-full truncate rounded p-2 text-left text-xs" title={path} disabled={opening()} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void openFiles(path); }}>{path}</button>}</For><button class={quietButtonClass} onClick={() => { setRecent([]); try { localStorage.removeItem(recentKey); } catch {} }}>{t('clearHistory')}</button></Show></div></details></div></div>
+    <header class="relative shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+      <div class="flex flex-wrap items-center justify-between gap-3"><h1 class="font-semibold">{t('workspace')} <span class="ml-2 text-xs font-normal text-slate-500">{t('openCount', { count: documents().length })}</span></h1><div class="ml-auto flex items-center gap-2"><LocaleSelect/><RecoveryPanel full={opening() || documents().length >= 8} onOpen={openRecovery}/><details class="relative"><summary class={`${quietButtonClass} flex items-center`}>{t('recent')}</summary><div class="absolute right-0 top-full z-50 mt-2 max-h-72 w-[min(28rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg"><Show when={recent().length} fallback={<p class="p-2 text-sm text-slate-500">{t('noRecent')}</p>}><For each={recent()}>{path => <button class="editor-action block w-full truncate rounded p-2 text-left text-xs" title={path} disabled={opening()} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void openFiles(path); }}>{path}</button>}</For><button class={quietButtonClass} onClick={() => { setRecent([]); try { localStorage.removeItem(recentKey); } catch {} }}>{t('clearHistory')}</button></Show></div></details></div></div>
       <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <input ref={fileInput} id="workspace-file-input" type="file" accept=".xlsx,.docx" multiple class="hidden" disabled={opening() || documents().length >= 8} onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ''; void uploadFiles(files); }}/>
         <button id="workspace-file-picker" type="button" class={primaryButtonClass} disabled={opening() || documents().length >= 8} onClick={() => fileInput?.click()}>{opening() ? t('opening') : t('chooseLocalFiles')}</button>

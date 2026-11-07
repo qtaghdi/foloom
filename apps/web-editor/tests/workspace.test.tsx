@@ -140,3 +140,26 @@ it('creates a named empty DOCX without replacing the existing editor', async () 
   expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain('회의록.docx');
   expect(localStorage.getItem('document-workspace:recent:v1')).toBeNull();
 });
+
+it('opens a recovered copy as a separate tab without replacing the source', async () => {
+  const fetcher = fixture(); await settle();
+  const existing = document.querySelector('iframe');
+  const id = '1234567890abcdef1234567890abcdef';
+  fetcher.mockResolvedValueOnce({ ok: true, status: 200, json: async () => [
+    { id, name: first.name, updatedAt: '2026-11-07T12:00:00Z', hasDraft: true },
+  ] });
+  const summary = [...document.querySelectorAll('summary')].find(node => node.textContent === '복구 사본')!;
+  const details = summary.parentElement as HTMLDetailsElement;
+  details.open = true;
+  details.dispatchEvent(new Event('toggle'));
+  await settle();
+  expect(details.textContent).toContain('초안 포함');
+  fetcher.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({
+    id: 'recovered', name: 'report (복구).docx', path: '', kind: 'docx', origin: 'recovery', uploaded: true,
+  }) });
+  button('별도 복사본으로 열기').click();
+  await settle();
+  expect(fetcher).toHaveBeenCalledWith(`/api/documents/docx-recovery/${id}/open`, expect.objectContaining({ method: 'POST' }));
+  expect(document.querySelector('iframe')).toBe(existing);
+  expect(document.querySelector('[aria-selected="true"]')?.textContent).toContain('report (복구).docx');
+});
