@@ -59,7 +59,7 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
    return resolveHeaderText(props.snapshot.sections??[],section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant));
   };
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
-    contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
+    contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} data-docx-paragraph={p.id} tabindex={-1}
     style={{
       'margin-left': p.layout?.left===undefined?undefined:`${p.layout.left/20}pt`,
       'margin-right': p.layout?.right===undefined?undefined:`${p.layout.right/20}pt`,

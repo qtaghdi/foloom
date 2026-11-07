@@ -234,6 +234,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		directRun(&baseRun, styles.defaults.child("rPrDefault").child("rPr"))
 		applyParagraph := func(props *node) {
 			applyParagraphPreview(&layout, props)
+			if level := paragraphOutlineLevel(props); level != nil {
+				out.OutlineLevel = level
+			}
 			if br := props.child("pageBreakBefore"); br != nil {
 				out.PageBreakBefore = onOff(br.attr("val"), true)
 			}
@@ -245,6 +248,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			styleRun(&baseRun, chain[i].child("rPr"))
 		}
 		applyParagraph(props)
+		out.OutlineOverride = paragraphOutlineLevel(props)
 		if layout != (ParagraphLayout{}) {
 			out.Layout = &layout
 		}

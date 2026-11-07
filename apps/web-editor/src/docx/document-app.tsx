@@ -20,6 +20,7 @@ import type { PasteMode } from './clipboard';
 import type { BoundaryMode, Run } from './contracts';
 import { DocumentBoundaryToolbar } from './document-boundary-toolbar';
 import { DocumentImageToolbar } from './document-image-toolbar';
+import { DocumentOutline } from './document-outline';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
 
@@ -84,6 +85,23 @@ export function DocumentApp() {
     const changed = controller.editBoundary({type:'update_boundary', targetId, boundary});
     if (changed) setDraftVersion(version => version + 1);
     return changed;
+  };
+  const locateHeading = (id:string) => {
+    const paragraph=[...document.querySelectorAll<HTMLElement>('#document-content [data-docx-paragraph]')]
+      .find(element=>element.dataset.docxParagraph===id);
+    if(!paragraph)return;
+    const runId=paragraph.querySelector<HTMLElement>('[data-docx-run]')?.dataset.docxRun;
+    const editor=paragraph.closest<HTMLElement>('[data-continuous-editor]');
+    if(editor&&runId){
+      const point={runId,offset:0};
+      const selection={anchor:point,focus:point};
+      if(restoreTextSelection(editor,selection))setFormattingSelection(selection);
+    }else{
+      setFormattingSelection(undefined);
+      setFocusedRun(undefined);
+      paragraph.focus({preventScroll:true});
+    }
+    paragraph.scrollIntoView({block:'start'});
   };
   const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
     setStructuralDraft(Boolean(focus));
@@ -221,7 +239,7 @@ export function DocumentApp() {
       const changed=controller.replaceSearchMatches(ranges,text);
       if(changed)setDraftVersion(version=>version+1);
       return changed;
-    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
+    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading}/></>}
     />
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>

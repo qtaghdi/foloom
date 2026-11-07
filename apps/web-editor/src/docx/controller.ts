@@ -194,7 +194,7 @@ export class DocumentController {
       const original=styles.get(definition.id),paragraph={...original?.paragraph,...definition.paragraph};
       if(definition.paragraph?.firstLine!==undefined)delete paragraph.hanging;
       if(definition.paragraph?.hanging!==undefined)delete paragraph.firstLine;
-      styles.set(definition.id,{id:definition.id,name:definition.name??original?.name??definition.id,kind:definition.kind,editable:original?.editable??true,
+      styles.set(definition.id,{id:definition.id,outlineLevel:original?.outlineLevel,name:definition.name??original?.name??definition.id,kind:definition.kind,editable:original?.editable??true,
         basedOn:definition.basedOn??original?.basedOn,run:{...(definition.run?.reset?{}:original?.run),...definition.run},paragraph});
     }
     return [...styles.values()];

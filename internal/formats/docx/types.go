@@ -76,6 +76,8 @@ type ParagraphLayout struct {
 }
 
 type Paragraph struct {
+	OutlineLevel      *int             `json:"outlineLevel,omitempty"`
+	OutlineOverride   *int             `json:"outlineOverride,omitempty"`
 	SectionID         string           `json:"sectionId,omitempty"`
 	StyleID           string           `json:"styleId,omitempty"`
 	StructureEditable bool             `json:"structureEditable"`
@@ -165,13 +167,14 @@ type StyleDefinition struct {
 	Paragraph *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type StyleInfo struct {
-	ID        string           `json:"id"`
-	Name      string           `json:"name"`
-	Kind      string           `json:"kind"`
-	BasedOn   string           `json:"basedOn,omitempty"`
-	Editable  bool             `json:"editable"`
-	Run       *InlineStyle     `json:"run,omitempty"`
-	Paragraph *ParagraphFormat `json:"paragraph,omitempty"`
+	OutlineLevel *int             `json:"outlineLevel,omitempty"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"`
+	Kind         string           `json:"kind"`
+	BasedOn      string           `json:"basedOn,omitempty"`
+	Editable     bool             `json:"editable"`
+	Run          *InlineStyle     `json:"run,omitempty"`
+	Paragraph    *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
 	Image             *ImageEdit         `json:"image,omitempty"`
