@@ -7,31 +7,36 @@ import (
 )
 
 type SectionFormat struct {
-	HeaderFooters []HeaderFooterUpdate `json:"headerFooters,omitempty"`
-	FirstPage     *bool                `json:"firstPage,omitempty"`
-	Width         *int                 `json:"width,omitempty"`
-	Height        *int                 `json:"height,omitempty"`
-	Orientation   string               `json:"orientation,omitempty"`
-	Top           *int                 `json:"top,omitempty"`
-	Right         *int                 `json:"right,omitempty"`
-	Bottom        *int                 `json:"bottom,omitempty"`
-	Left          *int                 `json:"left,omitempty"`
-	Columns       *int                 `json:"columns,omitempty"`
-	ColumnSpace   *int                 `json:"columnSpace,omitempty"`
-	BreakType     string               `json:"breakType,omitempty"`
+	// A start of -1 removes the explicit start so numbering continues.
+	PageNumberStart  *int                 `json:"pageNumberStart,omitempty"`
+	PageNumberFormat string               `json:"pageNumberFormat,omitempty"`
+	HeaderFooters    []HeaderFooterUpdate `json:"headerFooters,omitempty"`
+	FirstPage        *bool                `json:"firstPage,omitempty"`
+	Width            *int                 `json:"width,omitempty"`
+	Height           *int                 `json:"height,omitempty"`
+	Orientation      string               `json:"orientation,omitempty"`
+	Top              *int                 `json:"top,omitempty"`
+	Right            *int                 `json:"right,omitempty"`
+	Bottom           *int                 `json:"bottom,omitempty"`
+	Left             *int                 `json:"left,omitempty"`
+	Columns          *int                 `json:"columns,omitempty"`
+	ColumnSpace      *int                 `json:"columnSpace,omitempty"`
+	BreakType        string               `json:"breakType,omitempty"`
 }
 type SectionInfo struct {
-	HeaderFooters []HeaderFooterInfo `json:"headerFooters"`
-	FirstPage     bool               `json:"firstPage"`
-	ID            string             `json:"id"`
-	StartBlock    int                `json:"startBlock"`
-	EndBlock      int                `json:"endBlock"`
-	Page          PageLayout         `json:"page"`
-	Orientation   string             `json:"orientation"`
-	Columns       int                `json:"columns"`
-	ColumnSpace   int                `json:"columnSpace"`
-	BreakType     string             `json:"breakType"`
-	Editable      bool               `json:"editable"`
+	PageNumberStart  *int               `json:"pageNumberStart,omitempty"`
+	PageNumberFormat string             `json:"pageNumberFormat,omitempty"`
+	HeaderFooters    []HeaderFooterInfo `json:"headerFooters"`
+	FirstPage        bool               `json:"firstPage"`
+	ID               string             `json:"id"`
+	StartBlock       int                `json:"startBlock"`
+	EndBlock         int                `json:"endBlock"`
+	Page             PageLayout         `json:"page"`
+	Orientation      string             `json:"orientation"`
+	Columns          int                `json:"columns"`
+	ColumnSpace      int                `json:"columnSpace"`
+	BreakType        string             `json:"breakType"`
+	Editable         bool               `json:"editable"`
 }
 type sectionTarget struct {
 	info  SectionInfo
@@ -93,7 +98,7 @@ func inspectSections(root *node, session string, revision uint64) []sectionTarge
 				}
 			}
 		}
-		out = append(out, sectionTarget{SectionInfo{ID: fmt.Sprintf("section-%s-%d-%d", session, revision, len(out)), StartBlock: start, EndBlock: end, Page: sectionPage(props), Orientation: orientation, Columns: columns, ColumnSpace: space, BreakType: kind, Editable: editable}, props, body})
+		out = append(out, sectionTarget{SectionInfo{ID: fmt.Sprintf("section-%s-%d-%d", session, revision, len(out)), PageNumberStart: previewNumber(attribute(props.child("pgNumType"), wordNS, "start"), 0, 2147483647), PageNumberFormat: attribute(props.child("pgNumType"), wordNS, "fmt"), StartBlock: start, EndBlock: end, Page: sectionPage(props), Orientation: orientation, Columns: columns, ColumnSpace: space, BreakType: kind, Editable: editable}, props, body})
 		start = end + 1
 	}
 	for _, block := range body.children {
@@ -132,7 +137,7 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 	f := op.Section
 	scalar := *f
 	scalar.HeaderFooters = nil
-	if scalar.Width == nil && scalar.Height == nil && scalar.Top == nil && scalar.Right == nil && scalar.Bottom == nil && scalar.Left == nil && scalar.Columns == nil && scalar.ColumnSpace == nil && scalar.Orientation == "" && scalar.BreakType == "" && scalar.FirstPage == nil && len(f.HeaderFooters) == 0 {
+	if scalar.Width == nil && scalar.Height == nil && scalar.Top == nil && scalar.Right == nil && scalar.Bottom == nil && scalar.Left == nil && scalar.Columns == nil && scalar.ColumnSpace == nil && scalar.Orientation == "" && scalar.BreakType == "" && scalar.FirstPage == nil && scalar.PageNumberStart == nil && scalar.PageNumberFormat == "" && len(f.HeaderFooters) == 0 {
 		return replacement{}, fmt.Errorf("DOCX section update requires a property")
 	}
 	page := target.info.Page
@@ -231,6 +236,37 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 		}
 		if err := set("titlePg", map[string]string{"val": value}); err != nil {
 			return replacement{}, err
+		}
+	}
+	if f.PageNumberStart != nil || f.PageNumberFormat != "" {
+		if sectionChildCount(props, "pgNumType") > 1 {
+			return replacement{}, fmt.Errorf("duplicate DOCX page numbering property")
+		}
+		values := map[string]string{}
+		var remove []string
+		if f.PageNumberStart != nil {
+			switch n := *f.PageNumberStart; {
+			case n == -1:
+				remove = []string{"start"}
+			case n >= 0 && n <= 2147483647:
+				values["start"] = strconv.Itoa(n)
+			default:
+				return replacement{}, fmt.Errorf("invalid DOCX page number start")
+			}
+		}
+		switch f.PageNumberFormat {
+		case "":
+		case "decimal", "upperRoman", "lowerRoman", "upperLetter", "lowerLetter":
+			values["fmt"] = f.PageNumberFormat
+		default:
+			return replacement{}, fmt.Errorf("invalid DOCX page number format")
+		}
+		if old := props.child("pgNumType"); old != nil || len(values) > 0 {
+			raw, err := patchProperty(old, data, "pgNumType", values, remove)
+			if err != nil {
+				return replacement{}, err
+			}
+			updates["pgNumType"] = raw
 		}
 	}
 	raw := patchSectionChildren(props, data, updates)

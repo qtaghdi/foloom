@@ -94,3 +94,44 @@ func TestSectionCanBeAddedToDocumentWithoutExplicitSettings(t *testing.T) {
 		t.Fatalf("create section: %+v, %v", next, err)
 	}
 }
+
+func TestPageNumberingContinuesWithoutLosingChapterProperties(t *testing.T) {
+	s, path := withDocument(t, bodyXML(`<w:p><w:pPr><w:sectPr><w:pgNumType w:start="4" w:fmt="upperRoman"/></w:sectPr></w:pPr></w:p><w:p/><w:sectPr xmlns:c="urn:custom"><w:pgNumType w:start="0" w:fmt="lowerRoman" w:chapStyle="1" w:chapSep="hyphen" c:start="keep"/><w:cols w:num="1"/></w:sectPr>`))
+	original := fileBytes(t, path)
+	apply := func(start int, format string) (Snapshot, error) {
+		v := mustSnapshot(t, s)
+		return s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{Type: "update_section", SectionID: v.Sections[1].ID, Section: &SectionFormat{PageNumberStart: &start, PageNumberFormat: format}}}}, "human")
+	}
+	initial := mustSnapshot(t, s)
+	if n := initial.Sections[1].PageNumberStart; n == nil || *n != 0 {
+		t.Fatal("explicit zero is different from continuation")
+	}
+	for _, invalid := range []struct {
+		start  int
+		format string
+	}{{-2, "decimal"}, {1, "unsupported"}} {
+		if _, err := apply(invalid.start, invalid.format); err == nil || !bytes.Equal(original, fileBytes(t, path)) || mustSnapshot(t, s).Revision != initial.Revision {
+			t.Fatal("invalid page numbering was persisted")
+		}
+	}
+	next, err := apply(-1, "upperLetter")
+	if err != nil || next.Sections[1].PageNumberStart != nil || next.Sections[1].PageNumberFormat != "upperLetter" || next.Sections[0].PageNumberFormat != "upperRoman" {
+		t.Fatalf("continue numbering: %+v, %v", next.Sections, err)
+	}
+	for _, raw := range []string{`w:start="4"`, `c:start="keep"`, `w:chapStyle="1"`, `w:chapSep="hyphen"`, `<w:cols w:num="1"/>`} {
+		if !strings.Contains(string(s.pkg.document), raw) {
+			t.Fatalf("lost %s", raw)
+		}
+	}
+	reopened, err := Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := mustSnapshot(t, reopened).Sections[1]; n.PageNumberStart != nil || n.PageNumberFormat != "upperLetter" {
+		t.Fatalf("reopened numbering: %+v", n)
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("undo changed original bytes")
+	}
+}

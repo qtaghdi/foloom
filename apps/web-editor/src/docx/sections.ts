@@ -3,7 +3,7 @@ import type { SectionFormat,SectionInfo,HeaderFooterInfo } from './contracts';
 export function previewSection(original:SectionInfo,format:SectionFormat):SectionInfo {
  const page={...original.page};
  for(const key of ['width','height','top','right','bottom','left'] as const)if(format[key]!==undefined)page[key]=format[key]!;
- return {...original,page,firstPage:format.firstPage??original.firstPage,orientation:format.orientation??original.orientation,columns:format.columns??original.columns,columnSpace:format.columnSpace??original.columnSpace,breakType:format.breakType??original.breakType};
+ return {...original,page,pageNumberStart:format.pageNumberStart===-1?undefined:format.pageNumberStart??original.pageNumberStart,pageNumberFormat:format.pageNumberFormat??original.pageNumberFormat,firstPage:format.firstPage??original.firstPage,orientation:format.orientation??original.orientation,columns:format.columns??original.columns,columnSpace:format.columnSpace??original.columnSpace,breakType:format.breakType??original.breakType};
 }
 export function validateSection(section:SectionInfo):string {
  const {page,columns,columnSpace}=section;

@@ -466,3 +466,17 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 쪽 수·페이지별 반복은 아직 검증하지 않습니다. 새 홀짝 구분 활성화는 후속입니다.
 
 보호된 머리글 내용도 `첫 페이지 구분 적용`으로 구분 설정만 바꿀 수 있습니다. 이 동작은 내용이나 참조를 평탄화하지 않습니다.
+
+### 구역별 쪽 번호
+
+`구역·용지 설정`에서 번호를 이어가거나 0 이상의 정수에서 다시 시작하고,
+숫자·로마 숫자·알파벳 형식을 선택할 수 있습니다. 적용 후 본문과 함께
+저장하거나 실행 취소할 수 있습니다.
+
+`update_section`의 `pageNumberStart`는 지정 번호, `-1`은 이전 구역에서
+계속을 뜻합니다. 계속은 `w:pgNumType`의 `w:start` 속성만 제거합니다.
+`pageNumberFormat`은 `decimal`, `upperRoman`, `lowerRoman`, `upperLetter`,
+`lowerLetter` 중 하나입니다. 생략된 속성과 기존 장 번호·구분 문자는
+유지합니다. [Open XML 쪽 번호 속성](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.pagenumbertype)을 따릅니다.
+이 설정은 기존 번호 필드에 적용되는 저장 속성입니다. 번호 필드 삽입,
+실제 페이지 수 계산과 화면에서 번호를 매기는 동작은 아직 지원하지 않습니다.
