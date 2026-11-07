@@ -9,10 +9,10 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, type Snapshot, type TableOperation, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
-type DraftCheckpoint = { styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { table?:TableOperation; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   composition?(active: boolean): void;
   history?(controls: HistoryControls): void;
@@ -39,6 +39,7 @@ export class DocumentController {
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
   private loading = false;
+  private tableDraft?:TableOperation;
   private styleDrafts=new Map<string,StyleDefinition>();
   private undoDraft: DraftCheckpoint[] = [];
   private redoDraft: DraftCheckpoint[] = [];
@@ -46,10 +47,10 @@ export class DocumentController {
 
   constructor(private view: DocumentView) {}
 
-  hasDrafts(): boolean { return this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
+  hasDrafts(): boolean { return Boolean(this.tableDraft) || this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
   private checkpoint(selection?: TextSelection): DraftCheckpoint {
-    return { styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
+    return { table:this.tableDraft, styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
   }
   private remember(before: DraftCheckpoint, key?: string): void {
     const now = Date.now();
@@ -64,7 +65,7 @@ export class DocumentController {
     }
   }
   edit(operation: TextOperation, selection?: TextSelection): void {
-    if (this.busy || this.loading || this.disposed || !this.structureDraft) return;
+    if (this.busy || this.loading || this.disposed || this.tableDraft || !this.structureDraft) return;
     if ((this.structureDraft.currentText(operation.targetId) ?? this.expectedText.get(operation.targetId)) === operation.text) return;
     const before = this.checkpoint(selection ?? {anchor:{runId:operation.targetId,offset:0},focus:{runId:operation.targetId,offset:0}});
     if (!this.structureDraft?.edit(operation.targetId, operation.text)) {
@@ -78,7 +79,7 @@ export class DocumentController {
   }
 
   changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string): boolean {
-    if (this.busy || this.loading || this.disposed) return false;
+    if (this.busy || this.loading || this.disposed || this.tableDraft) return false;
     const before = this.structureDraft && this.checkpoint({anchor:{runId,offset:start},focus:{runId,offset:end}});
     const focus = this.structureDraft?.change(action, runId, start, end, insertion);
     if (!focus || !this.structureDraft) return false;
@@ -99,7 +100,7 @@ export class DocumentController {
     }
   }
   replaceSelection(selection: TextSelection, text: string, inline = false): boolean {
-    if (this.busy || this.loading || this.disposed) return false;
+    if (this.busy || this.loading || this.disposed || this.tableDraft) return false;
     const before = this.structureDraft && this.checkpoint(selection);
     const focus = this.structureDraft?.replace(selection, text, inline);
     if (!focus || !this.structureDraft) return false;
@@ -109,7 +110,7 @@ export class DocumentController {
     this.updateSave(); return true;
   }
   pasteRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): boolean {
-    if (this.busy || this.loading || this.disposed || this.composing) return false;
+    if (this.busy || this.loading || this.disposed || this.composing || this.tableDraft) return false;
     const before = this.structureDraft && this.checkpoint(selection);
     const focus=this.structureDraft?.replaceRich(selection,paragraphs);
     if (!focus || !this.structureDraft) return false;
@@ -130,7 +131,7 @@ export class DocumentController {
     return [...styles.values()];
   }
   editStyle(definition:StyleDefinition):boolean {
-    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    if(this.busy||this.loading||this.disposed||this.composing||this.tableDraft||!this.structureDraft)return false;
     const before=this.checkpoint();const previous=this.styleDrafts.get(definition.id);
     const paragraph=definition.paragraph?{...previous?.paragraph,...definition.paragraph}:previous?.paragraph;
     if(definition.paragraph?.firstLine!==undefined&&paragraph)delete paragraph.hanging;
@@ -138,16 +139,16 @@ export class DocumentController {
     this.styleDrafts.set(definition.id,{...previous,...definition,run:definition.run?.reset?definition.run:definition.run?{...previous?.run,...definition.run}:previous?.run,paragraph});
     this.remember(before);if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
   }
-  hasStyleDrafts():boolean {return this.styleDrafts.size>0 || this.pendingOperations().some(op=>op.type==='replace_paragraphs'&&op.paragraphs.some(p=>p.format?.styleId!==undefined||p.runs.some(r=>r.style?.styleId!==undefined)));}
+  hasStyleDrafts():boolean {return Boolean(this.tableDraft) || this.styleDrafts.size>0 || this.pendingOperations().some(op=>op.type==='replace_paragraphs'&&op.paragraphs.some(p=>p.format?.styleId!==undefined||p.runs.some(r=>r.style?.styleId!==undefined)));}
   formatParagraph(selection:TextSelection,format:ParagraphFormat):boolean {
-    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    if(this.busy||this.loading||this.disposed||this.composing||this.tableDraft||!this.structureDraft)return false;
     const before=this.checkpoint(selection),focus=this.structureDraft.formatParagraph(selection,format);
     if(!focus)return false;this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
     if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
   }
   selectedParagraphs(selection:TextSelection) {return this.structureDraft?.selectedParagraphs(selection)??[];}
   format(selection: TextSelection, style: InlineStyle): boolean {
-    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    if(this.busy||this.loading||this.disposed||this.composing||this.tableDraft||!this.structureDraft)return false;
     const before=this.checkpoint(selection),focus=this.structureDraft.format(selection,style);
     if(!focus)return false;
     this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
@@ -164,12 +165,23 @@ export class DocumentController {
   }
   selectionText(selection: TextSelection): string | undefined { return this.structureDraft?.selectedText(selection); }
 
+  pendingTable(): boolean { return Boolean(this.tableDraft); }
+  editTable(operation:TableOperation): boolean {
+    if (this.blocked || this.loading || this.disposed || !this.structureDraft || this.hasDrafts()) return false;
+    this.remember(this.checkpoint());
+    this.tableDraft = operation;
+    this.view.render(this.structureDraft.snapshot());
+    this.view.status('미저장 변경','pending');
+    this.updateSave();
+    return true;
+  }
+
   private pendingOperations(): Operation[] {
     const text = [...this.drafts.values()].filter(op => !this.structureDraft?.ownsOriginal(op.targetId));
-    return [...[...this.styleDrafts.values()].map(styleDefinition=>({type:'define_style' as const,styleDefinition})),...text, ...this.structureDraft?.operations() ?? []];
+    return [...(this.tableDraft ? [this.tableDraft] : []),...[...this.styleDrafts.values()].map(styleDefinition=>({type:'define_style' as const,styleDefinition})),...text, ...this.structureDraft?.operations() ?? []];
   }
   private resetDraft(snapshot: Snapshot): void {
-    this.drafts.clear();this.styleDrafts.clear();
+    this.drafts.clear();this.styleDrafts.clear();this.tableDraft=undefined;
     this.undoDraft = []; this.redoDraft = []; this.lastTyping = undefined;
     this.structureDraft = new StructureDraft(snapshot);
     this.expectedText.clear();
@@ -253,7 +265,7 @@ export class DocumentController {
     if (from.length) {
       const saved = from.pop()!;
       to.push(this.checkpoint(selection)); this.trimDraftHistory();
-      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.styleDrafts=new Map(saved.styles); this.lastTyping = undefined;
+      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.styleDrafts=new Map(saved.styles); this.tableDraft=saved.table; this.lastTyping = undefined;
       const point = saved.selection?.focus;
       this.view.render(this.structureDraft.snapshot(), point ? {runId:point.runId,start:point.offset,end:point.offset,selection:saved.selection} : undefined);
       this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');

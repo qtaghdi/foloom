@@ -17,6 +17,7 @@ export function validateDrafts(sessionId: string, revision: number, operations: 
   if (operations.length > 1000) return '한 번에 1,000개 입력까지 저장할 수 있습니다. 수정 범위를 줄이세요.';
   let textBytes = 0;
   for (const operation of operations) {
+    if(operation.type==='update_table')continue;
     const texts = operation.type === 'define_style' ? [] : operation.type === 'replace_paragraphs' ? operation.paragraphs.flatMap(p => p.runs.map(r => r.text)) : [operation.text];
     for (const text of texts) { const error = validateRunText(text); if (error) return error; textBytes += utf8Length(text); }
     if(operation.type!=='define_style')textBytes += utf8Length(operation.expectedText);

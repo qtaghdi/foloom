@@ -32,7 +32,7 @@ export const snapshotSchema = z.object({
   history: z.object({ undo: z.number().int().min(0).max(10), redo: z.number().int().min(0).max(10), undoActor: z.enum(['human', 'ai']).optional(), redoActor: z.enum(['human', 'ai']).optional() }).optional(),
   blocks: z.array(z.discriminatedUnion('type', [
     z.object({ id: z.string(), type: z.literal('paragraph'), paragraph: paragraphSchema }),
-    z.object({ id: z.string(), type: z.literal('table'), rows: z.array(z.object({
+    z.object({ id: z.string(), type: z.literal('table'), tableEditable: z.boolean().optional(), rows: z.array(z.object({
       cells: z.array(z.object({ id: z.string(), paragraphs: z.array(paragraphSchema) })),
     })) }),
   ])),
@@ -57,6 +57,9 @@ export type ParagraphOperation = {
  paragraphs: Array<{ sourceId: string; format?: ParagraphFormat; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation;
+export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column';
+export type TableEdit = {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number};
+export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | TableOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';
