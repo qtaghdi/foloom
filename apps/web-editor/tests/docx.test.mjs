@@ -229,3 +229,17 @@ test('DOCX section drafts share one revisioned save and undo history with text',
  assert.deepEqual(operations[0].operations.map(op=>op.type),['update_section','replace_run_text']);
  assert.equal(operations[0].operations[0].section.orientation,'landscape');
 });
+
+test('DOCX merges header variants in a section draft and restores their undo history',async()=>{
+ const f=fixture(),slots=['header','footer'].flatMap(kind=>['default','first','even'].map(variant=>({kind,variant,text:'',linked:false,editable:true})));
+ const section={id:'s',startBlock:0,endBlock:0,page:{width:11906,height:16838,top:1440,right:1440,bottom:1440,left:1440},orientation:'portrait',columns:1,columnSpace:720,breakType:'nextPage',editable:true,headerFooters:slots};
+ const writes=[];
+ f.fetch(async(_url,init)=>{if(init?.method==='POST')writes.push(JSON.parse(init.body));return {ok:true,json:async()=>({...snapshot,sections:[section],revision:init?.method==='POST'?2:1})};});
+ await f.controller.load();
+ assert.equal(f.controller.editSection('s',{headerFooters:[{kind:'header',variant:'default',text:'title'}]}),true);
+ assert.equal(f.controller.editSection('s',{firstPage:true,headerFooters:[{kind:'footer',variant:'first',text:'first footer'}]}),true);
+ await f.controller.restore('undo');assert.equal(f.controller.sections()[0].headerFooters.find(s=>s.kind==='header'&&s.variant==='default').text,'title');assert.equal(f.controller.sections()[0].firstPage,undefined);
+ await f.controller.restore('redo');await f.controller.save();
+ assert.equal(writes.length,1);assert.equal(writes[0].operations.length,1);assert.equal(writes[0].operations[0].section.headerFooters.length,2);
+ assert.equal(writes[0].operations[0].section.firstPage,true);
+});

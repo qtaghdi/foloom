@@ -1,4 +1,4 @@
-import { previewSection,validateSection } from './sections';
+import { previewSection,previewSections,validateSection } from './sections';
 import { confirmSavedDocument, downloadSavedDocument, DocumentFileError, type DownloadedFile } from '../transport/document-files';
 import { source } from '../i18n/index';
 import { errorResponseSchema } from '../transport/schemas';
@@ -121,11 +121,13 @@ export class DocumentController {
     this.updateSave();return true;
   }
   private preview():Snapshot {return {...this.structureDraft!.snapshot(),sections:this.sections()};}
-  sections(){return (this.snapshot?.sections??[]).map(section=>previewSection(section,this.sectionDrafts.get(section.id)??{}));}
+  sections(){return previewSections(this.snapshot?.sections??[],this.sectionDrafts);}
   editSection(id:string,format:SectionFormat):boolean {
    if(this.blocked||this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
    const original=this.snapshot?.sections?.find(section=>section.id===id);if(!original?.editable||!Object.keys(format).length||!sectionFormatSchema.safeParse(format).success)return false;
-   const merged={...this.sectionDrafts.get(id),...format};if(validateSection(previewSection(original,merged)))return false;
+   const previous=this.sectionDrafts.get(id),merged={...previous,...format};
+   if(format.headerFooters){const slots=new Map((previous?.headerFooters??[]).map(slot=>[slot.kind+':'+slot.variant,slot]));for(const slot of format.headerFooters)slots.set(slot.kind+':'+slot.variant,slot);merged.headerFooters=[...slots.values()];}
+   if(validateSection(previewSection(original,merged)))return false;
    const before=this.checkpoint();this.sectionDrafts.set(id,merged);this.remember(before);this.view.render(this.preview());this.view.status('미저장 변경','pending');this.updateSave();return true;
   }
   styles():StyleInfo[] {
