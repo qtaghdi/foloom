@@ -133,6 +133,41 @@ func TestDOCXMCPAndBrowserShareCommits(t *testing.T) {
 	if disk.Blocks[0].Paragraph.Runs[0].Text != "AI saved" {
 		t.Fatal("commit did not reach disk")
 	}
+
+	history := docx.HistoryInput{SessionID: snap.ID, BaseRevision: 3, Direction: "undo"}
+	if r = request("POST", "/api/docx/history", "https://evil.example", history); r.Code != 403 {
+		t.Fatal("cross-origin history accepted")
+	}
+	r = request("POST", "/api/docx/history", "", history)
+	if r.Code != 200 {
+		t.Fatal(r.Body.String())
+	}
+	if err := json.Unmarshal(r.Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap.Revision != 4 || snap.Blocks[1].Rows[0].Cells[0].Paragraphs[0].Runs[0].Text != "cell" || snap.History.RedoActor != "human" {
+		t.Fatalf("undo mismatch: %+v", snap)
+	}
+	if r = request("POST", "/api/docx/history", "", history); r.Code != 409 {
+		t.Fatal("stale history accepted")
+	}
+	history.BaseRevision = 4
+	history.Direction = "redo"
+	if call("restore_docx_history", history).IsError {
+		t.Fatal("MCP redo failed")
+	}
+	r = request("GET", "/api/docx", "", nil)
+	if err := json.Unmarshal(r.Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap.Revision != 5 || snap.Blocks[1].Rows[0].Cells[0].Paragraphs[0].Runs[0].Text != "human saved" {
+		t.Fatal("browser did not see MCP redo")
+	}
+	history.BaseRevision = 5
+	history.SessionID = "wrong-document"
+	if !call("restore_docx_history", history).IsError {
+		t.Fatal("foreign session history accepted")
+	}
 	result = call("create_docx", docxCreateInput{Path: path, Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "overwrite"}}})
 	if !result.IsError {
 		t.Fatal("create overwrote file")
@@ -158,9 +193,9 @@ func TestDOCXUnauthorizedAndMalformedRequests(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, route := range []string{"/docx", "/api/docx", "/api/docx/events", "/api/docx/operations"} {
+	for _, route := range []string{"/docx", "/api/docx", "/api/docx/events", "/api/docx/operations", "/api/docx/history"} {
 		method := "GET"
-		if strings.HasSuffix(route, "operations") {
+		if strings.HasSuffix(route, "operations") || strings.HasSuffix(route, "history") {
 			method = "POST"
 		}
 		w := httptest.NewRecorder()
@@ -257,5 +292,132 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no SSE resync: %v", scanner.Err())
+	}
+}
+
+func TestDOCXParagraphPlanThroughMCPAndHTTP(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "paragraphs.docx")
+	_, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "before"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	if _, err := api.OpenDOCX(ctx, path); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := initial.Blocks[0].Paragraph
+	input := docx.ApplyInput{SessionID: initial.ID, BaseRevision: initial.Revision, Operations: []docx.Operation{{Type: "replace_paragraphs", TargetID: p.ID, EndTargetID: p.ID, ExpectedText: "before", Paragraphs: []docx.ParagraphContent{
+		{SourceID: p.ID, Runs: []docx.RunContent{{SourceID: p.Runs[0].ID, Text: "first"}}},
+		{SourceID: p.ID, Runs: []docx.RunContent{{SourceID: p.Runs[0].ID, Text: "second"}}},
+	}}}}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: input})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP paragraph edit: %v %+v", err, result)
+	}
+	// The authenticated HTTP read observes the same revision and actual structure.
+	req := httptest.NewRequest("GET", "/api/docx", nil)
+	req.AddCookie(&http.Cookie{Name: browserSessionCookieName(req.Host), Value: api.browserToken})
+	recorder := httptest.NewRecorder()
+	api.Handler().ServeHTTP(recorder, req)
+	if recorder.Code != 200 {
+		t.Fatal(recorder.Body.String())
+	}
+	var after docx.Snapshot
+	if err := json.Unmarshal(recorder.Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != initial.Revision+1 || len(after.Blocks) != 2 || after.Blocks[1].Paragraph.Runs[0].Text != "second" {
+		t.Fatal("HTTP did not observe structured MCP commit")
+	}
+}
+
+func TestDOCXMCPStyleDefinitionAndApplicationWithoutTextFields(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	path := filepath.Join(t.TempDir(), "styles.docx")
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: path, Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "heading"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := opened.Blocks[0].Paragraph
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{
+		map[string]any{"type": "define_style", "styleDefinition": map[string]any{"id": "CustomHeading", "name": "제목", "kind": "paragraph", "run": map[string]any{"bold": true}}},
+		map[string]any{"type": "replace_paragraphs", "targetId": p.ID, "endTargetId": p.ID, "expectedText": "heading", "paragraphs": []any{map[string]any{"sourceId": p.ID, "format": map[string]any{"styleId": "CustomHeading"}, "runs": []any{map[string]any{"sourceId": p.Runs[0].ID, "text": "heading"}}}}},
+	}}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP style batch failed: %+v %v", result, err)
+	}
+	snapshot, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Revision != 2 || !snapshot.Blocks[0].Paragraph.Runs[0].Bold || snapshot.Blocks[0].Paragraph.StyleID != "CustomHeading" {
+		t.Fatal("MCP style batch was not shared", snapshot)
+	}
+}
+
+func TestDOCXSectionSettingsThroughMCPAndHTTP(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: filepath.Join(t.TempDir(), "sections.docx"), Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "content"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{map[string]any{"type": "update_section", "sectionId": opened.Sections[0].ID, "section": map[string]any{"width": 16838, "height": 11906, "orientation": "landscape", "columns": 2, "pageNumberStart": 25, "pageNumberFormat": "upperRoman"}}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("section MCP: %v %+v", err, result)
+	}
+	req := httptest.NewRequest("GET", "/api/docx", nil)
+	req.AddCookie(&http.Cookie{Name: browserSessionCookieName(req.Host), Value: api.browserToken})
+	recorder := httptest.NewRecorder()
+	api.Handler().ServeHTTP(recorder, req)
+	var after docx.Snapshot
+	if err := json.Unmarshal(recorder.Body.Bytes(), &after); err != nil || recorder.Code != 200 {
+		t.Fatalf("HTTP read: %s", recorder.Body.String())
+	}
+	if after.Revision != opened.Revision+1 || after.Sections[0].Columns != 2 || after.Sections[0].Page.Width != 16838 || after.Blocks[0].Paragraph.Runs[0].Text != "content" {
+		t.Fatal("section settings not shared", after)
+	}
+	if n := after.Sections[0]; n.PageNumberStart == nil || *n.PageNumberStart != 25 || n.PageNumberFormat != "upperRoman" {
+		t.Fatal("section numbering not shared", n)
+	}
+}
+
+func TestDOCXMCPHeaderAndFooterContracts(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: filepath.Join(t.TempDir(), "headers.docx"), Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "body"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{map[string]any{"type": "update_section", "sectionId": opened.Sections[0].ID, "section": map[string]any{"firstPage": true, "headerFooters": []any{map[string]any{"kind": "header", "variant": "first", "text": "title header"}, map[string]any{"kind": "footer", "variant": "default", "text": "footer"}}}}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("header MCP: %v %+v", err, result)
+	}
+	snapshot, err := api.docxSnapshot(ctx)
+	if err != nil || !snapshot.Sections[0].FirstPage {
+		t.Fatal("first page flag missing", err)
+	}
+	found := false
+	for _, info := range snapshot.Sections[0].HeaderFooters {
+		if info.Kind == "header" && info.Variant == "first" && info.Text == "title header" && info.Editable {
+			found = true
+		}
+	}
+	if !found || snapshot.Blocks[0].Paragraph.Runs[0].Text != "body" {
+		t.Fatal("header metadata mismatch", snapshot)
 	}
 }

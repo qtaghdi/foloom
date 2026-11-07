@@ -41,3 +41,6 @@ __pycache__/
 .idea/
 .vscode/
 *.swp
+
+# Revision history contains private document snapshots.
+.document-workspace-docx-history/
