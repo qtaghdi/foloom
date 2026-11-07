@@ -29,6 +29,7 @@ type recoveryEntry struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	Damaged   bool      `json:"damaged,omitempty"`
 	HasDraft  bool      `json:"hasDraft"`
 	Hash      [32]byte  `json:"hash"`
 }
@@ -140,9 +141,10 @@ func scanRecovery(root string, now time.Time) ([]recoveryEntry, int, error) {
 			continue
 		}
 		count++
-		if err == nil {
-			entries = append(entries, entry)
+		if err != nil {
+			entry = recoveryEntry{ID: id, Name: "손상된 복구 사본.docx", UpdatedAt: info.ModTime().UTC(), Damaged: true}
 		}
+		entries = append(entries, entry)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].UpdatedAt.After(entries[j].UpdatedAt) })
 	return entries, count, nil

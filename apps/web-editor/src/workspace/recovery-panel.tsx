@@ -32,9 +32,9 @@ export function RecoveryPanel(props: { full: boolean; onOpen: (id: string) => Pr
       <Show when={entries().length || busy() || error()} fallback={<p>{t('docxRecoveryEmpty')}</p>}>
         <ul class="space-y-2"><For each={entries()}>{entry => <li class="rounded border border-slate-200 p-2">
           <p class="break-all font-medium">{entry.name}</p>
-          <p>{new Intl.DateTimeFormat(locale(), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(entry.updatedAt))} · {t(entry.hasDraft ? 'docxRecoveryDraft' : 'docxRecoveryCommitted')}</p>
+          <p>{new Intl.DateTimeFormat(locale(), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(entry.updatedAt))} · {t(entry.damaged ? 'docxRecoveryFailed' : entry.hasDraft ? 'docxRecoveryDraft' : 'docxRecoveryCommitted')}</p>
           <div class="flex flex-wrap gap-1">
-            <button type="button" class={buttonClass} disabled={busy() || props.full} onClick={async () => { setBusy(true); try { if (await props.onOpen(entry.id)) setConfirm(''); } finally { setBusy(false); } }}>{t('docxRecoveryOpen')}</button>
+            <button type="button" class={buttonClass} disabled={busy() || props.full || entry.damaged} onClick={async () => { setBusy(true); try { if (await props.onOpen(entry.id)) setConfirm(''); } finally { setBusy(false); } }}>{t('docxRecoveryOpen')}</button>
             <Show when={confirm() === entry.id} fallback={<button type="button" class={quietButtonClass} disabled={busy()} onClick={() => setConfirm(entry.id)}>{t('docxRecoveryDelete')}</button>}>
               <span class="self-center">{t('docxRecoveryConfirmDelete')}</span>
               <button type="button" class={buttonClass} disabled={busy()} onClick={() => void remove(entry.id)}>{t('docxRecoveryDelete')}</button>

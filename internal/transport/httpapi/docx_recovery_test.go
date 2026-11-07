@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -165,5 +166,54 @@ func TestDOCXRecoveryRetainsDraftAfterSourceReplacement(t *testing.T) {
 	}
 	if w = request("PUT", recoveryRoute, "", input, true); w.Code != 404 {
 		t.Fatal("background update restored deleted consent", w.Code)
+	}
+}
+
+func TestDOCXRecoveryQuotaAndDamagedRecordCanBeDiscarded(t *testing.T) {
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	api.recoveryDir = filepath.Join(t.TempDir(), "recovery")
+	request := documentWorkspaceRequest(t, api)
+	var ids []string
+	for i := 0; i < 4; i++ {
+		w := request("POST", "/api/documents/new-docx", "", map[string]string{"name": fmt.Sprintf("사본 %d", i)}, true)
+		var opened openedDocument
+		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &opened) != nil {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		ids = append(ids, opened.ID)
+		w = request("POST", recoveryRoute, "", savedFileInput{SessionID: opened.ID, BaseRevision: 1}, true)
+		expected := 200
+		if i == 3 {
+			expected = 409
+		}
+		if w.Code != expected {
+			t.Fatal("quota", i, w.Code, w.Body.String())
+		}
+	}
+	if err := os.WriteFile(recoveryPath(api.recoveryDir, ids[0]), []byte("damaged header"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	w := request("GET", recoveryRoute, "", nil, true)
+	var entries []recoveryEntry
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &entries) != nil || len(entries) != 3 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	damaged := false
+	for _, entry := range entries {
+		if entry.ID == ids[0] && entry.Damaged {
+			damaged = true
+		}
+	}
+	if !damaged {
+		t.Fatal("damaged record hidden from deletion UI")
+	}
+	w = request("DELETE", recoveryRoute+"/"+ids[0], "", nil, true)
+	if w.Code != 204 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = request("POST", recoveryRoute, "", savedFileInput{SessionID: ids[3], BaseRevision: 1}, true)
+	if w.Code != 200 {
+		t.Fatal("quota not released after deletion", w.Code, w.Body.String())
 	}
 }

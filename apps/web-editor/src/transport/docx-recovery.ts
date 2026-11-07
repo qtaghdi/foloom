@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const recoveryRoute = '/api/documents/docx-recovery';
 const recoveryID = z.string().regex(/^[a-f0-9]{32}$/);
 export const recoveryEntrySchema = z.object({
-  id: recoveryID, name: z.string().min(1).max(240), updatedAt: z.iso.datetime({ offset: true }), hasDraft: z.boolean(),
+  id: recoveryID, name: z.string().min(1).max(240), updatedAt: z.iso.datetime({ offset: true }), hasDraft: z.boolean(), damaged: z.boolean().optional(),
 });
 export type RecoveryEntry = z.infer<typeof recoveryEntrySchema>;
 
