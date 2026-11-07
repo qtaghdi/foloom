@@ -1041,7 +1041,16 @@ export const catalog = {
   "openLimit": {"ko": "열린 파일은 최대 8개입니다. 파일을 닫은 뒤 다시 여세요.", "en": "You can open up to 8 files. Close a file and try again.", "ja": "開けるファイルは 8 個までです。ファイルを閉じて再試行してください。", "zh-CN": "最多可打开 8 个文件。请关闭文件后重试。"},
   "typeHere": {"ko":"여기에 입력하세요", "en":"Type here", "ja":"ここに入力", "zh-CN":"在此输入"},
   "closeWorkingCopyWarning": {"ko": "{name}의 작업 복사본을 닫으면 이 앱에 저장한 내용도 삭제됩니다. 필요한 수정본을 먼저 다운로드하세요.", "en": "Closing the working copy of {name} also deletes its saved edits from this app. Download your edited file first.", "ja": "{name} の作業用コピーを閉じると、このアプリに保存した編集内容も削除されます。先に編集済みファイルをダウンロードしてください。", "zh-CN": "关闭 {name} 的工作副本也会删除此应用中已保存的编辑。请先下载修改后的文件。"},
-  "closeWorkingCopy": {"ko": "복사본 닫기", "en": "Close working copy", "ja": "作業用コピーを閉じる", "zh-CN": "关闭工作副本"}
+  "closeWorkingCopy": {"ko": "복사본 닫기", "en": "Close working copy", "ja": "作業用コピーを閉じる", "zh-CN": "关闭工作副本"},
+  "newDOCX": {"ko":"새 DOCX 문서", "en":"New DOCX document", "ja":"新しい DOCX 文書", "zh-CN":"新建 DOCX 文档"},
+  "untitledDOCX": {"ko":"새 문서", "en":"Untitled", "ja":"新しい文書", "zh-CN":"新文档"},
+  "newDOCXHint": {"ko":"빈 문서를 작업 복사본으로 만듭니다. 닫기 전에 필요한 수정본을 다운로드하세요. 기존 파일을 덮어쓰지 않습니다.", "en":"Create an empty working copy. Download your edits before closing. Existing files stay unchanged.", "ja":"空の作業用コピーを作成します。閉じる前に編集内容をダウンロードしてください。既存のファイルは上書きしません。", "zh-CN":"创建空白工作副本。关闭前请下载修改后的文件。不会覆盖现有文件。"},
+  "documentName": {"ko":"문서 이름", "en":"Document name", "ja":"文書名", "zh-CN":"文档名称"},
+  "documentNameInvalid": {"ko":"이름만 입력하세요. DOCX 확장자를 사용하고 사용할 수 없는 문자나 너무 긴 이름은 피하세요.", "en":"Enter a filename with a DOCX extension. Avoid unsupported characters and overly long names.", "ja":"DOCX 拡張子のファイル名を入力してください。使用できない文字や長すぎる名前は避けてください。", "zh-CN":"请输入使用 DOCX 扩展名的文件名，避免不支持的字符或过长的名称。"},
+  "documentNameTaken": {"ko":"같은 이름의 문서가 열려 있습니다. 다른 이름을 지정하세요.", "en":"A document with this name is already open. Choose another name.", "ja":"同じ名前の文書が開いています。別の名前にしてください。", "zh-CN":"同名文档已打开。请使用其他名称。"},
+  "createdFileName": {"ko":"만들 파일", "en":"File to create", "ja":"作成するファイル", "zh-CN":"将创建的文件"},
+  "createDocument": {"ko":"문서 만들기", "en":"Create document", "ja":"文書を作成", "zh-CN":"创建文档"},
+  "newDocumentCopy": {"ko":"새 문서 작업 복사본", "en":"New document working copy", "ja":"新規文書の作業用コピー", "zh-CN":"新文档工作副本"}
 } as const;
 export type MessageKey = keyof typeof catalog;
 export type Locale = keyof (typeof catalog)[MessageKey];

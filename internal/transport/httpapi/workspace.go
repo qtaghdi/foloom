@@ -23,6 +23,7 @@ type openedDocument struct {
 	Path       string `json:"path"`
 	Kind       string `json:"kind"`
 	Uploaded   bool   `json:"uploaded,omitempty"`
+	Origin     string `json:"origin,omitempty"`
 	cleanupDir string
 	server     *Server
 }
@@ -85,7 +86,7 @@ func (s *Server) registerDocument(path string, workbook *xlsx.Session, document 
 	}
 	child := &Server{session: workbook, docxSession: document, scoped: true, browserToken: s.browserToken, mcpToken: s.mcpToken, mux: http.NewServeMux()}
 	child.routes()
-	opened := &openedDocument{Path: path, server: child}
+	opened := &openedDocument{Path: path, server: child, Origin: "path"}
 	if workbook != nil {
 		snapshot := workbook.Snapshot()
 		opened.ID = snapshot.ID
@@ -97,7 +98,10 @@ func (s *Server) registerDocument(path string, workbook *xlsx.Session, document 
 		opened.Kind = "docx"
 	}
 	if len(cleanupDirs) > 0 {
-		opened.Uploaded, opened.cleanupDir, opened.Path = true, cleanupDirs[0], ""
+		opened.Uploaded, opened.cleanupDir, opened.Path, opened.Origin = true, cleanupDirs[0], "", "upload"
+		if len(cleanupDirs) > 1 {
+			opened.Origin = cleanupDirs[1]
+		}
 	}
 	s.documents[opened.ID] = opened
 	return opened, nil
@@ -143,6 +147,7 @@ func (s *Server) workspaceRoutes() {
 			MaxOpen   int               `json:"maxOpen"`
 		}{documents, maxOpenDocuments})
 	})))
+	s.mux.Handle("POST /api/documents/new-docx", s.requireSession(http.HandlerFunc(s.newDOCX)))
 	s.mux.Handle("POST /api/documents/upload", s.requireSession(http.HandlerFunc(s.uploadDocument)))
 	s.mux.Handle("POST /api/documents", s.requireSession(http.HandlerFunc(s.openDocument)))
 	s.mux.Handle("DELETE /api/documents/{id}", s.requireSession(http.HandlerFunc(s.closeDocument)))

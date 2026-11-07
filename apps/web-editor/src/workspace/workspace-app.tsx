@@ -1,3 +1,4 @@
+import { CreateDocument } from './create-document';
 import { LocaleSelect } from '../i18n/locale-select';
 import { StatusPanel } from '../ui/status-panel';
 import { problemMessage } from '../ui/messages';
@@ -6,7 +7,7 @@ import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { z } from 'zod';
 import { buttonClass, primaryButtonClass, quietButtonClass } from '../ui/editor-chrome';
 
-const documentSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/), name: z.string(), path: z.string(), kind: z.enum(['xlsx', 'docx']), uploaded: z.boolean().optional() });
+const documentSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/), name: z.string(), path: z.string(), kind: z.enum(['xlsx', 'docx']), uploaded: z.boolean().optional(),origin:z.enum(['path','upload','new','copy','recovery']).optional() });
 const listSchema = z.object({ documents: z.array(documentSchema).max(8), maxOpen: z.number().int().positive().max(8) });
 const stateSchema = z.object({ type: z.enum(['workspace:state', 'workspace:checked']), id: z.string(), message: z.string(), dirty: z.boolean(), busy: z.boolean(), request: z.string().optional() });
 type OpenDocument = z.infer<typeof documentSchema>;
@@ -100,6 +101,14 @@ export function WorkspaceApp() {
     } catch (problem) { if (!disposed) setError(problem instanceof Error ? problem.message : t('theFileCouldNotBeOpened')); }
     finally { if (!disposed) setOpening(false); }
   };
+  const createDocument=async(name:string):Promise<boolean>=>{
+    if(opening())return false;setOpening(true);mutationVersion++;setError('');
+    try{
+      const opened=documentSchema.parse(await request('/api/documents/new-docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}));
+      if(disposed)return false;setDocuments(previous=>[...previous,opened]);select(opened.id);return true;
+    }catch(problem){if(!disposed)setError(problem instanceof Error?problem.message:t('theFileOperationFailed'));return false;}
+    finally{if(!disposed)setOpening(false);}
+  };
   const clearPending = () => { if (pending) clearTimeout(pending.timer); pending = undefined; setChecking(''); };
   const close = async (item: OpenDocument) => {
     if (closing()) return;
@@ -167,6 +176,7 @@ export function WorkspaceApp() {
       <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <input ref={fileInput} id="workspace-file-input" type="file" accept=".xlsx,.docx" multiple class="hidden" disabled={opening() || documents().length >= 8} onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ''; void uploadFiles(files); }}/>
         <button id="workspace-file-picker" type="button" class={primaryButtonClass} disabled={opening() || documents().length >= 8} onClick={() => fileInput?.click()}>{opening() ? t('opening') : t('chooseLocalFiles')}</button>
+        <CreateDocument names={documents().map(item=>item.name)} busy={opening()} disabled={opening()||documents().length>=8} error={error()} onCreate={createDocument}/>
         <p class="max-w-2xl text-xs leading-5 text-slate-500">{t('workingCopyHint')}</p>
       </div>
       <details class="mt-2"><summary class="editor-action w-fit cursor-pointer rounded text-xs text-slate-600 focus-visible:outline-2 focus-visible:outline-teal-700">{t('openByPath')}</summary>
@@ -178,7 +188,7 @@ export function WorkspaceApp() {
     <Show when={error()}><StatusPanel id="workspace-error" danger panel={{ title: t('operationFailed'), message: problemMessage(error()), details: error(), dismissible: true }} onDismiss={() => setError('')}/></Show>
     <Show when={confirmClose()}>{item => <section id="workspace-close" tabindex={-1} role="region" aria-label={t('confirmClosingFile')} class="shrink-0 border-b border-amber-200 bg-amber-50 p-4 text-sm"><p>{item().uploaded ? t('closeWorkingCopyWarning', { name: item().name }) : t('closeWarning', { name: item().name })}</p><div class="mt-2 flex flex-wrap gap-2"><Show when={item().kind === 'docx' && !item().uploaded}><button class={primaryButtonClass} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item(), true)}>{t('saveAndClose')}</button></Show><button class={buttonClass} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item(), false, true)}>{item().uploaded ? t('closeWorkingCopy') : t('discardInputAndClose')}</button><button class={buttonClass} onClick={() => { select(item().id); cancelClose(); }}>{t('returnToDocument')}</button><button class={quietButtonClass} onClick={cancelClose}>{t('cancel')}</button></div></section>}</Show>
     <div role="tablist" aria-label={t('openDocuments')} class="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-300 bg-slate-50 p-2"><For each={documents()}>{(item, index) => <div class="flex shrink-0 items-center rounded-md border" classList={{ 'border-teal-600 bg-white': active() === item.id, 'border-transparent': active() !== item.id }}>
-      <button id={`tab-${item.id}`} role="tab" aria-selected={active() === item.id} aria-controls={`panel-${item.id}`} tabindex={active() === item.id ? 0 : -1} class="editor-action max-w-64 rounded-md px-3 py-2 text-left" title={item.path} onClick={() => select(item.id)} onKeyDown={event => tabKey(event, index())}><span class="block truncate text-sm font-medium">{item.name}</span><span class="block truncate text-xs text-slate-500">{item.kind.toUpperCase()} · {localizeMessage(states()[item.id]?.message ?? t('readyToOpen'))} · {item.uploaded ? t('workingCopy') : item.path.split('/').at(-2)}</span></button>
+      <button id={`tab-${item.id}`} role="tab" aria-selected={active() === item.id} aria-controls={`panel-${item.id}`} tabindex={active() === item.id ? 0 : -1} class="editor-action max-w-64 rounded-md px-3 py-2 text-left" title={item.path} onClick={() => select(item.id)} onKeyDown={event => tabKey(event, index())}><span class="block truncate text-sm font-medium">{item.name}</span><span class="block truncate text-xs text-slate-500">{item.kind.toUpperCase()} · {localizeMessage(states()[item.id]?.message ?? t('readyToOpen'))} · {item.origin==='new'?t('newDocumentCopy'):item.uploaded ? t('workingCopy') : item.path.split('/').at(-2)}</span></button>
       <button aria-label={t('closeNamed', { name: item.name })} class={`${quietButtonClass} px-2`} disabled={Boolean(checking() || closing())} onClick={() => checkClose(item)}>×</button>
     </div>}</For></div>
     <main class="relative min-h-0 flex-1"><Show when={!documents().length}><div class="mx-auto max-w-lg p-8 text-center"><h2 class="text-lg font-semibold">{t('workspaceEmpty')}</h2><p class="mt-3 text-sm leading-7 text-slate-600">{t('chooseFilesHint')}</p></div></Show>

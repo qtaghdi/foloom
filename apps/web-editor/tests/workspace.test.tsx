@@ -112,3 +112,31 @@ it('confirms closing a saved working copy so downloaded edits cannot be silently
   button('복사본 닫기').click(); reply('2'); await settle();
   expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
 });
+
+it('creates a named empty DOCX without replacing the existing editor', async () => {
+  const fetcher = fixture(); await settle();
+  const existing = document.querySelector('iframe');
+  button('새 DOCX 문서').click(); await settle();
+  const dialog = document.querySelector('dialog')!;
+  const name = dialog.querySelector('input')!;
+  const enterName = (value: string) => {
+    name.value = value;
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  enterName('../original.docx');
+  expect(button('문서 만들기').disabled).toBe(true);
+  enterName('REPORT.DOCX');
+  expect(button('문서 만들기').disabled).toBe(true);
+  enterName(' 회의록 ');
+  const opened = { id: 'new-doc', name: '회의록.docx', path: '', kind: 'docx', origin: 'new', uploaded: true };
+  fetcher.mockResolvedValueOnce({ ok: true, status: 201, json: async () => opened });
+  dialog.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await settle();
+  expect(fetcher).toHaveBeenCalledWith('/api/documents/new-docx', expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ name: '회의록.docx' }),
+  }));
+  expect(document.querySelector('dialog')).toBeNull();
+  expect(document.querySelector('iframe')).toBe(existing);
+  expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain('회의록.docx');
+  expect(localStorage.getItem('document-workspace:recent:v1')).toBeNull();
+});
