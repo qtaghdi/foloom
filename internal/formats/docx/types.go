@@ -20,6 +20,7 @@ const (
 )
 
 type Run struct {
+	Link             *LinkInfo    `json:"link,omitempty"`
 	Picture          *PictureInfo `json:"picture,omitempty"`
 	CharacterStyleID string       `json:"characterStyleId,omitempty"`
 	BaseStyle        *InlineStyle `json:"baseStyle,omitempty"`
@@ -116,17 +117,18 @@ type HistoryInput struct {
 	Direction    string `json:"direction" jsonschema:"undo or redo"`
 }
 type Snapshot struct {
-	EvenAndOddHeaders *bool         `json:"evenAndOddHeaders,omitempty"`
-	Sections          []SectionInfo `json:"sections"`
-	Styles            []StyleInfo   `json:"styles"`
-	History           HistoryState  `json:"history"`
-	ID                string        `json:"id"`
-	Name              string        `json:"name"`
-	Revision          uint64        `json:"revision"`
-	Sequence          uint64        `json:"sequence"`
-	Blocks            []Block       `json:"blocks"`
-	Page              *PageLayout   `json:"page,omitempty"`
-	Warnings          []string      `json:"warnings"`
+	Bookmarks         []BookmarkInfo `json:"bookmarks,omitempty"`
+	EvenAndOddHeaders *bool          `json:"evenAndOddHeaders,omitempty"`
+	Sections          []SectionInfo  `json:"sections"`
+	Styles            []StyleInfo    `json:"styles"`
+	History           HistoryState   `json:"history"`
+	ID                string         `json:"id"`
+	Name              string         `json:"name"`
+	Revision          uint64         `json:"revision"`
+	Sequence          uint64         `json:"sequence"`
+	Blocks            []Block        `json:"blocks"`
+	Page              *PageLayout    `json:"page,omitempty"`
+	Warnings          []string       `json:"warnings"`
 }
 
 // ParagraphContent references formatting in the inspected revision. Repeated

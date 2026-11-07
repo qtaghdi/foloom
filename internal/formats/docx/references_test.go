@@ -43,6 +43,14 @@ func TestDOCXReferencesPreserveTargetsAndRejectUnsafeURLs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	reloaded := mustSnapshot(t, reopened)
+	if len(reloaded.Bookmarks) != 1 || reloaded.Bookmarks[0].ParagraphID != reloaded.Blocks[1].ID {
+		t.Fatal("bookmark not projected after reopen")
+	}
+	internal, web := reloaded.Blocks[0].Paragraph.Runs[1].Link, reloaded.Blocks[2].Paragraph.Runs[1].Link
+	if internal == nil || internal.Bookmark != "Target" || web == nil || web.URL != external {
+		t.Fatal("safe links not projected after reopen")
+	}
 	for range 3 {
 		historyRestore(t, reopened, "undo")
 	}

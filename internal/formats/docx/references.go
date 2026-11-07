@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -160,4 +161,84 @@ func (index bookmarkIndex) hasTarget(name string) bool {
 		}
 	}
 	return false
+}
+
+func (p *documentPackage) projectReferences(root *node, blocks []Block, targets map[string]target) []BookmarkInfo {
+	bookmarks := []BookmarkInfo{}
+	if !bytes.Contains(p.document, []byte("hyperlink")) && !bytes.Contains(p.document, []byte("bookmarkStart")) {
+		return bookmarks
+	}
+	index := readBookmarks(root)
+	names := map[string]bool{}
+	blockIndex := 0
+	for _, child := range root.child("body").children {
+		if !child.is("p") && !child.is("tbl") {
+			continue
+		}
+		block := &blocks[blockIndex]
+		blockIndex++
+		if block.Paragraph == nil {
+			continue
+		}
+		for _, marker := range child.children {
+			if len(bookmarks) >= 500 {
+				break
+			}
+			if marker.is("bookmarkStart") && index.safeStart(marker) {
+				name := attribute(marker, wordNS, "name")
+				names[name] = true
+				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID})
+			}
+		}
+	}
+	var external map[string]string
+	readExternal := func() {
+		external = make(map[string]string)
+		rels, err := parseXML(p.partData(documentRelationships, nil))
+		if err != nil {
+			return
+		}
+		for _, rel := range rels.children {
+			if rel.name.Space == packageRelNS && rel.name.Local == "Relationship" && attribute(rel, "", "Type") == officeRelNS+"/hyperlink" && attribute(rel, "", "TargetMode") == "External" {
+				raw := attribute(rel, "", "Target")
+				if safeLink(raw) {
+					external[attribute(rel, "", "Id")] = raw
+				}
+			}
+		}
+	}
+	project := func(paragraph *Paragraph) {
+		for i := range paragraph.Runs {
+			run := &paragraph.Runs[i]
+			t, ok := targets[run.ID]
+			if !ok || t.kind != "hyperlink" || strings.TrimSpace(run.Text) == "" {
+				continue
+			}
+			id, anchor := attribute(t.node, officeRelNS, "id"), attribute(t.node, wordNS, "anchor")
+			if id != "" && anchor == "" {
+				if external == nil {
+					readExternal()
+				}
+				if raw := external[id]; raw != "" {
+					run.Link = &LinkInfo{URL: raw}
+				}
+			} else if id == "" && names[anchor] {
+				run.Link = &LinkInfo{Bookmark: anchor}
+			}
+		}
+	}
+	for i := range blocks {
+		block := &blocks[i]
+		if block.Paragraph != nil {
+			project(block.Paragraph)
+		}
+		for j := range block.Rows {
+			for k := range block.Rows[j].Cells {
+				for l := range block.Rows[j].Cells[k].Paragraphs {
+					project(&block.Rows[j].Cells[k].Paragraphs[l])
+				}
+			}
+		}
+	}
+	return bookmarks
 }

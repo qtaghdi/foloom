@@ -137,6 +137,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	s.addPicturePreviews(blocks, targetsByID)
+	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID)
 	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 떠 있는 그림과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
 		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
@@ -177,7 +178,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			}
 		}
 	}
-	return Snapshot{EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {

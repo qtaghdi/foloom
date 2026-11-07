@@ -10,10 +10,10 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ImageOperation, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ImageOperation, type ReferenceOperation, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
-type DraftCheckpoint = { image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { reference?:ReferenceOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   composition?(active: boolean): void;
   history?(controls: HistoryControls): void;
@@ -40,6 +40,7 @@ export class DocumentController {
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
   private loading = false;
+  private referenceDraft?:ReferenceOperation;
   private imageDraft?:ImageOperation;
   private boundaryDraft?: BoundaryOperation;
   private headerParityDraft?: boolean;
@@ -51,10 +52,10 @@ export class DocumentController {
 
   constructor(private view: DocumentView) {}
 
-  hasDrafts(): boolean { return this.imageDraft !== undefined || this.boundaryDraft !== undefined || this.headerParityDraft !== undefined || this.sectionDrafts.size>0 || this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
+  hasDrafts(): boolean { return this.referenceDraft !== undefined || this.imageDraft !== undefined || this.boundaryDraft !== undefined || this.headerParityDraft !== undefined || this.sectionDrafts.size>0 || this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
   private checkpoint(selection?: TextSelection): DraftCheckpoint {
-    return { image:this.imageDraft, boundary: this.boundaryDraft, headerParity: this.headerParityDraft, sections:[...this.sectionDrafts],styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
+    return { reference:this.referenceDraft, image:this.imageDraft, boundary: this.boundaryDraft, headerParity: this.headerParityDraft, sections:[...this.sectionDrafts],styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
   }
   private remember(before: DraftCheckpoint, key?: string): void {
     const now = Date.now();
@@ -83,7 +84,7 @@ export class DocumentController {
   }
 
   changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string): boolean {
-    if (this.busy || this.loading || this.disposed || this.boundaryDraft || this.imageDraft) return false;
+    if (this.busy || this.loading || this.disposed || this.boundaryDraft || this.imageDraft || this.referenceDraft) return false;
     const before = this.structureDraft && this.checkpoint({anchor:{runId,offset:start},focus:{runId,offset:end}});
     const focus = this.structureDraft?.change(action, runId, start, end, insertion);
     if (!focus || !this.structureDraft) return false;
@@ -104,7 +105,7 @@ export class DocumentController {
     }
   }
   replaceSelection(selection: TextSelection, text: string, inline = false): boolean {
-    if (this.busy || this.loading || this.disposed || this.boundaryDraft || this.imageDraft) return false;
+    if (this.busy || this.loading || this.disposed || this.boundaryDraft || this.imageDraft || this.referenceDraft) return false;
     const before = this.structureDraft && this.checkpoint(selection);
     const focus = this.structureDraft?.replace(selection, text, inline);
     if (!focus || !this.structureDraft) return false;
@@ -114,7 +115,7 @@ export class DocumentController {
     this.updateSave(); return true;
   }
   pasteRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): boolean {
-    if (this.busy || this.loading || this.disposed || this.composing || this.boundaryDraft || this.imageDraft) return false;
+    if (this.busy || this.loading || this.disposed || this.composing || this.boundaryDraft || this.imageDraft || this.referenceDraft) return false;
     const before = this.structureDraft && this.checkpoint(selection);
     const focus=this.structureDraft?.replaceRich(selection,paragraphs);
     if (!focus || !this.structureDraft) return false;
@@ -126,7 +127,7 @@ export class DocumentController {
   private preview():Snapshot {return {...this.structureDraft!.snapshot(),evenAndOddHeaders:this.headerParityDraft??this.snapshot?.evenAndOddHeaders,sections:this.sections()};}
   sections(){return previewSections(this.snapshot?.sections??[],this.sectionDrafts);}
   replaceSearchMatches(ranges:TextSelection[],replacement:string):boolean {
-    if(this.blocked||this.loading||this.busy||this.disposed||this.composing||this.boundaryDraft||this.imageDraft||
+    if(this.blocked||this.loading||this.busy||this.disposed||this.composing||this.boundaryDraft||this.imageDraft||this.referenceDraft||
       !this.structureDraft||!this.snapshot||ranges.length===0||ranges.length>200||replacement.length>200||validateRunText(replacement)) return false;
     const before=this.checkpoint();
     let focus:DraftFocus|undefined;
@@ -142,6 +143,16 @@ export class DocumentController {
     }
     this.remember(before);
     this.view.render(this.preview(),focus);
+    this.view.status('미저장 변경','pending');
+    this.updateSave();
+    return true;
+  }
+  pendingReference(): boolean { return Boolean(this.referenceDraft); }
+  editReference(operation:ReferenceOperation): boolean {
+    if(this.blocked||this.loading||this.disposed||!this.structureDraft||this.hasDrafts())return false;
+    this.remember(this.checkpoint());
+    this.referenceDraft=operation;
+    this.view.render(this.preview());
     this.view.status('미저장 변경','pending');
     this.updateSave();
     return true;
@@ -181,7 +192,7 @@ export class DocumentController {
     return true;
   }
   editSection(id:string,format:SectionFormat):boolean {
-   if(this.blocked||this.busy||this.loading||this.disposed||this.composing||this.boundaryDraft||this.imageDraft||!this.structureDraft)return false;
+   if(this.blocked||this.busy||this.loading||this.disposed||this.composing||this.boundaryDraft||this.imageDraft||this.referenceDraft||!this.structureDraft)return false;
    const original=this.snapshot?.sections?.find(section=>section.id===id);if(!original?.editable||!Object.keys(format).length||!sectionFormatSchema.safeParse(format).success)return false;
    const previous=this.sectionDrafts.get(id),merged={...previous,...format};
    if(format.headerFooters){const slots=new Map((previous?.headerFooters??[]).map(slot=>[slot.kind+':'+slot.variant,slot]));for(const slot of format.headerFooters)slots.set(slot.kind+':'+slot.variant,slot);merged.headerFooters=[...slots.values()];}
@@ -238,10 +249,10 @@ export class DocumentController {
     const text = [...this.drafts.values()].filter(op => !this.structureDraft?.ownsOriginal(op.targetId));
     const parity: Operation[] = this.headerParityDraft === undefined ? [] :
       [{type:'update_header_parity',evenAndOddHeaders:this.headerParityDraft}];
-    return [...(this.imageDraft?[this.imageDraft]:[]),...this.boundaryDraft ? [this.boundaryDraft] : [],...parity,...[...this.sectionDrafts].map(([sectionId,section])=>({type:'update_section' as const,sectionId,section})),...[...this.styleDrafts.values()].map(styleDefinition=>({type:'define_style' as const,styleDefinition})),...text, ...this.structureDraft?.operations() ?? []];
+    return [...(this.referenceDraft?[this.referenceDraft]:[]),...(this.imageDraft?[this.imageDraft]:[]),...this.boundaryDraft ? [this.boundaryDraft] : [],...parity,...[...this.sectionDrafts].map(([sectionId,section])=>({type:'update_section' as const,sectionId,section})),...[...this.styleDrafts.values()].map(styleDefinition=>({type:'define_style' as const,styleDefinition})),...text, ...this.structureDraft?.operations() ?? []];
   }
   private resetDraft(snapshot: Snapshot): void {
-    this.drafts.clear();this.styleDrafts.clear();this.sectionDrafts.clear();this.headerParityDraft=undefined;this.boundaryDraft=undefined;this.imageDraft=undefined;
+    this.drafts.clear();this.styleDrafts.clear();this.sectionDrafts.clear();this.headerParityDraft=undefined;this.boundaryDraft=undefined;this.imageDraft=undefined;this.referenceDraft=undefined;
     this.undoDraft = []; this.redoDraft = []; this.lastTyping = undefined;
     this.structureDraft = new StructureDraft(snapshot);
     this.expectedText.clear();
@@ -325,7 +336,7 @@ export class DocumentController {
     if (from.length) {
       const saved = from.pop()!;
       to.push(this.checkpoint(selection)); this.trimDraftHistory();
-      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.styleDrafts=new Map(saved.styles); this.sectionDrafts=new Map(saved.sections); this.headerParityDraft=saved.headerParity; this.boundaryDraft=saved.boundary; this.imageDraft=saved.image; this.lastTyping = undefined;
+      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.styleDrafts=new Map(saved.styles); this.sectionDrafts=new Map(saved.sections); this.headerParityDraft=saved.headerParity; this.boundaryDraft=saved.boundary; this.imageDraft=saved.image; this.referenceDraft=saved.reference; this.lastTyping = undefined;
       const point = saved.selection?.focus;
       this.view.render(this.preview(), point ? {runId:point.runId,start:point.offset,end:point.offset,selection:saved.selection} : undefined);
       this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
