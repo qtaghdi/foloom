@@ -200,6 +200,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 	}
 	markFields(body)
+	anchors := paragraphAnchors(root)
 	targets := map[string]target{}
 	blocks := []Block{}
 	unsupported := false
@@ -215,7 +216,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			allowed = false
 			unsupported = true
 		}
-		out := Paragraph{ID: id(), Runs: []Run{}}
+		out := Paragraph{ID: id(), Anchor: anchors[p], Runs: []Run{}}
 		var trailingBreak *node
 		if kind == "replace_run_text" {
 			trailingBreak = trailingPageBreak(p)

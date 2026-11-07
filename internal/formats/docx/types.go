@@ -77,6 +77,7 @@ type ParagraphLayout struct {
 }
 
 type Paragraph struct {
+	Anchor            string           `json:"anchor,omitempty"`
 	OutlineLevel      *int             `json:"outlineLevel,omitempty"`
 	OutlineOverride   *int             `json:"outlineOverride,omitempty"`
 	SectionID         string           `json:"sectionId,omitempty"`
@@ -209,6 +210,7 @@ type InitialBlock struct {
 }
 
 type Event struct {
+	TextOnly bool   `json:"textOnly,omitempty"`
 	Sequence uint64 `json:"sequence"`
 	Revision uint64 `json:"revision"`
 	Actor    string `json:"actor"`

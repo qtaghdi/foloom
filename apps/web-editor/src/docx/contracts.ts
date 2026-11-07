@@ -20,6 +20,7 @@ const paragraphFormatSchema = z.object({styleId:z.string().max(120).optional(),
 });
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
+  anchor:z.string().regex(/^[0-7][0-9A-F]{7}$/).optional(),
   outlineLevel,outlineOverride:outlineLevel,
   sectionId:z.string().optional(),styleId:z.string().max(120).optional(),id: z.string(), runs: z.array(runSchema), structureEditable: z.boolean().optional(),
   pageBreakBefore: z.boolean().optional(), pageBreakAfter: z.boolean().optional(),
@@ -56,6 +57,7 @@ export const snapshotSchema = z.object({
   ])),
 });
 export const eventSchema = z.object({
+  textOnly:z.boolean().optional(),
   sequence: z.number().int().nonnegative(), revision: z.number().int().nonnegative(),
   type: z.enum(['docx.committed', 'docx.reload']), actor: z.string().optional(),
 });

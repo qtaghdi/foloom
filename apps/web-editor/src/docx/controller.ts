@@ -52,6 +52,8 @@ export class DocumentController {
 
   constructor(private view: DocumentView) {}
 
+  hasStructuralDraft(): boolean { return Boolean(this.structureDraft?.hasChanges()); }
+
   hasDrafts(): boolean { return this.referenceDraft !== undefined || this.imageDraft !== undefined || this.boundaryDraft !== undefined || this.headerParityDraft !== undefined || this.sectionDrafts.size>0 || this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
   private checkpoint(selection?: TextSelection): DraftCheckpoint {
@@ -262,7 +264,7 @@ export class DocumentController {
     }
   }
 
-  async load(observed?: { sequence: number; revision: number; actor?: string }): Promise<void> {
+  async load(observed?: { sequence: number; revision: number; actor?: string; textOnly?:boolean }): Promise<void> {
     if (this.busy || this.loading || this.disposed || this.composing) return;
     this.loading = true;
     this.disconnect();
@@ -273,11 +275,11 @@ export class DocumentController {
       const snapshot = await this.request('/api/docx');
       if (this.disposed) return;
       if (observed && this.snapshot && snapshot.revision === observed.revision && observed.actor === 'ai') {
-        const changes = compareParagraphs(this.snapshot, snapshot).slice(0, 60);
+        const changes = compareParagraphs(this.snapshot, snapshot, observed.textOnly===true).slice(0, 60);
         for (const [index, change] of changes.entries()) {
           this.view.activity?.({ id: index === 0 ? `event:${observed.sequence}` : `event:${observed.sequence}:${change.key}`, actor: 'ai', state: 'committed',
             title: '텍스트 변경', location: change.label, revision: observed.revision,
-            documentChange: { session: snapshot.id, key: change.key, before: change.before, after: change.after } });
+            documentChange: { session: snapshot.id, key: change.key, anchor:change.anchor, before: change.before, after: change.after } });
         }
       }
       this.snapshot = snapshot;

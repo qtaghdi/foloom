@@ -511,7 +511,14 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	}
 	m := historyManifest{Version: 1, Revision: s.revision + 1, Current: historyHash(content), Undo: append(append([]historyEntry(nil), s.history.manifest.Undo...), historyEntry{Hash: historyHash(s.content), Size: len(s.content), Actor: actor})}
 	trimHistory(&m)
-	return s.persistHistory(ctx, content, candidate, m, actor)
+	textOnly := true
+	for _, op := range input.Operations {
+		if op.Type != "replace_run_text" && op.Type != "replace_cell_text" {
+			textOnly = false
+			break
+		}
+	}
+	return s.persistHistory(ctx, content, candidate, m, actor, textOnly)
 }
 func (s *Session) checkSource() error {
 	content, err := readFile(s.path)
