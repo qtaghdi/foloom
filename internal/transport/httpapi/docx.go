@@ -108,6 +108,22 @@ func (s *Server) applyDOCX(ctx context.Context, input docx.ApplyInput, actor str
 	defer release()
 	return session.Apply(ctx, input, actor)
 }
+func (s *Server) restoreDOCX(ctx context.Context, input docx.HistoryInput, actor string) (docx.Snapshot, error) {
+	if !s.scoped && input.SessionID != "" {
+		s.sessionMu.RLock()
+		document := s.documents[input.SessionID]
+		s.sessionMu.RUnlock()
+		if document != nil && document.Kind == "docx" {
+			return document.server.restoreDOCX(ctx, input, actor)
+		}
+	}
+	session, release, err := s.acquireDOCX()
+	if err != nil {
+		return docx.Snapshot{}, err
+	}
+	defer release()
+	return session.RestoreHistory(ctx, input, actor)
+}
 func (s *Server) docxLaunchURL(id string) (string, error) {
 	url, err := s.issueBrowserLaunchURL()
 	if url != "" {
@@ -138,8 +154,12 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		snapshot, err := s.docxSnapshot(ctx)
 		return nil, snapshot, err
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "apply_docx_operations", Title: "DOCX 텍스트 편집", Description: "Atomically replace plain body or simple table run text while preserving unrelated OOXML. Pass current sessionId, baseRevision, editable targetId and exact expectedText. Refresh after conflicts. Tabs and line breaks, merged/nested tables, fields and tracked changes are unsupported.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "apply_docx_operations", Title: "DOCX 편집", Description: "Atomically edit body or simple table text, formatting and supported paragraph structure. Use define_style with styleDefinition (id, name, kind paragraph/character, basedOn, run and paragraph) to create or modify a definition. Style definitions may precede their applications in the same batch. Use paragraph format styleId or run style styleId to apply an existing or same-batch definition. Style boolean flags follow Word style-toggle inheritance; direct run flags are absolute. Use replace_run_text/replace_cell_text for text (LF is an inline line break), or replace_paragraphs with first/last paragraph IDs and ordered paragraphs referencing sourceId formatting. Run style supports bounded inline formatting overrides and reset of supported direct properties. Paragraph format supports align, indent and spacing in twips, line in 240ths for auto or twips for exact/atLeast, bidi and textDirection. Only structureEditable paragraphs in one contiguous sibling range are supported. Pass sessionId, baseRevision and exact expectedText (paragraph texts joined by LF). Do not overlap operations. Refresh after conflicts. Tabs, protected section/page boundaries, fields and tracked changes are unsupported.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {
 		snapshot, err := s.applyDOCX(ctx, input, "ai")
+		return nil, snapshot, err
+	})
+	mcp.AddTool(server, &mcp.Tool{Name: "restore_docx_history", Title: "DOCX 실행 취소·다시 실행", Description: "Restore one complete accepted DOCX batch from the shared chronological human/AI history. Inspect history, sessionId and current revision first. direction is undo or redo. New writes discard redo. Refresh after conflicts.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.HistoryInput) (*mcp.CallToolResult, docx.Snapshot, error) {
+		snapshot, err := s.restoreDOCX(ctx, input, "ai")
 		return nil, snapshot, err
 	})
 }
@@ -152,6 +172,23 @@ func (s *Server) docxRoutes() {
 			return
 		}
 		writeJSON(w, http.StatusOK, snapshot)
+	})))
+	s.mux.Handle("GET /api/docx/picture", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, release, err := s.acquireDOCX()
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer release()
+		raw, mime, err := session.Picture(r.Context(), r.URL.Query().Get("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", mime)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "private, no-store")
+		_, _ = w.Write(raw)
 	})))
 	s.mux.Handle("POST /api/docx/operations", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -167,6 +204,30 @@ func (s *Server) docxRoutes() {
 			return
 		}
 		snapshot, err := s.applyDOCX(r.Context(), input, "human")
+		if err != nil {
+			status := http.StatusBadRequest
+			if errors.Is(err, docx.ErrRevisionConflict) || errors.Is(err, docx.ErrExternalChange) || errors.Is(err, docx.ErrWriterBusy) {
+				status = http.StatusConflict
+			}
+			writeError(w, status, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, snapshot)
+	})))
+	s.mux.Handle("POST /api/docx/history", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var input docx.HistoryInput
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid DOCX history request: %w", err))
+			return
+		}
+		if err := decoder.Decode(new(any)); err != io.EOF {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("DOCX history request must contain one JSON value"))
+			return
+		}
+		snapshot, err := s.restoreDOCX(r.Context(), input, "human")
 		if err != nil {
 			status := http.StatusBadRequest
 			if errors.Is(err, docx.ErrRevisionConflict) || errors.Is(err, docx.ErrExternalChange) || errors.Is(err, docx.ErrWriterBusy) {

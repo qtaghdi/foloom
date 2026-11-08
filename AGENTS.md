@@ -291,6 +291,26 @@ and expected outputs.
   a whole multi-feature task into one commit merely because it shares a request.
 - Keep one cohesive change in one commit when its pieces are inseparable. Do not
   split by file or create artificial commits just to increase the commit count.
+- Before implementation, record a behavior-level commit plan and prerequisite
+  order in the issue or PR. Prefer separate commits when a behavior can be
+  independently explained, reviewed, verified through its real entry point,
+  or reverted while retaining the other behaviors, or has distinct failure,
+  compatibility, or acceptance requirements.
+- Issue count, PR count, shared files, implementation time, file count, and line
+  count do not determine commit boundaries. Build a verifiable prerequisite
+  first and layer dependent behaviors in order. Do not split Go, transport, UI,
+  and tests into commits that cannot build or violate their shared contract.
+- Keep paragraph splitting's server operation, draft model, Enter handling and
+  caret restoration together when required for one working behavior. Separate
+  independently verifiable inline breaks, multi-paragraph paste, and search.
+- Before submission, compare the actual diff with the commit plan. Explain why
+  multiple behaviors are inseparable if they remain in one commit. Never rewrite
+  published history merely to improve commit organization without owner consent.
+- When the owner requests all issues, continue prerequisite and independent work
+  instead of treating a partial PR as completion. Record genuinely blocked checks
+  and their environment requirements. The owner has requested normal PRs, not
+  Draft PRs, for this work. Keep remaining work and unverified evidence explicit;
+  normal PR status is not issue completion or permission to merge.
 - Include each feature's relevant tests, documentation, and changelog updates in
   the same commit as that feature. Connect each commit or focused commit group
   to its issue and record the implementation order for multi-issue work.

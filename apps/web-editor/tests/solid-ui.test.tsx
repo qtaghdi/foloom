@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'solid-js/web';
 import { AppView } from '../src/ui/app-view';
 import { WorkbookShell } from '../src/ui/workbook-shell';
+import { readTextSelection, restoreTextSelection } from '../src/docx/selection';
 import { DocumentApp } from '../src/docx/document-app';
 import { WorkbookApp } from '../src/workbook-app';
 import type { Snapshot } from '../src/docx/contracts';
@@ -174,8 +175,8 @@ it('localizes known workbook notices while retaining unknown diagnostic text', (
 it('keeps unsupported pasted text editable and restores saving after correction', async () => {
   const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
   const input = root.querySelector('textarea')!;
-  edit(input, '붙여넣은\n여러 줄');
-  expect(input.value).toBe('붙여넣은\n여러 줄'); expect(input.getAttribute('aria-invalid')).toBe('true');
+  edit(input, '붙여넣은\t탭 문자');
+  expect(input.value).toBe('붙여넣은\t탭 문자'); expect(input.getAttribute('aria-invalid')).toBe('true');
   expect(button(root, '저장').disabled).toBe(true);
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
   expect(document.activeElement).toBe(input); expect(f.fetcher).toHaveBeenCalledTimes(1);
@@ -196,7 +197,7 @@ it('locates an observed AI change by paragraph and displays its verified before 
   next.sequence = 1;
   next.blocks[0]!.paragraph!.runs[0]!.text = 'AI 수정';
   fixture.fetcher.mockResolvedValueOnce({ ok: true, json: async () => next });
-  fixture.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
+  fixture.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai', textOnly:true }) });
   await settle();
   const marker = root.querySelector<HTMLButtonElement>('.change-marker')!;
   expect(marker.closest('section')?.id).toBe('docx-paragraph-0');
@@ -249,4 +250,180 @@ it('clears the visible AI presence when the session reports idle', () => {
   view.showAIPresence({ ...event, sequence: 2, state: 'idle' }, 1);
   expect(root.querySelector('#ai-presence')).toBeNull();
   view.dispose();
+});
+
+
+function rich(root: ParentNode): HTMLElement { return root.querySelector<HTMLElement>('[data-continuous-editor]')!; }
+function spans(root: ParentNode): HTMLElement[] { return [...root.querySelectorAll<HTMLElement>('[data-docx-run]')]; }
+function selectRich(root: ParentNode, first: number, start: number, last = first, end = start) {
+  const fields = spans(root);
+  restoreTextSelection(rich(root), { anchor: { runId: fields[first]!.dataset.docxRun!, offset: start }, focus: { runId: fields[last]!.dataset.docxRun!, offset: end } });
+}
+function typeRich(root: ParentNode, index: number, text: string) {
+  const span = spans(root)[index]!; span.textContent = text;
+  span.dispatchEvent(new InputEvent('input', { inputType: 'insertText', bubbles: true }));
+}
+it('keeps split paragraphs as drafts, preserves typing and restores the caret without saving per Enter', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: '앞뒤', editable: true, bold: true, italic: false }] } }] };
+  const f = docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle();
+  const original = spans(root)[0]; typeRich(root, 0, '앞중간뒤'); expect(spans(root)[0]).toBe(original);
+  selectRich(root, 0, 1, 0, 3);
+  rich(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
+  expect([...root.querySelectorAll('.docx-paragraph')].map(p => p.textContent)).toEqual(['앞', '뒤']);
+  expect(readTextSelection(rich(root))?.focus.offset).toBe(0);
+  selectRich(root, 1, 0, 2, 1);
+  rich(root).dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: '이어쓰기', bubbles: true, cancelable: true })); await settle();
+  expect(f.fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  button(root, '저장').click(); await settle();
+  const body = JSON.parse(f.fetcher.mock.calls.find(([, init]) => init?.method === 'POST')![1]!.body as string);
+  expect(body.operations).toEqual([{ type: 'replace_paragraphs', targetId: 'p', endTargetId: 'p', expectedText: '앞뒤', text: '', paragraphs: [
+    { sourceId: 'p', runs: [{ sourceId: 'r', text: '앞' }] }, { sourceId: 'p', runs: [{ sourceId: 'r', text: '이어쓰기' }] },
+  ] }]);
+});
+it('does not split a paragraph while IME composition owns Enter', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: '', editable: true, bold: false, italic: false }] } }] };
+  docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle(); selectRich(root, 0, 0);
+  rich(root).dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  const span = spans(root)[0]!; span.textContent = '한';
+  rich(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  expect(spans(root)[0]).toBe(span); expect(span.textContent).toBe('한');
+  rich(root).dispatchEvent(new CompositionEvent('compositionend', { data: '한', bubbles: true })); await settle();
+  selectRich(root, 0, 1); rich(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
+});
+it('uses mobile beforeinput paragraph intent and preserves structure drafts after a lost response', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: 'mobile', editable: true, bold: false, italic: false }] } }] };
+  const f = docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle(); selectRich(root, 0, 6);
+  rich(root).dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertLineBreak', bubbles: true, cancelable: true })); await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
+  typeRich(root, 1, 'recover draft');
+  expect(spans(root)[1]!.querySelector('[data-docx-empty]')).toBeNull();
+  f.fetcher.mockRejectedValueOnce(new Error('response lost'));
+  button(root, '저장').click(); await settle();
+  expect([...root.querySelectorAll('.docx-paragraph')].map(p => p.textContent)).toEqual(['mobile','recover draft']);
+  expect(button(root, '저장').disabled).toBe(true);
+  expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
+});
+
+it('offers plain and basic style paste and never deletes selected text for an image-only clipboard', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'keep',editable:true,bold:true,italic:false}]}}] };
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();
+  const options=root.querySelector<HTMLSelectElement>('[aria-label="붙여넣기 서식"]')!;
+  options.value='basic';options.dispatchEvent(new Event('change',{bubbles:true}));
+  selectRich(root,0,0,0,4);
+  const image=new DataTransfer(); image.items.add(new File(['bytes'],'image.png',{type:'image/png'}));
+  rich(root).dispatchEvent(new ClipboardEvent('paste',{clipboardData:image,bubbles:true,cancelable:true}));
+  expect(spans(root)[0]?.textContent).toBe('keep');
+  const clipboard=new DataTransfer();clipboard.setData('text/plain','new');clipboard.setData('text/html','<p><em style="color:#112233">new</em></p>');
+  rich(root).dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));await settle();
+  expect(spans(root)[0]?.textContent).toBe('new');expect(spans(root)[0]?.style.fontStyle).toBe('italic');
+  button(root,'저장').click();await settle();
+  const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+  expect(body.operations[0].paragraphs[0].runs[0].style).toEqual({bold:false,italic:true,color:'#112233'});
+});
+it('preserves selected source text when writing a cut clipboard fails', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'keep',editable:true,bold:false,italic:false}]}}] };
+  docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,0,0,4);
+  const clipboard=new DataTransfer();clipboard.setData=()=>{throw new Error('clipboard denied');};
+  rich(root).dispatchEvent(new ClipboardEvent('cut',{clipboardData:clipboard,bubbles:true,cancelable:true}));await settle();
+  expect(spans(root)[0]?.textContent).toBe('keep');expect(root.querySelector('#save-status')?.textContent).toBe('저장됨');
+});
+
+it('restores the entire reversed selection when IME composition is cancelled', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
+    {id:'r1',text:'앞부분',editable:true,bold:true,italic:false}, {id:'r2',text:'뒷부분',editable:true,bold:false,italic:true},
+  ]}}] };
+  docxFixture(initial); const root=mount(()=><DocumentApp/>); await settle();
+  selectRich(root,1,2,0,1);
+  const before=readTextSelection(rich(root));
+  rich(root).dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));
+  spans(root)[0]!.textContent='임시';
+  rich(root).dispatchEvent(new CompositionEvent('compositionend',{data:'',bubbles:true})); await settle();
+  expect(spans(root).map(s=>s.textContent)).toEqual(['앞부분','뒷부분']);
+  expect(readTextSelection(rich(root))).toEqual(before);
+});
+
+it('uses one draft history for range edits, native undo intent and keyboard redo', async () => {
+  const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'앞뒤',editable:true,bold:true,italic:false}]}}]};
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);
+  rich(root).dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
+  const undo=new InputEvent('beforeinput',{inputType:'historyUndo',bubbles:true,cancelable:true});rich(root).dispatchEvent(undo);await settle();
+  expect(undo.defaultPrevented).toBe(true);expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(1);
+  expect(readTextSelection(rich(root))?.focus.offset).toBe(1);
+  rich(root).dispatchEvent(new KeyboardEvent('keydown',{key:'z',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
+  expect(f.fetcher.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0);
+  expect(button(root,'실행 취소').disabled).toBe(false);
+});
+
+it('reports mixed formatting and writes only the selected range through the toolbar',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'a',text:'AB',editable:true,bold:true,italic:false},{id:'b',text:'CD',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1,1,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ expect(button(root,'굵게').getAttribute('aria-pressed')).toBe('mixed');
+ button(root,'밑줄').click();await settle();
+ expect(spans(root).map(s=>s.textContent)).toEqual(['A','B','C','D']);
+ expect(spans(root)[1]?.style.textDecoration).toBe('underline');expect(spans(root)[2]?.style.textDecoration).toBe('underline');
+ expect(button(root,'밑줄').getAttribute('aria-pressed')).toBe('true');
+ button(root,'저장').click();await settle();
+ const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+ expect(body.operations[0].paragraphs[0].runs.map((r:any)=>r.style)).toEqual([undefined,{underline:true},{underline:true},undefined]);
+});
+
+it('saves paragraph alignment and indent through the document toolbar',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ const alignment=root.querySelector<HTMLSelectElement>('[aria-label="문단 정렬"]')!;alignment.value='center';alignment.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ const indent=root.querySelector<HTMLInputElement>('[aria-label="첫 줄 들여쓰기"]')!;indent.value='-12';indent.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ expect(root.querySelector<HTMLElement>('.docx-paragraph')?.style.textIndent).toBe('-12pt');
+ button(root,'저장').click();await settle();const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+ expect(body.operations[0].paragraphs[0].format).toEqual({align:'center',hanging:240});
+});
+
+it('remaps the cached toolbar selection after save when native selection was cleared',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ button(root,'밑줄').click();await settle();
+ const saved:Snapshot={...initial,revision:2,blocks:[{id:'new-p',type:'paragraph',paragraph:{id:'new-p',structureEditable:true,runs:[{id:'new-r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ f.fetcher.mockResolvedValueOnce({ok:true,json:async()=>saved});
+ document.getSelection()!.removeAllRanges();button(root,'저장').click();await settle();
+ expect(readTextSelection(rich(root))?.focus.runId).toBe('new-r');
+ const align=root.querySelector<HTMLSelectElement>('[aria-label="문단 정렬"]')!;expect(align.disabled).toBe(false);
+ align.value='center';align.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ expect(root.querySelector<HTMLElement>('.docx-paragraph > div')?.style.textAlign).toBe('center');
+});
+
+it('creates a style definition draft in the real dialog and applies it in the same save',async()=>{
+ const show=vi.spyOn(HTMLDialogElement.prototype,'showModal').mockImplementation(function(this:HTMLDialogElement){this.open=true;});
+ const close=vi.spyOn(HTMLDialogElement.prototype,'close').mockImplementation(function(this:HTMLDialogElement){this.open=false;});
+ try{
+  const initial:Snapshot={...snapshot,styles:[],blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'제목',editable:true,bold:false,italic:false}]}}]};
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+  button(root,'스타일 정의 편집').click();await settle();expect(show).toHaveBeenCalledOnce();
+  button(root,'스타일 추가').click();await settle();
+  const name=root.querySelector<HTMLInputElement>('[aria-label="스타일 이름"]')!;name.value='새 제목';name.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+  button(root,'상속 굵게 반전').click();await settle();button(root,'닫기').click();await settle();
+  const apply=root.querySelector<HTMLSelectElement>('[aria-label="문단 스타일 적용"]')!;const option=[...apply.options].find(o=>o.textContent?.startsWith('새 제목'))!;
+  apply.value=option.value;apply.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+  expect(root.textContent).toContain('스타일 미리 보기는 저장 후 갱신됩니다.');
+  button(root,'저장').click();await settle();const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+  expect(body.operations.map((op:any)=>op.type)).toEqual(['define_style','replace_paragraphs']);
+  expect(body.operations[0].styleDefinition).toMatchObject({name:'새 제목',kind:'paragraph',run:{bold:true}});
+  expect(body.operations[1].paragraphs[0].format.styleId).toBe(body.operations[0].styleDefinition.id);
+ }finally{show.mockRestore();close.mockRestore();}
+});
+
+it('keeps the newly created style selected after a second definition is inserted',async()=>{
+ const show=vi.spyOn(HTMLDialogElement.prototype,'showModal').mockImplementation(function(this:HTMLDialogElement){this.open=true;});
+ const close=vi.spyOn(HTMLDialogElement.prototype,'close').mockImplementation(function(this:HTMLDialogElement){this.open=false;});
+ try{
+  docxFixture({...snapshot,styles:[]});const root=mount(()=><DocumentApp/>);await settle();button(root,'스타일 정의 편집').click();await settle();
+  button(root,'스타일 추가').click();await settle();
+  const name=root.querySelector<HTMLInputElement>('[aria-label="새 스타일 이름"]')!;name.value='두 번째';name.dispatchEvent(new Event('input',{bubbles:true}));
+  button(root,'스타일 추가').click();await settle();
+  const picker=root.querySelector<HTMLSelectElement>('[aria-label="편집할 스타일"]')!;
+  expect(picker.selectedOptions[0]!.textContent).toContain('두 번째');
+  button(root,'닫기').click();await settle();button(root,'스타일 정의 편집').click();await settle();
+  expect(root.querySelector<HTMLSelectElement>('[aria-label="편집할 스타일"]')!.selectedOptions[0]!.textContent).toContain('두 번째');
+ }finally{show.mockRestore();close.mockRestore();}
 });

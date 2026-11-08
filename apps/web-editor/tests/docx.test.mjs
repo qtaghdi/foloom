@@ -118,9 +118,179 @@ test('DOCX closed event sources cannot interrupt a newer save', async () => {
 
 test('DOCX rejects unsupported draft text before sending and accepts corrected emoji text', async () => {
   const f = fixture(); await f.controller.load();
-  f.controller.edit({ ...edit, text: 'two\nlines' }); await f.controller.save();
+  f.controller.edit({ ...edit, text: 'two\tcolumns' }); await f.controller.save();
   assert.equal(f.state.writes.length, 0); assert.equal(f.state.enabled.at(-1), false);
   f.controller.edit({ ...edit, text: '문서 😀' });
   assert.equal(f.state.enabled.at(-1), true); await f.controller.save();
   assert.equal(f.state.writes.length, 1);
+});
+
+test('DOCX coalesces save requests until IME commits its final draft', async () => {
+  const f = fixture(); await f.controller.load(); f.controller.composition(true);
+  const first = f.controller.save(), second = f.controller.save();
+  assert.equal(f.state.writes.length, 0);
+  await f.controller.load();
+  assert.equal(f.state.renders.length, 1);
+  f.controller.edit({ ...edit, text: '한글 日本語 中文' });
+  f.controller.composition(false);
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  assert.equal(f.state.writes.length, 1);
+  assert.equal(f.state.writes[0].operations[0].text, '한글 日本語 中文');
+});
+
+test('DOCX cancels queued IME saves on remote conflict and preserves final input', async () => {
+  const f = fixture(); await f.controller.load(); f.controller.composition(true);
+  const pending = f.controller.save();
+  f.state.events.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
+  assert.equal(await pending, false);
+  assert.equal(f.state.statuses.at(-1)[1], 'conflicted');
+  f.controller.edit({ ...edit, text: '조합 보존' }); f.controller.composition(false);
+  assert.equal(await f.controller.save(), false);
+  assert.equal(f.state.writes.length, 0);
+  assert.equal(f.controller.hasDrafts(), true);
+  assert.equal(f.state.renders.length, 1);
+});
+
+test('DOCX disposal resolves an outstanding composition save without writing', async () => {
+  const f = fixture(); await f.controller.load(); f.controller.composition(true);
+  const pending = f.controller.save(); f.controller.dispose();
+  assert.equal(await pending, false);
+  f.controller.composition(false);
+  assert.equal(f.state.writes.length, 0);
+});
+
+test('DOCX draft undo coalesces typing and never also restores server history', async () => {
+  const f = fixture(); await f.controller.load();
+  f.controller.edit({...edit,text:'a'}); f.controller.edit({...edit,text:'ab'});
+  assert.equal(await f.controller.restore('undo'),true);
+  assert.equal(f.controller.hasDrafts(),false);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs[0].text,'old');
+  assert.equal(f.state.writes.length,0);
+  assert.equal(await f.controller.restore('redo'),true);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs[0].text,'ab');
+  f.controller.edit({...edit,text:'new branch'});
+  assert.equal(await f.controller.restore('redo'),false);
+  assert.equal(f.state.writes.length,0);
+});
+
+test('DOCX server undo uses current revision once and a lost response blocks retries', async () => {
+  const f=fixture();
+  f.fetch(async()=>({ok:true,json:async()=>({...snapshot,history:{undo:1,redo:0,undoActor:'ai'}})}));
+  await f.controller.load();const writes=[];
+  f.fetch(async(url,init)=>{writes.push([url,JSON.parse(init.body)]);throw new Error('lost response');});
+  assert.equal(await f.controller.restore('undo'),false);
+  assert.equal(await f.controller.restore('undo'),false);
+  assert.equal(writes.length,1);
+  assert.equal(writes[0][0],'/api/docx/history');
+  assert.deepEqual(writes[0][1],{sessionId:snapshot.id,baseRevision:1,direction:'undo'});
+  assert.equal(f.state.renders.length,1);
+  assert.equal(f.state.statuses.at(-1)[1],'failed');
+});
+
+test('DOCX style drafts participate in undo, redo and one revisioned save batch',async()=>{
+ const f=fixture();await f.controller.load();
+ assert.equal(f.controller.editStyle({id:'Custom',name:'제목',kind:'paragraph',run:{bold:true}}),true);
+ assert.equal(f.controller.hasDrafts(),true);assert.equal(f.controller.styles().length,1);
+ await f.controller.restore('undo');assert.equal(f.controller.hasDrafts(),false);assert.equal(f.controller.styles().length,0);
+ await f.controller.restore('redo');await f.controller.save();
+ assert.equal(f.state.writes.length,1);
+ assert.equal(f.state.writes[0].operations[0].type,'define_style');
+ assert.equal(f.state.writes[0].operations[0].styleDefinition.id,'Custom');
+ assert.equal(f.controller.hasDrafts(),false);
+});
+
+test('DOCX style inheritance can be corrected before an invalid draft reaches the server',async()=>{
+ const f=fixture();await f.controller.load();
+ f.controller.editStyle({id:'A',name:'A',kind:'paragraph',basedOn:'B'});
+ f.controller.editStyle({id:'B',name:'B',kind:'paragraph',basedOn:'A'});
+ assert.equal(await f.controller.save(),false);assert.equal(f.state.writes.length,0);
+ f.controller.editStyle({id:'B',kind:'paragraph',basedOn:''});
+ assert.equal(await f.controller.save(),true);assert.equal(f.state.writes.length,1);
+});
+
+test('DOCX section drafts share one revisioned save and undo history with text',async()=>{
+ const f=fixture();
+ const section={id:'section-current',startBlock:0,endBlock:0,page:{width:11906,height:16838,top:1440,right:1440,bottom:1440,left:1440},orientation:'portrait',columns:1,columnSpace:720,breakType:'nextPage',editable:true};
+ const operations=[];
+ f.fetch(async(_url,init)=>{
+  if(init?.method==='POST')operations.push(JSON.parse(init.body));
+  return {ok:true,json:async()=>({...snapshot,sections:[section],revision:init?.method==='POST'?2:1})};
+ });
+ await f.controller.load();
+ assert.equal(f.controller.editSection(section.id,{width:16838,height:11906,orientation:'landscape'}),true);
+ assert.equal(f.controller.sections()[0].page.width,16838);
+ await f.controller.restore('undo');assert.equal(f.controller.sections()[0].page.width,11906);
+ await f.controller.restore('redo');assert.equal(f.controller.sections()[0].page.width,16838);
+ assert.equal(f.controller.editSection(section.id,{left:50000}),false);
+ assert.equal(f.controller.editSection('stale',{columns:2}),false);
+ f.controller.edit(edit);await f.controller.save();
+ assert.equal(operations.length,1);
+ assert.equal(operations[0].baseRevision,1);
+ assert.deepEqual(operations[0].operations.map(op=>op.type),['update_section','replace_run_text']);
+ assert.equal(operations[0].operations[0].section.orientation,'landscape');
+});
+
+test('DOCX merges header variants in a section draft and restores their undo history',async()=>{
+ const f=fixture(),slots=['header','footer'].flatMap(kind=>['default','first','even'].map(variant=>({kind,variant,text:'',linked:false,editable:true})));
+ const section={id:'s',startBlock:0,endBlock:0,page:{width:11906,height:16838,top:1440,right:1440,bottom:1440,left:1440},orientation:'portrait',columns:1,columnSpace:720,breakType:'nextPage',editable:true,headerFooters:slots};
+ const writes=[];
+ f.fetch(async(_url,init)=>{if(init?.method==='POST')writes.push(JSON.parse(init.body));return {ok:true,json:async()=>({...snapshot,sections:[section],revision:init?.method==='POST'?2:1})};});
+ await f.controller.load();
+ assert.equal(f.controller.editSection('s',{headerFooters:[{kind:'header',variant:'default',text:'title'}]}),true);
+ assert.equal(f.controller.editSection('s',{firstPage:true,headerFooters:[{kind:'footer',variant:'first',text:'first footer'}]}),true);
+ await f.controller.restore('undo');assert.equal(f.controller.sections()[0].headerFooters.find(s=>s.kind==='header'&&s.variant==='default').text,'title');assert.equal(f.controller.sections()[0].firstPage,undefined);
+ await f.controller.restore('redo');await f.controller.save();
+ assert.equal(writes.length,1);assert.equal(writes[0].operations.length,1);assert.equal(writes[0].operations[0].section.headerFooters.length,2);
+ assert.equal(writes[0].operations[0].section.firstPage,true);
+});
+
+test('DOCX replace all uses one draft undo and retains run styles outside matches', async () => {
+  const f = fixture();
+  const original={...snapshot,blocks:[{id:'p1',type:'paragraph',paragraph:{id:'p1',structureEditable:true,runs:[
+    {id:'r1',text:'pre AB',editable:true,bold:true,italic:false},
+    {id:'r2',text:'C ABC post',editable:true,bold:false,italic:true},
+  ]}}]};
+  f.fetch(async (_url,init)=>{
+    if(init?.method==='POST')f.state.writes.push(JSON.parse(init.body));
+    return {ok:true,json:async()=>({...original,revision:init?.method==='POST'?2:1})};
+  });
+  const range=(runA,start,runB,end)=>({anchor:{runId:runA,offset:start},focus:{runId:runB,offset:end}});
+  const matches=[range('r1',4,'r2',1),range('r2',2,'r2',5)];
+  await f.controller.load();
+  assert.equal(f.controller.replaceSearchMatches([range('missing',0,'missing',1),matches[1]],'X'),false);
+  assert.equal(f.controller.hasDrafts(),false);
+  assert.equal(f.controller.replaceSearchMatches(matches,'X'),true);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs.map(run=>run.text).join(''),'pre X X post');
+  assert.equal(await f.controller.restore('undo'),true);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs.map(run=>run.text).join(''),'pre ABC ABC post');
+  assert.equal(await f.controller.restore('redo'),true);
+  await f.controller.save();
+  const writes=f.state.writes;
+  assert.equal(writes.length,1);
+  const operation=writes[0].operations[0];
+  assert.equal(operation.type,'replace_paragraphs');
+  assert.equal(operation.paragraphs[0].runs[0].sourceId,'r1');
+  assert.equal(operation.paragraphs[0].runs.at(-1).sourceId,'r2');
+});
+
+test('continuous typing in a long document captures one undo state per group', async () => {
+  const f = fixture();
+  const blocks = Array.from({ length: 1000 }, (_, index) => {
+    const id = `p-${index}`;
+    return { id, type: 'paragraph', paragraph: { id, structureEditable: true, runs: [
+      { id: `r-${index}`, text: '원본', editable: true, bold: false, italic: false },
+    ] } };
+  });
+  f.fetch(async () => ({ ok: true, json: async () => ({ ...snapshot, blocks }) }));
+  await f.controller.load();
+  const draft = f.controller.structureDraft;
+  const capture = draft.capture.bind(draft);
+  let captures = 0;
+  draft.capture = () => { captures++; return capture(); };
+  for (let i = 1; i <= 20; i++) {
+    f.controller.edit({type:'replace_run_text',targetId:'r-999',expectedText:'원본',text:'입력'.repeat(i)});
+  }
+  assert.equal(captures, 1);
+  assert.equal(await f.controller.restore('undo'), true);
+  assert.equal(f.state.renders.at(-1).blocks.at(-1).paragraph.runs[0].text, '원본');
 });

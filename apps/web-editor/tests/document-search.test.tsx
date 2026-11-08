@@ -43,3 +43,20 @@ it('reports an empty result and navigates a result without changing the document
   submit(); await settle(); expect(document.querySelector('script')).toBeNull(); expect(document.body.textContent).toContain('일부 결과');
   [...document.querySelectorAll('button')].find(b => b.textContent?.includes('Sheet1!A1'))!.click(); expect(locate).toHaveBeenCalledOnce();
 });
+it('finds repeated literal results and rejects stale replacement targets', () => {
+  document.body.innerHTML='<article><section class="docx-paragraph"><span data-docx-run="a">ab</span><span data-docx-run="b">c ABC abcd</span></section><table><tbody><tr><td><section class="docx-paragraph"><textarea>abc</textarea></section></td></tr></tbody></table></article>';
+  const replace=vi.fn(()=>true), root=document.querySelector('article')!;
+  const found=searchDocument(root,'abc',{wholeWord:true},replace);
+  expect(found.items).toHaveLength(3);
+  expect(found.protectedCount).toBe(1);
+  expect(found.replaceAll?.('new')).toBe(true);
+  expect(replace).toHaveBeenCalledWith([
+    {anchor:{runId:'a',offset:0},focus:{runId:'b',offset:1}},
+    {anchor:{runId:'b',offset:2},focus:{runId:'b',offset:5}},
+  ],'new');
+  expect(searchDocument(root,'abc',{matchCase:true,scope:'body'}).items).toHaveLength(2);
+  expect(searchDocument(root,'abc',{scope:'table'}).items).toHaveLength(1);
+  root.querySelector('[data-docx-run="b"]')!.textContent='c changed';
+  expect(found.items[0]!.replace?.('stale')).toBe(false);
+  expect(replace).toHaveBeenCalledOnce();
+});

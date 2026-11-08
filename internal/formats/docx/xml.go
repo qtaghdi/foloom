@@ -11,6 +11,8 @@ import (
 )
 
 type node struct {
+	parent                      *node
+	source                      []byte
 	name                        xml.Name
 	attrs                       []xml.Attr
 	start, inner, endStart, end int
@@ -62,7 +64,9 @@ func parseXML(data []byte) (*node, error) {
 					return nil, fmt.Errorf("multiple XML roots")
 				}
 				root = n
+				root.source = data
 			} else {
+				n.parent = stack[len(stack)-1]
 				stack[len(stack)-1].children = append(stack[len(stack)-1].children, n)
 			}
 			stack = append(stack, n)
@@ -119,6 +123,9 @@ func (n *node) attr(local string) string {
 	return ""
 }
 func textContent(n *node) string {
+	if n.is("br") && (n.attr("type") == "" || n.attr("type") == "textWrapping") {
+		return "\n"
+	}
 	if n.is("t") {
 		return n.text.String()
 	}
@@ -146,8 +153,9 @@ func escapeText(s string) string {
 }
 
 type target struct {
-	node       *node
-	text, kind string
+	paragraph, run *node
+	node           *node
+	text, kind     string
 }
 
 func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
@@ -192,6 +200,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 	}
 	markFields(body)
+	anchors := paragraphAnchors(root)
 	targets := map[string]target{}
 	blocks := []Block{}
 	unsupported := false
@@ -207,7 +216,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			allowed = false
 			unsupported = true
 		}
-		out := Paragraph{ID: id(), Runs: []Run{}}
+		out := Paragraph{ID: id(), Anchor: anchors[p], Runs: []Run{}}
 		var trailingBreak *node
 		if kind == "replace_run_text" {
 			trailingBreak = trailingPageBreak(p)
@@ -215,6 +224,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 		props := p.child("pPr")
 		styleID := props.child("pStyle").attr("val")
+		if styleText(styleID, true) {
+			out.StyleID = styleID
+		}
 		if style := styles.byID[styleID]; style == nil || style.attr("type") != "paragraph" {
 			styleID = styles.paragraph
 		}
@@ -223,6 +235,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		directRun(&baseRun, styles.defaults.child("rPrDefault").child("rPr"))
 		applyParagraph := func(props *node) {
 			applyParagraphPreview(&layout, props)
+			if level := paragraphOutlineLevel(props); level != nil {
+				out.OutlineLevel = level
+			}
 			if br := props.child("pageBreakBefore"); br != nil {
 				out.PageBreakBefore = onOff(br.attr("val"), true)
 			}
@@ -234,6 +249,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			styleRun(&baseRun, chain[i].child("rPr"))
 		}
 		applyParagraph(props)
+		out.OutlineOverride = paragraphOutlineLevel(props)
 		if layout != (ParagraphLayout{}) {
 			out.Layout = &layout
 		}
@@ -248,8 +264,25 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				continue
 			}
 			if !r.is("r") {
-				unsupported = true
-				out.Runs = append(out.Runs, Run{ID: id(), Text: textContent(r)})
+				if r.is("bookmarkStart") || r.is("bookmarkEnd") || r.is("commentRangeStart") || r.is("commentRangeEnd") {
+					continue
+				}
+				run := Run{ID: id(), Text: textContent(r), Object: objectPreview(r)}
+				if run.Object != nil && run.Object.Kind == "math" && run.Object.Editable && allowed && !protected[r] && !strings.Contains(string(root.source[r.start:r.end]), "<!--") {
+					targets[run.ID] = target{node: r, paragraph: p, kind: "math_object"}
+				}
+				if run.Object != nil && run.Object.Editable && targets[run.ID].kind != "math_object" {
+					run.Object.Editable = false
+				}
+				if r.is("hyperlink") {
+					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
+				} else {
+					unsupported = true
+				}
+				out.Runs = append(out.Runs, run)
+				continue
+			}
+			if r.child("commentReference") != nil && len(r.children) == 1 {
 				continue
 			}
 			texts := []*node{}
@@ -257,17 +290,37 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			for _, c := range r.children {
 				if c.is("t") {
 					texts = append(texts, c)
-				} else if !c.is("rPr") {
+				} else if !(c.is("rPr") || plainLineBreak(c)) {
 					plain = false
 				}
 			}
-			editable := allowed && !protected[r] && plain && (len(texts) == 0 || len(texts) == 1 && len(texts[0].children) == 0)
+			editable := allowed && !protected[r] && plain
+			for _, text := range texts {
+				editable = editable && len(text.children) == 0
+				if len(texts) != 1 || r.has("br") {
+					editable = editable && plainTextAttributes(text)
+				}
+			}
+			if len(texts) != 1 || r.has("br") {
+				props := 0
+				for _, child := range r.children {
+					if child.is("rPr") {
+						props++
+					}
+				}
+				if props > 1 || strings.Contains(string(root.source[r.start:r.end]), "<!--") {
+					editable = false
+				}
+			}
 			text := textContent(r)
-			if !validText(text) {
+			if !validInlineText(text) {
 				editable = false
 			}
 			run := baseRun
 			run.ID, run.Text, run.Editable = id(), text, editable
+			if !editable {
+				run.Object = objectPreview(r)
+			}
 			if len(texts) == 0 && r.child("br") == trailingBreak && trailingBreak != nil &&
 				(len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
 				continue
@@ -277,14 +330,25 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			for i := len(characters) - 1; i >= 0; i-- {
 				styleRun(&run, characters[i].child("rPr"))
 			}
+			base := run
+			run.BaseStyle = &InlineStyle{Bold: &base.Bold, Italic: &base.Italic, Underline: &base.Underline, Strike: &base.Strike, Color: base.Color, Font: base.Font, Highlight: base.Highlight, Vertical: base.Vertical}
+			if base.SizeHalfPoints != 0 {
+				run.BaseStyle.SizeHalfPoints = &base.SizeHalfPoints
+			}
+			if id := runProps.child("rStyle").attr("val"); styleText(id, true) {
+				run.CharacterStyleID = id
+			}
 			directRun(&run, runProps)
 			out.Runs = append(out.Runs, run)
+			if !editable && r.child("drawing") != nil {
+				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "picture"}
+			}
 			if editable {
 				textNode := r
-				if len(texts) == 1 {
+				if len(texts) == 1 && !r.has("br") {
 					textNode = texts[0]
 				}
-				targets[run.ID] = target{node: textNode, text: text, kind: kind}
+				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r}
 			} else {
 				unsupported = true
 			}
@@ -295,7 +359,16 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			run := baseRun
 			run.ID, run.Editable = id(), true
 			out.Runs = append(out.Runs, run)
-			targets[run.ID] = target{node: p, kind: kind}
+			targets[run.ID] = target{node: p, kind: kind, paragraph: p}
+		}
+		out.StructureEditable = allowed && structuralParagraph(p, root.source)
+		for _, run := range out.Runs {
+			out.StructureEditable = out.StructureEditable && run.Editable
+		}
+		if out.StructureEditable {
+			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "replace_paragraphs"}
+		} else if allowed && p.parent == body && (out.PageBreakBefore || props.child("pageBreakBefore") != nil) {
+			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "update_boundary"}
 		}
 		return out
 	}
