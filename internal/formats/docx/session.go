@@ -115,7 +115,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지와 일부 스타일을 미리 보며 자동 페이지 매김, 이미지, 머리글과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 이미지와 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
 		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
 	}
@@ -132,7 +132,30 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if history.Redo > 0 {
 		history.RedoActor = s.history.manifest.Redo[history.Redo-1].Actor
 	}
-	return Snapshot{Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	sections := []SectionInfo{}
+	targets := inspectSections(root, s.id, s.revision)
+	headers := s.pkg.headerFooterCatalog(targets)
+	for index, target := range targets {
+		target.info.HeaderFooters = headers[index]
+		if n := target.props.child("titlePg"); n != nil {
+			target.info.FirstPage = onOff(n.attr("val"), true)
+		}
+		sections = append(sections, target.info)
+		for index := target.info.StartBlock; index <= target.info.EndBlock && index < len(blocks); index++ {
+			block := &blocks[index]
+			if block.Paragraph != nil {
+				block.Paragraph.SectionID = target.info.ID
+			}
+			for row := range block.Rows {
+				for cell := range block.Rows[row].Cells {
+					for paragraph := range block.Rows[row].Cells[cell].Paragraphs {
+						block.Rows[row].Cells[cell].Paragraphs[paragraph].SectionID = target.info.ID
+					}
+				}
+			}
+		}
+	}
+	return Snapshot{EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -158,15 +181,73 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	if err != nil {
 		return Snapshot{}, err
 	}
+	root, err := parseXML(s.pkg.document)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	_, targets, _, err := inspect(s.pkg.document, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
 	}
 	seen := map[string]bool{}
 	var edits []replacement
+	headerCount := 0
 	textBytes := 0
 	structuralBytes := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_boundary" {
+			key := "boundary:" + op.TargetID
+			target, ok := targets[op.TargetID]
+			if seen[key] || !ok || (target.kind != "replace_paragraphs" && (target.kind != "update_boundary" || op.Boundary != "page_before" && op.Boundary != "no_page_before")) || op.ExpectedText != "" || op.EndTargetID != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.Paragraphs != nil || op.Text != "" || op.StyleDefinition != nil {
+				return Snapshot{}, fmt.Errorf("invalid or stale DOCX boundary target")
+			}
+			seen[key] = true
+			replacements, err := boundaryReplacements(target.paragraph.parent.parent, s.pkg.document, s.id, s.revision, target.paragraph, op.Boundary)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			edits = append(edits, replacements...)
+			continue
+		}
+		if op.Boundary != "" {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX boundary field")
+		}
+		if op.Type == "update_header_parity" {
+			if seen[op.Type] || op.EvenAndOddHeaders == nil || op.Section != nil || op.SectionID != "" || op.TargetID != "" || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || op.StyleDefinition != nil {
+				return Snapshot{}, fmt.Errorf("invalid or duplicate DOCX header parity operation")
+			}
+			seen[op.Type] = true
+			if err := s.pkg.updateHeaderParity(*op.EvenAndOddHeaders, parts); err != nil {
+				return Snapshot{}, err
+			}
+			continue
+		}
+		if op.EvenAndOddHeaders != nil {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX header parity field")
+		}
+		if op.Type == "update_section" {
+			key := "section:" + op.SectionID
+			if seen[key] {
+				return Snapshot{}, fmt.Errorf("duplicate DOCX section update")
+			}
+			seen[key] = true
+			if op.Section == nil {
+				return Snapshot{}, fmt.Errorf("DOCX section update requires settings")
+			}
+			headerCount += len(op.Section.HeaderFooters)
+			if headerCount > 32 {
+				return Snapshot{}, fmt.Errorf("DOCX batch permits 32 header/footer updates")
+			}
+			edit, err := s.pkg.sectionReplacement(s.pkg.document, root, s.id, s.revision, op, parts)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
+		if op.Section != nil || op.SectionID != "" {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX section fields")
+		}
 		if op.Type == "define_style" {
 			continue
 		}

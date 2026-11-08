@@ -1,3 +1,4 @@
+import { resolveHeaderText } from './document-header-footer';
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import type { PasteMode, ClipboardParagraph } from './clipboard';
@@ -26,15 +27,36 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
   });
   const pages = createMemo(() => {
     const pages: Array<Array<{ block: Snapshot['blocks'][number]; index: number }>> = [[]];
-    let nextPage = false;
+    let nextPage = false,previousSection:string|undefined;
     props.snapshot.blocks.forEach((block, index) => {
       const paragraph = block.type === 'paragraph' ? block.paragraph : undefined;
-      if ((nextPage || paragraph?.pageBreakBefore) && pages.at(-1)!.length) pages.push([]);
+      const section=paragraph?.sectionId??(block.type==='table'?block.rows[0]?.cells[0]?.paragraphs[0]?.sectionId:undefined);
+      if ((nextPage || paragraph?.pageBreakBefore || section!==previousSection) && pages.at(-1)!.length) pages.push([]);
       pages.at(-1)!.push({ block, index });
-      nextPage = Boolean(paragraph?.pageBreakAfter);
+      nextPage = Boolean(paragraph?.pageBreakAfter);previousSection=section;
     });
     return pages;
   });
+  const pageSection=(page:ReturnType<typeof pages>[number])=>{const block=page[0]?.block;const id=block?.type==='paragraph'?block.paragraph.sectionId:block?.rows[0]?.cells[0]?.paragraphs[0]?.sectionId;return props.snapshot.sections?.find(section=>section.id===id);};
+  const sectionStyle=(page:ReturnType<typeof pages>[number])=>{
+   const info=pageSection(page);if(!info)return {};
+   const p=info.page,width=`min(100cqi, ${p.width/15}px)`;
+   return {width:`${p.width/15}px`,'max-width':'100%','min-block-size':`calc(${width} * ${p.height/p.width})`,'--paper-insets':[p.top,p.right,p.bottom,p.left].map(value=>`calc(${width} * ${value/p.width})`).join(' ')};
+  };
+  const pageOrdinals=createMemo(()=>{
+   let previous:string|undefined, ordinal=0;
+   return pages().map(page=>{
+    const section=pageSection(page)?.id;
+    ordinal=section===previous?ordinal+1:1;
+    previous=section;
+    return ordinal;
+   });
+  });
+  const headerText=(page:ReturnType<typeof pages>[number],index:number,kind:'header'|'footer')=>{
+   const section=pageSection(page),ordinal=pageOrdinals()[index]??1;
+   const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
+   return resolveHeaderText(props.snapshot.sections??[],section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant));
+  };
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
     contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} tabindex={-1}
     style={{
@@ -77,8 +99,11 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
       onKeyDown={input.keydown} onKeyUp={input.focus} onPointerUp={input.focus} onFocusIn={input.focus}
       onBeforeInput={input.beforeinput} onInput={input.input} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
       onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
-    <For each={pages()}>{(page) => <div class="docx-paper w-full border border-slate-200 bg-white shadow-sm">
+    <For each={pages()}>{(page,index) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id}>
+    <Show when={headerText(page,index(),'header')}>{text=><div contentEditable={false} aria-label="머리글 미리보기" class="mb-4 whitespace-pre-wrap border-b border-dashed border-slate-200 pb-2 text-xs text-stone-600">{text()}</div>}</Show>
     <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
+    <Show when={pageSection(page)}>{section=><p contentEditable={false} class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
+    <div style={{'column-count':pageSection(page)?.columns,'column-gap':pageSection(page)?`${pageSection(page)!.columnSpace/20}pt`:undefined}}>
     <For each={page}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
       <div class="docx-table overflow-x-auto" tabindex={0} aria-label={t('documentTableScrollHorizontallyOnNarrowScreens')}>
         <table class="w-full border-collapse text-left"><tbody><For each={block.rows}>{(row, rowIndex) => <tr><For each={row.cells}>{(cell, cellIndex) =>
@@ -86,7 +111,9 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
         }</For></tr>}</For></tbody></table>
       </div>
     }</For>
+    </div>
     </Show>
+    <Show when={headerText(page,index(),'footer')}>{text=><div contentEditable={false} aria-label="바닥글 미리보기" class="mt-4 whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 text-xs text-stone-600">{text()}</div>}</Show>
   </div>}</For></div></>;
 }
 

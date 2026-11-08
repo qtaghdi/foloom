@@ -75,6 +75,7 @@ type ParagraphLayout struct {
 }
 
 type Paragraph struct {
+	SectionID         string           `json:"sectionId,omitempty"`
 	StyleID           string           `json:"styleId,omitempty"`
 	StructureEditable bool             `json:"structureEditable"`
 	PageBreakBefore   bool             `json:"pageBreakBefore,omitempty"`
@@ -112,15 +113,17 @@ type HistoryInput struct {
 	Direction    string `json:"direction" jsonschema:"undo or redo"`
 }
 type Snapshot struct {
-	Styles   []StyleInfo  `json:"styles"`
-	History  HistoryState `json:"history"`
-	ID       string       `json:"id"`
-	Name     string       `json:"name"`
-	Revision uint64       `json:"revision"`
-	Sequence uint64       `json:"sequence"`
-	Blocks   []Block      `json:"blocks"`
-	Page     *PageLayout  `json:"page,omitempty"`
-	Warnings []string     `json:"warnings"`
+	EvenAndOddHeaders *bool         `json:"evenAndOddHeaders,omitempty"`
+	Sections          []SectionInfo `json:"sections"`
+	Styles            []StyleInfo   `json:"styles"`
+	History           HistoryState  `json:"history"`
+	ID                string        `json:"id"`
+	Name              string        `json:"name"`
+	Revision          uint64        `json:"revision"`
+	Sequence          uint64        `json:"sequence"`
+	Blocks            []Block       `json:"blocks"`
+	Page              *PageLayout   `json:"page,omitempty"`
+	Warnings          []string      `json:"warnings"`
 }
 
 // ParagraphContent references formatting in the inspected revision. Repeated
@@ -170,13 +173,17 @@ type StyleInfo struct {
 	Paragraph *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
-	StyleDefinition *StyleDefinition   `json:"styleDefinition,omitempty"`
-	EndTargetID     string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
-	Paragraphs      []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type            string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, or define_style"`
-	TargetID        string             `json:"targetId,omitempty" jsonschema:"Editable run ID from the current get_docx snapshot"`
-	ExpectedText    string             `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
-	Text            string             `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
+	Boundary          string             `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, section_next_page, or section_continuous"`
+	EvenAndOddHeaders *bool              `json:"evenAndOddHeaders,omitempty" jsonschema:"Document-wide odd/even header and footer setting for update_header_parity"`
+	SectionID         string             `json:"sectionId,omitempty"`
+	Section           *SectionFormat     `json:"section,omitempty"`
+	StyleDefinition   *StyleDefinition   `json:"styleDefinition,omitempty"`
+	EndTargetID       string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
+	Paragraphs        []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
+	Type              string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, or update_boundary"`
+	TargetID          string             `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
+	ExpectedText      string             `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
+	Text              string             `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
 }
 
 type ApplyInput struct {
