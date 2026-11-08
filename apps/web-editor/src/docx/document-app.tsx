@@ -305,6 +305,11 @@ export function DocumentApp() {
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}
       onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading}/></>}
     />
+    <section aria-label="편집 도구 모음" tabindex={0}
+      class="min-h-0 max-h-[45dvh] shrink overflow-y-auto overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-700">
+    <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={tablePending()||state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
+      needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
+      onReload={requestReload}/>
     <DocumentListToolbar paragraphs={(() => {draftVersion();state().snapshot;return formattingSelection()?controller.selectedParagraphs(formattingSelection()!):[];})()}
       lists={state().snapshot?.lists??[]} disabled={state().saving||state().loading||Boolean(state().error||state().composing)}
       onList={list=>{const selection=formattingSelection();if(selection&&controller.applyList(selection,list))setDraftVersion(v=>v+1);}}
@@ -330,9 +335,7 @@ export function DocumentApp() {
     <DocumentTableToolbar blocks={state().snapshot?.blocks??[]} insertAfter={insertTableAfter()} pending={tablePending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const applied=controller.editTable(operation);if(applied)setDraftVersion(v=>v+1);return applied;}}/>
-    <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={tablePending()||state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
-      needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
-      onReload={requestReload}/>
+    </section>
     <Show when={printError()}><p role="alert" class="border-b border-red-200 px-4 py-2 text-sm text-red-800">{printError()}</p></Show>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
     <Show when={state().validation}>{(message) => <p class="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs leading-6 text-red-800 sm:px-6" role="alert">{localizeMessage(message())}</p>}</Show>
@@ -340,7 +343,7 @@ export function DocumentApp() {
       <p>{t('discardUnsavedInputAndReloadTheSavedDocument')}</p>
       <div class="mt-3 flex flex-wrap gap-2"><button id="discard-draft" type="button" class={primaryButtonClass} onClick={reload}>{t('discardReload')}</button><button type="button" class={buttonClass} onClick={cancelReload}>{t('cancel')}</button></div>
     </section></Show>
-    <div class="editor-workspace flex min-h-0 flex-1 overflow-hidden" data-activity-open={activity.open()}>
+    <div class="editor-workspace flex min-h-32 flex-1 overflow-hidden" data-activity-open={activity.open()}>
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
