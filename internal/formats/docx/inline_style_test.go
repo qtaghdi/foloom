@@ -60,3 +60,79 @@ func TestInvalidClipboardStyleRejectsWholePlan(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectFormattingAndResetPreserveLanguageAndStyle(t *testing.T) {
+	s, path := withDocument(t, bodyXML(`<w:p><w:r><w:rPr><w:rStyle w:val="Emphasis"/><w:rFonts w:ascii="Latin" w:eastAsia="한글"/><w:lang w:val="en-US" w:eastAsia="ko-KR"/><w:u w:val="double"/><w:strike/></w:rPr><w:t>before after</w:t></w:r></w:p>`))
+	original := fileBytes(t, path)
+	snap := mustSnapshot(t, s)
+	p := snap.Blocks[0].Paragraph
+	yes := true
+	input := paragraphPlan(snap, ParagraphContent{SourceID: p.ID, Runs: []RunContent{
+		{SourceID: p.Runs[0].ID, Text: "before "},
+		{SourceID: p.Runs[0].ID, Text: "after", Style: &InlineStyle{Underline: &yes, Strike: &yes, Highlight: "yellow", Vertical: "superscript"}},
+	}})
+	v, err := s.Apply(context.Background(), input, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := v.Blocks[0].Paragraph.Runs[1]
+	if !r.Underline || !r.Strike || r.Highlight != "yellow" || r.Vertical != "superscript" {
+		t.Fatalf("format preview mismatch %+v", r)
+	}
+	if !strings.Contains(string(s.pkg.document), `w:eastAsia="한글"`) || !strings.Contains(string(s.pkg.document), `w:eastAsia="ko-KR"`) {
+		t.Fatal("language fonts changed")
+	}
+	p = v.Blocks[0].Paragraph
+	input = paragraphPlan(v, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "before "}, {SourceID: p.Runs[1].ID, Text: "after", Style: &InlineStyle{Reset: true}}}})
+	v, err = s.Apply(context.Background(), input, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = v.Blocks[0].Paragraph.Runs[1]
+	if r.Underline || r.Strike || r.Highlight != "" || r.Vertical != "" || r.Font != "" {
+		t.Fatal("direct formatting not cleared", r)
+	}
+	if strings.Count(string(s.pkg.document), `w:rStyle w:val="Emphasis"`) < 2 || strings.Count(string(s.pkg.document), `w:lang w:val="en-US"`) < 2 {
+		t.Fatal("reset discarded style or language")
+	}
+	historyRestore(t, s, "undo")
+	historyRestore(t, s, "undo")
+	if !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("format undo lost original package")
+	}
+}
+func TestInvalidExtendedInlineFormatIsAtomic(t *testing.T) {
+	for _, style := range []*InlineStyle{{Highlight: "url(file)"}, {Vertical: "bad"}} {
+		s, path := createTest(t)
+		v := mustSnapshot(t, s)
+		p := v.Blocks[0].Paragraph
+		before := fileBytes(t, path)
+		input := paragraphPlan(Snapshot{ID: v.ID, Revision: v.Revision, Blocks: v.Blocks[:1]}, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "bad", Style: style}}})
+		if _, err := s.Apply(context.Background(), input, "human"); err == nil {
+			t.Fatal("invalid style accepted")
+		}
+		if !bytes.Equal(before, fileBytes(t, path)) || mustSnapshot(t, s).Revision != v.Revision {
+			t.Fatal("invalid format mutated file")
+		}
+	}
+}
+
+func TestStrikeStyleToggleAndDirectOverride(t *testing.T) {
+	root, err := parseXML([]byte(`<w:rPr xmlns:w="` + wordNS + `"><w:strike/></w:rPr>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Run{}
+	styleRun(&r, root)
+	if !r.Strike {
+		t.Fatal("style did not enable strike")
+	}
+	styleRun(&r, root)
+	if r.Strike {
+		t.Fatal("inherited style did not toggle strike")
+	}
+	directRun(&r, root)
+	if !r.Strike {
+		t.Fatal("direct strike did not override style")
+	}
+}

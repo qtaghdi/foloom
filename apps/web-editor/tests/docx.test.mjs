@@ -186,3 +186,24 @@ test('DOCX server undo uses current revision once and a lost response blocks ret
   assert.equal(f.state.renders.length,1);
   assert.equal(f.state.statuses.at(-1)[1],'failed');
 });
+
+test('DOCX style drafts participate in undo, redo and one revisioned save batch',async()=>{
+ const f=fixture();await f.controller.load();
+ assert.equal(f.controller.editStyle({id:'Custom',name:'제목',kind:'paragraph',run:{bold:true}}),true);
+ assert.equal(f.controller.hasDrafts(),true);assert.equal(f.controller.styles().length,1);
+ await f.controller.restore('undo');assert.equal(f.controller.hasDrafts(),false);assert.equal(f.controller.styles().length,0);
+ await f.controller.restore('redo');await f.controller.save();
+ assert.equal(f.state.writes.length,1);
+ assert.equal(f.state.writes[0].operations[0].type,'define_style');
+ assert.equal(f.state.writes[0].operations[0].styleDefinition.id,'Custom');
+ assert.equal(f.controller.hasDrafts(),false);
+});
+
+test('DOCX style inheritance can be corrected before an invalid draft reaches the server',async()=>{
+ const f=fixture();await f.controller.load();
+ f.controller.editStyle({id:'A',name:'A',kind:'paragraph',basedOn:'B'});
+ f.controller.editStyle({id:'B',name:'B',kind:'paragraph',basedOn:'A'});
+ assert.equal(await f.controller.save(),false);assert.equal(f.state.writes.length,0);
+ f.controller.editStyle({id:'B',kind:'paragraph',basedOn:''});
+ assert.equal(await f.controller.save(),true);assert.equal(f.state.writes.length,1);
+});

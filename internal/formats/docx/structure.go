@@ -159,9 +159,11 @@ func paragraphReplacement(data []byte, targets map[string]target, op Operation) 
 			return fail("paragraph formatting source is outside the range or has no runs")
 		}
 		var content strings.Builder
-		if props := source.node.child("pPr"); props != nil {
-			content.Write(data[props.start:props.end])
+		props, err := paragraphProperties(source.node.child("pPr"), data, paragraph.Format)
+		if err != nil {
+			return fail(err.Error())
 		}
+		content.WriteString(props)
 		for _, run := range paragraph.Runs {
 			runCount++
 			textBytes += len(run.Text)

@@ -9,11 +9,12 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
-type DraftCheckpoint = { structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
+  composition?(active: boolean): void;
   history?(controls: HistoryControls): void;
   validation?(message: string): void;
   activity?(entry: ActivityEntry): void;
@@ -38,16 +39,17 @@ export class DocumentController {
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
   private loading = false;
+  private styleDrafts=new Map<string,StyleDefinition>();
   private undoDraft: DraftCheckpoint[] = [];
   private redoDraft: DraftCheckpoint[] = [];
   private lastTyping?: { key: string; time: number };
 
   constructor(private view: DocumentView) {}
 
-  hasDrafts(): boolean { return this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
+  hasDrafts(): boolean { return this.styleDrafts.size > 0 || this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
   private checkpoint(selection?: TextSelection): DraftCheckpoint {
-    return { structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
+    return { styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
   }
   private remember(before: DraftCheckpoint, key?: string): void {
     const now = Date.now();
@@ -57,7 +59,7 @@ export class DocumentController {
     this.trimDraftHistory();
   }
   private trimDraftHistory(): void {
-    while (this.undoDraft.length + this.redoDraft.length > 10 || [...this.undoDraft, ...this.redoDraft].reduce((n, item) => n + (item.structure.length + JSON.stringify(item.drafts).length) * 2, 0) > 32 * 1024 * 1024) {
+    while (this.undoDraft.length + this.redoDraft.length > 10 || [...this.undoDraft, ...this.redoDraft].reduce((n, item) => n + (item.structure.length + JSON.stringify(item.drafts).length + JSON.stringify(item.styles).length) * 2, 0) > 32 * 1024 * 1024) {
       if (this.undoDraft.length) this.undoDraft.shift(); else this.redoDraft.shift();
     }
   }
@@ -89,6 +91,7 @@ export class DocumentController {
 
   composition(active: boolean): void {
     this.composing = active;
+    this.view.composition?.(active);
     this.updateSave();
     if (!active && this.compositionSaves.length) {
       const waiting = this.compositionSaves.splice(0);
@@ -115,6 +118,42 @@ export class DocumentController {
     if (!this.blocked) this.view.status('미저장 변경','pending');
     this.updateSave();return true;
   }
+  styles():StyleInfo[] {
+    const styles=new Map((this.snapshot?.styles??[]).map(style=>[style.id,style]));
+    for(const definition of this.styleDrafts.values()) {
+      const original=styles.get(definition.id),paragraph={...original?.paragraph,...definition.paragraph};
+      if(definition.paragraph?.firstLine!==undefined)delete paragraph.hanging;
+      if(definition.paragraph?.hanging!==undefined)delete paragraph.firstLine;
+      styles.set(definition.id,{id:definition.id,name:definition.name??original?.name??definition.id,kind:definition.kind,editable:original?.editable??true,
+        basedOn:definition.basedOn??original?.basedOn,run:{...(definition.run?.reset?{}:original?.run),...definition.run},paragraph});
+    }
+    return [...styles.values()];
+  }
+  editStyle(definition:StyleDefinition):boolean {
+    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    const before=this.checkpoint();const previous=this.styleDrafts.get(definition.id);
+    const paragraph=definition.paragraph?{...previous?.paragraph,...definition.paragraph}:previous?.paragraph;
+    if(definition.paragraph?.firstLine!==undefined&&paragraph)delete paragraph.hanging;
+    if(definition.paragraph?.hanging!==undefined&&paragraph)delete paragraph.firstLine;
+    this.styleDrafts.set(definition.id,{...previous,...definition,run:definition.run?.reset?definition.run:definition.run?{...previous?.run,...definition.run}:previous?.run,paragraph});
+    this.remember(before);if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
+  }
+  hasStyleDrafts():boolean {return this.styleDrafts.size>0 || this.pendingOperations().some(op=>op.type==='replace_paragraphs'&&op.paragraphs.some(p=>p.format?.styleId!==undefined||p.runs.some(r=>r.style?.styleId!==undefined)));}
+  formatParagraph(selection:TextSelection,format:ParagraphFormat):boolean {
+    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    const before=this.checkpoint(selection),focus=this.structureDraft.formatParagraph(selection,format);
+    if(!focus)return false;this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
+    if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
+  }
+  selectedParagraphs(selection:TextSelection) {return this.structureDraft?.selectedParagraphs(selection)??[];}
+  format(selection: TextSelection, style: InlineStyle): boolean {
+    if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
+    const before=this.checkpoint(selection),focus=this.structureDraft.format(selection,style);
+    if(!focus)return false;
+    this.remember(before);this.view.render(this.structureDraft.snapshot(),focus);
+    if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
+  }
+  selectedRuns(selection:TextSelection){return this.structureDraft?.selectedRuns(selection)??[];}
   richSelection(selection: TextSelection): ClipboardParagraph[] | undefined {return this.structureDraft?.selectedRich(selection);}
   deleteSelection(selection: TextSelection, direction: 'backward' | 'forward', word: boolean): boolean {
     const range = this.structureDraft?.deletion(selection, direction, word ? 'word' : 'grapheme');
@@ -127,10 +166,10 @@ export class DocumentController {
 
   private pendingOperations(): Operation[] {
     const text = [...this.drafts.values()].filter(op => !this.structureDraft?.ownsOriginal(op.targetId));
-    return [...text, ...this.structureDraft?.operations() ?? []];
+    return [...[...this.styleDrafts.values()].map(styleDefinition=>({type:'define_style' as const,styleDefinition})),...text, ...this.structureDraft?.operations() ?? []];
   }
   private resetDraft(snapshot: Snapshot): void {
-    this.drafts.clear();
+    this.drafts.clear();this.styleDrafts.clear();
     this.undoDraft = []; this.redoDraft = []; this.lastTyping = undefined;
     this.structureDraft = new StructureDraft(snapshot);
     this.expectedText.clear();
@@ -214,7 +253,7 @@ export class DocumentController {
     if (from.length) {
       const saved = from.pop()!;
       to.push(this.checkpoint(selection)); this.trimDraftHistory();
-      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.lastTyping = undefined;
+      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.styleDrafts=new Map(saved.styles); this.lastTyping = undefined;
       const point = saved.selection?.focus;
       this.view.render(this.structureDraft.snapshot(), point ? {runId:point.runId,start:point.offset,end:point.offset,selection:saved.selection} : undefined);
       this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
@@ -305,6 +344,14 @@ export class DocumentController {
   }
   private disconnect(): void { this.events?.close(); this.events = undefined; }
   private draftError(): string {
+    const styles=new Map(this.styles().map(style=>[style.id,style]));
+    for(const changed of this.styleDrafts.values()) {
+      const visited=new Set<string>();let id:string|undefined=changed.id;
+      while(id&&styles.has(id)) {
+        if(visited.has(id)||visited.size>=32)return '스타일 상속이 순환하거나 너무 깊습니다. 기준 스타일을 수정하세요.';
+        visited.add(id);id=styles.get(id)?.basedOn;
+      }
+    }
     return validateDrafts(this.snapshot?.id ?? '', this.snapshot?.revision ?? 0, this.pendingOperations());
   }
   private updateSave(): void {

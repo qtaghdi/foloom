@@ -1,12 +1,18 @@
+import { DocumentStyleToolbar } from './document-style-toolbar';
+import { DocumentParagraphToolbar } from './document-paragraph-toolbar';
+import { DocumentFormatToolbar } from './document-format-toolbar';
 import { For } from 'solid-js';
 import { buttonClass, quietButtonClass } from '../ui/editor-chrome';
 import type { PasteMode } from './clipboard';
 import type { HistoryControls } from './controller';
-import type { Run } from './contracts';
+import type { Run, InlineStyle, ParagraphFormat, StyleInfo, StyleDefinition } from './contracts';
 
 const scales = [75, 90, 100, 110, 125, 150];
 
 export function DocumentToolbar(props: {
+  stylesCatalog: StyleInfo[]; paragraphStyleIds:string[]; characterStyleIds:string[]; definitionDisabled:boolean; stylePending:boolean; onApplyStyle:(kind:'paragraph'|'character',id:string)=>void; onDefineStyle:(definition:StyleDefinition)=>void;
+  paragraphs: ParagraphFormat[]; onParagraphFormat: (format: ParagraphFormat) => void;
+  styles: InlineStyle[]; formatDisabled: boolean; onFormat: (style: InlineStyle) => void;
   pasteMode: PasteMode; onPasteMode: (mode: PasteMode) => void;
   history?: HistoryControls; onHistory: (direction: 'undo' | 'redo') => void;
   saving: boolean; loading: boolean; needsRecovery: boolean;
@@ -14,7 +20,8 @@ export function DocumentToolbar(props: {
   onZoom: (value: number) => void; onReload: () => void;
 }) {
   const format = () => {
-    const run = props.run;
+    const run = props.styles[0] ?? props.run;
+    if(props.styles.some(style=>style.font!==run?.font||style.sizeHalfPoints!==run?.sizeHalfPoints||style.bold!==run?.bold||style.italic!==run?.italic))return '혼합 서식';
     return run ? `${run.font ?? '기본 글꼴'} · ${(run.sizeHalfPoints ?? 22) / 2} pt` : '본문 서식';
   };
   return <div role="group" aria-label="문서 도구" class="flex min-w-0 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-200 bg-stone-50 px-3 py-1 sm:px-6">
@@ -46,5 +53,8 @@ export function DocumentToolbar(props: {
         </select>
       </label>
     </div>
+    <DocumentStyleToolbar styles={props.stylesCatalog} paragraphIds={props.paragraphStyleIds} characterIds={props.characterStyleIds} disabled={props.formatDisabled} definitionDisabled={props.definitionDisabled} pending={props.stylePending} onApply={props.onApplyStyle} onDefine={props.onDefineStyle}/>
+    <DocumentParagraphToolbar formats={props.paragraphs} disabled={props.formatDisabled} onFormat={props.onParagraphFormat}/>
+    <DocumentFormatToolbar styles={props.styles} disabled={props.formatDisabled} onFormat={props.onFormat}/>
   </div>;
 }

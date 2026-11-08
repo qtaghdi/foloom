@@ -337,3 +337,30 @@ func TestDOCXParagraphPlanThroughMCPAndHTTP(t *testing.T) {
 		t.Fatal("HTTP did not observe structured MCP commit")
 	}
 }
+
+func TestDOCXMCPStyleDefinitionAndApplicationWithoutTextFields(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	path := filepath.Join(t.TempDir(), "styles.docx")
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: path, Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "heading"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := opened.Blocks[0].Paragraph
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{
+		map[string]any{"type": "define_style", "styleDefinition": map[string]any{"id": "CustomHeading", "name": "제목", "kind": "paragraph", "run": map[string]any{"bold": true}}},
+		map[string]any{"type": "replace_paragraphs", "targetId": p.ID, "endTargetId": p.ID, "expectedText": "heading", "paragraphs": []any{map[string]any{"sourceId": p.ID, "format": map[string]any{"styleId": "CustomHeading"}, "runs": []any{map[string]any{"sourceId": p.Runs[0].ID, "text": "heading"}}}}},
+	}}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP style batch failed: %+v %v", result, err)
+	}
+	snapshot, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Revision != 2 || !snapshot.Blocks[0].Paragraph.Runs[0].Bold || snapshot.Blocks[0].Paragraph.StyleID != "CustomHeading" {
+		t.Fatal("MCP style batch was not shared", snapshot)
+	}
+}

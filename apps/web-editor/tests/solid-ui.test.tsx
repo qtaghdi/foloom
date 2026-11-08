@@ -356,3 +356,74 @@ it('uses one draft history for range edits, native undo intent and keyboard redo
   expect(f.fetcher.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0);
   expect(button(root,'실행 취소').disabled).toBe(false);
 });
+
+it('reports mixed formatting and writes only the selected range through the toolbar',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'a',text:'AB',editable:true,bold:true,italic:false},{id:'b',text:'CD',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1,1,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ expect(button(root,'굵게').getAttribute('aria-pressed')).toBe('mixed');
+ button(root,'밑줄').click();await settle();
+ expect(spans(root).map(s=>s.textContent)).toEqual(['A','B','C','D']);
+ expect(spans(root)[1]?.style.textDecoration).toBe('underline');expect(spans(root)[2]?.style.textDecoration).toBe('underline');
+ expect(button(root,'밑줄').getAttribute('aria-pressed')).toBe('true');
+ button(root,'저장').click();await settle();
+ const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+ expect(body.operations[0].paragraphs[0].runs.map((r:any)=>r.style)).toEqual([undefined,{underline:true},{underline:true},undefined]);
+});
+
+it('saves paragraph alignment and indent through the document toolbar',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ const alignment=root.querySelector<HTMLSelectElement>('[aria-label="문단 정렬"]')!;alignment.value='center';alignment.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ const indent=root.querySelector<HTMLInputElement>('[aria-label="첫 줄 들여쓰기"]')!;indent.value='-12';indent.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ expect(root.querySelector<HTMLElement>('.docx-paragraph')?.style.textIndent).toBe('-12pt');
+ button(root,'저장').click();await settle();const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+ expect(body.operations[0].paragraphs[0].format).toEqual({align:'center',hanging:240});
+});
+
+it('remaps the cached toolbar selection after save when native selection was cleared',async()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+ button(root,'밑줄').click();await settle();
+ const saved:Snapshot={...initial,revision:2,blocks:[{id:'new-p',type:'paragraph',paragraph:{id:'new-p',structureEditable:true,runs:[{id:'new-r',text:'문단',editable:true,bold:false,italic:false}]}}]};
+ f.fetcher.mockResolvedValueOnce({ok:true,json:async()=>saved});
+ document.getSelection()!.removeAllRanges();button(root,'저장').click();await settle();
+ expect(readTextSelection(rich(root))?.focus.runId).toBe('new-r');
+ const align=root.querySelector<HTMLSelectElement>('[aria-label="문단 정렬"]')!;expect(align.disabled).toBe(false);
+ align.value='center';align.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+ expect(root.querySelector<HTMLElement>('.docx-paragraph > div')?.style.textAlign).toBe('center');
+});
+
+it('creates a style definition draft in the real dialog and applies it in the same save',async()=>{
+ const show=vi.spyOn(HTMLDialogElement.prototype,'showModal').mockImplementation(function(this:HTMLDialogElement){this.open=true;});
+ const close=vi.spyOn(HTMLDialogElement.prototype,'close').mockImplementation(function(this:HTMLDialogElement){this.open=false;});
+ try{
+  const initial:Snapshot={...snapshot,styles:[],blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'제목',editable:true,bold:false,italic:false}]}}]};
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,1);document.dispatchEvent(new Event('selectionchange'));await settle();
+  button(root,'스타일 정의 편집').click();await settle();expect(show).toHaveBeenCalledOnce();
+  button(root,'스타일 추가').click();await settle();
+  const name=root.querySelector<HTMLInputElement>('[aria-label="스타일 이름"]')!;name.value='새 제목';name.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+  button(root,'상속 굵게 반전').click();await settle();button(root,'닫기').click();await settle();
+  const apply=root.querySelector<HTMLSelectElement>('[aria-label="문단 스타일 적용"]')!;const option=[...apply.options].find(o=>o.textContent?.startsWith('새 제목'))!;
+  apply.value=option.value;apply.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+  expect(root.textContent).toContain('스타일 미리 보기는 저장 후 갱신됩니다.');
+  button(root,'저장').click();await settle();const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+  expect(body.operations.map((op:any)=>op.type)).toEqual(['define_style','replace_paragraphs']);
+  expect(body.operations[0].styleDefinition).toMatchObject({name:'새 제목',kind:'paragraph',run:{bold:true}});
+  expect(body.operations[1].paragraphs[0].format.styleId).toBe(body.operations[0].styleDefinition.id);
+ }finally{show.mockRestore();close.mockRestore();}
+});
+
+it('keeps the newly created style selected after a second definition is inserted',async()=>{
+ const show=vi.spyOn(HTMLDialogElement.prototype,'showModal').mockImplementation(function(this:HTMLDialogElement){this.open=true;});
+ const close=vi.spyOn(HTMLDialogElement.prototype,'close').mockImplementation(function(this:HTMLDialogElement){this.open=false;});
+ try{
+  docxFixture({...snapshot,styles:[]});const root=mount(()=><DocumentApp/>);await settle();button(root,'스타일 정의 편집').click();await settle();
+  button(root,'스타일 추가').click();await settle();
+  const name=root.querySelector<HTMLInputElement>('[aria-label="새 스타일 이름"]')!;name.value='두 번째';name.dispatchEvent(new Event('input',{bubbles:true}));
+  button(root,'스타일 추가').click();await settle();
+  const picker=root.querySelector<HTMLSelectElement>('[aria-label="편집할 스타일"]')!;
+  expect(picker.selectedOptions[0]!.textContent).toContain('두 번째');
+  button(root,'닫기').click();await settle();button(root,'스타일 정의 편집').click();await settle();
+  expect(root.querySelector<HTMLSelectElement>('[aria-label="편집할 스타일"]')!.selectedOptions[0]!.textContent).toContain('두 번째');
+ }finally{show.mockRestore();close.mockRestore();}
+});

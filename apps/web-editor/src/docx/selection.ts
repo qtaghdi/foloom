@@ -57,5 +57,23 @@ export function restoreTextSelection(root: HTMLElement, value: TextSelection): b
   if (!anchor || !focus) return false;
   root.focus({ preventScroll: true });
   root.ownerDocument.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+  revealTextSelection(root);
   return true;
+}
+
+// Reveal the caret rather than the whole contenteditable page. A large page
+// scrollIntoView can hide the active line after a writing-mode or viewport change.
+export function revealTextSelection(root: HTMLElement): void {
+  const selection=root.ownerDocument.getSelection();
+  const viewport=root.closest<HTMLElement>('.editor-primary');
+  if(!viewport||!selection?.focusNode||!root.contains(selection.focusNode))return;
+  const caret=root.ownerDocument.createRange();caret.setStart(selection.focusNode,selection.focusOffset);caret.collapse(true);
+  if(typeof caret.getBoundingClientRect!=='function')return;
+  let rect=caret.getBoundingClientRect();
+  if(!rect.height)rect=(selection.focusNode.nodeType===Node.ELEMENT_NODE?selection.focusNode as Element:selection.focusNode.parentElement)!.getBoundingClientRect();
+  const bounds=viewport.getBoundingClientRect(),inset=12;
+  if(rect.top<bounds.top+inset)viewport.scrollTop+=rect.top-bounds.top-inset;
+  else if(rect.bottom>bounds.bottom-inset)viewport.scrollTop+=rect.bottom-bounds.bottom+inset;
+  if(rect.left<bounds.left+inset)viewport.scrollLeft+=rect.left-bounds.left-inset;
+  else if(rect.right>bounds.right-inset)viewport.scrollLeft+=rect.right-bounds.right+inset;
 }

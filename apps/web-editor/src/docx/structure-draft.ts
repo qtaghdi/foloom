@@ -1,10 +1,10 @@
-import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle } from './contracts';
+import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat } from './contracts';
 import type { ClipboardParagraph } from './clipboard';
 import { isTextBoundary, graphemeOffsets, type TextSelection, type TextPoint } from './selection';
 import { validateRunText } from './validation';
 
 type DraftRun = Run & { sourceId: string; style?: InlineStyle };
-type DraftParagraph = Omit<Paragraph, 'runs'> & { sourceId: string; runs: DraftRun[] };
+type DraftParagraph = Omit<Paragraph, 'runs'> & { sourceId: string; format?: ParagraphFormat; runs: DraftRun[] };
 type Group = { originals: Paragraph[]; current: DraftParagraph[]; changed: boolean };
 
 // Local identities survive splits and moves until commit. Source identities are
@@ -61,7 +61,7 @@ export class StructureDraft {
     return this.groups.filter(group => group.changed).map(group => ({
       type: 'replace_paragraphs', targetId: group.originals[0]!.id, endTargetId: group.originals.at(-1)!.id,
       expectedText: group.originals.map(p => p.runs.map(r => r.text).join('')).join('\n'), text: '',
-      paragraphs: group.current.map(p => ({ sourceId: p.sourceId, runs: p.runs.map(r => ({ sourceId: r.sourceId, text: r.text, ...(r.style ? { style: r.style } : {}) })) })),
+      paragraphs: group.current.map(p => ({ sourceId: p.sourceId, ...(p.format ? {format:p.format}:{}), runs: p.runs.map(r => ({ sourceId: r.sourceId, text: r.text, ...(r.style ? { style: r.style } : {}) })) })),
     }));
   }
   ownsOriginal(runId: string): boolean {
@@ -215,16 +215,67 @@ export class StructureDraft {
     for (const item of prepared) { item.group.current.splice(item.from, item.count, ...item.paragraphs); item.group.changed = true; }
     return focus;
   }
+  formatParagraph(selection: TextSelection, format: ParagraphFormat): DraftFocus | undefined {
+    const range=this.normalized(selection);if(!range)return;
+    const found=range.runs.map(item=>this.find(item.run.id));if(found.some(item=>!item))return;
+    const selected=new Set<DraftParagraph>();
+    found.forEach((item,index)=>{if(index===found.length-1 && index>0 && range.end.offset===0 && !selected.has(item!.paragraph))return;selected.add(item!.paragraph);});
+    for(const p of selected){
+      const merged={...p.format,...format};
+      if(format.firstLine!==undefined)delete merged.hanging;
+      if(format.hanging!==undefined)delete merged.firstLine;
+      p.format=merged;if(format.styleId!==undefined)p.styleId=format.styleId;p.layout={...p.layout,...format};
+      if(format.firstLine!==undefined)delete p.layout.hanging;
+      if(format.hanging!==undefined)delete p.layout.firstLine;
+      this.paragraphGroup.get(p.sourceId)!.changed=true;
+    }
+    return {runId:selection.focus.runId,start:selection.focus.offset,end:selection.focus.offset,selection};
+  }
+  selectedParagraphs(selection:TextSelection):Paragraph[] {
+    const range=this.normalized(selection);if(!range)return [];const paragraphs=new Map<string,Paragraph>();
+    range.runs.forEach((item,index)=>{if(index===range.runs.length-1&&index>0&&range.end.offset===0&&!paragraphs.has(item.paragraph.id))return;paragraphs.set(item.paragraph.id,item.paragraph);});return [...paragraphs.values()];
+  }
+  format(selection: TextSelection, style: InlineStyle): DraftFocus | undefined {
+    const range=this.normalized(selection);if (!range) return;
+    const found=range.runs.map(item=>this.find(item.run.id));
+    if (found.some(item=>!item)) return;
+    const collapsed=range.start.runId===range.end.runId && range.start.offset===range.end.offset;
+    let first:TextPoint|undefined,last:TextPoint|undefined;
+    for (const [index,item] of found.entries()) {
+      const {run,paragraph,group}=item!;
+      const start=index===0?range.start.offset:0,end=index===found.length-1?range.end.offset:run.text.length;
+      if (!collapsed && start===end) continue;
+      const combined:InlineStyle=style.reset?{...style}:{...run.style,...style};
+      const baseline=combined.reset ? {bold:false,italic:false,underline:false,strike:false,color:undefined,font:undefined,sizeHalfPoints:undefined,highlight:undefined,vertical:undefined,...run.baseStyle} : run;
+      const selected:DraftRun={...run,...baseline,...combined,...combined.styleId!==undefined?{characterStyleId:combined.styleId}:{},id:this.id(),text:run.text.slice(start,end),style:combined};
+      const pieces:DraftRun[]=[];
+      if(start) pieces.push({...run,text:run.text.slice(0,start)});
+      pieces.push(selected);
+      if(end<run.text.length)pieces.push({...run,id:this.id(),text:run.text.slice(end)});
+      const position=paragraph.runs.findIndex(r=>r.id===run.id);
+      paragraph.runs.splice(position,1,...pieces);group.changed=true;
+      first??={runId:selected.id,offset:0};last={runId:selected.id,offset:selected.text.length};
+    }
+    if(!first || !last)return;
+    const forward=selection.anchor.runId===range.start.runId && selection.anchor.offset===range.start.offset;
+    const selected={anchor:forward?first:last,focus:forward?last:first};
+    return {runId:selected.focus.runId,start:selected.focus.offset,end:selected.focus.offset,selection:selected};
+  }
   replaceRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): DraftFocus | undefined {
     if (!paragraphs.length || paragraphs.length>1000 || paragraphs.some(p=>!p.length)) return;
     return this.replace(selection,paragraphs.map(p=>p.map(r=>r.text).join('')).join('\n'),false,paragraphs);
+  }
+  selectedRuns(selection:TextSelection):Run[] {
+    const range=this.normalized(selection);if(!range)return [];
+    const collapsed=range.start.runId===range.end.runId&&range.start.offset===range.end.offset;
+    return range.runs.filter((item,index)=>collapsed||(index===range.runs.length-1?range.end.offset:item.run.text.length)>(index===0?range.start.offset:0)).map(item=>item.run);
   }
   selectedRich(selection: TextSelection): ClipboardParagraph[] | undefined {
     const range=this.normalized(selection);if (!range) return;
     const result:ClipboardParagraph[]=[];let previous:string|undefined;
     for (const [index,{paragraph,run}] of range.runs.entries()) {
       if (previous!==paragraph.id) result.push([]);previous=paragraph.id;
-      result.at(-1)!.push({text:run.text.slice(index===0?range.start.offset:0,index===range.runs.length-1?range.end.offset:undefined),style:{bold:run.bold,italic:run.italic,...run.font?{font:run.font}:{},...run.color?{color:run.color}:{},...run.sizeHalfPoints?{sizeHalfPoints:run.sizeHalfPoints}:{}}});
+      result.at(-1)!.push({text:run.text.slice(index===0?range.start.offset:0,index===range.runs.length-1?range.end.offset:undefined),style:{bold:run.bold,italic:run.italic,underline:Boolean(run.underline),strike:Boolean(run.strike),highlight:run.highlight??'none',vertical:run.vertical??'baseline',...run.font?{font:run.font}:{},...run.color?{color:run.color}:{},...run.sizeHalfPoints?{sizeHalfPoints:run.sizeHalfPoints}:{}}});
     }
     return result;
   }

@@ -317,3 +317,23 @@ DOCX clipboard HTML은 inert 문서에서 텍스트와 한정된 글자 서식�
 active DOM·저장 API로 외부 HTML이나 URL을 넘기지 않습니다. 문단 계획 run의
 선택적 `style`은 adapter가 다시 검증하고 원본 rPr의 지정한 속성만 교체합니다.
 이 계약은 향후 서식 도구에서 재사용할 수 있으나 전체 Word 서식 지원을 의미하지 않습니다.
+
+DOCX 글자 도구는 source run의 일부 범위를 분리한 뒤 typed `InlineStyle`을
+문단 계획에 기록합니다. `reset`은 지원하는 직접 글자 속성만 제거하고 스타일
+참조·언어·나머지 rPr를 보존합니다. snapshot의 `baseStyle`은 직접 서식을
+제외한 상속 미리 보기이며 쓰기 권한이나 source formatting 참조가 아닙니다.
+문단 계획의 source ID·전체 검증·원자 저장·확정 이력 경계는 유지합니다.
+
+같은 문단 계획의 `paragraphs[].format`은 문단 배치·길이·방향의 선택적
+변경입니다. adapter는 원본 pPr의 대상 속성과 충돌하는 대체 길이 속성만
+교체합니다. UI는 pt, API는 twips와 240분율 줄 간격을 사용하며 초안과 확정
+이력은 글자 서식과 같은 transaction 경계를 따릅니다.
+
+DOCX 스타일 작성은 `define_style` operation과 문단·run의 `styleId` 참조를
+기존 batch에 결합합니다. format adapter가 스타일 part와 관계·content type을
+검증하고 필요한 part만 교체합니다. 처음 part를 추가할 때도 기존 이름을
+덮어쓰지 않습니다. `serializeParts`는 바꾸지 않는 ZIP header와 part payload를
+유지합니다. 문서 XML·스타일·관계 변경은 하나의 파일 교체와 revision·이력으로
+확정합니다. UI의 스타일 정의 초안은 controller에서 관리하며 저장 후 canonical
+snapshot으로 상속 미리 보기를 갱신합니다. 스타일 정의의 토글과 직접 run의
+절대 속성은 각각 Word 상속 규칙을 유지합니다.
