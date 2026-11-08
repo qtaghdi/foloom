@@ -7,11 +7,11 @@ import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
-export function DocumentContent(props: { pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
   const input = continuousInput(() => editor, {
-    snapshot: () => props.snapshot, saving: () => props.saving, edit: operation => props.onEdit(operation),
+    history: direction => props.onHistory(direction), snapshot: () => props.snapshot, saving: () => props.saving, edit: (operation, selection) => props.onEdit(operation, selection),
     replace: (...args) => props.onRange(...args), delete: (...args) => props.onDelete(...args), structure: (...args) => props.onStructure(...args),
     composition: active => props.onComposition(active), refresh: selection => props.onRefresh(selection), text: selection => props.selectionText(selection),
     focus: run => props.onFocusRun(run), pasteMode: () => props.pasteMode, pasteRich: (...args) => props.onPasteRich(...args), richText: selection => props.richSelection(selection), notice: message => setNotice(message === 'protected' ? source('paragraphStructureUnavailable') : message === 'invalid' ? source('thisInputContainsLineBreaksTabsOrUnsupported') : message === 'clipboard' ? source('clipboardNormalized') : ''),
@@ -46,7 +46,7 @@ export function DocumentContent(props: { pasteMode: PasteMode; onPasteRich: (sel
         <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>
           <Show when={p.structureEditable} fallback={<RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
-            onFocus={() => props.onFocusRun(run)}
+            onFocus={() => props.onFocusRun(run)} onComposition={props.onComposition} onHistory={props.onHistory}
             onStructure={p.structureEditable ? (action, start, end, insertion) => props.onStructure(action, run.id, start, end, insertion) : undefined}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/> }>
             <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text || (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
@@ -94,7 +94,7 @@ function runStyle(run: Run) {
   };
 }
 
-function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onStructure?: (action: StructureAction, start: number, end: number, insertion?: string) => boolean; onEdit: (text: string) => void }) {
+function RunField(props: { onComposition: (active: boolean) => void; onHistory: (direction: 'undo' | 'redo') => void; run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onStructure?: (action: StructureAction, start: number, end: number, insertion?: string) => boolean; onEdit: (text: string) => void }) {
   const [error, setError] = createSignal('');
   const [hint, setHint] = createSignal('');
   const [composing, setComposing] = createSignal(false);
@@ -107,7 +107,7 @@ function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'cent
       style={{ ...runStyle(props.run), 'text-align': props.align }}
       classList={{ 'docx-run-wide': props.fullWidth }}
       onFocus={props.onFocus}
-      onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
+      onCompositionStart={() => { setComposing(true); props.onComposition(true); }} onCompositionEnd={event => { setComposing(false); props.onEdit(event.currentTarget.value); props.onComposition(false); }}
       onKeyDown={(event) => {
         if (event.isComposing || composing() || props.saving) return;
         const field = event.currentTarget;
@@ -132,6 +132,7 @@ function RunField(props: { run: Run; fullWidth: boolean; align?: 'start' | 'cent
       }}
       onBeforeInput={(event) => {
         if (composing() || event.isComposing || props.saving || !event.cancelable) return;
+        if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') { event.preventDefault(); props.onHistory(event.inputType === 'historyUndo' ? 'undo' : 'redo'); return; }
         const lineBreak = event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak' && !softBreak;
         softBreak = false;
         if (!lineBreak) return;

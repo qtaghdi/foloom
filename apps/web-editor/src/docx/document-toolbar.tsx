@@ -1,12 +1,14 @@
 import { For } from 'solid-js';
 import { buttonClass, quietButtonClass } from '../ui/editor-chrome';
 import type { PasteMode } from './clipboard';
+import type { HistoryControls } from './controller';
 import type { Run } from './contracts';
 
 const scales = [75, 90, 100, 110, 125, 150];
 
 export function DocumentToolbar(props: {
   pasteMode: PasteMode; onPasteMode: (mode: PasteMode) => void;
+  history?: HistoryControls; onHistory: (direction: 'undo' | 'redo') => void;
   saving: boolean; loading: boolean; needsRecovery: boolean;
   run?: Run; zoom: number;
   onZoom: (value: number) => void; onReload: () => void;
@@ -22,6 +24,10 @@ export function DocumentToolbar(props: {
         <path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5.3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
+    <button class={quietButtonClass} type="button" aria-label="실행 취소" title={`실행 취소: ${props.history?.undoLabel ?? '이력 없음'}`}
+      aria-keyshortcuts="Control+Z Meta+Z" disabled={!props.history?.undo} onClick={() => props.onHistory('undo')}>↶<span class="sr-only">실행 취소</span></button>
+    <button class={quietButtonClass} type="button" aria-label="다시 실행" title={`다시 실행: ${props.history?.redoLabel ?? '이력 없음'}`}
+      aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y" disabled={!props.history?.redo} onClick={() => props.onHistory('redo')}>↷<span class="sr-only">다시 실행</span></button>
     <label class="flex min-h-11 items-center gap-2 text-xs text-slate-700">
       <span class="hidden sm:inline">붙여넣기</span>
       <select aria-label="붙여넣기 서식" class="editor-select min-h-11 max-w-36 rounded-md bg-stone-50 px-2" value={props.pasteMode}

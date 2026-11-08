@@ -133,6 +133,41 @@ func TestDOCXMCPAndBrowserShareCommits(t *testing.T) {
 	if disk.Blocks[0].Paragraph.Runs[0].Text != "AI saved" {
 		t.Fatal("commit did not reach disk")
 	}
+
+	history := docx.HistoryInput{SessionID: snap.ID, BaseRevision: 3, Direction: "undo"}
+	if r = request("POST", "/api/docx/history", "https://evil.example", history); r.Code != 403 {
+		t.Fatal("cross-origin history accepted")
+	}
+	r = request("POST", "/api/docx/history", "", history)
+	if r.Code != 200 {
+		t.Fatal(r.Body.String())
+	}
+	if err := json.Unmarshal(r.Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap.Revision != 4 || snap.Blocks[1].Rows[0].Cells[0].Paragraphs[0].Runs[0].Text != "cell" || snap.History.RedoActor != "human" {
+		t.Fatalf("undo mismatch: %+v", snap)
+	}
+	if r = request("POST", "/api/docx/history", "", history); r.Code != 409 {
+		t.Fatal("stale history accepted")
+	}
+	history.BaseRevision = 4
+	history.Direction = "redo"
+	if call("restore_docx_history", history).IsError {
+		t.Fatal("MCP redo failed")
+	}
+	r = request("GET", "/api/docx", "", nil)
+	if err := json.Unmarshal(r.Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap.Revision != 5 || snap.Blocks[1].Rows[0].Cells[0].Paragraphs[0].Runs[0].Text != "human saved" {
+		t.Fatal("browser did not see MCP redo")
+	}
+	history.BaseRevision = 5
+	history.SessionID = "wrong-document"
+	if !call("restore_docx_history", history).IsError {
+		t.Fatal("foreign session history accepted")
+	}
 	result = call("create_docx", docxCreateInput{Path: path, Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "overwrite"}}})
 	if !result.IsError {
 		t.Fatal("create overwrote file")
@@ -158,9 +193,9 @@ func TestDOCXUnauthorizedAndMalformedRequests(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, route := range []string{"/docx", "/api/docx", "/api/docx/events", "/api/docx/operations"} {
+	for _, route := range []string{"/docx", "/api/docx", "/api/docx/events", "/api/docx/operations", "/api/docx/history"} {
 		method := "GET"
-		if strings.HasSuffix(route, "operations") {
+		if strings.HasSuffix(route, "operations") || strings.HasSuffix(route, "history") {
 			method = "POST"
 		}
 		w := httptest.NewRecorder()

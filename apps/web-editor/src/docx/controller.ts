@@ -11,7 +11,10 @@ import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type DraftFocus, type StructureAction } from './contracts';
 
+export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
+type DraftCheckpoint = { structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
+  history?(controls: HistoryControls): void;
   validation?(message: string): void;
   activity?(entry: ActivityEntry): void;
   render(snapshot: Snapshot, focus?: DraftFocus): void;
@@ -35,26 +38,49 @@ export class DocumentController {
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
   private loading = false;
+  private undoDraft: DraftCheckpoint[] = [];
+  private redoDraft: DraftCheckpoint[] = [];
+  private lastTyping?: { key: string; time: number };
 
   constructor(private view: DocumentView) {}
 
   hasDrafts(): boolean { return this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy || this.composing; }
 
-  edit(operation: TextOperation): void {
-    if (this.busy || this.loading) return;
+  private checkpoint(selection?: TextSelection): DraftCheckpoint {
+    return { structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
+  }
+  private remember(before: DraftCheckpoint, key?: string): void {
+    const now = Date.now();
+    if (!key || this.lastTyping?.key !== key || now - this.lastTyping.time > 750) this.undoDraft.push(before);
+    this.lastTyping = key ? { key, time: now } : undefined;
+    this.redoDraft = [];
+    this.trimDraftHistory();
+  }
+  private trimDraftHistory(): void {
+    while (this.undoDraft.length + this.redoDraft.length > 10 || [...this.undoDraft, ...this.redoDraft].reduce((n, item) => n + (item.structure.length + JSON.stringify(item.drafts).length) * 2, 0) > 32 * 1024 * 1024) {
+      if (this.undoDraft.length) this.undoDraft.shift(); else this.redoDraft.shift();
+    }
+  }
+  edit(operation: TextOperation, selection?: TextSelection): void {
+    if (this.busy || this.loading || this.disposed || !this.structureDraft) return;
+    if ((this.structureDraft.currentText(operation.targetId) ?? this.expectedText.get(operation.targetId)) === operation.text) return;
+    const before = this.checkpoint(selection ?? {anchor:{runId:operation.targetId,offset:0},focus:{runId:operation.targetId,offset:0}});
     if (!this.structureDraft?.edit(operation.targetId, operation.text)) {
       const expectedText = this.expectedText.get(operation.targetId) ?? operation.expectedText;
       if (operation.text === expectedText) this.drafts.delete(operation.targetId);
       else this.drafts.set(operation.targetId, { ...operation, expectedText });
     }
+    this.remember(before, operation.targetId);
     if (!this.blocked) this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
     this.updateSave();
   }
 
   changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string): boolean {
     if (this.busy || this.loading || this.disposed) return false;
+    const before = this.structureDraft && this.checkpoint({anchor:{runId,offset:start},focus:{runId,offset:end}});
     const focus = this.structureDraft?.change(action, runId, start, end, insertion);
     if (!focus || !this.structureDraft) return false;
+    this.remember(before!);
     this.view.render(this.structureDraft.snapshot(), focus);
     if (!this.blocked) this.view.status('미저장 변경', 'pending');
     this.updateSave();
@@ -71,16 +97,20 @@ export class DocumentController {
   }
   replaceSelection(selection: TextSelection, text: string, inline = false): boolean {
     if (this.busy || this.loading || this.disposed) return false;
+    const before = this.structureDraft && this.checkpoint(selection);
     const focus = this.structureDraft?.replace(selection, text, inline);
     if (!focus || !this.structureDraft) return false;
+    this.remember(before!);
     this.view.render(this.structureDraft.snapshot(), focus);
     if (!this.blocked) this.view.status('미저장 변경', 'pending');
     this.updateSave(); return true;
   }
   pasteRich(selection: TextSelection, paragraphs: ClipboardParagraph[]): boolean {
     if (this.busy || this.loading || this.disposed || this.composing) return false;
+    const before = this.structureDraft && this.checkpoint(selection);
     const focus=this.structureDraft?.replaceRich(selection,paragraphs);
     if (!focus || !this.structureDraft) return false;
+    this.remember(before!);
     this.view.render(this.structureDraft.snapshot(),focus);
     if (!this.blocked) this.view.status('미저장 변경','pending');
     this.updateSave();return true;
@@ -101,6 +131,7 @@ export class DocumentController {
   }
   private resetDraft(snapshot: Snapshot): void {
     this.drafts.clear();
+    this.undoDraft = []; this.redoDraft = []; this.lastTyping = undefined;
     this.structureDraft = new StructureDraft(snapshot);
     this.expectedText.clear();
     for (const block of snapshot.blocks) {
@@ -176,6 +207,35 @@ export class DocumentController {
     finally { this.busy = false; this.updateSave(); }
   }
 
+  async restore(direction: 'undo' | 'redo', selection?: TextSelection): Promise<boolean> {
+    if (this.blocked || this.busy || this.loading || this.composing || this.disposed || !this.snapshot || !this.structureDraft) return false;
+    const from = direction === 'undo' ? this.undoDraft : this.redoDraft;
+    const to = direction === 'undo' ? this.redoDraft : this.undoDraft;
+    if (from.length) {
+      const saved = from.pop()!;
+      to.push(this.checkpoint(selection)); this.trimDraftHistory();
+      this.structureDraft.restore(saved.structure); this.drafts = new Map(saved.drafts); this.lastTyping = undefined;
+      const point = saved.selection?.focus;
+      this.view.render(this.structureDraft.snapshot(), point ? {runId:point.runId,start:point.offset,end:point.offset,selection:saved.selection} : undefined);
+      this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
+      this.updateSave(); return true;
+    }
+    // A local draft must never cause a second undo against the saved document.
+    if (this.hasDrafts() || !this.snapshot.history?.[direction]) return false;
+    this.busy = true; this.disconnect(); this.updateSave(); this.view.status('저장 중','pending');
+    const activityId = `local:${++this.activitySequence}`;
+    this.view.activity?.({id:activityId,actor:'human',state:'pending',title:direction==='undo'?'실행 취소':'다시 실행'});
+    try {
+      const next = await this.request('/api/docx/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:this.snapshot.id,baseRevision:this.snapshot.revision,direction})});
+      if (this.disposed) return false;
+      this.snapshot=next;this.resetDraft(next);this.view.render(next);this.view.status('저장됨','committed');
+      this.view.activity?.({id:activityId,actor:'human',state:'committed',title:direction==='undo'?'실행 취소':'다시 실행',revision:next.revision});
+      this.connect(next);return true;
+    } catch(error) {
+      this.view.activity?.({id:activityId,actor:'human',state:'uncertain',title:'이력 복원 결과 확인 필요'});this.fail(error);return false;
+    } finally {this.busy=false;this.updateSave();}
+  }
+
   async download(): Promise<DownloadedFile | undefined> {
     if (!await this.save() || !this.snapshot || this.disposed || this.blocked || this.hasDrafts()) return;
     const checkpoint = this.snapshot;
@@ -249,6 +309,14 @@ export class DocumentController {
   }
   private updateSave(): void {
     const error = this.draftError();
+    const available = !this.blocked && !this.busy && !this.loading && !this.composing && !this.disposed;
+    const actor = (value?: string) => value === 'ai' ? 'AI 확정 작업' : '사람 확정 작업';
+    this.view.history?.({
+      undo: available && (this.undoDraft.length > 0 || !this.hasDrafts() && Boolean(this.snapshot?.history?.undo)),
+      redo: available && (this.redoDraft.length > 0 || !this.hasDrafts() && Boolean(this.snapshot?.history?.redo)),
+      undoLabel: this.undoDraft.length ? '미저장 초안' : actor(this.snapshot?.history?.undoActor),
+      redoLabel: this.redoDraft.length ? '미저장 초안' : actor(this.snapshot?.history?.redoActor),
+    });
     this.view.validation?.(error);
     this.view.canSave(!this.blocked && !this.busy && this.hasDrafts() && !this.composing && !error);
   }

@@ -71,14 +71,26 @@ type Block struct {
 	Rows      []Row      `json:"rows,omitempty"`
 }
 
+type HistoryState struct {
+	Undo      int    `json:"undo"`
+	Redo      int    `json:"redo"`
+	UndoActor string `json:"undoActor,omitempty"`
+	RedoActor string `json:"redoActor,omitempty"`
+}
+type HistoryInput struct {
+	SessionID    string `json:"sessionId"`
+	BaseRevision uint64 `json:"baseRevision"`
+	Direction    string `json:"direction" jsonschema:"undo or redo"`
+}
 type Snapshot struct {
-	ID       string      `json:"id"`
-	Name     string      `json:"name"`
-	Revision uint64      `json:"revision"`
-	Sequence uint64      `json:"sequence"`
-	Blocks   []Block     `json:"blocks"`
-	Page     *PageLayout `json:"page,omitempty"`
-	Warnings []string    `json:"warnings"`
+	History  HistoryState `json:"history"`
+	ID       string       `json:"id"`
+	Name     string       `json:"name"`
+	Revision uint64       `json:"revision"`
+	Sequence uint64       `json:"sequence"`
+	Blocks   []Block      `json:"blocks"`
+	Page     *PageLayout  `json:"page,omitempty"`
+	Warnings []string     `json:"warnings"`
 }
 
 // ParagraphContent references formatting in the inspected revision. Repeated

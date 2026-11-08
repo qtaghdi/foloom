@@ -85,11 +85,11 @@ export function DocumentApp() {
         const currentRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
         const remap = (point: typeof richSelection.anchor) => {
           const index = previousRuns.findIndex(run => run.dataset.docxRun === point.runId);
-          const run = currentRuns[index];
+          const run = index >= 0 ? currentRuns[Math.min(index, currentRuns.length - 1)] : undefined;
           return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
         };
         const anchor = remap(richSelection.anchor), focus = remap(richSelection.focus);
-        if (editor && anchor && focus && currentRuns.length === previousRuns.length) restoreTextSelection(editor, { anchor, focus });
+        if (editor && anchor && focus) restoreTextSelection(editor, { anchor, focus });
       });
     } else if (selection && (restoringSave || document.activeElement === document.body)) {
       const field = article?.querySelectorAll('textarea')[index];
@@ -113,8 +113,18 @@ export function DocumentApp() {
   const beforeUnload = (event: BeforeUnloadEvent) => {
     if (controller.hasDrafts()) { event.preventDefault(); event.returnValue = ''; }
   };
+  const restoreHistory = (direction: 'undo' | 'redo') => {
+    const editor = document.querySelector<HTMLElement>('[data-continuous-editor]');
+    void controller.restore(direction, editor ? readTextSelection(editor) : undefined).then(changed => { if (changed) setDraftVersion(v => v + 1); });
+  };
   const keydown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && confirmReload()) { event.preventDefault(); cancelReload(); return; }
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) {
+      const target = event.target as HTMLElement | null;
+      if (event.isComposing || target?.closest('input, select') || target?.closest('textarea') && !target.closest('#document-content')) return;
+      event.preventDefault(); restoreHistory(key === 'y' || event.shiftKey ? 'redo' : 'undo'); return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
       if (state().validation) { document.querySelector<HTMLTextAreaElement>('textarea[aria-invalid="true"]')?.focus(); return; }
@@ -149,7 +159,7 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentToolbar pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
+    <DocumentToolbar history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
@@ -162,13 +172,13 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onDelete={(selection, direction, word) => { const changed = controller.deleteSelection(selection, direction, word); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onComposition={active => controller.composition(active)} onRefresh={selection => controller.refreshSelection(selection)} selectionText={selection => controller.selectionText(selection)}
           onStructure={(action, id, start, end, insertion) => { const changed = controller.changeStructure(action, id, start, end, insertion); if (changed) setDraftVersion(v => v + 1); return changed; }}
-          onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => { controller.edit(operation); setDraftVersion((version) => version + 1); }}/>}</Show>
+          onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation, selection) => { controller.edit(operation, selection); setDraftVersion((version) => version + 1); }}/>}</Show>
       </article>
       <details class="mt-2 rounded-md px-2 py-2 text-xs leading-6 text-stone-600">
         <summary class="editor-action min-h-11 w-fit rounded px-1 py-2 font-medium">{t('editingSupportAndPreservation')}</summary>

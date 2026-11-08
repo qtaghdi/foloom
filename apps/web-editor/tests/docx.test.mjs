@@ -158,3 +158,31 @@ test('DOCX disposal resolves an outstanding composition save without writing', a
   f.controller.composition(false);
   assert.equal(f.state.writes.length, 0);
 });
+
+test('DOCX draft undo coalesces typing and never also restores server history', async () => {
+  const f = fixture(); await f.controller.load();
+  f.controller.edit({...edit,text:'a'}); f.controller.edit({...edit,text:'ab'});
+  assert.equal(await f.controller.restore('undo'),true);
+  assert.equal(f.controller.hasDrafts(),false);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs[0].text,'old');
+  assert.equal(f.state.writes.length,0);
+  assert.equal(await f.controller.restore('redo'),true);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs[0].text,'ab');
+  f.controller.edit({...edit,text:'new branch'});
+  assert.equal(await f.controller.restore('redo'),false);
+  assert.equal(f.state.writes.length,0);
+});
+
+test('DOCX server undo uses current revision once and a lost response blocks retries', async () => {
+  const f=fixture();
+  f.fetch(async()=>({ok:true,json:async()=>({...snapshot,history:{undo:1,redo:0,undoActor:'ai'}})}));
+  await f.controller.load();const writes=[];
+  f.fetch(async(url,init)=>{writes.push([url,JSON.parse(init.body)]);throw new Error('lost response');});
+  assert.equal(await f.controller.restore('undo'),false);
+  assert.equal(await f.controller.restore('undo'),false);
+  assert.equal(writes.length,1);
+  assert.equal(writes[0][0],'/api/docx/history');
+  assert.deepEqual(writes[0][1],{sessionId:snapshot.id,baseRevision:1,direction:'undo'});
+  assert.equal(f.state.renders.length,1);
+  assert.equal(f.state.statuses.at(-1)[1],'failed');
+});
