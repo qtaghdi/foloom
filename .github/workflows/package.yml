@@ -1,14 +1,8 @@
 name: Package verification
 
 on:
-  pull_request:
-    branches:
-      - main
+  workflow_call:
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,30 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Test CI scope rules
-        run: node --test .github/scripts/check-scope.test.mjs
-      - name: Select checks for changed files
-        id: scope
-        run: node .github/scripts/check-scope.mjs
       - uses: pnpm/action-setup@v4
-        if: steps.scope.outputs.package == 'true'
         with:
           version: 11.9.0
       - uses: actions/setup-node@v4
-        if: steps.scope.outputs.package == 'true'
         with:
           node-version: 22
           cache: pnpm
       - uses: actions/setup-go@v5
-        if: steps.scope.outputs.package == 'true'
         with:
           go-version: 1.25.0
           cache: true
       - name: Verify clean package and current-platform archive
-        if: steps.scope.outputs.package == 'true'
         run: make package-verify release-package-test

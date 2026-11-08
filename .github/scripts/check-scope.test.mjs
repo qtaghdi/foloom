@@ -8,22 +8,31 @@ test('known documentation edits skip expensive checks', () => {
   }
 });
 test('DOCX code and fixtures select DOCX and packaging without XLSX gates', () => {
-  for (const path of ['internal/formats/docx/create.go', 'internal/transport/httpapi/docx_test.go', 'apps/web-editor/src/docx/controller.ts', 'apps/web-editor/src/docx/main.ts', 'testdata/docx/simple.docx']) {
-    assert.deepEqual(classifyChanges([path]), { regression: false, docx: true, safety: false, performance: false, package: true }, path);
+  for (const path of ['internal/formats/docx/create.go', 'internal/transport/httpapi/docx_test.go', 'apps/web-editor/src/docx/controller.ts', 'apps/web-editor/src/docx/main.ts', 'apps/web-editor/tests/docx-header-footer.test.tsx', 'testdata/docx/simple.docx']) {
+    assert.deepEqual(classifyChanges([path]), { regression: false, docx: true, web: false, safety: false, performance: false, package: true }, path);
   }
 });
 test('packaging scripts verify packages', () => {
-  assert.deepEqual(classifyChanges(['scripts/package-smoke.sh']), { regression: false, docx: false, safety: false, performance: false, package: true });
+  assert.deepEqual(classifyChanges(['scripts/package-smoke.sh']), { regression: false, docx: false, web: false, safety: false, performance: false, package: true });
 });
-test('XLSX, shared, dependencies, workflows, and unknown paths run everything', () => {
-  for (const path of ['internal/formats/xlsx/session.go', 'testdata/xlsx/basic.xlsx', 'internal/transport/httpapi/server.go', 'apps/web-editor/src/ui/app-view.ts', 'pnpm-lock.yaml', 'go.mod', 'Makefile', 'internal/hostinstall/install.go', '.github/scripts/check-scope.mjs', '.github/workflows/package.yml', 'new/README.md', 'docs/executable.sh', 'scripts/package-smoke.sh.extra']) {
+function selected(paths) {
+  const plan = classifyChanges(paths);
+  return Object.keys(plan).filter(key => plan[key]);
+}
+test('independent changes select the union of the relevant jobs', () => {
+  assert.deepEqual(selected(['internal/formats/xlsx/session.go']), ['regression', 'safety', 'performance', 'package']);
+  assert.deepEqual(selected(['testdata/xlsx/basic.xlsx']), ['regression']);
+  assert.deepEqual(selected(['cmd/xlsx-performance/main.go']), ['performance']);
+  assert.deepEqual(selected(['scripts/verify-xlsx-safety.sh']), ['safety']);
+  assert.deepEqual(selected(['apps/web-editor/src/ui/app-view.ts']), ['web', 'package']);
+  assert.deepEqual(selected(['apps/web-editor/tests/docx-sections.test.tsx', 'internal/transport/httpapi/static/index.html']), ['docx', 'package']);
+  assert.deepEqual(selected(['apps/web-editor/src/docx/controller.ts', 'cmd/xlsx-performance/main.go']), ['docx', 'performance', 'package']);
+});
+test('shared backend, dependencies, CI and unknown paths fail closed', () => {
+  for (const path of ['internal/transport/httpapi/server.go', 'pnpm-lock.yaml', 'go.mod', 'Makefile', 'internal/hostinstall/install.go', '.github/scripts/check-scope.mjs', '.github/workflows/package.yml', 'new/README.md', 'docs/executable.sh', 'scripts/package-smoke.sh.extra']) {
     assert.ok(Object.values(classifyChanges([path])).every(Boolean), path);
   }
-});
-test('mixed paths, deleted source, empty diff and manual dispatch fail closed', () => {
-  for (const paths of [[], ['docs/guide.md', 'internal/formats/docx/session.go', 'internal/formats/xlsx/session.go'], ['internal/formats/xlsx/removed.go', 'docs/moved.md']]) {
-    assert.ok(Object.values(classifyChanges(paths)).every(Boolean));
-  }
+  assert.ok(Object.values(classifyChanges([])).every(Boolean));
   assert.ok(Object.values(classifyChanges(['README.md'], true)).every(Boolean));
 });
 test('diff rejects missing or option-shaped commit inputs', () => {
@@ -60,10 +69,10 @@ test('real PR diff covers all commits and code renamed into docs', async () => {
     assert.ok(Object.values(run(base, docs)).every(value => !value));
     renameSync(join(root, 'internal/formats/xlsx/session.go'), join(root, 'docs/moved.md'));
     const renamed = commit('move source');
-    assert.ok(Object.values(run(base, renamed)).every(Boolean));
+    assert.deepEqual(run(base, renamed), classifyChanges(['internal/formats/xlsx/session.go']));
     writeFileSync(join(root, 'docs/guide.md'), 'another documentation commit\n');
     const lastDocs = commit('follow-up docs');
-    assert.ok(Object.values(run(base, lastDocs)).every(Boolean));
+    assert.deepEqual(run(base, lastDocs), classifyChanges(['internal/formats/xlsx/session.go']));
     assert.ok(Object.values(run(base, docs, 'workflow_dispatch')).every(Boolean));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
