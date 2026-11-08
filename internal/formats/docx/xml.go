@@ -267,7 +267,13 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				if r.is("bookmarkStart") || r.is("bookmarkEnd") || r.is("commentRangeStart") || r.is("commentRangeEnd") {
 					continue
 				}
-				run := Run{ID: id(), Text: textContent(r)}
+				run := Run{ID: id(), Text: textContent(r), Object: objectPreview(r)}
+				if run.Object != nil && run.Object.Kind == "math" && run.Object.Editable && allowed && !protected[r] && !strings.Contains(string(root.source[r.start:r.end]), "<!--") {
+					targets[run.ID] = target{node: r, paragraph: p, kind: "math_object"}
+				}
+				if run.Object != nil && run.Object.Editable && targets[run.ID].kind != "math_object" {
+					run.Object.Editable = false
+				}
 				if r.is("hyperlink") {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
 				} else {
@@ -312,6 +318,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			}
 			run := baseRun
 			run.ID, run.Text, run.Editable = id(), text, editable
+			if !editable {
+				run.Object = objectPreview(r)
+			}
 			if len(texts) == 0 && r.child("br") == trailingBreak && trailingBreak != nil &&
 				(len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
 				continue

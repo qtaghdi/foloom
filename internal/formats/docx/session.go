@@ -222,6 +222,22 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	var bookmarks *bookmarkIndex
 	referenceCount := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_math" {
+			t, ok := targets[op.TargetID]
+			if !ok || op.Math == nil || op.Comment != nil || op.Reference != nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
+				return Snapshot{}, fmt.Errorf("invalid DOCX equation operation")
+			}
+			edit, err := mathReplacement(s.pkg.document, t, *op.Math)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			edits = append(edits, edit)
+			referenceCount++
+			continue
+		}
+		if op.Math != nil {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX equation fields")
+		}
 		if op.Type == "add_comment" {
 			t, ok := targets[op.TargetID]
 			key := "comment:" + op.TargetID
