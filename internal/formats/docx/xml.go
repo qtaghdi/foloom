@@ -200,6 +200,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 	}
 	markFields(body)
+	anchors := paragraphAnchors(root)
 	targets := map[string]target{}
 	blocks := []Block{}
 	unsupported := false
@@ -215,7 +216,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			allowed = false
 			unsupported = true
 		}
-		out := Paragraph{ID: id(), Runs: []Run{}}
+		out := Paragraph{ID: id(), Anchor: anchors[p], Runs: []Run{}}
 		var trailingBreak *node
 		if kind == "replace_run_text" {
 			trailingBreak = trailingPageBreak(p)
@@ -263,7 +264,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				continue
 			}
 			if !r.is("r") {
-				if r.is("bookmarkStart") || r.is("bookmarkEnd") {
+				if r.is("bookmarkStart") || r.is("bookmarkEnd") || r.is("commentRangeStart") || r.is("commentRangeEnd") {
 					continue
 				}
 				run := Run{ID: id(), Text: textContent(r)}
@@ -273,6 +274,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					unsupported = true
 				}
 				out.Runs = append(out.Runs, run)
+				continue
+			}
+			if r.child("commentReference") != nil && len(r.children) == 1 {
 				continue
 			}
 			texts := []*node{}
