@@ -59,12 +59,11 @@ export class DocumentController {
   private checkpoint(selection?: TextSelection): DraftCheckpoint {
     return { standalone:this.standaloneDraft, image:this.imageDraft, boundary: this.boundaryDraft, headerParity: this.headerParityDraft, sections:[...this.sectionDrafts],styles:[...this.styleDrafts],structure: this.structureDraft!.capture(), drafts: [...this.drafts], selection };
   }
-  private remember(before: DraftCheckpoint, key?: string): void {
-    const now = Date.now();
-    if (!key || this.lastTyping?.key !== key || now - this.lastTyping.time > 750) this.undoDraft.push(before);
+  private remember(before: DraftCheckpoint | undefined, key?: string, now = Date.now()): void {
+    if (before) this.undoDraft.push(before);
     this.lastTyping = key ? { key, time: now } : undefined;
     this.redoDraft = [];
-    this.trimDraftHistory();
+    if (before) this.trimDraftHistory();
   }
   private trimDraftHistory(): void {
     while (this.undoDraft.length + this.redoDraft.length > 10 || [...this.undoDraft, ...this.redoDraft].reduce((n, item) => n + (item.structure.length + JSON.stringify(item.drafts).length + JSON.stringify(item.styles).length + JSON.stringify(item.sections).length) * 2, 0) > 32 * 1024 * 1024) {
@@ -74,13 +73,16 @@ export class DocumentController {
   edit(operation: TextOperation, selection?: TextSelection): void {
     if (this.busy || this.loading || this.disposed || !this.structureDraft) return;
     if ((this.structureDraft.currentText(operation.targetId) ?? this.expectedText.get(operation.targetId)) === operation.text) return;
-    const before = this.checkpoint(selection ?? {anchor:{runId:operation.targetId,offset:0},focus:{runId:operation.targetId,offset:0}});
+    const now = Date.now();
+    const grouped = this.lastTyping?.key === operation.targetId && now - this.lastTyping.time <= 750;
+    // The first edit already holds the undo state for this typing group.
+    const before = grouped ? undefined : this.checkpoint(selection ?? {anchor:{runId:operation.targetId,offset:0},focus:{runId:operation.targetId,offset:0}});
     if (!this.structureDraft?.edit(operation.targetId, operation.text)) {
       const expectedText = this.expectedText.get(operation.targetId) ?? operation.expectedText;
       if (operation.text === expectedText) this.drafts.delete(operation.targetId);
       else this.drafts.set(operation.targetId, { ...operation, expectedText });
     }
-    this.remember(before, operation.targetId);
+    this.remember(before, operation.targetId, now);
     if (!this.blocked) this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
     this.updateSave();
   }
