@@ -1,0 +1,124 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# https://docs.coderabbit.ai/reference/configuration
+# Tracking: https://github.com/qtaghdi/foloom/issues/111
+language: ko-KR
+tone_instructions: >-
+  사용자 문서의 데이터 보존을 책임지는 엔지니어처럼 근거 중심으로 리뷰하세요.
+  재현 조건, 깨지는 불변식, 데이터·사용자 영향과 최소 수정안을 간결히 설명하세요.
+  확인된 결함과 확인이 필요한 가정을 구분하고 취향이나 추측에 따른 지적은 피하세요.
+
+reviews:
+  profile: chill
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  collapse_walkthrough: true
+  poem: false
+  in_progress_fortune: false
+  suggested_labels: false
+  suggested_reviewers: false
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+  pre_merge_checks:
+    docstrings:
+      mode: 'off'
+  path_filters:
+    - '!**/node_modules/**'
+    - '!.pnpm-store/**'
+    - '!apps/web-editor/.vite/**'
+    - '!internal/transport/httpapi/static/assets/**'
+    - '!internal/transport/httpapi/static/app.html'
+    - '!bin/**'
+    - '!dist/**'
+    - '!**/__pycache__/**'
+    - '!**/.pytest_cache/**'
+    - '!coverage.out'
+  path_instructions:
+    - path: '**/*'
+      instructions: >-
+        foloom의 기존 코드·명령·경로에는 document-workspace 이름이 남아 있습니다.
+        Go 서비스와 Solid/TypeScript/Vite UI로 구성된 로컬 우선 사무 문서 공동 편집기입니다.
+        AGENTS.md, docs/architecture.md와 관련 ADR을 기준으로 변경이 깨뜨리는 실제 불변식을 검토하세요.
+        서버가 문서와 저장 상태의 기준이며 브라우저의 선택·초안·AI 애니메이션은 임시 상태입니다.
+        데이터 손실, 잘못된 문서에 쓰기, 충돌 우회, 저장 실패의 성공 표시, 보안 경계 위반을 우선하세요.
+        새로운 인프라나 범용 문서 추상화는 실제 요구가 있을 때만 제안하고 기존 문제·취향 지적을 반복하지 마세요.
+        owner-facing 문서와 제품 문구는 한국어, 코드 주석·커밋·AGENTS.md·skill 지침은 영어이며 em dash를 쓰지 않습니다.
+        실제 실행 증거 없이 테스트 통과, Excel·Word 호환성 또는 lossless 보존을 단정하지 마세요.
+    - path: 'internal/formats/**'
+      instructions: >-
+        형식 adapter는 파싱·검증·저장·호환성을 소유하며 HTTP/MCP/브라우저에 의존하지 않아야 합니다.
+        모든 쓰기는 base revision 확인, 전체 batch 검증, 단일 논리 트랜잭션, 안전한 저장 후
+        revision 한 번 증가와 순서 있는 이벤트 발행을 따라야 합니다.
+        실패한 검증·저장·취소·외부 파일 변경이 메모리, 원본 파일, revision 또는 이력을 부분 변경하지 않는지 확인하세요.
+        같은 디렉터리 임시 파일과 원자적 교체, 잠금 소유권, 세션 종료와 동시 요청, undo/redo 및 복구 실패를 검토하세요.
+        외부 OOXML/ZIP의 크기·압축 해제 한도, 경로와 참조를 신뢰하지 마세요.
+    - path: 'internal/formats/xlsx/**'
+      instructions: >-
+        Excelize를 통한 편집 후 수식, 스타일, 병합, validation, conditional formatting,
+        차트, 이미지, 외부 링크와 편집 범위 밖 데이터를 보존하는지 확인하세요.
+        수식 저장과 계산을 구분하고 수식이나 셀 내용을 코드로 실행하지 마세요.
+        범위·행열 인덱스와 대용량 제한, 여러 작업의 순서, 숨김 시트와 객체 이력,
+        재시작 복구를 확인하고 관련 corpus와 회귀 검사 증거를 요구하세요.
+    - path: 'internal/formats/docx/**'
+      instructions: >-
+        DOCX 지원 범위는 관련 ADR과 docs/docx-editing.md의 현재 계약을 기준으로 판단하세요.
+        namespace-aware OOXML 처리와 표적 변경으로 대상 밖 XML, ZIP part, 관계, content type,
+        알 수 없는 속성, 스타일 상속 및 구역·머리글·바닥글 참조가 보존되는지 확인하세요.
+        문단·run·구역 ID의 세션/revision 유효성, 지원하지 않는 구조의 거부, 겹치는 batch 작업과
+        서식 단위 변환, 문단·표 셀 경계, Unicode·공백 보존을 검토하세요.
+        native Word 검증과 자동 ZIP/XML 보존 검사를 구분하고 계획 중인 전체 Word 기능을 현재 요구로 강제하지 마세요.
+    - path: 'internal/transport/httpapi/**'
+      instructions: >-
+        HTTP, SSE, MCP가 같은 typed adapter 계약과 검증을 사용하고 transport에 형식 로직이 새지 않는지 확인하세요.
+        loopback 기본 바인딩, 추측 불가능한 token, 브라우저 쓰기 Origin 검사, 요청·업로드 크기 제한,
+        파일 경로 정규화와 권한, 비밀 및 문서 내용의 로그 유출, CSP와 iframe 경계를 검토하세요.
+        문서 ID와 세션을 정확히 고정하고 닫힌 ID나 모호한 다중 문서 쓰기를 활성 문서로 fallback하지 마세요.
+        SSE sequence/revision, reconnect와 replay gap, 세션 교체·종료 경합, 취소와 자원 정리를 확인하세요.
+        MCP host의 선택 기능이 없어도 stdio와 인증된 브라우저 대체 경로가 동작해야 합니다.
+    - path: 'apps/web-editor/src/**'
+      instructions: >-
+        앱 UI는 Solid이며 Univer 내부 React와 구분하세요. React hooks 규칙을 Solid 컴포넌트에 적용하지 마세요.
+        엔진 호출은 SpreadsheetEngine, transport는 WorkbookClient, revision·쓰기 직렬화·구독은
+        WorkbookController 경계를 유지하고 HTTP/MCP App/SSE payload는 Zod로 검증해야 합니다.
+        문서 전환과 오래된 응답, 중복 구독·이벤트, dispose 누락, 저장 중 경합과 낙관적 상태의 복구를 검토하세요.
+        pending/committed/conflicted/failed와 미저장 초안을 구분하고 충돌·재연결·탭 종료 시 초안을 잃지 않게 하세요.
+        키보드, 선택·클립보드·undo, 한글 IME composition과 Unicode 커서 위치, 접근 가능한 포커스를 확인하세요.
+        큰 문서는 제한 로딩·가상화를 유지하고 prefers-reduced-motion, 작은 화면 대체 UI를 존중하세요.
+        postMessage는 origin, source frame, payload를 확인해야 합니다. 색상·여백만의 취향 지적은 피하세요.
+    - path: 'internal/hostinstall/**'
+      instructions: >-
+        호스트 설정 설치·제거는 다른 MCP 서버와 사용자 설정을 보존해야 합니다.
+        경로·인자 escaping, token 노출, 파일 권한, 중단·실패 시 복구와 멱등성,
+        포함된 skill 및 실행 파일 버전의 일관성을 검토하세요.
+    - path: '{testdata/**,**/*_test.go,apps/web-editor/tests/**}'
+      instructions: >-
+        테스트는 성공 경로뿐 아니라 stale revision, batch 중간 실패, 저장 실패,
+        외부 파일 변경, 동시 편집, 원본 보존과 재열기를 검증해야 합니다.
+        변경한 경계에 필요한 기존 검사를 우선하고 동일 assertion을 모든 계층에 복제하도록 요구하지 마세요.
+        호환성 manifest·fixture 생성기·출처와 hash를 함께 살피고 기대값 갱신이나 skip으로 회귀를 감추지 마세요.
+        자동 corpus 검증과 실제 Excel/Word에서의 수동 검증 증거를 구분하세요.
+    - path: '{go.mod,go.sum,package.json,pnpm-lock.yaml,pnpm-workspace.yaml,apps/web-editor/package.json,.github/**,scripts/**,Makefile}'
+      instructions: >-
+        Go 변경은 gofmt, go test ./..., go test -race ./..., go vet ./...의 관련 증거를 확인하세요.
+        프론트엔드는 pnpm과 root Makefile을 사용하고 모든 Univer 패키지를 workspace catalog의 같은 정확한 버전으로 유지하세요.
+        @univerjs-pro 패키지·서비스 의존성을 금지하며 의존성 변경 시 check:oss와 production audit 결과를 확인하세요.
+        릴리스·패키징에서 내장 UI와 소스의 일치, 비밀 유출 및 사용자 설정 보존을 살피세요.
+        이슈·PR 연결과 실제 정책 검사를 존중하고 자동 리뷰를 소유자의 명시적 병합 승인으로 취급하지 마세요.
+    - path: '{docs/**,README.md,CHANGELOG.md}'
+      instructions: >-
+        한국어로 작성하고 현재 구현, 실험 기능, 계획, 실제 native 검증 결과를 구분하세요.
+        사용자 동작·보안·호환성·아키텍처·운영에 중요한 변경은 미출시 changelog에 함께 기록해야 합니다.
+        오래된 문서의 한계를 현재 코드 결함으로 단정하지 말고 관련 코드 및 최신 ADR과 대조하세요.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - '**/AGENTS.md'
+  learnings:
+    scope: local
+
+chat:
+  auto_reply: true
+  art: false
