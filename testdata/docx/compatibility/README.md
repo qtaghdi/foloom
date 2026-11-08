@@ -18,9 +18,9 @@ make docx-compatibility-test
 payload hash와 대상 밖 XML byte를 비교합니다. 위험 archive, 손상 XML, 저장 실패,
 리비전 충돌은 adapter 테스트가 별도로 생성합니다.
 
-Microsoft Word와 LibreOffice에서 생산한 fixture와 native reopen 및 시각 증거는
-아직 없습니다. 합성 corpus 통과를 Word 호환성 또는 손실 없는 편집으로 표현하지
-않습니다. 실제 문서는 복사본으로 사용합니다.
+Microsoft Word와 LibreOffice에서 생산한 fixture는 아직 없습니다. 합성 corpus의
+Word 읽기와 LibreOffice 자동 재저장·재열기 결과는 품질 검증 안내에 기록했습니다.
+실제 문서는 복사본으로 사용합니다.
 
 manifest의 SHA-256·출처 누락과 미등록 DOCX를 CI에서 거부합니다. 서로 다른
 내용의 반복 저장과 원본 비변경을 검사하며, native 검증용 출력은
