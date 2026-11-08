@@ -259,3 +259,46 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 		t.Fatalf("no SSE resync: %v", scanner.Err())
 	}
 }
+
+func TestDOCXParagraphPlanThroughMCPAndHTTP(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "paragraphs.docx")
+	_, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "before"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	if _, err := api.OpenDOCX(ctx, path); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := initial.Blocks[0].Paragraph
+	input := docx.ApplyInput{SessionID: initial.ID, BaseRevision: initial.Revision, Operations: []docx.Operation{{Type: "replace_paragraphs", TargetID: p.ID, EndTargetID: p.ID, ExpectedText: "before", Paragraphs: []docx.ParagraphContent{
+		{SourceID: p.ID, Runs: []docx.RunContent{{SourceID: p.Runs[0].ID, Text: "first"}}},
+		{SourceID: p.ID, Runs: []docx.RunContent{{SourceID: p.Runs[0].ID, Text: "second"}}},
+	}}}}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: input})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP paragraph edit: %v %+v", err, result)
+	}
+	// The authenticated HTTP read observes the same revision and actual structure.
+	req := httptest.NewRequest("GET", "/api/docx", nil)
+	req.AddCookie(&http.Cookie{Name: browserSessionCookieName(req.Host), Value: api.browserToken})
+	recorder := httptest.NewRecorder()
+	api.Handler().ServeHTTP(recorder, req)
+	if recorder.Code != 200 {
+		t.Fatal(recorder.Body.String())
+	}
+	var after docx.Snapshot
+	if err := json.Unmarshal(recorder.Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != initial.Revision+1 || len(after.Blocks) != 2 || after.Blocks[1].Paragraph.Runs[0].Text != "second" {
+		t.Fatal("HTTP did not observe structured MCP commit")
+	}
+}

@@ -3,15 +3,16 @@ import { source } from '../i18n/index';
 import { errorResponseSchema } from '../transport/schemas';
 import { documentEvents } from '../transport/document-events';
 import { scopedDocumentURL } from '../transport/document-scope';
+import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, type Snapshot, type Operation } from './contracts';
+import { eventSchema, snapshotSchema, type Snapshot, type Operation, type TextOperation, type DraftFocus, type StructureAction } from './contracts';
 
 export interface DocumentView {
   validation?(message: string): void;
   activity?(entry: ActivityEntry): void;
-  render(snapshot: Snapshot): void;
+  render(snapshot: Snapshot, focus?: DraftFocus): void;
   status(message: string, state: 'pending' | 'committed' | 'failed' | 'conflicted'): void;
   error(message: string, details?: string): void;
   canSave(enabled: boolean): void;
@@ -22,7 +23,9 @@ export interface DocumentView {
 export class DocumentController {
   private snapshot?: Snapshot;
   private activitySequence = 0;
-  private drafts = new Map<string, Operation>();
+  private drafts = new Map<string, TextOperation>();
+  private structureDraft?: StructureDraft;
+  private expectedText = new Map<string, string>();
   private busy = false;
   private blocked = true;
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
@@ -31,14 +34,41 @@ export class DocumentController {
 
   constructor(private view: DocumentView) {}
 
-  hasDrafts(): boolean { return this.drafts.size > 0 || this.busy; }
+  hasDrafts(): boolean { return this.drafts.size > 0 || Boolean(this.structureDraft?.hasChanges()) || this.busy; }
 
-  edit(operation: Operation): void {
+  edit(operation: TextOperation): void {
     if (this.busy || this.loading) return;
-    if (operation.text === operation.expectedText) this.drafts.delete(operation.targetId);
-    else this.drafts.set(operation.targetId, operation);
-    if (!this.blocked) this.view.status(this.drafts.size ? '미저장 변경' : '저장됨', this.drafts.size ? 'pending' : 'committed');
+    if (!this.structureDraft?.edit(operation.targetId, operation.text)) {
+      const expectedText = this.expectedText.get(operation.targetId) ?? operation.expectedText;
+      if (operation.text === expectedText) this.drafts.delete(operation.targetId);
+      else this.drafts.set(operation.targetId, { ...operation, expectedText });
+    }
+    if (!this.blocked) this.view.status(this.hasDrafts() ? '미저장 변경' : '저장됨', this.hasDrafts() ? 'pending' : 'committed');
     this.updateSave();
+  }
+
+  changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string): boolean {
+    if (this.busy || this.loading || this.disposed) return false;
+    const focus = this.structureDraft?.change(action, runId, start, end, insertion);
+    if (!focus || !this.structureDraft) return false;
+    this.view.render(this.structureDraft.snapshot(), focus);
+    if (!this.blocked) this.view.status('미저장 변경', 'pending');
+    this.updateSave();
+    return true;
+  }
+
+  private pendingOperations(): Operation[] {
+    const text = [...this.drafts.values()].filter(op => !this.structureDraft?.ownsOriginal(op.targetId));
+    return [...text, ...this.structureDraft?.operations() ?? []];
+  }
+  private resetDraft(snapshot: Snapshot): void {
+    this.drafts.clear();
+    this.structureDraft = new StructureDraft(snapshot);
+    this.expectedText.clear();
+    for (const block of snapshot.blocks) {
+      const paragraphs = block.type === 'paragraph' ? [block.paragraph] : block.rows.flatMap(r => r.cells.flatMap(c => c.paragraphs));
+      for (const p of paragraphs) for (const run of p.runs) this.expectedText.set(run.id, run.text);
+    }
   }
 
   async load(observed?: { sequence: number; revision: number; actor?: string }): Promise<void> {
@@ -60,7 +90,7 @@ export class DocumentController {
         }
       }
       this.snapshot = snapshot;
-      this.drafts.clear();
+      this.resetDraft(snapshot);
       this.blocked = false;
       this.view.error('');
       this.view.render(snapshot);
@@ -72,26 +102,26 @@ export class DocumentController {
 
   async save(): Promise<boolean> {
     if (this.blocked || this.busy || this.loading || this.disposed || !this.snapshot || this.draftError()) return false;
-    const hasChanges = this.drafts.size > 0;
+    const hasChanges = this.hasDrafts();
     this.busy = true;
     this.disconnect();
     this.updateSave();
     this.view.status(hasChanges ? '저장 중' : source('checkingSave'), 'pending');
     const activityId = `local:${++this.activitySequence}`;
-    if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.drafts.size}개 수정` });
+    if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.pendingOperations().length}개 수정` });
     try {
       let snapshot = this.snapshot;
       if (hasChanges) {
         snapshot = await this.request('/api/docx/operations', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: snapshot.id, baseRevision: snapshot.revision, operations: [...this.drafts.values()] }),
+          body: JSON.stringify({ sessionId: snapshot.id, baseRevision: snapshot.revision, operations: this.pendingOperations() }),
         });
       } else { await confirmSavedDocument(snapshot); }
       if (this.disposed) return false;
       this.snapshot = snapshot;
       if (hasChanges) {
         this.view.activity?.({ id: activityId, actor: 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: snapshot.revision });
-        this.drafts.clear();
+        this.resetDraft(snapshot);
         this.view.render(snapshot);
       }
       this.view.status('저장됨', 'committed');
@@ -172,12 +202,12 @@ export class DocumentController {
   }
   private disconnect(): void { this.events?.close(); this.events = undefined; }
   private draftError(): string {
-    return validateDrafts(this.snapshot?.id ?? '', this.snapshot?.revision ?? 0, [...this.drafts.values()]);
+    return validateDrafts(this.snapshot?.id ?? '', this.snapshot?.revision ?? 0, this.pendingOperations());
   }
   private updateSave(): void {
     const error = this.draftError();
     this.view.validation?.(error);
-    this.view.canSave(!this.blocked && !this.busy && this.drafts.size > 0 && !error);
+    this.view.canSave(!this.blocked && !this.busy && this.hasDrafts() && !error);
   }
   dispose(): void { this.disposed = true; this.disconnect(); }
 }

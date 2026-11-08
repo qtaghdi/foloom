@@ -138,7 +138,7 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		snapshot, err := s.docxSnapshot(ctx)
 		return nil, snapshot, err
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "apply_docx_operations", Title: "DOCX 텍스트 편집", Description: "Atomically replace plain body or simple table run text while preserving unrelated OOXML. Pass current sessionId, baseRevision, editable targetId and exact expectedText. Refresh after conflicts. Tabs and line breaks, merged/nested tables, fields and tracked changes are unsupported.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "apply_docx_operations", Title: "DOCX 텍스트 편집", Description: "Atomically edit body or simple table text and supported paragraph structure. Use replace_run_text/replace_cell_text for text (LF is an inline line break), or replace_paragraphs with first/last paragraph IDs and ordered paragraphs referencing sourceId formatting. Only structureEditable paragraphs in one contiguous sibling range are supported. Pass sessionId, baseRevision and exact expectedText (paragraph texts joined by LF). Do not overlap operations. Refresh after conflicts. Tabs, protected section/page boundaries, fields and tracked changes are unsupported.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {
 		snapshot, err := s.applyDOCX(ctx, input, "ai")
 		return nil, snapshot, err
 	})
