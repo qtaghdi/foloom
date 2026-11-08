@@ -272,3 +272,25 @@ test('DOCX replace all uses one draft undo and retains run styles outside matche
   assert.equal(operation.paragraphs[0].runs[0].sourceId,'r1');
   assert.equal(operation.paragraphs[0].runs.at(-1).sourceId,'r2');
 });
+
+test('continuous typing in a long document captures one undo state per group', async () => {
+  const f = fixture();
+  const blocks = Array.from({ length: 1000 }, (_, index) => {
+    const id = `p-${index}`;
+    return { id, type: 'paragraph', paragraph: { id, structureEditable: true, runs: [
+      { id: `r-${index}`, text: '원본', editable: true, bold: false, italic: false },
+    ] } };
+  });
+  f.fetch(async () => ({ ok: true, json: async () => ({ ...snapshot, blocks }) }));
+  await f.controller.load();
+  const draft = f.controller.structureDraft;
+  const capture = draft.capture.bind(draft);
+  let captures = 0;
+  draft.capture = () => { captures++; return capture(); };
+  for (let i = 1; i <= 20; i++) {
+    f.controller.edit({type:'replace_run_text',targetId:'r-999',expectedText:'원본',text:'입력'.repeat(i)});
+  }
+  assert.equal(captures, 1);
+  assert.equal(await f.controller.restore('undo'), true);
+  assert.equal(f.state.renders.at(-1).blocks.at(-1).paragraph.runs[0].text, '원본');
+});

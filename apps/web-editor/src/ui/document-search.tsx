@@ -60,7 +60,7 @@ export function DocumentSearch(props: { version: string; search: (query: string,
   };
   return <>
     <button ref={trigger} type="button" class={quietButtonClass} aria-expanded={open()} aria-controls={open() ? 'document-search' : undefined} onClick={() => open() ? close() : show()}>{t('search')}</button>
-    <Show when={open()}><section id="document-search" aria-label={t('searchInDocument')} class="fixed right-3 top-16 z-50 w-[min(26rem,calc(100vw-1.5rem))] rounded-lg border border-slate-300 bg-white p-4 text-slate-900 shadow-lg">
+    <Show when={open()}><section id="document-search" aria-label={t('searchInDocument')} class="fixed right-3 top-16 z-50 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain w-[min(26rem,calc(100vw-1.5rem))] rounded-lg border border-slate-300 bg-white p-4 text-slate-900 shadow-lg">
       <form onSubmit={(event) => { event.preventDefault(); if (query().trim() && !busy()) void search(); }}>
         <div class="flex items-center gap-2">
           <label class="sr-only" for="document-search-query">{t('searchText')}</label>
