@@ -40,6 +40,9 @@ func structuralParagraph(p *node, data []byte) bool {
 	allowedProps := " pStyle keepNext keepLines widowControl numPr suppressLineNumbers pBdr shd tabs suppressAutoHyphens contextualSpacing mirrorIndents suppressOverlap bidi adjustRightInd snapToGrid spacing ind jc textDirection textAlignment textboxTightWrap outlineLvl cnfStyle rPr "
 	var safeProperties func(*node) bool
 	safeProperties = func(n *node) bool {
+		if strings.TrimSpace(n.text.String()) != "" {
+			return false
+		}
 		if n.name.Space != wordNS {
 			return false
 		}
@@ -169,17 +172,24 @@ func paragraphReplacement(data []byte, targets map[string]target, op Operation) 
 			if !exists || target.kind == "replace_paragraphs" || paragraphs[byNode[target.paragraph]].node == nil {
 				return fail("run formatting source is outside the range")
 			}
+			if err := validateInlineStyle(run.Style); err != nil {
+				return fail(err.Error())
+			}
 			var runXML string
 			if target.run == nil {
-				runXML = `<dw:r xmlns:dw="` + wordNS + `">` + inlineXML(run.Text) + `</dw:r>`
-			} else if target.text == run.Text {
+				props, err := inlineProperties(nil, data, run.Style)
+				if err != nil {
+					return fail(err.Error())
+				}
+				runXML = `<dw:r xmlns:dw="` + wordNS + `">` + props + inlineXML(run.Text) + `</dw:r>`
+			} else if target.text == run.Text && run.Style == nil {
 				opening, closing := scopedOpening(target.run, data, false)
 				runXML = opening + string(data[target.run.inner:target.run.endStart]) + closing
 			} else {
 				opening, closing := scopedOpening(target.run, data, false)
-				var props string
-				if n := target.run.child("rPr"); n != nil {
-					props = string(data[n.start:n.end])
+				props, err := inlineProperties(target.run.child("rPr"), data, run.Style)
+				if err != nil {
+					return fail(err.Error())
 				}
 				runXML = opening + props + inlineXML(run.Text) + closing
 			}

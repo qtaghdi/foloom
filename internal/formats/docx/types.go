@@ -87,9 +87,20 @@ type ParagraphContent struct {
 	SourceID string       `json:"sourceId"`
 	Runs     []RunContent `json:"runs"`
 }
+
+// InlineStyle contains explicit, bounded clipboard formatting overrides. Source
+// run properties not named here remain unchanged.
+type InlineStyle struct {
+	Bold           *bool  `json:"bold,omitempty"`
+	Italic         *bool  `json:"italic,omitempty"`
+	Color          string `json:"color,omitempty"`
+	Font           string `json:"font,omitempty"`
+	SizeHalfPoints *int   `json:"sizeHalfPoints,omitempty"`
+}
 type RunContent struct {
-	SourceID string `json:"sourceId"`
-	Text     string `json:"text"`
+	Style    *InlineStyle `json:"style,omitempty"`
+	SourceID string       `json:"sourceId"`
+	Text     string       `json:"text"`
 }
 
 type Operation struct {

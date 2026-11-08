@@ -39,10 +39,11 @@ export type TextOperation = {
   type: 'replace_run_text' | 'replace_cell_text'; targetId: string; expectedText: string; text: string;
 };
 
+export type InlineStyle = { bold?: boolean; italic?: boolean; color?: string; font?: string; sizeHalfPoints?: number };
 export type ParagraphOperation = {
  type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';
- paragraphs: Array<{ sourceId: string; runs: Array<{ sourceId: string; text: string }> }>;
+ paragraphs: Array<{ sourceId: string; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type Operation = TextOperation | ParagraphOperation;
-export type DraftFocus = { runId: string; start: number; end: number };
+export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

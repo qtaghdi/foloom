@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'solid-js/web';
 import { AppView } from '../src/ui/app-view';
 import { WorkbookShell } from '../src/ui/workbook-shell';
+import { readTextSelection, restoreTextSelection } from '../src/docx/selection';
 import { DocumentApp } from '../src/docx/document-app';
 import { WorkbookApp } from '../src/workbook-app';
 import type { Snapshot } from '../src/docx/contracts';
@@ -251,17 +252,27 @@ it('clears the visible AI presence when the session reports idle', () => {
   view.dispose();
 });
 
+
+function rich(root: ParentNode): HTMLElement { return root.querySelector<HTMLElement>('[data-continuous-editor]')!; }
+function spans(root: ParentNode): HTMLElement[] { return [...root.querySelectorAll<HTMLElement>('[data-docx-run]')]; }
+function selectRich(root: ParentNode, first: number, start: number, last = first, end = start) {
+  const fields = spans(root);
+  restoreTextSelection(rich(root), { anchor: { runId: fields[first]!.dataset.docxRun!, offset: start }, focus: { runId: fields[last]!.dataset.docxRun!, offset: end } });
+}
+function typeRich(root: ParentNode, index: number, text: string) {
+  const span = spans(root)[index]!; span.textContent = text;
+  span.dispatchEvent(new InputEvent('input', { inputType: 'insertText', bubbles: true }));
+}
 it('keeps split paragraphs as drafts, preserves typing and restores the caret without saving per Enter', async () => {
   const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: '앞뒤', editable: true, bold: true, italic: false }] } }] };
   const f = docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle();
-  let input = root.querySelector('textarea')!;
-  edit(input, '앞중간뒤'); input.focus(); input.setSelectionRange(1, 3);
-  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
-  expect([...root.querySelectorAll('textarea')].map(f => f.value)).toEqual(['앞', '뒤']);
-  input = root.querySelectorAll('textarea')[1]!;
-  expect(document.activeElement).toBe(input); expect(input.selectionStart).toBe(0);
-  edit(input, '이어쓰기');
-  expect(root.querySelectorAll('textarea')[1]).toBe(input);
+  const original = spans(root)[0]; typeRich(root, 0, '앞중간뒤'); expect(spans(root)[0]).toBe(original);
+  selectRich(root, 0, 1, 0, 3);
+  rich(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
+  expect([...root.querySelectorAll('.docx-paragraph')].map(p => p.textContent)).toEqual(['앞', '뒤']);
+  expect(readTextSelection(rich(root))?.focus.offset).toBe(0);
+  selectRich(root, 1, 0, 2, 1);
+  rich(root).dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: '이어쓰기', bubbles: true, cancelable: true })); await settle();
   expect(f.fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
   button(root, '저장').click(); await settle();
   const body = JSON.parse(f.fetcher.mock.calls.find(([, init]) => init?.method === 'POST')![1]!.body as string);
@@ -271,25 +282,63 @@ it('keeps split paragraphs as drafts, preserves typing and restores the caret wi
 });
 it('does not split a paragraph while IME composition owns Enter', async () => {
   const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: '', editable: true, bold: false, italic: false }] } }] };
-  docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle();
-  const input = root.querySelector('textarea')!; input.focus();
-  input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); edit(input, '한');
-  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-  expect(root.querySelector('textarea')).toBe(input); expect(input.value).toBe('한');
-  input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })); input.setSelectionRange(1,1);
-  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
-  expect(root.querySelectorAll('textarea')).toHaveLength(2);
+  docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle(); selectRich(root, 0, 0);
+  rich(root).dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  const span = spans(root)[0]!; span.textContent = '한';
+  rich(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  expect(spans(root)[0]).toBe(span); expect(span.textContent).toBe('한');
+  rich(root).dispatchEvent(new CompositionEvent('compositionend', { data: '한', bubbles: true })); await settle();
+  selectRich(root, 0, 1); rich(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
 });
 it('uses mobile beforeinput paragraph intent and preserves structure drafts after a lost response', async () => {
   const initial: Snapshot = { ...snapshot, blocks: [{ id: 'p', type: 'paragraph', paragraph: { id: 'p', structureEditable: true, runs: [{ id: 'r', text: 'mobile', editable: true, bold: false, italic: false }] } }] };
-  const f = docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle();
-  const input = root.querySelector('textarea')!; input.focus(); input.setSelectionRange(6,6);
-  input.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertLineBreak', bubbles: true, cancelable: true })); await settle();
-  expect(root.querySelectorAll('textarea')).toHaveLength(2);
-  edit(root.querySelectorAll('textarea')[1]!, 'recover draft');
+  const f = docxFixture(initial); const root = mount(() => <DocumentApp/>); await settle(); selectRich(root, 0, 6);
+  rich(root).dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertLineBreak', bubbles: true, cancelable: true })); await settle();
+  expect(root.querySelectorAll('.docx-paragraph')).toHaveLength(2);
+  typeRich(root, 1, 'recover draft');
+  expect(spans(root)[1]!.querySelector('[data-docx-empty]')).toBeNull();
   f.fetcher.mockRejectedValueOnce(new Error('response lost'));
   button(root, '저장').click(); await settle();
-  expect([...root.querySelectorAll('textarea')].map(f => f.value)).toEqual(['mobile','recover draft']);
+  expect([...root.querySelectorAll('.docx-paragraph')].map(p => p.textContent)).toEqual(['mobile','recover draft']);
   expect(button(root, '저장').disabled).toBe(true);
   expect(root.querySelector('#save-status')?.getAttribute('data-state')).toBe('failed');
+});
+
+it('offers plain and basic style paste and never deletes selected text for an image-only clipboard', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'keep',editable:true,bold:true,italic:false}]}}] };
+  const f=docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();
+  const options=root.querySelector<HTMLSelectElement>('[aria-label="붙여넣기 서식"]')!;
+  options.value='basic';options.dispatchEvent(new Event('change',{bubbles:true}));
+  selectRich(root,0,0,0,4);
+  const image=new DataTransfer(); image.items.add(new File(['bytes'],'image.png',{type:'image/png'}));
+  rich(root).dispatchEvent(new ClipboardEvent('paste',{clipboardData:image,bubbles:true,cancelable:true}));
+  expect(spans(root)[0]?.textContent).toBe('keep');
+  const clipboard=new DataTransfer();clipboard.setData('text/plain','new');clipboard.setData('text/html','<p><em style="color:#112233">new</em></p>');
+  rich(root).dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));await settle();
+  expect(spans(root)[0]?.textContent).toBe('new');expect(spans(root)[0]?.style.fontStyle).toBe('italic');
+  button(root,'저장').click();await settle();
+  const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
+  expect(body.operations[0].paragraphs[0].runs[0].style).toEqual({bold:false,italic:true,color:'#112233'});
+});
+it('preserves selected source text when writing a cut clipboard fails', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'keep',editable:true,bold:false,italic:false}]}}] };
+  docxFixture(initial);const root=mount(()=><DocumentApp/>);await settle();selectRich(root,0,0,0,4);
+  const clipboard=new DataTransfer();clipboard.setData=()=>{throw new Error('clipboard denied');};
+  rich(root).dispatchEvent(new ClipboardEvent('cut',{clipboardData:clipboard,bubbles:true,cancelable:true}));await settle();
+  expect(spans(root)[0]?.textContent).toBe('keep');expect(root.querySelector('#save-status')?.textContent).toBe('저장됨');
+});
+
+it('restores the entire reversed selection when IME composition is cancelled', async () => {
+  const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
+    {id:'r1',text:'앞부분',editable:true,bold:true,italic:false}, {id:'r2',text:'뒷부분',editable:true,bold:false,italic:true},
+  ]}}] };
+  docxFixture(initial); const root=mount(()=><DocumentApp/>); await settle();
+  selectRich(root,1,2,0,1);
+  const before=readTextSelection(rich(root));
+  rich(root).dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));
+  spans(root)[0]!.textContent='임시';
+  rich(root).dispatchEvent(new CompositionEvent('compositionend',{data:'',bubbles:true})); await settle();
+  expect(spans(root).map(s=>s.textContent)).toEqual(['앞부분','뒷부분']);
+  expect(readTextSelection(rich(root))).toEqual(before);
 });

@@ -1,5 +1,11 @@
 // Application-owned copy only. Document content and editor toolbars are not translated.
 export const catalog = {
+  "clipboardNormalized": {
+    "ko": "기본 글자 서식과 텍스트만 붙입니다. 지원하지 않는 링크·그림·목록·서식은 포함하지 않습니다.",
+    "en": "Pasting text and basic character formatting only. Unsupported links, images, lists and formatting are not included.",
+    "ja": "テキストと基本的な文字書式のみ貼り付けます。未対応のリンク、画像、リスト、書式は含めません。",
+    "zh-CN": "仅粘贴文本和基本字符格式。不包含不支持的链接、图片、列表及格式。"
+  },
   "paragraphStructureUnavailable": {
     "ko": "이 문단의 구조는 원본 보존을 위해 보호됩니다. 지원되는 텍스트만 편집할 수 있습니다.",
     "en": "This paragraph structure is protected to preserve the original. You can edit supported text.",

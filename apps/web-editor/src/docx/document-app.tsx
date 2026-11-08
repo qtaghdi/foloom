@@ -4,6 +4,7 @@ import { DiagnosticDetails } from '../i18n/diagnostic-details';
 import { t, localizeMessage } from '../i18n';
 import { connectWorkspaceBridge, publishEditorState } from '../ui/workspace-bridge';
 import { DocumentSearch } from '../ui/document-search';
+import { readTextSelection, restoreTextSelection } from './selection';
 import { searchDocument } from './search';
 import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
@@ -13,6 +14,7 @@ import type { ActivityEntry } from '../ui/activity';
 import { ActivityPanel } from '../ui/activity-panel';
 import { DocumentContent } from './document-content';
 import { DocumentToolbar } from './document-toolbar';
+import type { PasteMode } from './clipboard';
 import type { Run } from './contracts';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
@@ -23,6 +25,7 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
   const [draftVersion, setDraftVersion] = createSignal(0);
+  const [pasteMode, setPasteMode] = createSignal<PasteMode>('text');
   const [zoom, setZoom] = createSignal(100);
   const [focusedRun, setFocusedRun] = createSignal<Run>();
   const paper = () => state().snapshot?.page ?? defaultPaper;
@@ -56,6 +59,9 @@ export function DocumentApp() {
     setStructuralDraft(Boolean(focus));
     const article = document.getElementById('document-content');
     const active = document.activeElement;
+    const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
+    const richSelection = previousEditor && readTextSelection(previousEditor);
+    const previousRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
     const fields = [...article?.querySelectorAll('textarea') ?? []];
     const previousField = active instanceof HTMLTextAreaElement ? active
       : state().saving ? fields.find(field => field.name === focusedRun()?.id) : undefined;
@@ -67,7 +73,23 @@ export function DocumentApp() {
     if (focus) {
       queueMicrotask(() => {
         const field = [...article?.querySelectorAll('textarea') ?? []].find(field => field.name === focus.runId);
-        field?.focus({ preventScroll: true }); field?.setSelectionRange(focus.start, focus.end);
+        if (field) { field.focus({ preventScroll: true }); field.setSelectionRange(focus.start, focus.end); }
+        else {
+          const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
+          if (editor) restoreTextSelection(editor, focus.selection ?? { anchor: { runId: focus.runId, offset: focus.start }, focus: { runId: focus.runId, offset: focus.end } });
+        }
+      });
+    } else if (richSelection && restoringSave) {
+      queueMicrotask(() => {
+        const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
+        const currentRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
+        const remap = (point: typeof richSelection.anchor) => {
+          const index = previousRuns.findIndex(run => run.dataset.docxRun === point.runId);
+          const run = currentRuns[index];
+          return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
+        };
+        const anchor = remap(richSelection.anchor), focus = remap(richSelection.focus);
+        if (editor && anchor && focus && currentRuns.length === previousRuns.length) restoreTextSelection(editor, { anchor, focus });
       });
     } else if (selection && (restoringSave || document.activeElement === document.body)) {
       const field = article?.querySelectorAll('textarea')[index];
@@ -127,7 +149,7 @@ export function DocumentApp() {
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
       actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} search={async (query) => searchDocument(document.getElementById('document-content'), query)} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/></>}
     />
-    <DocumentToolbar saving={state().saving} loading={state().loading}
+    <DocumentToolbar pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
@@ -140,8 +162,11 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading} changes={changes()}
           selected={selectedChange() && canLocate(selectedChange()!) ? selectedChange() : undefined}
+          onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}
+          onDelete={(selection, direction, word) => { const changed = controller.deleteSelection(selection, direction, word); if (changed) setDraftVersion(v => v + 1); return changed; }}
+          onComposition={active => controller.composition(active)} onRefresh={selection => controller.refreshSelection(selection)} selectionText={selection => controller.selectionText(selection)}
           onStructure={(action, id, start, end, insertion) => { const changed = controller.changeStructure(action, id, start, end, insertion); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.documentChange?.key === entry.documentChange?.key ? undefined : entry)} onEdit={(operation) => { controller.edit(operation); setDraftVersion((version) => version + 1); }}/>}</Show>
       </article>
