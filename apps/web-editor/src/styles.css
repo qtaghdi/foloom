@@ -237,3 +237,42 @@
 @media (prefers-reduced-motion: reduce) {
   #spreadsheet button[data-workspace-history] { transition: none; }
 }
+
+@media print {
+  html:has([data-docx-app]), body:has([data-docx-app]),
+  body:has([data-docx-app]) #root, [data-docx-app],
+  [data-docx-app] .editor-workspace, [data-docx-app] .editor-primary {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+  body:has([data-docx-app]) .skip-link,
+  [data-docx-app] > :not(.editor-workspace),
+  [data-docx-app] .editor-workspace > :not(.editor-primary),
+  [data-docx-app] details, [data-docx-app] button,
+  [data-docx-app] [data-docx-print-hide], [data-docx-app] textarea {
+    display: none !important;
+  }
+  [data-docx-app] .editor-primary { padding: 0 !important; }
+  [data-docx-app] .docx-preview {
+    container-type: normal;
+    max-width: none;
+    zoom: 1 !important;
+  }
+  [data-docx-app] .docx-paper {
+    page: var(--docx-print-paper);
+    width: auto !important;
+    min-block-size: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    print-color-adjust: exact;
+  }
+  [data-docx-app] .docx-paper + .docx-paper { break-before: page; }
+  [data-docx-app] .docx-paper > * { content-visibility: visible; }
+  [data-docx-app] .docx-table { overflow: visible; }
+  [data-docx-app] img { break-inside: avoid; }
+  [data-docx-app] [data-docx-print-text] { display: inline !important; }
+}
