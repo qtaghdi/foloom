@@ -84,3 +84,35 @@ Word가 활성화되지 않아 작성·편집·저장이 비활성 상태였습�
 확보, native 수정·저장·재열기, 정량 시각 비교와 LibreOffice 검증은 남아 있습니다.
 구독이나 계정 설정은 변경하지 않았습니다. 따라서 #84 전체 완료와 native 편집
 호환성을 주장하지 않습니다.
+
+## 2026-11-08 LibreOffice 자동 재저장
+
+macOS 26.7.2에서 번들 LibreOfficeDev 26.8.0.0.alpha0
+(`2c87e51eeaa2b413ff4ae097b2705eea1995d8e5`)의 Writer로 Foloom이 편집한
+합성 corpus 두 파일을 열고 DOCX로 재저장했습니다. 입력과 출력에서 각각
+PDF를 생성해 재저장 결과를 Writer가 다시 열 수 있는지도 확인했습니다.
+
+```sh
+qa_dir="$(mktemp -d /tmp/foloom-lo-qa.XXXXXX)"
+DOCX_COMPATIBILITY_OUTPUT="$qa_dir/foloom" make docx-compatibility-test
+mkdir "$qa_dir/libreoffice" "$qa_dir/pdf-before" "$qa_dir/pdf-after"
+soffice --headless --convert-to 'docx:Office Open XML Text' \
+  --outdir "$qa_dir/libreoffice" "$qa_dir"/foloom/*.docx
+soffice --headless --convert-to pdf --outdir "$qa_dir/pdf-before" "$qa_dir"/foloom/*.docx
+soffice --headless --convert-to pdf --outdir "$qa_dir/pdf-after" "$qa_dir"/libreoffice/*.docx
+```
+
+- 두 파일의 문단 텍스트와 표 셀 `A`, `표 변경`이 같았습니다.
+- `generated-preservation.docx`의 머리글 텍스트, 외부 링크 대상, `PAGE` 명령,
+  삽입 변경 기록은 유지됐습니다. Writer가 머리글을 여러 part로 나누고
+  단순 필드를 시작·구분·종료 요소가 있는 필드로 바꿨습니다.
+- Writer가 합성 파일에 있던 custom XML과 그림 배치에 사용되지 않는
+  `word/media/image1.png`를 재저장 중 제거했습니다. Foloom의 저장 결과에는
+  두 part가 모두 남아 있었습니다. 배치된 그림의 재저장 검증은 별도로 필요합니다.
+- 재저장 전후의 PDF는 모두 Letter 한 쪽이었습니다. 96 DPI RGB 비교에서
+  기본 파일은 1,281픽셀, 보존 파일은 1,383픽셀이 달랐습니다.
+  이 수치는 동일한 번들 환경의 결과이며 글꼴별 시각 일치를 증명하지 않습니다.
+
+이 실행은 합성 파일의 headless 재저장과 재열기까지 검증했습니다. 실제 입력을
+포함한 LibreOffice 검증, 생산 앱에서 만든 대표 fixture, Word의 수정·저장·재열기는
+#84에 남아 있습니다.
