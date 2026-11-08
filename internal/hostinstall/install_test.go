@@ -3,6 +3,7 @@ package hostinstall
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,12 +133,12 @@ func TestInstallRejectsMalformedManagedCodexBlockBeforeWriting(t *testing.T) {
 }
 
 func TestRepositorySkillMatchesInstalledSkill(t *testing.T) {
-	path := filepath.Join("..", "..", ".agents", "skills", "document-workspace", "SKILL.md")
+	path := filepath.Join("..", "..", ".agents", "skills", "foloom", "SKILL.md")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(content, documentWorkspaceSkill) {
+	if !bytes.Equal(content, foloomSkill) {
 		t.Fatal("repository and installed document-workspace skills differ")
 	}
 }
@@ -155,7 +156,7 @@ func TestInstallMigratesLegacyCodexSection(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(readTestFile(t, installer.codexConfigPath()))
-	if strings.Contains(content, "/old") || strings.Contains(content, "OLD") || strings.Count(content, "[mcp_servers.document_workspace]") != 1 || !strings.Contains(content, "[features]") {
+	if strings.Contains(content, "/old") || strings.Contains(content, "OLD") || strings.Count(content, "[mcp_servers.foloom]") != 1 || !strings.Contains(content, "[features]") {
 		t.Fatalf("legacy Codex config migration = %s", content)
 	}
 }
@@ -191,4 +192,86 @@ func readTestFile(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return content
+}
+
+func TestFoloomMigrationPreservesUserFilesAndReplacesLegacyRegistration(t *testing.T) {
+	for _, customized := range []bool{false, true} {
+		t.Run(fmt.Sprint(customized), func(t *testing.T) {
+			source := filepath.Join(t.TempDir(), "foloom")
+			writeTestFile(t, source, []byte("foloom executable"))
+			i := &Installer{Home: t.TempDir(), SourceExecutable: source, GOOS: "darwin"}
+			writeTestFile(t, i.claudeConfigPath(), []byte(`{"mcpServers":{"document-workspace":{"command":"/old"},"other":{"command":"/keep"}},"theme":"dark"}`))
+			writeTestFile(t, i.codexConfigPath(), []byte("model = \"keep\"\n"+legacyStart+"\n[mcp_servers.document_workspace]\ncommand = \"/old\"\n"+legacyEnd+"\n[mcp_servers.other]\ncommand = \"/keep\"\n"))
+			oldPath := filepath.Join(i.Home, ".codex", "skills", "document-workspace", "SKILL.md")
+			oldContent := legacySkill
+			if customized {
+				oldContent = append(append([]byte{}, legacySkill...), []byte("\nUser workflow notes\n")...)
+			}
+			writeTestFile(t, oldPath, oldContent)
+			status, err := i.Install()
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertFullyInstalled(t, status)
+			_, servers, err := parseClaudeConfig(readTestFile(t, i.claudeConfigPath()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, exists := servers["document-workspace"]; exists {
+				t.Fatal("legacy Claude server remains active")
+			}
+			if !bytes.Contains(servers["other"], []byte("/keep")) {
+				t.Fatal("unrelated Claude server changed")
+			}
+			codex := string(readTestFile(t, i.codexConfigPath()))
+			if strings.Contains(codex, "/old") || strings.Contains(codex, legacyStart) || !strings.Contains(codex, "[mcp_servers.foloom]") || !strings.Contains(codex, "/keep") {
+				t.Fatalf("migration = %s", codex)
+			}
+			if !bytes.Contains(readTestFile(t, i.codexConfigPath()+".document-workspace.bak"), []byte("/old")) {
+				t.Fatal("previous config was not backed up")
+			}
+			if customized {
+				if !bytes.Equal(readTestFile(t, oldPath), oldContent) {
+					t.Fatal("custom legacy skill changed")
+				}
+			} else if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+				t.Fatalf("managed legacy skill remains: %v", err)
+			}
+			if _, err := i.Install(); err != nil {
+				t.Fatalf("reinstall: %v", err)
+			}
+		})
+	}
+}
+
+func TestFoloomMigrationRejectsBrokenLegacyBlockBeforeAnyWrite(t *testing.T) {
+	for _, block := range []string{legacyStart, legacyEnd, legacyStart + "\n" + managedEnd, legacyStart + "\n" + managedStart + "\n" + managedEnd + "\n" + legacyEnd} {
+		i := &Installer{Home: t.TempDir(), SourceExecutable: "/tmp/foloom", GOOS: "darwin"}
+		writeTestFile(t, i.codexConfigPath(), []byte(block))
+		if _, err := i.Install(); err == nil {
+			t.Fatalf("accepted malformed block %q", block)
+		}
+		if _, err := os.Stat(i.binaryPath()); !os.IsNotExist(err) {
+			t.Fatal("binary was installed before validation")
+		}
+		if got := string(readTestFile(t, i.codexConfigPath())); got != block {
+			t.Fatal("malformed config changed")
+		}
+	}
+}
+
+func TestFoloomInstallDoesNotOverwriteCustomCanonicalSkill(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "foloom")
+	writeTestFile(t, source, []byte("executable"))
+	i := &Installer{Home: t.TempDir(), SourceExecutable: source, GOOS: "darwin"}
+	writeTestFile(t, i.codexSkillPath(), []byte("user custom instructions"))
+	if _, err := i.Install(); err == nil {
+		t.Fatal("custom skill was not protected")
+	}
+	if got := string(readTestFile(t, i.codexSkillPath())); got != "user custom instructions" {
+		t.Fatal("custom skill changed")
+	}
+	if _, err := os.Stat(i.binaryPath()); !os.IsNotExist(err) {
+		t.Fatal("binary was installed before validation")
+	}
 }

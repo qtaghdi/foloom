@@ -2,7 +2,7 @@
 
 ## 비전
 
-document-workspace는 Claude, Codex 등 MCP 클라이언트에서 사람과 AI가 같은 사무
+폴룸은 Claude, Codex 등 MCP 클라이언트에서 사람과 AI가 같은 사무
 문서를 편집하는 작업 공간입니다. 하나의 리비전 세션에서 활동 표시, 명시적
 commit, conflict, undo, 형식별 안전 저장을 제공합니다.
 

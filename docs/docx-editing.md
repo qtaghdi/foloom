@@ -7,7 +7,7 @@ Microsoft Word와 LibreOffice native reopen 및 시각 증거는 아직 없습�
 
 ## 새 DOCX 문서
 
-열 파일이 없다면 `document-workspace -workspace`를 실행하고 터미널에 나온
+열 파일이 없다면 `foloom -workspace`를 실행하고 터미널에 나온
 브라우저 링크를 엽니다.
 
 작업 공간에서 **새 DOCX 문서**를 선택하고 파일 이름을 입력합니다. 이름에
@@ -68,11 +68,11 @@ DOCX 편집기의 **복구 보관**에서 이 문서의 보관을 켜면 확정 
 최신 소스에서 `make build`로 바이너리를 만든 뒤 실행합니다. 기존에 설치한 MCP
 바이너리는 이 소스 변경만으로 갱신되지 않습니다. 설치 workflow를 사용하는 경우
 새 실행 파일로 `mcp install`을 수행한 뒤 호스트를 완전히 다시 시작합니다.
-설치된 `document-workspace` 스킬에 DOCX 절대 경로와 작업을 전달할 수 있습니다.
+설치된 `foloom` 스킬에 DOCX 절대 경로와 작업을 전달할 수 있습니다.
 
 ```sh
-./bin/document-workspace -check /absolute/path/to/document.docx
-./bin/document-workspace /absolute/path/to/document.docx
+./bin/foloom -check /absolute/path/to/document.docx
+./bin/foloom /absolute/path/to/document.docx
 ```
 
 출력되는 인증 URL로 DOCX 브라우저 편집기를 엽니다. 지원 일반 문단은 하나의

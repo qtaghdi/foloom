@@ -1,6 +1,11 @@
-# document-workspace
+# 폴룸 · Foloom
 
-MCP 클라이언트에서 사람과 AI가 함께 사무 문서를 편집하는 작업 공간입니다.
+![폴룸](docs/brand/foloom-wordmark.svg)
+
+**같은 문서에서, 함께.**
+
+사람과 AI가 함께 일하는 문서 공간입니다. MCP 클라이언트와 브라우저에서 같은
+문서를 확인하고 편집합니다. [브랜드 가이드와 로고 원본](docs/brand.md)을 제공합니다.
 
 사람과 AI 에이전트가 같은 문서를 확인하고 수정할 수 있는 공유 편집 세션을
 제공합니다. 리비전, 현재 위치 표시, 충돌 감지, 실행 취소, 안전한 저장을
@@ -12,6 +17,9 @@ MCP 클라이언트에서 사람과 AI가 함께 사무 문서를 편집하는 �
 검사를 통과합니다. 현재 소스와 바이너리를 공개 배포하지 않습니다. Microsoft
 Excel 실사용 검증, 반복적인 외부 사용, 배포 조건, 소유자의 명시적 결정이 공개
 릴리스 전 남은 조건입니다.
+
+기존 document-workspace에서 전환하는 경우 [이름·설치 마이그레이션](docs/foloom-migration.md)을
+확인하세요.
 
 ## 현재 지원 범위
 
@@ -45,7 +53,7 @@ native Word 검증은 남아 있습니다. [DOCX 사용 안내](docs/docx-editin
 apps/
   web-editor/                 TypeScript 브라우저 편집기
 cmd/
-  document-workspace/         Go 실행 파일
+  foloom/         Go 실행 파일
 internal/
   formats/
     xlsx/                     XLSX 세션, 작업, 저장
@@ -73,27 +81,27 @@ docs/                         아키텍처, 계획, 결정
 압축을 푼 뒤 서버를 시작하지 않고 복사본 통합 문서를 검증합니다.
 
 ```bash
-./document-workspace -check /absolute/path/to/workbook.xlsx
+./foloom -check /absolute/path/to/workbook.xlsx
 ```
 
 그다음 로컬 브라우저 편집기를 시작합니다.
 
 ```bash
-./document-workspace /absolute/path/to/workbook.xlsx
+./foloom /absolute/path/to/workbook.xlsx
 ```
 
 결과물 선택, 체크섬 검증, 서명되지 않은 앱 경고, 로컬 Claude Desktop 및 Codex
 설정은 [비공개 XLSX 알파 안내](docs/getting-started.md)를 참고하세요.
 
-macOS에서는 압축을 푼 실행 파일로 MCP와 `document-workspace` 스킬을 함께 설치할 수
+macOS에서는 압축을 푼 실행 파일로 MCP와 `foloom` 스킬을 함께 설치할 수
 있습니다.
 
 ```bash
-./document-workspace mcp install
+./foloom mcp install
 ```
 
-Claude Desktop과 Codex를 다시 시작한 뒤 `document-workspace` 스킬에 XLSX 또는
-DOCX 절대 경로와 작업을 전달합니다. Codex에서는 `$document-workspace`로 호출할
+Claude Desktop과 Codex를 다시 시작한 뒤 `foloom` 스킬에 XLSX 또는
+DOCX 절대 경로와 작업을 전달합니다. Codex에서는 `$foloom`로 호출할
 수 있습니다. 기존 XLSX용 `document-xlsx` MCP 프롬프트도 사용할 수 있습니다.
 
 ## 소스에서 빌드
@@ -113,7 +121,7 @@ stdio를 사용하는 로컬 데스크톱 호스트:
 
 ```bash
 make build
-./bin/document-workspace -transport stdio
+./bin/foloom -transport stdio
 ```
 
 기존처럼 `-file /absolute/path/to/workbook.xlsx`를 지정하는 방식도 유지됩니다.

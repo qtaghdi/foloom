@@ -1,11 +1,11 @@
 ---
-name: document-workspace
-description: Inspect, create DOCX, or edit local XLSX and DOCX files through the document-workspace MCP server when the user gives a file path or names an open workspace document.
+name: foloom
+description: Inspect, create DOCX, or edit local XLSX and DOCX files through the Foloom MCP server when the user gives a file path or names an open workspace document.
 ---
 
-# Document Workspace
+# Foloom
 
-Use the document-workspace MCP tools for the requested file. Route by its
+Use the Foloom MCP tools for the requested file. Route by its
 extension or the active document format. Ask for an absolute path if no
 matching document is open and the user has not supplied a path. For creation,
 use the user-specified destination. Do not search unrelated directories.

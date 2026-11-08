@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/docx"
+	"github.com/qtaghdi/foloom/internal/formats/docx"
 )
 
 func (s *Server) copyDOCX(w http.ResponseWriter, r *http.Request) {

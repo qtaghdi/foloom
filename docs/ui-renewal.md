@@ -24,7 +24,7 @@ Image Gen으로 만든 XLSX와 DOCX 전체 화면 reference를 기준으로 합�
 실제 화면에 사용하는 raster asset이 아니며 저장소 밖에 보관합니다. 실서비스 UI는
 Solid와 semantic HTML로 구현합니다.
 
-- 흰색 header·toolbar, slate-100 작업 바탕, slate-900 본문, indigo-600 강조색
+- 흰색 header·toolbar, 따뜻한 종이색 작업 바탕, 잉크색 본문, 소나무색 강조색
 - slate-200 divider, 6px control radius, 44px 이상 touch target
 - 공통 header: 제품명·문서명·형식, 저장 상태, 활동 버튼
 - 형식별 toolbar: 지원하는 동작만 표시하고 unavailable 상태는 명확히 구분
@@ -223,6 +223,12 @@ Univer의 기존 history 명령과 서버 이력 연결은 유지하고, adapter
 반대 방향의 같은 도형을 사용하고 비활성 상태를 명확히 구분합니다. touch 입력에는
 44px 이상의 대상을 제공하며 reduced motion에서는 transition을 제거합니다.
 툴바 언어는 현재 한국어로 유지합니다.
+
+## 폴룸 브랜드
+
+현재 제품 심볼·워드마크와 앱 소유 색상은 [폴룸 브랜드 가이드](brand.md)를 따릅니다.
+과거 UI 검증의 indigo·teal 색상 설명은 당시 결과이며, 현재 앱 토큰은 소나무색입니다.
+기존 문서의 셀·본문 서식과 엔진의 형식별 도구는 브랜드 변경으로 치환하지 않습니다.
 
 ## DOCX 문단 구조 편집 검증 (#83)
 

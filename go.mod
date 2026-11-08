@@ -1,4 +1,4 @@
-module github.com/qtaghdi/document-workspace
+module github.com/qtaghdi/foloom
 
 go 1.25.0
 

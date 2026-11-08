@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/docx"
+	"github.com/qtaghdi/foloom/internal/formats/docx"
 )
 
 func TestDOCXRecoveryPersistsAcrossWorkspaceRestart(t *testing.T) {

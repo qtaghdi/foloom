@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 )
 
 func TestSearchHTTPAndMCP(t *testing.T) {

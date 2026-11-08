@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 )
 
 type applyInput struct {
@@ -40,7 +40,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.validSessionCookie(r) {
-		http.Error(w, "open the tokenized URL printed by document-workspace", http.StatusUnauthorized)
+		http.Error(w, "폴룸이 출력한 인증 URL로 열어 주세요", http.StatusUnauthorized)
 		return
 	}
 	body, err := staticFS.ReadFile("static/index.html")

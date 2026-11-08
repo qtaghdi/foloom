@@ -14,15 +14,24 @@ import (
 )
 
 const (
-	serverName       = "document-workspace"
-	codexServerName  = "document_workspace"
-	managedStart     = "# document-workspace managed start"
-	managedEnd       = "# document-workspace managed end"
+	serverName       = "foloom"
+	codexServerName  = "foloom"
+	managedStart     = "# foloom managed start"
+	managedEnd       = "# foloom managed end"
 	installedBinMode = 0o755
 )
 
-//go:embed assets/document-workspace/SKILL.md
-var documentWorkspaceSkill []byte
+//go:embed assets/foloom/SKILL.md
+var foloomSkill []byte
+
+// The original bytes identify an unmodified managed skill. Never delete a
+// similarly named user-authored skill during a brand migration.
+//
+//go:embed assets/document-workspace/legacy.md
+var legacySkill []byte
+
+const legacyStart = "# document-workspace managed start"
+const legacyEnd = "# document-workspace managed end"
 
 type Installer struct {
 	Home             string
@@ -79,6 +88,15 @@ func (i *Installer) Install() (Status, error) {
 		return Status{}, err
 	}
 	codexNext := mergeCodexConfig(codexCurrent, binaryPath)
+	for _, path := range []string{i.claudeSkillPath(), i.codexSkillPath()} {
+		current, err := readOptionalFile(path)
+		if err != nil {
+			return Status{}, err
+		}
+		if len(current) != 0 && !bytes.Equal(current, foloomSkill) {
+			return Status{}, fmt.Errorf("사용자가 수정한 foloom 스킬을 보존하기 위해 설치를 중단했습니다: %s", path)
+		}
+	}
 
 	if err := copyExecutable(i.SourceExecutable, binaryPath); err != nil {
 		return Status{}, fmt.Errorf("실행 파일 설치: %w", err)
@@ -92,10 +110,18 @@ func (i *Installer) Install() (Status, error) {
 	for _, path := range []string{i.claudeSkillPath(), i.codexSkillPath()} {
 		current, err := readOptionalFile(path)
 		if err != nil {
-			return Status{}, fmt.Errorf("기존 document-workspace 스킬 읽기: %w", err)
+			return Status{}, fmt.Errorf("기존 foloom 스킬 읽기: %w", err)
 		}
-		if err := writeChangedConfig(path, current, documentWorkspaceSkill); err != nil {
-			return Status{}, fmt.Errorf("document-workspace 스킬 설치: %w", err)
+		if err := writeChangedConfig(path, current, foloomSkill); err != nil {
+			return Status{}, fmt.Errorf("foloom 스킬 설치: %w", err)
+		}
+	}
+	for _, host := range []string{".claude", ".codex"} {
+		path := filepath.Join(i.Home, host, "skills", "document-workspace", "SKILL.md")
+		if fileEquals(path, legacySkill) {
+			if err := os.Remove(path); err != nil {
+				return Status{}, fmt.Errorf("이전 기본 스킬 정리: %w", err)
+			}
 		}
 	}
 	return i.Status()
@@ -120,8 +146,8 @@ func (i *Installer) Status() (Status, error) {
 		return Status{}, err
 	}
 	status.CodexMCP = codexConfigMatches(codex, status.BinaryPath)
-	status.ClaudeSkill = fileEquals(i.claudeSkillPath(), documentWorkspaceSkill)
-	status.CodexSkill = fileEquals(i.codexSkillPath(), documentWorkspaceSkill)
+	status.ClaudeSkill = fileEquals(i.claudeSkillPath(), foloomSkill)
+	status.CodexSkill = fileEquals(i.codexSkillPath(), foloomSkill)
 	return status, nil
 }
 
@@ -153,7 +179,7 @@ func (i *Installer) Uninstall() (Status, error) {
 		return Status{}, fmt.Errorf("Codex 설정 저장: %w", err)
 	}
 	for _, path := range []string{i.claudeSkillPath(), i.codexSkillPath()} {
-		if fileEquals(path, documentWorkspaceSkill) {
+		if fileEquals(path, foloomSkill) {
 			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return Status{}, fmt.Errorf("설치 스킬 제거: %w", err)
 			}
@@ -191,11 +217,11 @@ func (i *Installer) codexConfigPath() string {
 }
 
 func (i *Installer) claudeSkillPath() string {
-	return filepath.Join(i.Home, ".claude", "skills", "document-workspace", "SKILL.md")
+	return filepath.Join(i.Home, ".claude", "skills", "foloom", "SKILL.md")
 }
 
 func (i *Installer) codexSkillPath() string {
-	return filepath.Join(i.Home, ".codex", "skills", "document-workspace", "SKILL.md")
+	return filepath.Join(i.Home, ".codex", "skills", "foloom", "SKILL.md")
 }
 
 func mergeClaudeConfig(current []byte, binaryPath string) ([]byte, error) {
@@ -210,6 +236,7 @@ func mergeClaudeConfig(current []byte, binaryPath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	delete(servers, "document-workspace")
 	servers[serverName] = entry
 	encodedServers, err := json.Marshal(servers)
 	if err != nil {
@@ -283,12 +310,12 @@ func removeCodexConfig(current []byte) []byte {
 	legacy := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == managedStart {
+		if trimmed == managedStart || trimmed == legacyStart {
 			managed = true
 			continue
 		}
 		if managed {
-			if trimmed == managedEnd {
+			if trimmed == managedEnd || trimmed == legacyEnd {
 				managed = false
 			}
 			continue
@@ -311,22 +338,35 @@ func removeCodexConfig(current []byte) []byte {
 }
 
 func isCodexServerHeader(line string) bool {
-	return line == "[mcp_servers.document_workspace]" || line == "[mcp_servers.\"document-workspace\"]"
+	return line == "[mcp_servers.foloom]" || line == "[mcp_servers.\"foloom\"]" || line == "[mcp_servers.document_workspace]" || line == "[mcp_servers.\"document-workspace\"]"
 }
 
 func isCodexServerChildHeader(line string) bool {
-	return strings.HasPrefix(line, "[mcp_servers.document_workspace.") || strings.HasPrefix(line, "[mcp_servers.\"document-workspace\".")
+	return strings.HasPrefix(line, "[mcp_servers.foloom.") || strings.HasPrefix(line, "[mcp_servers.\"foloom\".") || strings.HasPrefix(line, "[mcp_servers.document_workspace.") || strings.HasPrefix(line, "[mcp_servers.\"document-workspace\".")
 }
 
 func validateCodexManagedBlock(current []byte) error {
 	text := strings.ReplaceAll(string(current), "\r\n", "\n")
-	startCount := strings.Count(text, managedStart)
-	endCount := strings.Count(text, managedEnd)
-	if startCount != endCount || startCount > 1 {
-		return fmt.Errorf("Codex 설정의 document-workspace 관리 구간이 손상되어 변경하지 않았습니다")
+	open := ""
+	counts := make(map[string]int)
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		switch line {
+		case managedStart, legacyStart:
+			counts[line]++
+			if open != "" || counts[line] > 1 {
+				return fmt.Errorf("Codex 설정의 관리 구간이 손상되어 변경하지 않았습니다")
+			}
+			open = line
+		case managedEnd, legacyEnd:
+			if (line == managedEnd && open != managedStart) || (line == legacyEnd && open != legacyStart) {
+				return fmt.Errorf("Codex 설정의 관리 구간 순서가 올바르지 않아 변경하지 않았습니다")
+			}
+			open = ""
+		}
 	}
-	if startCount == 1 && strings.Index(text, managedStart) > strings.Index(text, managedEnd) {
-		return fmt.Errorf("Codex 설정의 document-workspace 관리 구간 순서가 올바르지 않아 변경하지 않았습니다")
+	if open != "" {
+		return fmt.Errorf("Codex 설정의 관리 구간이 손상되어 변경하지 않았습니다")
 	}
 	return nil
 }

@@ -20,7 +20,7 @@ export class MCPWorkbookClient implements WorkbookClient {
 
   async connect(): Promise<void> {
     this.app = new App(
-      { name: 'document-workspace', version: '0.1.0' },
+      { name: 'foloom', version: '0.1.0' },
       { availableDisplayModes: ['inline', 'fullscreen'] },
       { autoResize: true },
     );

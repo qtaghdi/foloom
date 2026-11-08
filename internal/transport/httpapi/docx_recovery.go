@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/docx"
+	"github.com/qtaghdi/foloom/internal/formats/docx"
 )
 
 const recoveryRoute = "/api/documents/docx-recovery"

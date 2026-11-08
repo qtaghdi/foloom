@@ -2,7 +2,7 @@
 
 ## 목표
 
-document-workspace는 사람과 AI가 같은 사무 문서를 안전하게 편집하는 로컬 우선
+폴룸은 사람과 AI가 같은 사무 문서를 안전하게 편집하는 로컬 우선
 플랫폼입니다. 형식별 fidelity는 adapter가 소유하고, 전송 계층은 형식 규칙을
 모르며, browser는 표시와 초안만 담당합니다. 서버의 리비전과 저장 상태가 항상
 기준입니다.
@@ -11,7 +11,7 @@ document-workspace는 사람과 AI가 같은 사무 문서를 안전하게 편�
 
 ```text
 apps/web-editor/                 TypeScript 브라우저 편집기
-cmd/document-workspace/         Go 실행 파일
+cmd/foloom/         Go 실행 파일
 internal/formats/xlsx/          XLSX 세션, 작업, 저장, 이력
 internal/formats/docx/          실험 DOCX 생성, 표적 편집, 저장
 internal/transport/httpapi/     HTTP, SSE, MCP, 내장 UI
@@ -46,7 +46,7 @@ Claude/Codex MCP host ─┐
 
 ### Go 실행 파일
 
-`cmd/document-workspace`는 입력 파일을 열고 HTTP 또는 stdio 전송을 시작합니다.
+`cmd/foloom`는 입력 파일을 열고 HTTP 또는 stdio 전송을 시작합니다.
 stdio는 파일 없이 시작한 뒤 `open_workbook`으로 활성 XLSX를 정할 수 있습니다.
 thread-safe session holder가 활성 세션의 교체와 종료를 직렬화하며 진행 중인 도구
 호출이 닫힌 세션을 사용하지 않게 합니다. HTTP는 시작 시 XLSX 또는 DOCX 파일이 필요하며 CLI는 확장자로 adapter를 선택합니다.
@@ -290,6 +290,12 @@ XLSX는 셀 편집 종료와 직렬 작업 대기를 마치고, DOCX는 초안�
 응답의 ID·리비전·MIME을 확인한 뒤 파일명과 원래 확장자로 다운로드를 요청합니다.
 브라우저 다운로드 요청과 사용자 디스크 저장 완료는 구분합니다. MCP inline에서는
 `confirm_workbook_save`로 저장 확인을 제공하고 파일 다운로드는 브라우저를 안내합니다.
+
+## 폴룸 이름 전환
+
+제품과 GitHub 저장소의 이름은 폴룸(Foloom), 명령과 Go module은 `foloom`입니다.
+브랜드는 [브랜드 가이드](brand.md), 설치 전환은 [마이그레이션 안내](foloom-migration.md)를
+따릅니다. 저장 adapter와 리비전·MCP 도구 입력 계약은 변경하지 않습니다.
 
 ## DOCX 문단 구조 계획
 

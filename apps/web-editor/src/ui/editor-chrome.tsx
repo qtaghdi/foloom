@@ -1,3 +1,4 @@
+import { FoloomBrand } from '../brand/brand';
 import { LocaleSelect } from '../i18n/locale-select';
 import { t, localizeMessage } from '../i18n';
 import { Show, type JSX } from 'solid-js';
@@ -12,9 +13,7 @@ export function EditorHeader(props: {
 }) {
   return <header class="app-toolbar flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-200 bg-white px-4 py-2 text-slate-900 sm:px-6">
     <div class="flex min-w-0 flex-1 items-center gap-3">
-      <div class="flex shrink-0 items-center gap-2 text-teal-800" aria-label="document-workspace">
-        <svg viewBox="0 0 28 32" width="24" height="28" fill="none" aria-hidden="true"><path d="M3 1h14l8 8v22H3zM17 1v9h8" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><text x="8" y="24" fill="currentColor" font-size="15" font-weight="600">D</text></svg>
-      </div>
+      <FoloomBrand symbolOnly/>
       <div class="flex min-w-0 items-center gap-3">
         <h1 id={props.nameId} class="min-w-0 truncate text-sm font-semibold sm:text-base" title={props.name}>{props.name}</h1>
         <span class="sr-only">{props.kind}</span>

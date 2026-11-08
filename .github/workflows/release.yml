@@ -37,6 +37,6 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: document-workspace-${{ inputs.version }}
+          name: foloom-${{ inputs.version }}
           path: dist/
           if-no-files-found: error

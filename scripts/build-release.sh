@@ -29,14 +29,17 @@ for target in $release_targets; do
     exit 2
   fi
 
-  package_name="document-workspace_${version}_${os}_${arch}"
+  package_name="foloom_${version}_${os}_${arch}"
   stage_directory="$dist_directory/$package_name"
-  binary_name=document-workspace
+  binary_name=foloom
   if [ "$os" = windows ]; then
-    binary_name=document-workspace.exe
+    binary_name=foloom.exe
   fi
 
   mkdir -p "$stage_directory/docs"
+  cp -R "$repository_root/docs/brand" "$stage_directory/docs/brand"
+  cp "$repository_root/docs/brand.md" "$stage_directory/docs/brand.md"
+  cp "$repository_root/docs/foloom-migration.md" "$stage_directory/docs/foloom-migration.md"
   cp "$repository_root/README.md" "$stage_directory/README.md"
   cp "$repository_root/docs/getting-started.md" "$stage_directory/docs/getting-started.md"
   cp "$repository_root/docs/docx-editing.md" "$stage_directory/docs/docx-editing.md"
@@ -46,9 +49,9 @@ for target in $release_targets; do
 
   CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
     GOTOOLCHAIN="${GO_TOOLCHAIN:-go1.25.0}" \
-    GOCACHE="${GO_CACHE:-/tmp/document-workspace-go-cache}" \
+    GOCACHE="${GO_CACHE:-/tmp/foloom-go-cache}" \
     go build -trimpath -ldflags "$ldflags" \
-    -o "$stage_directory/$binary_name" "$repository_root/cmd/document-workspace"
+    -o "$stage_directory/$binary_name" "$repository_root/cmd/foloom"
 
   if [ "$os" = windows ]; then
     (cd "$dist_directory" && zip -X -q -r "$package_name.zip" "$package_name")

@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/docx"
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
-	"github.com/qtaghdi/document-workspace/internal/hostinstall"
-	"github.com/qtaghdi/document-workspace/internal/transport/httpapi"
+	"github.com/qtaghdi/foloom/internal/formats/docx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/hostinstall"
+	"github.com/qtaghdi/foloom/internal/transport/httpapi"
 )
 
 var (
@@ -57,7 +57,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if options.showVersion {
-		fmt.Fprintf(stdout, "document-workspace %s (commit %s, built %s)\n", version, commit, buildDate)
+		fmt.Fprintf(stdout, "foloom %s (commit %s, built %s)\n", version, commit, buildDate)
 		return 0
 	}
 
@@ -160,7 +160,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var result options
-	flags := flag.NewFlagSet("document-workspace", flag.ContinueOnError)
+	flags := flag.NewFlagSet("foloom", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&result.file, "file", "", "열 XLSX 또는 DOCX 문서 경로")
 	flags.BoolVar(&result.workspace, "workspace", false, "파일 없이 빈 작업 공간 열기")
@@ -173,10 +173,10 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&result.check, "check", false, "validate the workbook and exit without starting a server")
 	flags.BoolVar(&result.showVersion, "version", false, "print build version and exit")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: document-workspace [options] <document.xlsx|document.docx>")
-		fmt.Fprintln(stderr, "       document-workspace -file <document.xlsx|document.docx> [options]")
-		fmt.Fprintln(stderr, "       document-workspace -workspace")
-		fmt.Fprintln(stderr, "       document-workspace mcp <install|status|uninstall>")
+		fmt.Fprintln(stderr, "Usage: foloom [options] <document.xlsx|document.docx>")
+		fmt.Fprintln(stderr, "       foloom -file <document.xlsx|document.docx> [options]")
+		fmt.Fprintln(stderr, "       foloom -workspace")
+		fmt.Fprintln(stderr, "       foloom mcp <install|status|uninstall>")
 		fmt.Fprintln(stderr)
 		fmt.Fprintln(stderr, "Options:")
 		flags.PrintDefaults()
@@ -211,7 +211,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 
 func runMCPCommand(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
-		fmt.Fprintln(stderr, "사용법: document-workspace mcp <install|status|uninstall>")
+		fmt.Fprintln(stderr, "사용법: foloom mcp <install|status|uninstall>")
 		return 2
 	}
 	installer, err := hostinstall.New()
@@ -224,7 +224,7 @@ func runMCPCommand(args []string, stdout, stderr io.Writer) int {
 	case "install":
 		status, err = installer.Install()
 		if err == nil {
-			fmt.Fprintln(stdout, "MCP와 document-workspace 스킬을 설치했습니다.")
+			fmt.Fprintln(stdout, "MCP와 foloom 스킬을 설치했습니다.")
 			fmt.Fprintln(stdout, "Claude Desktop과 Codex를 완전히 다시 시작해 주세요.")
 		}
 	case "status":
@@ -232,7 +232,7 @@ func runMCPCommand(args []string, stdout, stderr io.Writer) int {
 	case "uninstall":
 		status, err = installer.Uninstall()
 		if err == nil {
-			fmt.Fprintln(stdout, "document-workspace MCP와 스킬을 제거했습니다.")
+			fmt.Fprintln(stdout, "foloom MCP와 스킬을 제거했습니다.")
 		}
 	default:
 		fmt.Fprintf(stderr, "지원하지 않는 MCP 명령 %q입니다. install, status, uninstall 중 하나를 사용하세요.\n", args[0])
@@ -249,9 +249,9 @@ func runMCPCommand(args []string, stdout, stderr io.Writer) int {
 func printMCPStatus(output io.Writer, status hostinstall.Status) {
 	fmt.Fprintf(output, "실행 파일: %s (%s)\n", installedLabel(status.Binary), status.BinaryPath)
 	fmt.Fprintf(output, "Claude Desktop MCP: %s\n", installedLabel(status.ClaudeMCP))
-	fmt.Fprintf(output, "Claude document-workspace 스킬: %s\n", installedLabel(status.ClaudeSkill))
+	fmt.Fprintf(output, "Claude foloom 스킬: %s\n", installedLabel(status.ClaudeSkill))
 	fmt.Fprintf(output, "Codex MCP: %s\n", installedLabel(status.CodexMCP))
-	fmt.Fprintf(output, "Codex document-workspace 스킬: %s\n", installedLabel(status.CodexSkill))
+	fmt.Fprintf(output, "Codex foloom 스킬: %s\n", installedLabel(status.CodexSkill))
 }
 
 func installedLabel(installed bool) string {

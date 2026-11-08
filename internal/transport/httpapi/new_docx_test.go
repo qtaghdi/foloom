@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qtaghdi/document-workspace/internal/formats/docx"
+	"github.com/qtaghdi/foloom/internal/formats/docx"
 )
 
 func TestNewDOCXNameValidation(t *testing.T) {

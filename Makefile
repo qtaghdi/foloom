@@ -1,6 +1,6 @@
 GO ?= go
 GO_TOOLCHAIN ?= go1.25.0
-GO_CACHE ?= /tmp/document-workspace-go-cache
+GO_CACHE ?= /tmp/foloom-go-cache
 XLSX_PERFORMANCE_PROFILE ?= ci
 
 .PHONY: audit build compatibility-test dev docx-compatibility-test docx-verify go-build go-test package-check package-smoke package-test package-verify release-build release-package-test release-verify test verify web-build web-install web-test xlsx-performance-verify xlsx-pre-excel-verify xlsx-safety-verify
@@ -40,7 +40,7 @@ compatibility-test:
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) test ./internal/formats/xlsx -run CompatibilityCorpus -count=1
 
 go-build:
-	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) build -o bin/document-workspace ./cmd/document-workspace
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) build -o bin/foloom ./cmd/foloom
 
 package-check:
 	node scripts/check-embedded-assets.mjs
@@ -91,4 +91,4 @@ audit:
 
 dev:
 	@test -n "$(FILE)" || (echo "Usage: make dev FILE=/absolute/path/to/book.xlsx" && exit 2)
-	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) run ./cmd/document-workspace -file "$(FILE)"
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) GOCACHE=$(GO_CACHE) $(GO) run ./cmd/foloom -file "$(FILE)"

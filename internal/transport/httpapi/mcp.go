@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/qtaghdi/document-workspace/internal/formats/xlsx"
+	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 )
 
 const (
@@ -136,7 +136,7 @@ func requireLoopbackAddress(addr string) error {
 
 func (s *Server) mcpServer() *mcp.Server {
 	server := mcp.NewServer(
-		&mcp.Implementation{Name: "document-workspace", Version: "0.1.0"},
+		&mcp.Implementation{Name: "foloom", Version: "0.1.0"},
 		&mcp.ServerOptions{Instructions: serverInstructions},
 	)
 	appOnlyMeta := mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}
@@ -157,7 +157,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		if path == "" || task == "" {
 			return nil, fmt.Errorf("path and task are required")
 		}
-		text := fmt.Sprintf("Use the document-workspace MCP tools for this request. Open %q, then open the returned browserUrl in the host browser surface so the user can directly edit the workbook. Do not use an inline image or MCP App preview as the editing surface, and do not repeat the short-lived URL in chat. Inspect only the workbook metadata and ranges needed for the task, summarize the proposed changes, and use the latest revision for one coherent apply_operations batch after the host presents any required approval. Do not read the entire workbook unless the task requires it. Re-read the changed range and report the saved revision when complete. Task: %s", path, task)
+		text := fmt.Sprintf("Use the Foloom MCP tools for this request. Open %q, then open the returned browserUrl in the host browser surface so the user can directly edit the workbook. Do not use an inline image or MCP App preview as the editing surface, and do not repeat the short-lived URL in chat. Inspect only the workbook metadata and ranges needed for the task, summarize the proposed changes, and use the latest revision for one coherent apply_operations batch after the host presents any required approval. Do not read the entire workbook unless the task requires it. Re-read the changed range and report the saved revision when complete. Task: %s", path, task)
 		return &mcp.GetPromptResult{
 			Description: "안전한 XLSX 편집 workflow",
 			Messages:    []*mcp.PromptMessage{{Role: mcp.Role("user"), Content: &mcp.TextContent{Text: text}}},
@@ -165,9 +165,9 @@ func (s *Server) mcpServer() *mcp.Server {
 	})
 	server.AddResource(&mcp.Resource{
 		URI:         appResourceURI,
-		Name:        "document-workspace-xlsx",
-		Title:       "Workbook Editor",
-		Description: "Interactive spreadsheet editor for the open XLSX workbook.",
+		Name:        "foloom-xlsx",
+		Title:       "폴룸 XLSX 편집기",
+		Description: "열린 XLSX를 사람과 AI가 함께 편집하는 폴룸 화면입니다.",
 		MIMEType:    "text/html;profile=mcp-app",
 	}, func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		body, err := staticFS.ReadFile("static/app.html")

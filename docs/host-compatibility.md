@@ -38,11 +38,11 @@ embedded UI 통과로 표현하지 않습니다.
 make build
 ```
 
-binary는 `bin/document-workspace`에 생성됩니다. desktop 앱은 shell 작업 디렉터리를
+binary는 `bin/foloom`에 생성됩니다. desktop 앱은 shell 작업 디렉터리를
 상속하지 않으므로 설정에 절대 경로를 사용합니다.
 
-macOS에서는 `./bin/document-workspace mcp install`이 실행 파일을 고정된 사용자
-경로로 복사하고 Claude Desktop 및 Codex MCP 설정과 XLSX·DOCX용 `document-workspace` 스킬을
+macOS에서는 `./bin/foloom mcp install`이 실행 파일을 고정된 사용자
+경로로 복사하고 Claude Desktop 및 Codex MCP 설정과 XLSX·DOCX용 `foloom` 스킬을
 설치합니다. `mcp status`로 각 구성 요소를 확인하고 `mcp uninstall`로 관리 항목만
 제거할 수 있습니다.
 
@@ -51,8 +51,8 @@ macOS에서는 `./bin/document-workspace mcp install`이 실행 파일을 고정
 ```json
 {
   "mcpServers": {
-    "document-workspace": {
-      "command": "/absolute/path/to/document-workspace/bin/document-workspace",
+    "foloom": {
+      "command": "/absolute/path/to/foloom/bin/foloom",
       "args": ["-transport", "stdio"]
     }
   }
@@ -67,8 +67,8 @@ macOS에서는 `./bin/document-workspace mcp install`이 실행 파일을 고정
 ## Codex stdio 설정
 
 ```toml
-[mcp_servers.document_workspace]
-command = "/absolute/path/to/document-workspace/bin/document-workspace"
+[mcp_servers.foloom]
+command = "/absolute/path/to/foloom/bin/foloom"
 args = ["-transport", "stdio"]
 ```
 
@@ -76,7 +76,7 @@ args = ["-transport", "stdio"]
 browser에서 열어 전체 grid를 직접 편집합니다.
 
 Claude는 MCP prompt 목록의 `document-xlsx`를 선택하거나 host가 노출한 slash
-command를 사용할 수 있습니다. Codex는 `$document-workspace`로 XLSX 또는 DOCX 작업을
+command를 사용할 수 있습니다. Codex는 `$foloom`으로 XLSX 또는 DOCX 작업을
 명시적으로 시작할 수 있습니다. host UI가 prompt 이름을 namespace와 함께 표시할
 수 있으므로 정확한 표기는 설치된 host 버전에서 확인합니다.
 
@@ -99,9 +99,9 @@ command, 이후 작업 범위를 모두 신뢰할 때만 사용합니다. 자동
 
 대표 통합 문서의 복사본만 사용합니다.
 
-1. `document-workspace mcp status`에서 실행 파일, 두 MCP 설정, 두 skill을 확인합니다.
-2. `document-workspace`만 활성화한 새 호스트 대화를 시작합니다.
-3. 초기화, `document-xlsx` 프롬프트 또는 `document-workspace` 스킬, server instruction 노출을 확인합니다.
+1. `foloom mcp status`에서 실행 파일, 두 MCP 설정, 두 skill을 확인합니다.
+2. `foloom`만 활성화한 새 호스트 대화를 시작합니다.
+3. 초기화, `document-xlsx` 프롬프트 또는 `foloom` 스킬, server instruction 노출을 확인합니다.
 4. 절대 경로로 `open_workbook`을 호출한 뒤 `get_workbook`, `read_range`를 호출합니다.
 5. 일회용 browser editor URL을 엽니다. native iframe은 별도 호환성 확인에만
    사용합니다.

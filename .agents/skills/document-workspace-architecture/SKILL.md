@@ -25,7 +25,7 @@ CLI or host -> transport adapter -> format session -> durable document
 
 Ownership rules:
 
-- `cmd/document-workspace` parses process configuration and starts transports.
+- `cmd/foloom` parses process configuration and starts transports.
 - `internal/transport` translates contracts and does not own format rules.
 - `internal/formats/<format>` owns parsing, validation, persistence, and
   format-specific compatibility behavior.
