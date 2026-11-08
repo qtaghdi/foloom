@@ -20,6 +20,7 @@ import type { PasteMode } from './clipboard';
 import type { BoundaryMode, Run } from './contracts';
 import { DocumentBoundaryToolbar } from './document-boundary-toolbar';
 import { DocumentImageToolbar } from './document-image-toolbar';
+import { printDocument, printPaperRules } from './print-layout';
 import { DocumentOutline } from './document-outline';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
@@ -33,6 +34,8 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
+  const [printing,setPrinting] = createSignal(false);
+  const [printError,setPrintError] = createSignal('');
   const [draftVersion, setDraftVersion] = createSignal(0);
   const [formattingSelection,setFormattingSelection]=createSignal<import('./selection').TextSelection>();
   const [pasteMode, setPasteMode] = createSignal<PasteMode>('text');
@@ -107,6 +110,23 @@ export function DocumentApp() {
     const changed = controller.editBoundary({type:'update_boundary', targetId, boundary});
     if (changed) setDraftVersion(version => version + 1);
     return changed;
+  };
+  const printReady = () => {
+    state().message; draftVersion();
+    return Boolean(state().snapshot) && !state().error && !state().loading && !controller.hasDrafts() && !printing();
+  };
+  const requestPrint = async () => {
+    const article = document.getElementById('document-content');
+    if (!article || !printReady()) return;
+    setPrintError('');
+    setPrinting(true);
+    const snapshot = state().snapshot;
+    try {
+      const started = await printDocument(article, () => state().snapshot === snapshot && !controller.hasDrafts());
+      if (!started) setPrintError('문서가 바뀌었습니다. 저장 상태를 확인하고 다시 인쇄하세요.');
+    }
+    catch { setPrintError('그림이나 글꼴을 불러오지 못했습니다. 문서를 다시 연 뒤 인쇄하세요.'); }
+    finally { setPrinting(false); }
   };
   const locateHeading = (id:string) => {
     const paragraph=[...document.querySelectorAll<HTMLElement>('#document-content [data-docx-paragraph]')]
@@ -254,10 +274,11 @@ export function DocumentApp() {
   onCleanup(dispose);
   return <>
     <a class="skip-link" href="#document-content">{t('skipToContent')}</a>
-    <div class="flex h-full min-h-0 flex-col overflow-hidden">
+    <div data-docx-app class="flex h-full min-h-0 flex-col overflow-hidden">
+    <Show when={state().snapshot}>{snapshot=><style media="print">{printPaperRules(snapshot())}</style>}</Show>
     <EditorHeader name={state().snapshot?.name ?? t('openingDocument')} kind={t('document')} nameId="document-name" statusId="save-status"
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
-      actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} docxEditing search={async (query,options) => searchDocument(document.getElementById('document-content'),query,options,(ranges,text)=>{
+      actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><button type="button" class={buttonClass} disabled={!printReady()} onClick={()=>void requestPrint()} title="저장된 문서를 인쇄하거나 PDF로 저장합니다.">인쇄·PDF</button><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} docxEditing search={async (query,options) => searchDocument(document.getElementById('document-content'),query,options,(ranges,text)=>{
       const changed=controller.replaceSearchMatches(ranges,text);
       if(changed)setDraftVersion(version=>version+1);
       return changed;
@@ -282,6 +303,7 @@ export function DocumentApp() {
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
+    <Show when={printError()}><p role="alert" class="border-b border-red-200 px-4 py-2 text-sm text-red-800">{printError()}</p></Show>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
     <Show when={state().validation}>{(message) => <p class="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs leading-6 text-red-800 sm:px-6" role="alert">{localizeMessage(message())}</p>}</Show>
     <Show when={confirmReload()}><section class="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-6" role="region" aria-label={t('confirmDiscardingUnsavedInput')}>
