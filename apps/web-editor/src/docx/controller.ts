@@ -8,7 +8,7 @@ import type { ClipboardParagraph } from './clipboard';
 import type { TextSelection } from './selection';
 import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
-import { validateDrafts } from './validation';
+import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
 import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ImageOperation, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
@@ -125,6 +125,27 @@ export class DocumentController {
   }
   private preview():Snapshot {return {...this.structureDraft!.snapshot(),evenAndOddHeaders:this.headerParityDraft??this.snapshot?.evenAndOddHeaders,sections:this.sections()};}
   sections(){return previewSections(this.snapshot?.sections??[],this.sectionDrafts);}
+  replaceSearchMatches(ranges:TextSelection[],replacement:string):boolean {
+    if(this.blocked||this.loading||this.busy||this.disposed||this.composing||this.boundaryDraft||this.imageDraft||
+      !this.structureDraft||!this.snapshot||ranges.length===0||ranges.length>200||replacement.length>200||validateRunText(replacement)) return false;
+    const before=this.checkpoint();
+    let focus:DraftFocus|undefined;
+    // Search provides non-overlapping ranges in document order. Reversing keeps
+    // offsets in preceding portions of a run valid until they are replaced.
+    for(const range of [...ranges].reverse()){
+      focus=this.structureDraft.replace(range,replacement,true);
+      if(!focus){this.structureDraft.restore(before.structure);return false;}
+    }
+    if(validateDrafts(this.snapshot.id,this.snapshot.revision,this.pendingOperations())){
+      this.structureDraft.restore(before.structure);
+      return false;
+    }
+    this.remember(before);
+    this.view.render(this.preview(),focus);
+    this.view.status('미저장 변경','pending');
+    this.updateSave();
+    return true;
+  }
   pendingImage(): boolean { return Boolean(this.imageDraft); }
   editImage(operation:ImageOperation): boolean {
     if(this.blocked||this.loading||this.disposed||!this.structureDraft||this.hasDrafts())return false;
@@ -173,7 +194,7 @@ export class DocumentController {
       const original=styles.get(definition.id),paragraph={...original?.paragraph,...definition.paragraph};
       if(definition.paragraph?.firstLine!==undefined)delete paragraph.hanging;
       if(definition.paragraph?.hanging!==undefined)delete paragraph.firstLine;
-      styles.set(definition.id,{id:definition.id,name:definition.name??original?.name??definition.id,kind:definition.kind,editable:original?.editable??true,
+      styles.set(definition.id,{id:definition.id,outlineLevel:original?.outlineLevel,name:definition.name??original?.name??definition.id,kind:definition.kind,editable:original?.editable??true,
         basedOn:definition.basedOn??original?.basedOn,run:{...(definition.run?.reset?{}:original?.run),...definition.run},paragraph});
     }
     return [...styles.values()];
