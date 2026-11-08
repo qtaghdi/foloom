@@ -222,6 +222,27 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	var bookmarks *bookmarkIndex
 	referenceCount := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_table" {
+			key := "table:" + op.TargetID
+			t, ok := targets[op.TargetID]
+			if !ok || seen[key] || op.Table == nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return Snapshot{}, fmt.Errorf("invalid or duplicate DOCX table operation")
+			}
+			seen[key] = true
+			edit, err := tableReplacement(s.pkg.document, t, *op.Table)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			structuralBytes += len(edit.data)
+			if structuralBytes > maxPartBytes {
+				return Snapshot{}, fmt.Errorf("DOCX batch replacement XML exceeds 16 MiB limit")
+			}
+			edits = append(edits, edit)
+			continue
+		}
+		if op.Table != nil {
+			return Snapshot{}, fmt.Errorf("unexpected DOCX table fields")
+		}
 		if op.Type == "update_math" {
 			t, ok := targets[op.TargetID]
 			if !ok || op.Math == nil || op.Comment != nil || op.Reference != nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
