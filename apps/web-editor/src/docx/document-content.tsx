@@ -6,6 +6,7 @@ import { continuousInput } from './continuous-input';
 import type { TextSelection } from './selection';
 import { validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
+import { ObjectPreview } from './document-objects';
 import { scopedDocumentURL } from '../transport/document-scope';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
@@ -79,7 +80,7 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
     }}>
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
-        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<Show when={run.link} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>{link=>
+        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<Show when={run.link} fallback={<Show when={run.object} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>{object=><ObjectPreview object={object()}/>}</Show>}>{link=>
           <a data-docx-text contentEditable={false} class="whitespace-pre-wrap text-blue-800 underline focus-visible:outline-2 focus-visible:outline-teal-700"
             href={link().url??`#${link().bookmark}`} target={link().url?'_blank':undefined}
             rel={link().url?'noopener noreferrer':undefined}

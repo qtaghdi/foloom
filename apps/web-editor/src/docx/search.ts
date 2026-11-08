@@ -20,11 +20,11 @@ export function searchDocument(
   for (const paragraph of root.querySelectorAll<HTMLElement>('.docx-paragraph')) {
     const inTable = Boolean(paragraph.closest('td,th'));
     if (options.scope==='table' && !inTable || options.scope==='body' && inTable) continue;
-    const readFields=()=>[...paragraph.querySelectorAll<HTMLElement>('textarea, [data-docx-run], [data-docx-text], img')];
+    const readFields=()=>[...paragraph.querySelectorAll<HTMLElement>('textarea, [data-docx-run], [data-docx-text], [data-docx-opaque], img')];
     const fields = readFields();
     // A picture is a non-text boundary. Do not match across it.
     const valueOf = (field:HTMLElement) => field instanceof HTMLTextAreaElement ? field.value :
-      field instanceof HTMLImageElement ? '\ufffc' : field.textContent ?? '';
+      field instanceof HTMLImageElement || field.hasAttribute('data-docx-opaque') ? '\ufffc' : field.textContent ?? '';
     const values = fields.map(valueOf);
     const text = values.join('');
     pattern.lastIndex = 0;
