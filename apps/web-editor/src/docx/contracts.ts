@@ -54,7 +54,7 @@ export const snapshotSchema = z.object({
   history: z.object({ undo: z.number().int().min(0).max(10), redo: z.number().int().min(0).max(10), undoActor: z.enum(['human', 'ai']).optional(), redoActor: z.enum(['human', 'ai']).optional() }).optional(),
   blocks: z.array(z.discriminatedUnion('type', [
     z.object({ id: z.string(), type: z.literal('paragraph'), paragraph: paragraphSchema }),
-    z.object({ id: z.string(), type: z.literal('table'), rows: z.array(z.object({
+    z.object({ id: z.string(), type: z.literal('table'), tableEditable: z.boolean().optional(), rows: z.array(z.object({
       cells: z.array(z.object({ id: z.string(), paragraphs: z.array(paragraphSchema) })),
     })) }),
   ])),
@@ -80,6 +80,9 @@ export type ParagraphOperation = {
  paragraphs: Array<{ sourceId: string; format?: ParagraphFormat; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
+export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column';
+export type TableEdit = {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number};
+export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'section_next_page' | 'section_continuous';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
 export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}};
@@ -88,6 +91,6 @@ export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} |
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string}};
 export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete';expression?:string}};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation;
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | TableOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

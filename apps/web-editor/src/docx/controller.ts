@@ -12,10 +12,10 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ImageOperation, type ReferenceOperation, type CommentOperation, type MathOperation, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ImageOperation, type ReferenceOperation, type CommentOperation, type MathOperation, type TableOperation, type Snapshot, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
-type DraftCheckpoint = { standalone?:ReferenceOperation|CommentOperation|MathOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   recovery?(status: RecoveryStatus): void;
   composition?(active: boolean): void;
@@ -43,7 +43,7 @@ export class DocumentController {
   private events?: Pick<EventSource, 'addEventListener' | 'onerror' | 'close'>;
   private disposed = false;
   private loading = false;
-  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation;
+  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation|TableOperation;
   private imageDraft?:ImageOperation;
   private boundaryDraft?: BoundaryOperation;
   private headerParityDraft?: boolean;
@@ -169,8 +169,10 @@ export class DocumentController {
     this.updateSave();
     return true;
   }
+  pendingTable(): boolean { return this.standaloneDraft?.type === 'update_table'; }
+  editTable(operation: TableOperation): boolean { return this.editStandalone(operation); }
   pendingStandalone(): boolean { return Boolean(this.standaloneDraft); }
-  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation): boolean {
+  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation|TableOperation): boolean {
     if(this.blocked||this.loading||this.disposed||!this.structureDraft||this.hasDrafts())return false;
     this.remember(this.checkpoint());
     this.standaloneDraft=operation;
