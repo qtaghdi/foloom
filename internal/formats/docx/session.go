@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -23,6 +25,7 @@ type Session struct {
 	revision, sequence uint64
 	events             []Event
 	history            *historyStore
+	pictureAssets      map[string]pictureAsset
 	// Injected only by package tests to verify persistence failures before commit.
 	rename func(string, string) error
 }
@@ -106,16 +109,36 @@ func (s *Session) Snapshot(ctx context.Context) (Snapshot, error) {
 	defer s.mu.Unlock()
 	return s.snapshotLocked()
 }
+
+// Picture returns only a validated current-revision media asset addressed by a run ID.
+func (s *Session) Picture(ctx context.Context, id string) ([]byte, string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !strings.HasPrefix(id, s.id+":"+strconv.FormatUint(s.revision, 10)+":") {
+		return nil, "", fmt.Errorf("stale DOCX picture")
+	}
+	asset, ok := s.pictureAssets[id]
+	if !ok {
+		return nil, "", fmt.Errorf("DOCX picture unavailable")
+	}
+	return bytes.Clone(asset.data), asset.mime, nil
+}
+
 func (s *Session) snapshotLocked() (Snapshot, error) {
 	root, err := parseXML(s.pkg.document)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	blocks, _, unsupported, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+	blocks, targetsByID, unsupported, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지와 일부 스타일을 미리 보며 자동 페이지 매김, 이미지, 머리글과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	s.addPicturePreviews(blocks, targetsByID)
+	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID)
+	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 떠 있는 그림과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
 		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
 	}
@@ -132,7 +155,30 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if history.Redo > 0 {
 		history.RedoActor = s.history.manifest.Redo[history.Redo-1].Actor
 	}
-	return Snapshot{Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	sections := []SectionInfo{}
+	targets := inspectSections(root, s.id, s.revision)
+	headers := s.pkg.headerFooterCatalog(targets)
+	for index, target := range targets {
+		target.info.HeaderFooters = headers[index]
+		if n := target.props.child("titlePg"); n != nil {
+			target.info.FirstPage = onOff(n.attr("val"), true)
+		}
+		sections = append(sections, target.info)
+		for index := target.info.StartBlock; index <= target.info.EndBlock && index < len(blocks); index++ {
+			block := &blocks[index]
+			if block.Paragraph != nil {
+				block.Paragraph.SectionID = target.info.ID
+			}
+			for row := range block.Rows {
+				for cell := range block.Rows[row].Cells {
+					for paragraph := range block.Rows[row].Cells[cell].Paragraphs {
+						block.Rows[row].Cells[cell].Paragraphs[paragraph].SectionID = target.info.ID
+					}
+				}
+			}
+		}
+	}
+	return Snapshot{Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -151,7 +197,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	if actor != "ai" && actor != "human" {
 		return Snapshot{}, fmt.Errorf("DOCX actor must be human or ai")
 	}
-	content, err := s.prepareOperations(input)
+	content, err := s.prepareOperations(input, actor)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -170,7 +216,14 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 	}
 	m := historyManifest{Version: 1, Revision: s.revision + 1, Current: historyHash(content), Undo: append(append([]historyEntry(nil), s.history.manifest.Undo...), historyEntry{Hash: historyHash(s.content), Size: len(s.content), Actor: actor})}
 	trimHistory(&m)
-	return s.persistHistory(ctx, content, candidate, m, actor)
+	textOnly := true
+	for _, op := range input.Operations {
+		if op.Type != "replace_run_text" && op.Type != "replace_cell_text" {
+			textOnly = false
+			break
+		}
+	}
+	return s.persistHistory(ctx, content, candidate, m, actor, textOnly)
 }
 
 // RecoveryFile validates a draft against the exact in-memory base. It never
@@ -188,7 +241,7 @@ func (s *Session) RecoveryFile(ctx context.Context, input ApplyInput) ([]byte, e
 	if len(input.Operations) == 0 {
 		return append([]byte(nil), s.content...), nil
 	}
-	content, err := s.prepareOperations(input)
+	content, err := s.prepareOperations(input, "human")
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +259,7 @@ func (s *Session) RecoveryFile(ctx context.Context, input ApplyInput) ([]byte, e
 }
 
 // prepareOperations runs under mu and does not read or write the source.
-func (s *Session) prepareOperations(input ApplyInput) ([]byte, error) {
+func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, error) {
 	if input.SessionID != s.id || input.BaseRevision != s.revision {
 		return nil, ErrRevisionConflict
 	}
@@ -217,15 +270,157 @@ func (s *Session) prepareOperations(input ApplyInput) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	root, err := parseXML(s.pkg.document)
+	if err != nil {
+		return nil, err
+	}
 	_, targets, _, err := inspect(s.pkg.document, s.id, s.revision)
 	if err != nil {
 		return nil, err
 	}
 	seen := map[string]bool{}
 	var edits []replacement
+	headerCount := 0
+	var drawingID uint32
+	imageCount := 0
 	textBytes := 0
 	structuralBytes := 0
+	var bookmarks *bookmarkIndex
+	referenceCount := 0
 	for _, op := range input.Operations {
+		if op.Type == "update_math" {
+			t, ok := targets[op.TargetID]
+			if !ok || op.Math == nil || op.Comment != nil || op.Reference != nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX equation operation")
+			}
+			edit, err := mathReplacement(s.pkg.document, t, *op.Math)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			referenceCount++
+			continue
+		}
+		if op.Math != nil {
+			return nil, fmt.Errorf("unexpected DOCX equation fields")
+		}
+		if op.Type == "add_comment" {
+			t, ok := targets[op.TargetID]
+			key := "comment:" + op.TargetID
+			if !ok || seen[key] || op.Comment == nil || op.Reference != nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid or duplicate DOCX comment operation")
+			}
+			seen[key] = true
+			changes, err := s.pkg.appendComment(root, t, *op.Comment, actor, parts)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, changes...)
+			referenceCount++
+			continue
+		}
+		if op.Comment != nil {
+			return nil, fmt.Errorf("unexpected DOCX comment fields")
+		}
+		if op.Type == "update_reference" {
+			t, ok := targets[op.TargetID]
+			if !ok || op.Reference == nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX reference operation")
+			}
+			if bookmarks == nil {
+				index := readBookmarks(root)
+				bookmarks = &index
+			}
+			replacements, err := s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, replacements...)
+			referenceCount++
+			continue
+		}
+		if op.Reference != nil {
+			return nil, fmt.Errorf("unexpected DOCX reference fields")
+		}
+		if op.Type == "update_image" {
+			target, ok := targets[op.TargetID]
+			if !ok || op.Image == nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid DOCX image operation")
+			}
+			if imageCount == 0 {
+				drawingID, err = s.pkg.availableDrawingID()
+				if err != nil {
+					return nil, err
+				}
+			}
+			if imageCount >= 4 || drawingID == 0 {
+				return nil, fmt.Errorf("DOCX batch image limit exceeded")
+			}
+			edit, err := s.pkg.imageInsertion(s.pkg.document, target, *op.Image, drawingID, parts)
+			if err != nil {
+				return nil, err
+			}
+			imageCount++
+			drawingID++
+			edits = append(edits, edit)
+			continue
+		}
+		if op.Image != nil {
+			return nil, fmt.Errorf("unexpected DOCX image fields")
+		}
+		if op.Type == "update_boundary" {
+			key := "boundary:" + op.TargetID
+			target, ok := targets[op.TargetID]
+			if seen[key] || !ok || (target.kind != "replace_paragraphs" && (target.kind != "update_boundary" || op.Boundary != "page_before" && op.Boundary != "no_page_before")) || op.ExpectedText != "" || op.EndTargetID != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.Paragraphs != nil || op.Text != "" || op.StyleDefinition != nil {
+				return nil, fmt.Errorf("invalid or stale DOCX boundary target")
+			}
+			seen[key] = true
+			replacements, err := boundaryReplacements(target.paragraph.parent.parent, s.pkg.document, s.id, s.revision, target.paragraph, op.Boundary)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, replacements...)
+			continue
+		}
+		if op.Boundary != "" {
+			return nil, fmt.Errorf("unexpected DOCX boundary field")
+		}
+		if op.Type == "update_header_parity" {
+			if seen[op.Type] || op.EvenAndOddHeaders == nil || op.Section != nil || op.SectionID != "" || op.TargetID != "" || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || op.StyleDefinition != nil {
+				return nil, fmt.Errorf("invalid or duplicate DOCX header parity operation")
+			}
+			seen[op.Type] = true
+			if err := s.pkg.updateHeaderParity(*op.EvenAndOddHeaders, parts); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if op.EvenAndOddHeaders != nil {
+			return nil, fmt.Errorf("unexpected DOCX header parity field")
+		}
+		if op.Type == "update_section" {
+			key := "section:" + op.SectionID
+			if seen[key] {
+				return nil, fmt.Errorf("duplicate DOCX section update")
+			}
+			seen[key] = true
+			if op.Section == nil {
+				return nil, fmt.Errorf("DOCX section update requires settings")
+			}
+			headerCount += len(op.Section.HeaderFooters)
+			if headerCount > 32 {
+				return nil, fmt.Errorf("DOCX batch permits 32 header/footer updates")
+			}
+			edit, err := s.pkg.sectionReplacement(s.pkg.document, root, s.id, s.revision, op, parts)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
+		if op.Section != nil || op.SectionID != "" {
+			return nil, fmt.Errorf("unexpected DOCX section fields")
+		}
 		if op.Type == "define_style" {
 			continue
 		}

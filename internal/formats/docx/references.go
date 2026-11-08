@@ -1,0 +1,244 @@
+package docx
+
+import (
+	"bytes"
+	"fmt"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
+
+type ReferenceEdit struct {
+	Action   string `json:"action" jsonschema:"insert_link or insert_bookmark"`
+	Text     string `json:"text,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Bookmark string `json:"bookmark,omitempty"`
+}
+
+type BookmarkInfo struct {
+	Name        string `json:"name"`
+	ParagraphID string `json:"paragraphId"`
+}
+
+type LinkInfo struct {
+	URL      string `json:"url,omitempty"`
+	Bookmark string `json:"bookmark,omitempty"`
+}
+
+type bookmarkIndex struct {
+	names   map[string]int
+	starts  map[string][]*node
+	ends    map[string][]*node
+	highest int
+}
+
+func readBookmarks(root *node) bookmarkIndex {
+	index := bookmarkIndex{names: map[string]int{}, starts: map[string][]*node{}, ends: map[string][]*node{}}
+	var walk func(*node)
+	walk = func(n *node) {
+		if n.is("bookmarkStart") || n.is("bookmarkEnd") {
+			id := attribute(n, wordNS, "id")
+			if number, err := strconv.Atoi(id); err == nil && number > index.highest {
+				index.highest = number
+			}
+			if n.is("bookmarkStart") {
+				index.starts[id] = append(index.starts[id], n)
+				index.names[strings.ToLower(attribute(n, wordNS, "name"))]++
+			} else {
+				index.ends[id] = append(index.ends[id], n)
+			}
+		}
+		for _, child := range n.children {
+			walk(child)
+		}
+	}
+	walk(root)
+	return index
+}
+
+func (index bookmarkIndex) safeStart(n *node) bool {
+	id, name := attribute(n, wordNS, "id"), attribute(n, wordNS, "name")
+	start, end := index.starts[id], index.ends[id]
+	return id != "" && bookmarkName.MatchString(name) && index.names[strings.ToLower(name)] == 1 && len(start) == 1 && len(end) == 1 && n.start < end[0].start
+}
+
+func safeLink(raw string) bool {
+	if len(raw) == 0 || len(raw) > 2048 || strings.ContainsAny(raw, "\\\t\r\n\x00 ") {
+		return false
+	}
+	for _, r := range raw {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	u, err := url.Parse(raw)
+	return err == nil && u != nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil && u.Opaque == ""
+}
+
+func (p *documentPackage) addHyperlink(raw string, changes map[string][]byte) (string, error) {
+	rels := p.partData(documentRelationships, changes)
+	if len(rels) == 0 {
+		rels = []byte(`<Relationships xmlns="` + packageRelNS + `"></Relationships>`)
+	}
+	root, err := parseXML(rels)
+	if err != nil {
+		return "", err
+	}
+	used := map[string]bool{}
+	for _, rel := range root.children {
+		used[attribute(rel, "", "Id")] = true
+	}
+	id := "rIdFoloomLink"
+	for i := 1; used[id]; i++ {
+		id = "rIdFoloomLink" + strconv.Itoa(i)
+	}
+	xml := `<dwr:Relationship xmlns:dwr="` + packageRelNS + `" Id="` + id + `" Type="` + officeRelNS + `/hyperlink" Target="` + escapeText(raw) + `" TargetMode="External"/>`
+	rels, err = appendXMLChild(rels, xml)
+	if err != nil {
+		return "", err
+	}
+	changes[documentRelationships] = rels
+	return id, nil
+}
+
+func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEdit, bookmarks *bookmarkIndex, changes map[string][]byte) ([]replacement, error) {
+	paragraph := t.paragraph
+	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") {
+		return nil, fmt.Errorf("DOCX reference requires an editable body paragraph")
+	}
+	appendRun := func(raw string) []replacement {
+		if strings.HasSuffix(string(data[paragraph.start:paragraph.inner]), "/>") {
+			open, close := scopedOpening(paragraph, data, false)
+			return []replacement{{paragraph.start, paragraph.end, []byte(open + raw + close)}}
+		}
+		return []replacement{{paragraph.endStart, paragraph.endStart, []byte(raw)}}
+	}
+	switch edit.Action {
+	case "insert_bookmark":
+		key := strings.ToLower(edit.Bookmark)
+		if edit.Text != "" || edit.URL != "" || !bookmarkName.MatchString(edit.Bookmark) || bookmarks.names[key] != 0 || bookmarks.highest >= 2147483647 {
+			return nil, fmt.Errorf("invalid or duplicate DOCX bookmark")
+		}
+		bookmarks.highest++
+		id := strconv.Itoa(bookmarks.highest)
+		bookmarks.names[key] = 1
+		open := `<dwb:bookmarkStart xmlns:dwb="` + wordNS + `" dwb:id="` + id + `" dwb:name="` + edit.Bookmark + `"/>`
+		close := `<dwb:bookmarkEnd xmlns:dwb="` + wordNS + `" dwb:id="` + id + `"/>`
+		return appendRun(open + close), nil
+	case "insert_link":
+		if !validText(edit.Text) || len(edit.Text) > 4096 || strings.TrimSpace(edit.Text) == "" || (edit.URL == "") == (edit.Bookmark == "") {
+			return nil, fmt.Errorf("invalid DOCX link text or target")
+		}
+		property := ""
+		if edit.URL != "" {
+			if !safeLink(edit.URL) {
+				return nil, fmt.Errorf("unsupported DOCX link URL")
+			}
+			id, err := p.addHyperlink(edit.URL, changes)
+			if err != nil {
+				return nil, err
+			}
+			property = ` r:id="` + id + `"`
+		} else {
+			if !bookmarkName.MatchString(edit.Bookmark) || !bookmarks.hasTarget(edit.Bookmark) {
+				return nil, fmt.Errorf("DOCX link destination does not exist")
+			}
+			property = ` dwb:anchor="` + edit.Bookmark + `"`
+		}
+		return appendRun(`<dwb:hyperlink xmlns:dwb="` + wordNS + `" xmlns:r="` + officeRelNS + `"` + property + `><dwb:r><dwb:rPr><dwb:color dwb:val="0563C1"/><dwb:u dwb:val="single"/></dwb:rPr><dwb:t xml:space="preserve">` + escapeText(edit.Text) + `</dwb:t></dwb:r></dwb:hyperlink>`), nil
+	default:
+		return nil, fmt.Errorf("unsupported DOCX reference action")
+	}
+}
+
+func (index bookmarkIndex) hasTarget(name string) bool {
+	for _, starts := range index.starts {
+		if len(starts) == 1 && attribute(starts[0], wordNS, "name") == name && index.safeStart(starts[0]) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *documentPackage) projectReferences(root *node, blocks []Block, targets map[string]target) []BookmarkInfo {
+	bookmarks := []BookmarkInfo{}
+	if !bytes.Contains(p.document, []byte("hyperlink")) && !bytes.Contains(p.document, []byte("bookmarkStart")) {
+		return bookmarks
+	}
+	index := readBookmarks(root)
+	names := map[string]bool{}
+	blockIndex := 0
+	for _, child := range root.child("body").children {
+		if !child.is("p") && !child.is("tbl") {
+			continue
+		}
+		block := &blocks[blockIndex]
+		blockIndex++
+		if block.Paragraph == nil {
+			continue
+		}
+		for _, marker := range child.children {
+			if len(bookmarks) >= 500 {
+				break
+			}
+			if marker.is("bookmarkStart") && index.safeStart(marker) {
+				name := attribute(marker, wordNS, "name")
+				names[name] = true
+				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID})
+			}
+		}
+	}
+	var external map[string]string
+	readExternal := func() {
+		external = make(map[string]string)
+		rels, err := parseXML(p.partData(documentRelationships, nil))
+		if err != nil {
+			return
+		}
+		for _, rel := range rels.children {
+			if rel.name.Space == packageRelNS && rel.name.Local == "Relationship" && attribute(rel, "", "Type") == officeRelNS+"/hyperlink" && attribute(rel, "", "TargetMode") == "External" {
+				raw := attribute(rel, "", "Target")
+				if safeLink(raw) {
+					external[attribute(rel, "", "Id")] = raw
+				}
+			}
+		}
+	}
+	project := func(paragraph *Paragraph) {
+		for i := range paragraph.Runs {
+			run := &paragraph.Runs[i]
+			t, ok := targets[run.ID]
+			if !ok || t.kind != "hyperlink" || strings.TrimSpace(run.Text) == "" {
+				continue
+			}
+			id, anchor := attribute(t.node, officeRelNS, "id"), attribute(t.node, wordNS, "anchor")
+			if id != "" && anchor == "" {
+				if external == nil {
+					readExternal()
+				}
+				if raw := external[id]; raw != "" {
+					run.Link = &LinkInfo{URL: raw}
+				}
+			} else if id == "" && names[anchor] {
+				run.Link = &LinkInfo{Bookmark: anchor}
+			}
+		}
+	}
+	for i := range blocks {
+		block := &blocks[i]
+		if block.Paragraph != nil {
+			project(block.Paragraph)
+		}
+		for j := range block.Rows {
+			for k := range block.Rows[j].Cells {
+				for l := range block.Rows[j].Cells[k].Paragraphs {
+					project(&block.Rows[j].Cells[k].Paragraphs[l])
+				}
+			}
+		}
+	}
+	return bookmarks
+}

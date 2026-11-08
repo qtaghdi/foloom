@@ -4,9 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -362,5 +366,108 @@ func TestDOCXMCPStyleDefinitionAndApplicationWithoutTextFields(t *testing.T) {
 	}
 	if snapshot.Revision != 2 || !snapshot.Blocks[0].Paragraph.Runs[0].Bold || snapshot.Blocks[0].Paragraph.StyleID != "CustomHeading" {
 		t.Fatal("MCP style batch was not shared", snapshot)
+	}
+}
+
+func TestDOCXSectionSettingsThroughMCPAndHTTP(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: filepath.Join(t.TempDir(), "sections.docx"), Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "content"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{map[string]any{"type": "update_section", "sectionId": opened.Sections[0].ID, "section": map[string]any{"width": 16838, "height": 11906, "orientation": "landscape", "columns": 2, "pageNumberStart": 25, "pageNumberFormat": "upperRoman"}}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("section MCP: %v %+v", err, result)
+	}
+	req := httptest.NewRequest("GET", "/api/docx", nil)
+	req.AddCookie(&http.Cookie{Name: browserSessionCookieName(req.Host), Value: api.browserToken})
+	recorder := httptest.NewRecorder()
+	api.Handler().ServeHTTP(recorder, req)
+	var after docx.Snapshot
+	if err := json.Unmarshal(recorder.Body.Bytes(), &after); err != nil || recorder.Code != 200 {
+		t.Fatalf("HTTP read: %s", recorder.Body.String())
+	}
+	if after.Revision != opened.Revision+1 || after.Sections[0].Columns != 2 || after.Sections[0].Page.Width != 16838 || after.Blocks[0].Paragraph.Runs[0].Text != "content" {
+		t.Fatal("section settings not shared", after)
+	}
+	if n := after.Sections[0]; n.PageNumberStart == nil || *n.PageNumberStart != 25 || n.PageNumberFormat != "upperRoman" {
+		t.Fatal("section numbering not shared", n)
+	}
+}
+
+func TestDOCXMCPHeaderAndFooterContracts(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: filepath.Join(t.TempDir(), "headers.docx"), Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "body"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{map[string]any{"type": "update_section", "sectionId": opened.Sections[0].ID, "section": map[string]any{"firstPage": true, "headerFooters": []any{map[string]any{"kind": "header", "variant": "first", "text": "title header"}, map[string]any{"kind": "footer", "variant": "default", "text": "footer"}}}}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("header MCP: %v %+v", err, result)
+	}
+	snapshot, err := api.docxSnapshot(ctx)
+	if err != nil || !snapshot.Sections[0].FirstPage {
+		t.Fatal("first page flag missing", err)
+	}
+	found := false
+	for _, info := range snapshot.Sections[0].HeaderFooters {
+		if info.Kind == "header" && info.Variant == "first" && info.Text == "title header" && info.Editable {
+			found = true
+		}
+	}
+	if !found || snapshot.Blocks[0].Paragraph.Runs[0].Text != "body" {
+		t.Fatal("header metadata mismatch", snapshot)
+	}
+}
+
+func TestDOCXPictureRequiresSessionAndCurrentRevision(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	opened, err := api.createDOCX(ctx, docxCreateInput{Path: filepath.Join(t.TempDir(), "picture.docx"), Blocks: []docx.InitialBlock{{Type: "paragraph", Text: "body"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw bytes.Buffer
+	if err = png.Encode(&raw, image.NewRGBA(image.Rect(0, 0, 2, 1))); err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{
+		"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{map[string]any{
+			"type": "update_image", "targetId": opened.Blocks[0].ID, "image": map[string]any{"action": "insert", "base64": base64.StdEncoding.EncodeToString(raw.Bytes())},
+		}},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP picture: %v %+v", err, result)
+	}
+	snapshot, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snapshot.Blocks[0].Paragraph.Runs[1].ID
+	request := func(id string, auth bool) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", "/api/docx/picture?id="+url.QueryEscape(id), nil)
+		if auth {
+			req.AddCookie(&http.Cookie{Name: browserSessionCookieName(req.Host), Value: api.browserToken})
+		}
+		r := httptest.NewRecorder()
+		api.Handler().ServeHTTP(r, req)
+		return r
+	}
+	if response := request(id, false); response.Code != 401 {
+		t.Fatalf("unauthenticated image: %d", response.Code)
+	}
+	if response := request(id, true); response.Code != 200 || response.Header().Get("Content-Type") != "image/png" || !bytes.Equal(raw.Bytes(), response.Body.Bytes()) {
+		t.Fatalf("picture response: %d %s", response.Code, response.Header().Get("Content-Type"))
+	}
+	if response := request(opened.Blocks[0].Paragraph.Runs[0].ID, true); response.Code != 404 {
+		t.Fatalf("stale picture: %d", response.Code)
 	}
 }
