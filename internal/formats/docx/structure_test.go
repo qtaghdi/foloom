@@ -88,7 +88,7 @@ func TestParagraphPlanRejectedAtomically(t *testing.T) {
 			case "empty":
 				op.Paragraphs = nil
 			case "invalid":
-				op.Paragraphs[0].Runs[0].Text = "bad\ttext"
+				op.Paragraphs[0].Runs[0].Text = "bad\x01text"
 			case "cross-table":
 				op.EndTargetID = snap.Blocks[1].Rows[0].Cells[0].Paragraphs[0].ID
 			case "rename":

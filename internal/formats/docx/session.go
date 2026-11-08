@@ -178,7 +178,10 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			}
 		}
 	}
-	return Snapshot{Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	listRoot, _ := parseXML(s.pkg.partData(s.pkg.numberingPath, nil))
+	numbering := readNumbering(listRoot)
+	applyListLabels(blocks, numbering)
+	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -271,6 +274,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		return nil, err
 	}
 	root, err := parseXML(s.pkg.document)
+	if err != nil {
+		return nil, err
+	}
+	listKeys, numbering, err := s.pkg.prepareNumbering(input.Operations, parts)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +449,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Section != nil || op.SectionID != "" {
 			return nil, fmt.Errorf("unexpected DOCX section fields")
 		}
-		if op.Type == "define_style" {
+		if op.Type == "define_style" || op.Type == "define_list" {
 			continue
 		}
 		for _, p := range op.Paragraphs {
@@ -471,6 +478,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				}
 			}
 			seen[op.TargetID] = true
+			op, err := resolveParagraphLists(op, listKeys, numbering)
+			if err != nil {
+				return nil, err
+			}
 			edit, err := paragraphReplacement(s.pkg.document, targets, op)
 			if err != nil {
 				return nil, err
@@ -505,7 +516,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			return nil, fmt.Errorf("DOCX batch text exceeds 4 MiB")
 		}
 		if !validInlineText(op.Text) {
-			return nil, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters or tabs")
+			return nil, fmt.Errorf("DOCX text exceeds 64 KiB or contains unsupported control characters")
 		}
 		if op.Text == t.text {
 			continue
@@ -541,7 +552,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			continue
 		}
-		if strings.Contains(op.Text, "\n") {
+		if strings.ContainsAny(op.Text, "\n\t") {
 			if !plainTextAttributes(n) {
 				return nil, fmt.Errorf("DOCX inline break cannot replace opaque text attributes")
 			}

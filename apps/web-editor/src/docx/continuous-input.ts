@@ -4,6 +4,7 @@ import { readTextSelection, restoreTextSelection, targetTextSelection, type Text
 import { validateRunText } from './validation';
 
 type InputCallbacks = {
+  listLevel?: (selection:TextSelection, delta:number)=>boolean;
   history: (direction: 'undo' | 'redo') => void;
   snapshot: () => Snapshot; saving: () => boolean;
   edit: (operation: TextOperation, selection?: TextSelection) => void;
@@ -78,6 +79,7 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') plainPaste = event.shiftKey;
       softBreak = event.key === 'Enter' && event.shiftKey;
+      if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey && callbacks.listLevel?.(range,event.shiftKey?-1:1)) { event.preventDefault(); return; }
       if (event.key === 'Enter') { event.preventDefault(); apply(range, '\n', softBreak); return; }
       if (event.key === 'Backspace' || event.key === 'Delete') {
         event.preventDefault(); callbacks.delete(range, event.key === 'Backspace' ? 'backward' : 'forward', event.altKey || event.ctrlKey); return;

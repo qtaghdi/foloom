@@ -137,7 +137,7 @@ func patchStyle(root *node, data []byte, d StyleDefinition) ([]byte, error) {
 	if d.BasedOn != nil && !styleText(*d.BasedOn, true) {
 		return nil, fmt.Errorf("invalid DOCX style base")
 	}
-	if d.Run != nil && d.Run.StyleID != nil || d.Paragraph != nil && d.Paragraph.StyleID != nil {
+	if d.Run != nil && d.Run.StyleID != nil || d.Paragraph != nil && (d.Paragraph.StyleID != nil || d.Paragraph.List != nil) {
 		return nil, fmt.Errorf("style definitions use basedOn rather than style references")
 	}
 	if err := validateInlineStyle(d.Run); err != nil {
