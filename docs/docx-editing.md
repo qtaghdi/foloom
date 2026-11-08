@@ -167,6 +167,9 @@ Origin과 CSP 경계를 사용합니다.
 
 ## 검증
 
+기능별 지원 범위와 native 승격 기준은 [DOCX 품질 검증](docx-quality.md)을
+따릅니다. Word 읽기 전용 확인은 native 수정·저장·재열기 인증을 대신하지 않습니다.
+
 [합성 corpus](../testdata/docx/compatibility/README.md),
 [adapter 테스트](../internal/formats/docx/session_test.go),
 [MCP·HTTP 통합 테스트](../internal/transport/httpapi/docx_test.go),
