@@ -29,6 +29,7 @@ var (
 
 type options struct {
 	file             string
+	workspace        bool
 	transport        string
 	addr             string
 	stdioBrowser     bool
@@ -162,6 +163,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags := flag.NewFlagSet("foloom", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&result.file, "file", "", "열 XLSX 또는 DOCX 문서 경로")
+	flags.BoolVar(&result.workspace, "workspace", false, "파일 없이 빈 작업 공간 열기")
 	flags.StringVar(&result.transport, "transport", "http", "MCP transport: http or stdio")
 	flags.StringVar(&result.addr, "addr", "127.0.0.1:8765", "HTTP listen address")
 	flags.BoolVar(&result.stdioBrowser, "stdio-browser", true, "serve a loopback browser fallback in stdio mode")
@@ -173,6 +175,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: foloom [options] <document.xlsx|document.docx>")
 		fmt.Fprintln(stderr, "       foloom -file <document.xlsx|document.docx> [options]")
+		fmt.Fprintln(stderr, "       foloom -workspace")
 		fmt.Fprintln(stderr, "       foloom mcp <install|status|uninstall>")
 		fmt.Fprintln(stderr)
 		fmt.Fprintln(stderr, "Options:")
@@ -193,9 +196,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		}
 		result.file = flags.Arg(0)
 	}
-	if strings.TrimSpace(result.file) == "" && result.transport != "stdio" {
+	if result.workspace && (result.file != "" || result.check || result.transport != "http") {
+		return options{}, errors.New("-workspace starts an empty HTTP workspace and cannot be combined with a file, -check or stdio")
+	}
+	if strings.TrimSpace(result.file) == "" && result.transport != "stdio" && !result.workspace {
 		flags.Usage()
-		return options{}, errors.New("workbook path is required for HTTP transport")
+		return options{}, errors.New("workbook path or -workspace is required for HTTP transport")
 	}
 	if result.transport != "http" && result.transport != "stdio" {
 		return options{}, fmt.Errorf("unsupported transport %q: use http or stdio", result.transport)

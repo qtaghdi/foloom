@@ -26,6 +26,7 @@ const (
 
 type Server struct {
 	documents      map[string]*openedDocument
+	recoveryDir    string
 	scoped         bool
 	closed         bool
 	openMu         sync.Mutex

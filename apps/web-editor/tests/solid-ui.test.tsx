@@ -175,8 +175,8 @@ it('localizes known workbook notices while retaining unknown diagnostic text', (
 it('keeps unsupported pasted text editable and restores saving after correction', async () => {
   const f = docxFixture(); const root = mount(() => <DocumentApp/>); await settle();
   const input = root.querySelector('textarea')!;
-  edit(input, '붙여넣은\t탭 문자');
-  expect(input.value).toBe('붙여넣은\t탭 문자'); expect(input.getAttribute('aria-invalid')).toBe('true');
+  edit(input, '붙여넣은\x01제어 문자');
+  expect(input.value).toBe('붙여넣은\x01제어 문자'); expect(input.getAttribute('aria-invalid')).toBe('true');
   expect(button(root, '저장').disabled).toBe(true);
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
   expect(document.activeElement).toBe(input); expect(f.fetcher).toHaveBeenCalledTimes(1);

@@ -68,7 +68,7 @@ it('changes DOCX messages and validation without replacing the draft or translat
   expect(document.querySelector('#reload-document')!.getAttribute('aria-label')).toBe('다시 불러오기');
   expect(document.querySelector('#document-name')!.textContent).toBe('Saved.docx');
   expect(document.body.textContent).toContain('Native opening and visual compatibility');
-  field.value = '탭\t문자'; field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.value = '제어\x01문자'; field.dispatchEvent(new Event('input', { bubbles: true }));
   expect(document.body.textContent).toContain('unsupported characters');
   setLocale('ja'); expect(document.querySelector('#save-status')!.textContent).toBe('未保存の変更');
 });

@@ -1,4 +1,5 @@
-import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat } from './contracts';
+import { previewLists } from './lists';
+import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat, ListDefinition } from './contracts';
 import type { ClipboardParagraph } from './clipboard';
 import { isTextBoundary, graphemeOffsets, type TextSelection, type TextPoint } from './selection';
 import { validateRunText } from './validation';
@@ -224,7 +225,18 @@ export class StructureDraft {
       const merged={...p.format,...format};
       if(format.firstLine!==undefined)delete merged.hanging;
       if(format.hanging!==undefined)delete merged.firstLine;
-      p.format=merged;if(format.styleId!==undefined)p.styleId=format.styleId;p.layout={...p.layout,...format};
+      if(format.tabs) {
+        const updates=new Map((p.format?.tabs??[]).map(tab=>[tab.position,tab]));
+        for(const tab of format.tabs)updates.set(tab.position,tab);
+        merged.tabs=[...updates.values()].sort((a,b)=>a.position-b.position);
+      }
+      const previousTabs=p.layout?.tabs??[];
+      p.format=merged;if(format.list!==undefined)p.list=format.list;if(format.styleId!==undefined)p.styleId=format.styleId;p.layout={...p.layout,...format};
+      if(format.tabs) {
+        const current=new Map((previousTabs).map(tab=>[tab.position,tab]));
+        for(const tab of merged.tabs??[]){if(tab.align==='clear')current.delete(tab.position);else current.set(tab.position,tab);}
+        p.layout.tabs=[...current.values()].sort((a,b)=>a.position-b.position);
+      }
       if(format.firstLine!==undefined)delete p.layout.hanging;
       if(format.hanging!==undefined)delete p.layout.firstLine;
       this.paragraphGroup.get(p.sourceId)!.changed=true;
@@ -279,7 +291,7 @@ export class StructureDraft {
     }
     return result;
   }
-  snapshot(): Snapshot {
+  snapshot(lists: ListDefinition[] = []): Snapshot {
     const expand = (paragraphs: Paragraph[]): Paragraph[] => {
       const emitted = new Set<Group>();
       return paragraphs.flatMap(p => {
@@ -298,6 +310,6 @@ export class StructureDraft {
       else { flush(); blocks.push({ ...block, rows: block.rows.map(row => ({ ...row, cells: row.cells.map(cell => ({ ...cell, paragraphs: expand(cell.paragraphs) })) })) }); }
     }
     flush();
-    return { ...this.original, blocks };
+    return previewLists({ ...this.original, blocks }, lists);
   }
 }

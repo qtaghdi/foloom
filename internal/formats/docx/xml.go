@@ -123,6 +123,12 @@ func (n *node) attr(local string) string {
 	return ""
 }
 func textContent(n *node) string {
+	if n.is("tab") {
+		if n.parent != nil && n.parent.is("r") {
+			return "\t"
+		}
+		return ""
+	}
 	if n.is("br") && (n.attr("type") == "" || n.attr("type") == "textWrapping") {
 		return "\n"
 	}
@@ -234,6 +240,14 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		var baseRun Run
 		directRun(&baseRun, styles.defaults.child("rPrDefault").child("rPr"))
 		applyParagraph := func(props *node) {
+			if n := props.child("numPr"); n != nil {
+				if id := listInt(n.child("numId").attr("val"), -1); id >= 0 {
+					level := listInt(n.child("ilvl").attr("val"), 0)
+					if level <= 8 {
+						out.List = &ParagraphList{ID: id, Level: level}
+					}
+				}
+			}
 			applyParagraphPreview(&layout, props)
 			if level := paragraphOutlineLevel(props); level != nil {
 				out.OutlineLevel = level
@@ -250,7 +264,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 		applyParagraph(props)
 		out.OutlineOverride = paragraphOutlineLevel(props)
-		if layout != (ParagraphLayout{}) {
+		if hasParagraphLayout(layout) {
 			out.Layout = &layout
 		}
 		// Fields and tracked changes can span runs. Fail closed for the paragraph.
@@ -290,18 +304,18 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			for _, c := range r.children {
 				if c.is("t") {
 					texts = append(texts, c)
-				} else if !(c.is("rPr") || plainLineBreak(c)) {
+				} else if !(c.is("rPr") || plainLineBreak(c) || plainTab(c)) {
 					plain = false
 				}
 			}
 			editable := allowed && !protected[r] && plain
 			for _, text := range texts {
 				editable = editable && len(text.children) == 0
-				if len(texts) != 1 || r.has("br") {
+				if len(texts) != 1 || r.has("br") || r.has("tab") {
 					editable = editable && plainTextAttributes(text)
 				}
 			}
-			if len(texts) != 1 || r.has("br") {
+			if len(texts) != 1 || r.has("br") || r.has("tab") {
 				props := 0
 				for _, child := range r.children {
 					if child.is("rPr") {
@@ -345,7 +359,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			}
 			if editable {
 				textNode := r
-				if len(texts) == 1 && !r.has("br") {
+				if len(texts) == 1 && !r.has("br") || r.has("tab") {
 					textNode = texts[0]
 				}
 				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r}
@@ -379,6 +393,10 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			blocks = append(blocks, Block{ID: p.ID, Type: "paragraph", Paragraph: &p})
 		case child.is("tbl"):
 			block := Block{ID: id(), Type: "table", Rows: []Row{}}
+			_, block.TableEditable = simpleTable(child)
+			if block.TableEditable {
+				targets[block.ID] = target{node: child, kind: "update_table"}
+			}
 			// Merged, nested or revision-marked tables are inspection-only.
 			allowed := true
 			for _, name := range []string{"gridSpan", "vMerge", "hMerge", "ins", "del", "sdt", "gridBefore", "gridAfter", "tblPrChange", "trPrChange", "tcPrChange"} {

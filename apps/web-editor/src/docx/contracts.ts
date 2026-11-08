@@ -14,13 +14,18 @@ export const runSchema = z.object({
   font: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
 });
 const spacing = z.number().int().min(0).max(2880).optional();
-const paragraphFormatSchema = z.object({styleId:z.string().max(120).optional(),
+const paragraphListSchema=z.object({id:z.number().int().min(0).max(2147483647).optional(),key:z.string().regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/).optional(),level:z.number().int().min(0).max(8).optional()});
+const listInfoSchema=z.object({id:z.number().int().positive().max(2147483647),levels:z.array(z.object({level:z.number().int().min(0).max(8),kind:z.string(),text:z.string(),start:z.number().int().nonnegative()})).max(9)});
+const tabStopSchema=z.object({position:z.number().int().min(0).max(28800),align:z.enum(['left','center','right','decimal','bar','clear']),leader:z.enum(['none','dot','hyphen','underscore','heavy','middleDot']).optional()});
+export type TabStop=z.infer<typeof tabStopSchema>;
+const paragraphFormatSchema = z.object({tabs:z.array(tabStopSchema).max(32).optional(),list:paragraphListSchema.optional(),styleId:z.string().max(120).optional(),
  align:z.enum(['start','center','end','justify']).optional(),before:spacing,after:spacing,
  left:z.number().int().min(-14400).max(14400).optional(),right:z.number().int().min(-14400).max(14400).optional(),firstLine:z.number().int().min(0).max(14400).optional(),hanging:z.number().int().min(0).max(14400).optional(),
  line:z.number().int().min(20).max(2880).optional(),lineRule:z.enum(['auto','exact','atLeast']).optional(),bidi:z.boolean().optional(),textDirection:z.string().max(20).optional(),
 });
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
+  list:paragraphListSchema.optional(),listLabel:z.string().max(240).optional(),
   anchor:z.string().regex(/^[0-7][0-9A-F]{7}$/).optional(),
   outlineLevel,outlineOverride:outlineLevel,
   sectionId:z.string().optional(),styleId:z.string().max(120).optional(),id: z.string(), runs: z.array(runSchema), structureEditable: z.boolean().optional(),
@@ -44,6 +49,7 @@ export type SectionInfo=z.infer<typeof sectionSchema>;
 export type SectionOperation={type:'update_section';sectionId:string;section:SectionFormat};
 const styleInfoSchema=z.object({outlineLevel,id:z.string().max(120),name:z.string().max(256),kind:z.enum(['paragraph','character']),basedOn:z.string().optional(),editable:z.boolean(),run:baseStyleSchema.extend({reset:z.boolean().optional()}).optional(),paragraph:paragraphFormatSchema.optional()});
 export const snapshotSchema = z.object({
+  lists:z.array(listInfoSchema).max(500).optional(),
   trackedChanges:z.boolean().optional(),
   comments:z.array(z.object({id:z.string(),author:z.string(),date:z.string().optional(),text:z.string(),paragraphId:z.string().optional()})).max(100).optional(),
   bookmarks:z.array(z.object({name:bookmarkName,paragraphId:z.string()})).max(500).optional(),
@@ -54,7 +60,7 @@ export const snapshotSchema = z.object({
   history: z.object({ undo: z.number().int().min(0).max(10), redo: z.number().int().min(0).max(10), undoActor: z.enum(['human', 'ai']).optional(), redoActor: z.enum(['human', 'ai']).optional() }).optional(),
   blocks: z.array(z.discriminatedUnion('type', [
     z.object({ id: z.string(), type: z.literal('paragraph'), paragraph: paragraphSchema }),
-    z.object({ id: z.string(), type: z.literal('table'), rows: z.array(z.object({
+    z.object({ id: z.string(), type: z.literal('table'), tableEditable: z.boolean().optional(), rows: z.array(z.object({
       cells: z.array(z.object({ id: z.string(), paragraphs: z.array(paragraphSchema) })),
     })) }),
   ])),
@@ -80,6 +86,12 @@ export type ParagraphOperation = {
  paragraphs: Array<{ sourceId: string; format?: ParagraphFormat; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
+export type ListDefinition={key:string;kind:'bullet'|'decimal';start?:number};
+export type ListOperation={type:'define_list';listDefinition:ListDefinition};
+export type ParagraphList=z.infer<typeof paragraphListSchema>;
+export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column';
+export type TableEdit = {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number};
+export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'section_next_page' | 'section_continuous';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
 export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}};
@@ -88,6 +100,6 @@ export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} |
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string}};
 export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete';expression?:string}};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation;
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

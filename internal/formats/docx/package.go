@@ -15,10 +15,11 @@ type part struct {
 }
 
 type documentPackage struct {
-	parts      []part
-	document   []byte
-	styles     previewStyles
-	stylesPath string
+	parts         []part
+	document      []byte
+	styles        previewStyles
+	stylesPath    string
+	numberingPath string
 }
 
 func loadPackage(content []byte) (*documentPackage, error) {
@@ -153,6 +154,12 @@ func loadPackage(content []byte) (*documentPackage, error) {
 			}
 			if part.header.Name == "word/_rels/document.xml.rels" && kind == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" {
 				stylesPath = resolved
+			}
+			if part.header.Name == "word/_rels/document.xml.rels" && kind == numberingRelationship {
+				if p.numberingPath != "" && p.numberingPath != resolved {
+					return nil, fmt.Errorf("ambiguous DOCX numbering relationship")
+				}
+				p.numberingPath = resolved
 			}
 		}
 	}
