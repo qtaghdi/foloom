@@ -164,6 +164,7 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 	})
 }
 func (s *Server) docxRoutes() {
+	s.mux.Handle("POST /api/docx/export", s.requireSession(http.HandlerFunc(s.exportDOCXDraft)))
 	s.mux.HandleFunc("GET /docx", s.docxIndex)
 	s.mux.Handle("GET /api/docx", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		snapshot, err := s.docxSnapshot(r.Context())

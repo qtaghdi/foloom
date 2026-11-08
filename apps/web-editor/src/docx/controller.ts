@@ -1,3 +1,5 @@
+import { exportDOCXCopy } from '../transport/save-docx-copy';
+import { DraftRecovery, type RecoveryStatus } from './recovery';
 import { previewSection,previewSections,validateSection } from './sections';
 import { confirmSavedDocument, downloadSavedDocument, DocumentFileError, type DownloadedFile } from '../transport/document-files';
 import { source } from '../i18n/index';
@@ -15,6 +17,7 @@ import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, t
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
 type DraftCheckpoint = { standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
+  recovery?(status: RecoveryStatus): void;
   composition?(active: boolean): void;
   history?(controls: HistoryControls): void;
   validation?(message: string): void;
@@ -50,7 +53,22 @@ export class DocumentController {
   private redoDraft: DraftCheckpoint[] = [];
   private lastTyping?: { key: string; time: number };
 
+  private recovery?: DraftRecovery;
+
   constructor(private view: DocumentView) {}
+
+  private connectRecovery(snapshot: Snapshot): void {
+    if (!this.view.recovery || new URLSearchParams(window.location.search).get('document') !== snapshot.id) return;
+    this.recovery ??= new DraftRecovery(snapshot.id, () => {
+      if (!this.snapshot || this.composing || this.draftError()) return;
+      return JSON.stringify({ sessionId: this.snapshot.id, baseRevision: this.snapshot.revision, operations: this.pendingOperations() });
+    }, this.view.recovery);
+    void this.recovery.load();
+  }
+
+  enableRecovery(): void { void this.recovery?.enable(); }
+  removeRecovery(): void { void this.recovery?.remove(); }
+  retryRecovery(): void { void this.recovery?.flush(); }
 
   hasStructuralDraft(): boolean { return Boolean(this.structureDraft?.hasChanges()); }
 
@@ -293,6 +311,7 @@ export class DocumentController {
       this.view.render(snapshot);
       this.view.status('저장됨', 'committed');
       this.connect(snapshot);
+      this.connectRecovery(snapshot);
     } catch (error) { this.fail(error); }
     finally { this.loading = false; this.updateSave(); }
   }
@@ -312,6 +331,10 @@ export class DocumentController {
     try {
       let snapshot = this.snapshot;
       if (hasChanges) {
+        if (this.recovery) {
+          await this.recovery.flush();
+          if (this.disposed) return false;
+        }
         snapshot = await this.request('/api/docx/operations', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: snapshot.id, baseRevision: snapshot.revision, operations: this.pendingOperations() }),
@@ -361,6 +384,14 @@ export class DocumentController {
       this.connect(next);return true;
     } catch(error) {
       this.view.activity?.({id:activityId,actor:'human',state:'uncertain',title:'이력 복원 결과 확인 필요'});this.fail(error);return false;
+    } finally {this.busy=false;this.updateSave();}
+  }
+
+  async exportCopy(name: string): Promise<DownloadedFile | undefined> {
+    if (this.disposed || this.busy || this.loading || this.composing || !this.snapshot || this.draftError()) return;
+    this.busy=true; this.updateSave();
+    try {
+      return await exportDOCXCopy({sessionId:this.snapshot.id,baseRevision:this.snapshot.revision,operations:this.pendingOperations(),name});
     } finally {this.busy=false;this.updateSave();}
   }
 
@@ -453,11 +484,12 @@ export class DocumentController {
       undoLabel: this.undoDraft.length ? '미저장 초안' : actor(this.snapshot?.history?.undoActor),
       redoLabel: this.redoDraft.length ? '미저장 초안' : actor(this.snapshot?.history?.redoActor),
     });
+    if (!this.composing && !this.loading && !this.busy && !error) this.recovery?.schedule();
     this.view.validation?.(error);
     this.view.canSave(!this.blocked && !this.busy && this.hasDrafts() && !this.composing && !error);
   }
   private cancelCompositionSaves(): void {
     for (const finish of this.compositionSaves.splice(0)) finish(false);
   }
-  dispose(): void { this.disposed = true; this.cancelCompositionSaves(); this.disconnect(); }
+  dispose(): void { if (this.disposed) return; this.recovery?.dispose(); this.disposed = true; this.cancelCompositionSaves(); this.disconnect(); }
 }

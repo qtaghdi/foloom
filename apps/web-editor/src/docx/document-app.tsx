@@ -1,3 +1,6 @@
+import { SaveDOCXCopyAction } from './save-copy-action';
+import { RecoveryControls } from './recovery-controls';
+import type { RecoveryStatus } from './recovery';
 import { DocumentHeaderFooter } from './document-header-footer';
 import { DocumentSectionToolbar } from './document-section-toolbar';
 import { FileActions } from '../ui/file-actions';
@@ -35,6 +38,9 @@ const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bott
 
 export function DocumentApp() {
   const { state, view, activity } = createDocumentView();
+  const recoveryAvailable = new URLSearchParams(window.location.search).has('document');
+  const [recovery, setRecovery] = createSignal<RecoveryStatus>({});
+
   const [printing,setPrinting] = createSignal(false);
   const [printError,setPrintError] = createSignal('');
   const [draftVersion, setDraftVersion] = createSignal(0);
@@ -152,7 +158,7 @@ export function DocumentApp() {
     const runId = formattingSelection()?.focus.runId??focusedRun()?.id;
     return paragraphs.find(paragraph=>paragraph.runs.some(run=>run.id===runId))??paragraphs.at(-1);
   };
-  const controller = new DocumentController({ ...view, render: (snapshot, focus) => {
+  const controller = new DocumentController({ ...view, recovery: setRecovery, render: (snapshot, focus) => {
     setStructuralDraft(Boolean(focus) || controller.hasStructuralDraft());
     if(focus)setFormattingSelection(focus.selection??{anchor:{runId:focus.runId,offset:focus.start},focus:{runId:focus.runId,offset:focus.end}});
     const article = document.getElementById('document-content');
@@ -261,6 +267,7 @@ export function DocumentApp() {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    window.removeEventListener('online', retryRecovery);
     window.removeEventListener('resize',resized);
     document.removeEventListener('selectionchange',selectionChanged);
     window.removeEventListener('beforeunload', beforeUnload);
@@ -269,7 +276,9 @@ export function DocumentApp() {
     disconnectWorkspace();
     controller.dispose();
   };
+  const retryRecovery = () => controller.retryRecovery();
   onMount(() => {
+    window.addEventListener('online', retryRecovery);
     disconnectWorkspace = connectWorkspaceBridge(editorState, async () => { await controller.save(); });
     window.addEventListener('resize',resized);
     document.addEventListener('selectionchange',selectionChanged);
@@ -285,7 +294,7 @@ export function DocumentApp() {
     <Show when={state().snapshot}>{snapshot=><style media="print">{printPaperRules(snapshot())}</style>}</Show>
     <EditorHeader name={state().snapshot?.name ?? t('openingDocument')} kind={t('document')} nameId="document-name" statusId="save-status"
       message={state().message} status={state().status} onActivity={activity.toggle} activityOpen={activity.open()}
-      actions={<><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><button type="button" class={buttonClass} disabled={!printReady()} onClick={()=>void requestPrint()} title="저장된 문서를 인쇄하거나 PDF로 저장합니다.">인쇄·PDF</button><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} docxEditing search={async (query,options) => searchDocument(document.getElementById('document-content'),query,options,(ranges,text)=>{
+      actions={<><SaveDOCXCopyAction name={state().snapshot?.name??'document.docx'} disabled={!state().snapshot||state().saving||state().loading||Boolean(state().composing||state().validation)} onExport={name=>controller.exportCopy(name)}/><FileActions saveID="save-document" disabled={!state().snapshot || state().saving || state().loading || Boolean(state().error || state().validation)} downloadAvailable onSave={() => controller.save()} onDownload={() => controller.download()}/><button type="button" class={buttonClass} disabled={!printReady()} onClick={()=>void requestPrint()} title="저장된 문서를 인쇄하거나 PDF로 저장합니다.">인쇄·PDF</button><DocumentSearch version={`${state().snapshot?.id}:${state().snapshot?.revision}:${state().message}:${state().saving}:${draftVersion()}`} docxEditing search={async (query,options) => searchDocument(document.getElementById('document-content'),query,options,(ranges,text)=>{
       const changed=controller.replaceSearchMatches(ranges,text);
       if(changed)setDraftVersion(version=>version+1);
       return changed;
@@ -294,6 +303,10 @@ export function DocumentApp() {
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}
       onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading}/></>}
     />
+    <Show when={recoveryAvailable && state().snapshot}>
+      <RecoveryControls status={recovery()} disabled={state().saving || state().loading || Boolean(state().composing || state().validation)}
+        onEnable={() => controller.enableRecovery()} onDelete={() => controller.removeRecovery()} onRetry={retryRecovery}/>
+    </Show>
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentBoundaryToolbar target={boundaryParagraph()} pending={boundaryPending()}
