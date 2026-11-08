@@ -61,6 +61,13 @@ func structuralParagraph(p *node, data []byte) bool {
 	for _, child := range p.children {
 		if child.is("pPr") {
 			for _, prop := range child.children {
+				// An explicit off value can travel with normal paragraph formatting.
+				if prop.is("pageBreakBefore") && sectionChildCount(child, "pageBreakBefore") == 1 {
+					switch attribute(prop, wordNS, "val") {
+					case "0", "false", "off":
+						continue
+					}
+				}
 				if prop.name.Space != wordNS || !strings.Contains(allowedProps, " "+prop.name.Local+" ") {
 					return false
 				}

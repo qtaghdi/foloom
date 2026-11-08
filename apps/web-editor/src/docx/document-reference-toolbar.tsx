@@ -1,0 +1,66 @@
+import { createSignal, For, Show } from 'solid-js';
+import { buttonClass } from '../ui/editor-chrome';
+import type { Paragraph, ReferenceEdit, ReferenceOperation, Snapshot } from './contracts';
+
+export function DocumentReferenceToolbar(props:{
+  target?:Paragraph;bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  onApply:(operation:ReferenceOperation)=>boolean;
+}) {
+  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'>('bookmark');
+  const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
+  const [error,setError]=createSignal('');
+  const disabled=()=>props.disabled||props.pending;
+  const apply=()=>{
+    if(!props.target?.structureEditable)return;
+    let reference:ReferenceEdit;
+    if(mode()==='bookmark'){
+      if(!/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(bookmark())){setError('북마크 이름은 영문자로 시작하는 영문자·숫자·밑줄 1~40자를 사용하세요.');return;}
+      if(props.bookmarks.some(item=>item.name.toLowerCase()===bookmark().toLowerCase())){setError('같은 이름의 북마크가 있습니다.');return;}
+      reference={action:'insert_bookmark',bookmark:bookmark()};
+    }else{
+      if(!text().trim()){setError('표시할 링크 텍스트를 입력하세요.');return;}
+      if(mode()==='url'){
+        const value=url().trim();
+        try{
+          const parsed=new URL(value);
+          if(!/^https?:\/\/\S+$/.test(value)||parsed.username||parsed.password||!parsed.hostname)throw new Error();
+        }catch{setError('인증 정보가 없는 HTTP 또는 HTTPS 주소를 입력하세요.');return;}
+        reference={action:'insert_link',text:text(),url:value};
+      }else{
+        const name=anchor()||props.bookmarks[0]?.name;
+        if(!name||!props.bookmarks.some(item=>item.name===name)){setError('이동할 북마크를 먼저 선택하세요.');return;}
+        reference={action:'insert_link',text:text(),bookmark:name};
+      }
+    }
+    setError(props.onApply({type:'update_reference',targetId:props.target.id,reference})?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+  };
+  return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
+    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">링크·북마크</summary>
+    <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
+      <select aria-label="참조 작업" class="editor-select min-h-11" disabled={disabled()} value={mode()}
+        onChange={event=>{setMode(event.currentTarget.value as ReturnType<typeof mode>);setError('');}}>
+        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option>
+      </select>
+      <Show when={mode()==='bookmark'} fallback={<>
+        <input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
+          disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/>
+        <Show when={mode()==='url'} fallback={<select aria-label="링크 대상 북마크" class="editor-select min-h-11" disabled={disabled()}
+          value={anchor()||props.bookmarks[0]?.name||''} onChange={event=>setAnchor(event.currentTarget.value)}>
+          <Show when={!props.bookmarks.length}><option value="">북마크 없음</option></Show>
+          <For each={props.bookmarks}>{item=><option value={item.name}>{item.name}</option>}</For>
+        </select>}>
+          <input type="url" maxlength="2048" aria-label="웹 링크 주소" placeholder="https://" class="min-h-11 max-w-full rounded border border-slate-300 px-2"
+            disabled={disabled()} value={url()} onInput={event=>setURL(event.currentTarget.value)}/>
+        </Show>
+      </>}>
+        <input type="text" maxlength="40" aria-label="북마크 이름" placeholder="북마크 이름" class="min-h-11 rounded border border-slate-300 px-2"
+          disabled={disabled()} value={bookmark()} onInput={event=>setBookmark(event.currentTarget.value)}/>
+      </Show>
+      <button type="button" class={buttonClass} disabled={disabled()||!props.target?.structureEditable} onClick={apply}>참조 적용</button>
+      <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':props.target?.structureEditable
+        ? `대상 문단: ${props.target.runs.map(run=>run.text).join('').trim().slice(0,80)||'빈 문단'}`
+        : '편집 가능한 본문 문단에 커서를 놓으세요.'}</p>
+      <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
+    </div>
+  </details>;
+}

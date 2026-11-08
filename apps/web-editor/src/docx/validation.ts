@@ -18,9 +18,10 @@ export function validateDrafts(sessionId: string, revision: number, operations: 
   if (operations.filter(op=>op.type==='define_list').length>32) return '한 번에 새 목록은 32개까지 만들 수 있습니다. 실행 취소 후 작업을 나누어 저장하세요.';
   let textBytes = 0;
   for (const operation of operations) {
-    const texts = (operation.type === 'define_style' || operation.type === 'define_list') ? [] : operation.type === 'replace_paragraphs' ? operation.paragraphs.flatMap(p => p.runs.map(r => r.text)) : [operation.text];
+    if(operation.type==='define_list'||operation.type==='update_image'||operation.type==='update_reference'||operation.type==='add_comment'||operation.type==='update_math')continue;
+    const texts = operation.type==='update_section' ? (operation.section.headerFooters??[]).flatMap(slot=>slot.text===undefined?[]:[slot.text]) : operation.type === 'define_style' || operation.type === 'update_header_parity' || operation.type === 'update_boundary' ? [] : operation.type === 'replace_paragraphs' ? operation.paragraphs.flatMap(p => p.runs.map(r => r.text)) : [operation.text];
     for (const text of texts) { const error = validateRunText(text); if (error) return error; textBytes += utf8Length(text); }
-    if(operation.type!=='define_style'&&operation.type!=='define_list')textBytes += utf8Length(operation.expectedText);
+    if(operation.type!=='define_style'&&operation.type!=='update_section'&&operation.type!=='update_header_parity'&&operation.type!=='update_boundary')textBytes += utf8Length(operation.expectedText);
     if (textBytes > 1024 * 1024) return '한 번에 저장할 수 있는 범위를 넘었습니다. 변경을 나누어 저장하세요.';
   }
   if (utf8Length(JSON.stringify({ sessionId, baseRevision: revision, operations })) > 1024 * 1024) return '저장 요청이 1 MiB를 넘습니다. 변경을 나누어 저장하세요.';

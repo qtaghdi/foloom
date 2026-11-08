@@ -85,6 +85,10 @@ func editableStyle(n *node, data []byte) bool {
 	}
 	return safe(n.child("pPr")) && safe(n.child("rPr"))
 }
+func paragraphOutlineLevel(props *node) *int {
+	return previewNumber(attribute(props.child("outlineLvl"), wordNS, "val"), 0, 9)
+}
+
 func (p *documentPackage) styleCatalog() []StyleInfo {
 	result := []StyleInfo{}
 	ids := []string{}
@@ -108,7 +112,7 @@ func (p *documentPackage) styleCatalog() []StyleInfo {
 		if len([]rune(name)) > 120 {
 			name = string([]rune(name)[:120]) + "…"
 		}
-		result = append(result, StyleInfo{ID: id, Name: name, Kind: kind, BasedOn: n.child("basedOn").attr("val"), Editable: editableStyle(n, p.styleData()), Run: directInlineStyle(n.child("rPr")), Paragraph: directParagraphFormat(n.child("pPr"))})
+		result = append(result, StyleInfo{ID: id, Name: name, Kind: kind, OutlineLevel: paragraphOutlineLevel(n.child("pPr")), BasedOn: n.child("basedOn").attr("val"), Editable: editableStyle(n, p.styleData()), Run: directInlineStyle(n.child("rPr")), Paragraph: directParagraphFormat(n.child("pPr"))})
 		if len(result) >= 500 {
 			break
 		}
@@ -284,6 +288,7 @@ func (p *documentPackage) prepareStyles(operations []Operation) (map[string][]by
 		}
 		data = []byte(`<w:styles xmlns:w="` + wordNS + `"></w:styles>`)
 	}
+
 	for _, d := range defs {
 		root, err := parseXML(data)
 		if err != nil {

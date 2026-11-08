@@ -173,6 +173,23 @@ func (s *Server) docxRoutes() {
 		}
 		writeJSON(w, http.StatusOK, snapshot)
 	})))
+	s.mux.Handle("GET /api/docx/picture", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, release, err := s.acquireDOCX()
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer release()
+		raw, mime, err := session.Picture(r.Context(), r.URL.Query().Get("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", mime)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "private, no-store")
+		_, _ = w.Write(raw)
+	})))
 	s.mux.Handle("POST /api/docx/operations", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		var input docx.ApplyInput

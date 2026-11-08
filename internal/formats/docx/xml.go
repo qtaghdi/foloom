@@ -206,6 +206,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 	}
 	markFields(body)
+	anchors := paragraphAnchors(root)
 	targets := map[string]target{}
 	blocks := []Block{}
 	unsupported := false
@@ -221,7 +222,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			allowed = false
 			unsupported = true
 		}
-		out := Paragraph{ID: id(), Runs: []Run{}}
+		out := Paragraph{ID: id(), Anchor: anchors[p], Runs: []Run{}}
 		var trailingBreak *node
 		if kind == "replace_run_text" {
 			trailingBreak = trailingPageBreak(p)
@@ -248,6 +249,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				}
 			}
 			applyParagraphPreview(&layout, props)
+			if level := paragraphOutlineLevel(props); level != nil {
+				out.OutlineLevel = level
+			}
 			if br := props.child("pageBreakBefore"); br != nil {
 				out.PageBreakBefore = onOff(br.attr("val"), true)
 			}
@@ -259,6 +263,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			styleRun(&baseRun, chain[i].child("rPr"))
 		}
 		applyParagraph(props)
+		out.OutlineOverride = paragraphOutlineLevel(props)
 		if hasParagraphLayout(layout) {
 			out.Layout = &layout
 		}
@@ -273,8 +278,25 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				continue
 			}
 			if !r.is("r") {
-				unsupported = true
-				out.Runs = append(out.Runs, Run{ID: id(), Text: textContent(r)})
+				if r.is("bookmarkStart") || r.is("bookmarkEnd") || r.is("commentRangeStart") || r.is("commentRangeEnd") {
+					continue
+				}
+				run := Run{ID: id(), Text: textContent(r), Object: objectPreview(r)}
+				if run.Object != nil && run.Object.Kind == "math" && run.Object.Editable && allowed && !protected[r] && !strings.Contains(string(root.source[r.start:r.end]), "<!--") {
+					targets[run.ID] = target{node: r, paragraph: p, kind: "math_object"}
+				}
+				if run.Object != nil && run.Object.Editable && targets[run.ID].kind != "math_object" {
+					run.Object.Editable = false
+				}
+				if r.is("hyperlink") {
+					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
+				} else {
+					unsupported = true
+				}
+				out.Runs = append(out.Runs, run)
+				continue
+			}
+			if r.child("commentReference") != nil && len(r.children) == 1 {
 				continue
 			}
 			texts := []*node{}
@@ -310,6 +332,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			}
 			run := baseRun
 			run.ID, run.Text, run.Editable = id(), text, editable
+			if !editable {
+				run.Object = objectPreview(r)
+			}
 			if len(texts) == 0 && r.child("br") == trailingBreak && trailingBreak != nil &&
 				(len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
 				continue
@@ -329,6 +354,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			}
 			directRun(&run, runProps)
 			out.Runs = append(out.Runs, run)
+			if !editable && r.child("drawing") != nil {
+				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "picture"}
+			}
 			if editable {
 				textNode := r
 				if len(texts) == 1 && !r.has("br") || r.has("tab") {
@@ -353,6 +381,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 		if out.StructureEditable {
 			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "replace_paragraphs"}
+		} else if allowed && p.parent == body && (out.PageBreakBefore || props.child("pageBreakBefore") != nil) {
+			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "update_boundary"}
 		}
 		return out
 	}

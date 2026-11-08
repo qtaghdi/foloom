@@ -32,12 +32,28 @@ func appendXMLChild(data []byte, child string) ([]byte, error) {
 // addWordPart adds one internal relationship and content type override without
 // normalizing other entries, including changes staged by the same batch.
 func (p *documentPackage) addWordPart(changes map[string][]byte, kind, relationshipID string) (string, error) {
-	filename := "word/" + kind + ".xml"
-	for i := 1; p.partData(filename, changes) != nil; i++ {
-		filename = fmt.Sprintf("word/%s-%d.xml", kind, i)
+	filename := p.availablePart(changes, "word/"+kind, ".xml")
+	_, err := p.addRelatedPart(changes, filename, kind, "application/vnd.openxmlformats-officedocument.wordprocessingml."+kind+"+xml", relationshipID)
+	return filename, err
+}
+
+func (p *documentPackage) availablePart(changes map[string][]byte, stem, extension string) string {
+	reserved := map[string]bool{}
+	if root, err := parseXML(p.partData("[Content_Types].xml", changes)); err == nil {
+		for _, child := range root.children {
+			reserved[strings.TrimPrefix(attribute(child, "", "PartName"), "/")] = true
+		}
 	}
+	filename := stem + extension
+	for i := 1; p.partData(filename, changes) != nil || reserved[filename]; i++ {
+		filename = fmt.Sprintf("%s-%d%s", stem, i, extension)
+	}
+	return filename
+}
+
+func (p *documentPackage) addRelatedPart(changes map[string][]byte, filename, kind, contentType, relationshipID string) (string, error) {
 	const ctPath = "[Content_Types].xml"
-	ct, err := appendXMLChild(p.partData(ctPath, changes), `<dwct:Override xmlns:dwct="http://schemas.openxmlformats.org/package/2006/content-types" PartName="/`+filename+`" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.`+kind+`+xml"/>`)
+	ct, err := appendXMLChild(p.partData(ctPath, changes), `<dwct:Override xmlns:dwct="http://schemas.openxmlformats.org/package/2006/content-types" PartName="/`+filename+`" ContentType="`+contentType+`"/>`)
 	if err != nil {
 		return "", err
 	}
@@ -66,5 +82,5 @@ func (p *documentPackage) addWordPart(changes map[string][]byte, kind, relations
 		return "", err
 	}
 	changes[ctPath], changes[relPath] = ct, rels
-	return filename, nil
+	return relationshipID, nil
 }
