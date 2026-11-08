@@ -11,6 +11,7 @@ const actions = {
   add_column:'열 추가',
   delete_column:'열 삭제',
   move_column:'열 이동',
+  set_row_height:'행 높이 설정',
 } as const;
 
 export function DocumentTableToolbar(props: {
@@ -24,10 +25,11 @@ export function DocumentTableToolbar(props: {
   const [tableId,setTableId] = createSignal('');
   const [rows,setRows] = createSignal(2), [columns,setColumns] = createSignal(2);
   const [position,setPosition] = createSignal(1), [destination,setDestination] = createSignal(2);
+  const [height,setHeight] = createSignal(24);
   const [error,setError] = createSignal('');
   const tables = createMemo(()=>props.blocks.filter(block=>block.type==='table'));
   const selected = createMemo(()=>tables().find(table=>table.id===tableId())??tables()[0]);
-  const dimension = () => action().endsWith('_row') ? selected()?.rows.length??0 : selected()?.rows[0]?.cells.length??0;
+  const dimension = () => (action().endsWith('_row') || action()==='set_row_height') ? selected()?.rows.length??0 : selected()?.rows[0]?.cells.length??0;
   const disabled = () => props.disabled||props.pending;
   const valid = (number:number, max:number) => Number.isInteger(number)&&number>=1&&number<=max;
   const apply = () => {
@@ -49,6 +51,13 @@ export function DocumentTableToolbar(props: {
           return;
         }
         edit.index = position()-1;
+      }
+      if (kind==='set_row_height') {
+        if (!valid(height(),1584)) {
+          setError('행 높이는 1~1,584 pt로 입력하세요.');
+          return;
+        }
+        edit.height = height()*20;
       }
       if (kind.startsWith('move_')) {
         if (!valid(destination(),dimension()) || destination()===position()) {
@@ -81,6 +90,7 @@ export function DocumentTableToolbar(props: {
           <For each={tables()}>{(table,index)=><option value={table.id}>표 {index()+1}{table.tableEditable?'':' (보호됨)'}</option>}</For>
         </select>
         <Show when={action()!=='delete'}>{field('행 또는 열 위치',position,setPosition,()=>dimension()+Number(action().startsWith('add_')))}</Show>
+        <Show when={action()==='set_row_height'}>{field('최소 행 높이 (pt)',height,setHeight,()=>1584)}</Show>
         <Show when={action().startsWith('move_')}>{field('이동 후 위치',destination,setDestination,dimension)}</Show>
       </>}>
         {field('새 표의 행 수',rows,setRows,()=>100)}
@@ -90,7 +100,7 @@ export function DocumentTableToolbar(props: {
         onClick={apply}>표 작업 적용</button>
       <p class="basis-full text-slate-600">{props.pending?'표 작업을 저장하거나 실행 취소하세요.':action()==='insert'
         ? `삽입 위치: ${props.insertAfter?.runs.map(run=>run.text).join('').trim().slice(0,80)||'편집 가능한 본문 문단'} 뒤`
-        : '삭제는 선택한 표, 행 또는 열의 내용을 포함합니다. 적용 후 저장으로 확정합니다.'}</p>
+        : action()==='set_row_height' ? '내용이 많으면 행은 지정한 최소 높이보다 커질 수 있습니다. 적용 후 저장으로 확정합니다.' : '삭제는 선택한 표, 행 또는 열의 내용을 포함합니다. 적용 후 저장으로 확정합니다.'}</p>
       <Show when={error()}><p class="basis-full text-red-700" role="alert">{error()}</p></Show>
     </div>
   </details>;

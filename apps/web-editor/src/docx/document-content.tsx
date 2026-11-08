@@ -135,7 +135,7 @@ export function DocumentContent(props: { onListLevel?: (selection:TextSelection,
     <div style={{'column-count':pageSection(page)?.columns,'column-gap':pageSection(page)?`${pageSection(page)!.columnSpace/20}pt`:undefined}}>
     <For each={page}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
       <div class="docx-table overflow-x-auto" tabindex={0} aria-label={t('documentTableScrollHorizontallyOnNarrowScreens')}>
-        <table class="w-full border-collapse text-left"><tbody><For each={block.rows}>{(row, rowIndex) => <tr><For each={row.cells}>{(cell, cellIndex) =>
+        <table class="w-full border-collapse text-left"><tbody><For each={block.rows}>{(row, rowIndex) => <tr style={{height:row.height ? `${row.height/20}pt` : undefined}}><For each={row.cells}>{(cell, cellIndex) =>
           <td class="min-w-24 border border-slate-300 px-2 py-1 align-top"><For each={cell.paragraphs}>{(p, pIndex) => paragraph(p, 'replace_cell_text', `${index}-${rowIndex()}-${cellIndex()}-${pIndex()}`)}</For></td>
         }</For></tr>}</For></tbody></table>
       </div>

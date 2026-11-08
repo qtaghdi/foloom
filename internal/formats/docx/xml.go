@@ -424,7 +424,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				if !row.is("tr") {
 					continue
 				}
-				r := Row{Cells: []Cell{}}
+				r := Row{Cells: []Cell{}, Height: tableRowHeight(row)}
 				for _, cell := range row.children {
 					if !cell.is("tc") {
 						continue

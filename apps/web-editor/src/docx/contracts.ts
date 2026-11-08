@@ -61,6 +61,7 @@ export const snapshotSchema = z.object({
   blocks: z.array(z.discriminatedUnion('type', [
     z.object({ id: z.string(), type: z.literal('paragraph'), paragraph: paragraphSchema }),
     z.object({ id: z.string(), type: z.literal('table'), tableEditable: z.boolean().optional(), rows: z.array(z.object({
+      height: z.number().int().min(1).max(31680).optional(),
       cells: z.array(z.object({ id: z.string(), paragraphs: z.array(paragraphSchema) })),
     })) }),
   ])),
@@ -89,8 +90,8 @@ export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition}
 export type ListDefinition={key:string;kind:'bullet'|'decimal';start?:number};
 export type ListOperation={type:'define_list';listDefinition:ListDefinition};
 export type ParagraphList=z.infer<typeof paragraphListSchema>;
-export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column';
-export type TableEdit = {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number};
+export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column' | 'set_row_height';
+export type TableEdit = {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number;height?:number};
 export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'section_next_page' | 'section_continuous';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
