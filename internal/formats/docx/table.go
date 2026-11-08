@@ -3,15 +3,18 @@ package docx
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
 const maxTableRows = 100
 const maxTableColumns = 50
 const maxTableCells = 3000
+const maxTableRowHeight = 31680
 
 type TableEdit struct {
-	Action      string `json:"action" jsonschema:"insert, delete, add_row, delete_row, move_row, add_column, delete_column, or move_column"`
+	Height      *int   `json:"height,omitempty" jsonschema:"Minimum row height in twips, from 20 to 31680"`
+	Action      string `json:"action" jsonschema:"insert, delete, add_row, delete_row, move_row, add_column, delete_column, move_column, or set_row_height"`
 	Rows        int    `json:"rows,omitempty"`
 	Columns     int    `json:"columns,omitempty"`
 	Index       *int   `json:"index,omitempty" jsonschema:"Zero-based row or column index"`
@@ -99,6 +102,9 @@ func newTableRow(columns int) string {
 }
 
 func tableReplacement(data []byte, target target, op TableEdit) (replacement, error) {
+	if op.Action != "set_row_height" && op.Height != nil {
+		return replacement{}, fmt.Errorf("unexpected DOCX row height")
+	}
 	if op.Action == "insert" {
 		p := target.paragraph
 		if target.kind != "replace_paragraphs" || p == nil || !p.parent.is("body") ||
@@ -117,6 +123,13 @@ func tableReplacement(data []byte, target target, op TableEdit) (replacement, er
 	grid, allowed := simpleTable(table)
 	if !allowed {
 		return replacement{}, fmt.Errorf("complex DOCX table structure is protected")
+	}
+	if op.Action == "set_row_height" {
+		if op.Index == nil || *op.Index < 0 || *op.Index >= len(grid.rows) || op.Destination != nil ||
+			op.Height == nil || *op.Height < 20 || *op.Height > maxTableRowHeight {
+			return replacement{}, fmt.Errorf("DOCX row height requires a valid row and a height from 20 to 31680 twips")
+		}
+		return tableRowHeightReplacement(data, grid.rows[*op.Index], *op.Height)
 	}
 	if op.Action == "delete" {
 		if op.Index != nil || op.Destination != nil {
@@ -192,4 +205,48 @@ func tableReplacement(data []byte, target target, op TableEdit) (replacement, er
 	}
 	raw = append(raw, data[offset:table.end]...)
 	return replacement{table.start, table.end, raw}, nil
+}
+
+func tableRowHeightReplacement(data []byte, row *node, height int) (replacement, error) {
+	props := row.child("trPr")
+	var existing *node
+	if props != nil {
+		if tableChildCount(props, "trHeight") > 1 {
+			return replacement{}, fmt.Errorf("ambiguous DOCX row height")
+		}
+		existing = props.child("trHeight")
+	}
+	raw, err := patchProperty(existing, data, "trHeight", map[string]string{"val": strconv.Itoa(height), "hRule": "atLeast"}, nil)
+	if err != nil {
+		return replacement{}, err
+	}
+	if existing != nil {
+		return replacement{existing.start, existing.end, []byte(raw)}, nil
+	}
+	if props == nil {
+		raw = `<dwt:trPr xmlns:dwt="` + wordNS + `">` + raw + `</dwt:trPr>`
+		return replacement{row.inner, row.inner, []byte(raw)}, nil
+	}
+	opening, closing := scopedOpening(props, data, false)
+	// Preserve every other row property and the bytes between them.
+	if props.inner <= props.endStart {
+		raw += string(data[props.inner:props.endStart])
+	}
+	return replacement{props.start, props.end, []byte(opening + raw + closing)}, nil
+}
+
+func tableRowHeight(row *node) int {
+	props := row.child("trPr")
+	if props == nil {
+		return 0
+	}
+	height := props.child("trHeight")
+	if height == nil || attribute(height, wordNS, "hRule") == "auto" {
+		return 0
+	}
+	value, err := strconv.Atoi(attribute(height, wordNS, "val"))
+	if err != nil || value < 1 || value > maxTableRowHeight {
+		return 0
+	}
+	return value
 }

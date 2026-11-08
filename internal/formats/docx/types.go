@@ -124,7 +124,8 @@ type Cell struct {
 }
 
 type Row struct {
-	Cells []Cell `json:"cells"`
+	Height int    `json:"height,omitempty"`
+	Cells  []Cell `json:"cells"`
 }
 
 type Block struct {

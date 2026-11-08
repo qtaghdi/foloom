@@ -71,3 +71,47 @@ func TestTableOperationsRequireValidGridAndKeepNonemptyDimensions(t *testing.T) 
 		t.Fatalf("delete: %v", err)
 	}
 }
+
+func TestTableRowHeightPreservesOtherPropertiesAndReopens(t *testing.T) {
+	ctx := context.Background()
+	s, path := withDocument(t, bodyXML(`<w:tbl><w:tblGrid><w:gridCol/></w:tblGrid><w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>`))
+	original := fileBytes(t, path)
+	apply := func(row, height int) (Snapshot, error) {
+		v := mustSnapshot(t, s)
+		op := Operation{Type: "update_table", TargetID: v.Blocks[0].ID, Table: &TableEdit{Action: "set_row_height", Index: &row, Height: &height}}
+		return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}, "human")
+	}
+	if _, err := apply(0, maxTableRowHeight+1); err == nil || !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("invalid height changed the file")
+	}
+	if v, err := apply(0, 800); err != nil || v.Blocks[0].Rows[0].Height != 800 || v.Blocks[0].Rows[1].Height != 0 {
+		t.Fatalf("height set on wrong row: %v %+v", err, v.Blocks)
+	}
+	first := fileBytes(t, path)
+	if v, err := apply(0, 900); err != nil || v.Blocks[0].Rows[0].Height != 900 {
+		t.Fatalf("existing height replacement failed: %v %+v", err, v.Blocks)
+	}
+	if v, err := apply(1, 1000); err != nil || v.Blocks[0].Rows[1].Height != 1000 {
+		t.Fatalf("height on a row without properties failed: %v %+v", err, v.Blocks)
+	}
+	if !strings.Contains(string(s.pkg.document), `<w:tblHeader/>`) || !strings.Contains(string(s.pkg.document), `<w:t>Header</w:t>`) {
+		t.Fatal("row property or cell content lost")
+	}
+	reopened, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := mustSnapshot(t, reopened).Blocks[0].Rows
+	if rows[0].Height != 900 || rows[1].Height != 1000 {
+		t.Fatalf("height not retained after reopening: %+v", rows)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(first, fileBytes(t, path)) {
+		t.Fatal("undo did not restore prior height")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("undo did not restore original bytes")
+	}
+}
