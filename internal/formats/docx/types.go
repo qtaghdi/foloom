@@ -20,6 +20,7 @@ const (
 )
 
 type Run struct {
+	Picture          *PictureInfo `json:"picture,omitempty"`
 	CharacterStyleID string       `json:"characterStyleId,omitempty"`
 	BaseStyle        *InlineStyle `json:"baseStyle,omitempty"`
 	Underline        bool         `json:"underline,omitempty"`
@@ -173,6 +174,7 @@ type StyleInfo struct {
 	Paragraph *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
+	Image             *ImageEdit         `json:"image,omitempty"`
 	Boundary          string             `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, section_next_page, or section_continuous"`
 	EvenAndOddHeaders *bool              `json:"evenAndOddHeaders,omitempty" jsonschema:"Document-wide odd/even header and footer setting for update_header_parity"`
 	SectionID         string             `json:"sectionId,omitempty"`
@@ -180,7 +182,7 @@ type Operation struct {
 	StyleDefinition   *StyleDefinition   `json:"styleDefinition,omitempty"`
 	EndTargetID       string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
 	Paragraphs        []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type              string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, or update_boundary"`
+	Type              string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_boundary, or update_image"`
 	TargetID          string             `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
 	ExpectedText      string             `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
 	Text              string             `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
