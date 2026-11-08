@@ -197,7 +197,7 @@ it('locates an observed AI change by paragraph and displays its verified before 
   next.sequence = 1;
   next.blocks[0]!.paragraph!.runs[0]!.text = 'AI 수정';
   fixture.fetcher.mockResolvedValueOnce({ ok: true, json: async () => next });
-  fixture.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai' }) });
+  fixture.sources.at(-1).listener({ data: JSON.stringify({ type: 'docx.committed', sequence: 1, revision: 2, actor: 'ai', textOnly:true }) });
   await settle();
   const marker = root.querySelector<HTMLButtonElement>('.change-marker')!;
   expect(marker.closest('section')?.id).toBe('docx-paragraph-0');

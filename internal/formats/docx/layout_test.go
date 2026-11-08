@@ -97,3 +97,23 @@ func TestPreviewResolvesRelatedStylesAndPreservesPageBreaks(t *testing.T) {
 		t.Fatal("saving text changed the surrounding layout")
 	}
 }
+
+func TestOutlineResolvesCustomHeadingInheritanceAndBodyOverride(t *testing.T) {
+	styles, err := parseXML([]byte(`<w:styles xmlns:w="` + wordNS + `"><w:style w:type="paragraph" w:styleId="Base"><w:pPr><w:outlineLvl w:val="2"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Custom"><w:basedOn w:val="Base"/></w:style></w:styles>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := parseXML([]byte(bodyXML(`<w:p><w:pPr><w:pStyle w:val="Custom"/></w:pPr><w:r><w:t>heading</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Custom"/><w:outlineLvl w:val="9"/></w:pPr><w:r><w:t>body</w:t></w:r></w:p>`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks, _, _, err := inspectDocument(root, "test", 1, readPreviewStyles(styles))
+	if err != nil {
+		t.Fatal(err)
+	}
+	heading, body := blocks[0].Paragraph, blocks[1].Paragraph
+	if heading.OutlineLevel == nil || *heading.OutlineLevel != 2 || heading.OutlineOverride != nil ||
+		body.OutlineLevel == nil || *body.OutlineLevel != 9 || body.OutlineOverride == nil || *body.OutlineOverride != 9 {
+		t.Fatalf("outline mismatch: %+v %+v", heading, body)
+	}
+}

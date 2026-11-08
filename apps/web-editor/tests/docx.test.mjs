@@ -243,3 +243,54 @@ test('DOCX merges header variants in a section draft and restores their undo his
  assert.equal(writes.length,1);assert.equal(writes[0].operations.length,1);assert.equal(writes[0].operations[0].section.headerFooters.length,2);
  assert.equal(writes[0].operations[0].section.firstPage,true);
 });
+
+test('DOCX replace all uses one draft undo and retains run styles outside matches', async () => {
+  const f = fixture();
+  const original={...snapshot,blocks:[{id:'p1',type:'paragraph',paragraph:{id:'p1',structureEditable:true,runs:[
+    {id:'r1',text:'pre AB',editable:true,bold:true,italic:false},
+    {id:'r2',text:'C ABC post',editable:true,bold:false,italic:true},
+  ]}}]};
+  f.fetch(async (_url,init)=>{
+    if(init?.method==='POST')f.state.writes.push(JSON.parse(init.body));
+    return {ok:true,json:async()=>({...original,revision:init?.method==='POST'?2:1})};
+  });
+  const range=(runA,start,runB,end)=>({anchor:{runId:runA,offset:start},focus:{runId:runB,offset:end}});
+  const matches=[range('r1',4,'r2',1),range('r2',2,'r2',5)];
+  await f.controller.load();
+  assert.equal(f.controller.replaceSearchMatches([range('missing',0,'missing',1),matches[1]],'X'),false);
+  assert.equal(f.controller.hasDrafts(),false);
+  assert.equal(f.controller.replaceSearchMatches(matches,'X'),true);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs.map(run=>run.text).join(''),'pre X X post');
+  assert.equal(await f.controller.restore('undo'),true);
+  assert.equal(f.state.renders.at(-1).blocks[0].paragraph.runs.map(run=>run.text).join(''),'pre ABC ABC post');
+  assert.equal(await f.controller.restore('redo'),true);
+  await f.controller.save();
+  const writes=f.state.writes;
+  assert.equal(writes.length,1);
+  const operation=writes[0].operations[0];
+  assert.equal(operation.type,'replace_paragraphs');
+  assert.equal(operation.paragraphs[0].runs[0].sourceId,'r1');
+  assert.equal(operation.paragraphs[0].runs.at(-1).sourceId,'r2');
+});
+
+test('continuous typing in a long document captures one undo state per group', async () => {
+  const f = fixture();
+  const blocks = Array.from({ length: 1000 }, (_, index) => {
+    const id = `p-${index}`;
+    return { id, type: 'paragraph', paragraph: { id, structureEditable: true, runs: [
+      { id: `r-${index}`, text: '원본', editable: true, bold: false, italic: false },
+    ] } };
+  });
+  f.fetch(async () => ({ ok: true, json: async () => ({ ...snapshot, blocks }) }));
+  await f.controller.load();
+  const draft = f.controller.structureDraft;
+  const capture = draft.capture.bind(draft);
+  let captures = 0;
+  draft.capture = () => { captures++; return capture(); };
+  for (let i = 1; i <= 20; i++) {
+    f.controller.edit({type:'replace_run_text',targetId:'r-999',expectedText:'원본',text:'입력'.repeat(i)});
+  }
+  assert.equal(captures, 1);
+  assert.equal(await f.controller.restore('undo'), true);
+  assert.equal(f.state.renders.at(-1).blocks.at(-1).paragraph.runs[0].text, '원본');
+});
