@@ -393,6 +393,10 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			blocks = append(blocks, Block{ID: p.ID, Type: "paragraph", Paragraph: &p})
 		case child.is("tbl"):
 			block := Block{ID: id(), Type: "table", Rows: []Row{}}
+			_, block.TableEditable = simpleTable(child)
+			if block.TableEditable {
+				targets[block.ID] = target{node: child, kind: "update_table"}
+			}
 			// Merged, nested or revision-marked tables are inspection-only.
 			allowed := true
 			for _, name := range []string{"gridSpan", "vMerge", "hMerge", "ins", "del", "sdt", "gridBefore", "gridAfter", "tblPrChange", "trPrChange", "tcPrChange"} {

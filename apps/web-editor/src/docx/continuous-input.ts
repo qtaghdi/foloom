@@ -51,10 +51,32 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
     const range = selection(); const focused = range && current.get(range.focus.runId);
     if (focused) callbacks.focus(focused.run);
   };
+  const moveTableCaret = (range: TextSelection, backwards: boolean): boolean => {
+    if (range.anchor.runId !== range.focus.runId || range.anchor.offset !== range.focus.offset) return false;
+    for (const block of callbacks.snapshot().blocks) {
+      if (block.type !== 'table' || !block.tableEditable) continue;
+      const cells = block.rows.flatMap(row => row.cells);
+      const cellIndex = cells.findIndex(cell => cell.paragraphs.some(paragraph =>
+        paragraph.runs.some(run => run.id === range.focus.runId)));
+      if (cellIndex < 0) continue;
+      const next = cells[cellIndex + (backwards ? -1 : 1)];
+      const run = next?.paragraphs.flatMap(paragraph => paragraph.runs).find(item => item.editable);
+      if (!run) return false;
+      const point = {runId:run.id, offset:0};
+      if (!restoreTextSelection(root(), {anchor:point,focus:point})) return false;
+      callbacks.focus(run);
+      return true;
+    }
+    return false;
+  };
   return {
     keydown(event: KeyboardEvent) {
       if (!eligible(event) || composition || event.isComposing || callbacks.saving()) return;
       const range = selection(); if (!range) return;
+      if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey && moveTableCaret(range,event.shiftKey)) {
+        event.preventDefault();
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') plainPaste = event.shiftKey;
       softBreak = event.key === 'Enter' && event.shiftKey;
       if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey && callbacks.listLevel?.(range,event.shiftKey?-1:1)) { event.preventDefault(); return; }
