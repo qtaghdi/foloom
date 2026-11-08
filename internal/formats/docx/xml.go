@@ -263,8 +263,16 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				continue
 			}
 			if !r.is("r") {
-				unsupported = true
-				out.Runs = append(out.Runs, Run{ID: id(), Text: textContent(r)})
+				if r.is("bookmarkStart") || r.is("bookmarkEnd") {
+					continue
+				}
+				run := Run{ID: id(), Text: textContent(r)}
+				if r.is("hyperlink") {
+					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
+				} else {
+					unsupported = true
+				}
+				out.Runs = append(out.Runs, run)
 				continue
 			}
 			texts := []*node{}

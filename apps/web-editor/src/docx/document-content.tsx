@@ -58,6 +58,13 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
    const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
    return resolveHeaderText(props.snapshot.sections??[],section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant));
   };
+  const goToBookmark=(name:string)=>{
+    const id=props.snapshot.bookmarks?.find(bookmark=>bookmark.name===name)?.paragraphId;
+    if(!id)return;
+    const target=[...editor.querySelectorAll<HTMLElement>('[data-docx-paragraph]')].find(node=>node.dataset.docxParagraph===id);
+    target?.focus({preventScroll:true});
+    target?.scrollIntoView({block:'center'});
+  };
   const paragraph = (p: Paragraph, kind: TextOperation['type'], key: string) => <section
     contentEditable={p.structureEditable ? undefined : false} class="docx-paragraph relative min-h-[1.35em] min-w-0" id={`docx-paragraph-${key}`} data-docx-paragraph={p.id} tabindex={-1}
     style={{
@@ -72,7 +79,12 @@ export function DocumentContent(props: { onHistory: (direction: 'undo' | 'redo')
     }}>
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
-        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>
+        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<Show when={run.link} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>{link=>
+          <a data-docx-text contentEditable={false} class="whitespace-pre-wrap text-blue-800 underline focus-visible:outline-2 focus-visible:outline-teal-700"
+            href={link().url??`#${link().bookmark}`} target={link().url?'_blank':undefined}
+            rel={link().url?'noopener noreferrer':undefined}
+            onClick={event=>{const name=link().bookmark;if(name){event.preventDefault();goToBookmark(name);}}}>{run.text}</a>
+        }</Show>}>
           <img loading="lazy" class="inline-block max-w-full align-middle" contentEditable={false}
             src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}
             width={Math.max(1,Math.round(run.picture!.widthEmu/9525))} height={Math.max(1,Math.round(run.picture!.heightEmu/9525))}

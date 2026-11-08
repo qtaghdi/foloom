@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 const baseStyleSchema = z.object({styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
+const bookmarkName=z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
 export const runSchema = z.object({
+  link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
+    z.object({bookmark:bookmarkName,url:z.undefined().optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), bold: z.boolean(), italic: z.boolean(),
@@ -39,6 +42,7 @@ export type SectionInfo=z.infer<typeof sectionSchema>;
 export type SectionOperation={type:'update_section';sectionId:string;section:SectionFormat};
 const styleInfoSchema=z.object({outlineLevel,id:z.string().max(120),name:z.string().max(256),kind:z.enum(['paragraph','character']),basedOn:z.string().optional(),editable:z.boolean(),run:baseStyleSchema.extend({reset:z.boolean().optional()}).optional(),paragraph:paragraphFormatSchema.optional()});
 export const snapshotSchema = z.object({
+  bookmarks:z.array(z.object({name:bookmarkName,paragraphId:z.string()})).max(500).optional(),
   evenAndOddHeaders: z.boolean().optional(),
  sections:z.array(sectionSchema).max(128).optional(),
   styles:z.array(styleInfoSchema).max(500).optional(),id: z.string(), name: z.string(), revision: z.number().int().nonnegative(),
@@ -74,6 +78,9 @@ export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition}
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'section_next_page' | 'section_continuous';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
 export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}};
-export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation;
+export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} |
+  {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string};
+export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
+export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';
