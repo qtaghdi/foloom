@@ -96,6 +96,10 @@ export function DocumentApp() {
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
   const imagePending = () => { state().snapshot; draftVersion(); return controller.pendingImage(); };
+  const pictures = createMemo(() => {
+    const snapshot = state().snapshot;
+    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs.filter(run => run.picture?.preview)) : [];
+  });
   const imageParagraph = () => {
     const blocks = state().snapshot?.blocks??[];
     const paragraphs = blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph]:block.rows.flatMap(row=>row.cells.flatMap(cell=>cell.paragraphs)))
@@ -323,7 +327,7 @@ export function DocumentApp() {
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentBoundaryToolbar target={boundaryParagraph()} pending={boundaryPending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
-    <DocumentImageToolbar target={imageParagraph()} pending={imagePending()}
+    <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentReferenceToolbar target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}

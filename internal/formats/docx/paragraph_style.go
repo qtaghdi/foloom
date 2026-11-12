@@ -66,6 +66,10 @@ func validateParagraphFormat(f *ParagraphFormat) error {
 // Rebuild only a named scalar property. RawToken retains namespace prefixes,
 // including unknown attributes, after scopedOpening supplies inherited bindings.
 func patchProperty(n *node, data []byte, name string, values map[string]string, remove []string) (string, error) {
+	return patchScalarProperty(n, data, name, wordNS, values, remove)
+}
+
+func patchScalarProperty(n *node, data []byte, name, namespace string, values map[string]string, remove []string) (string, error) {
 	opening, closing := `<dwf:`+name+` xmlns:dwf="`+wordNS+`">`, `</dwf:`+name+`>`
 	if n != nil {
 		if len(n.children) != 0 || strings.TrimSpace(n.text.String()) != "" {
@@ -109,21 +113,26 @@ func patchProperty(n *node, data []byte, name string, values map[string]string, 
 		removes[k] = true
 	}
 	for _, a := range start.Attr {
-		if scope[a.Name.Space] == wordNS && a.Name.Space != "" && removes[a.Name.Local] {
+		if removes[a.Name.Local] && (a.Name.Space == "" && namespace == "" || a.Name.Space != "" && scope[a.Name.Space] == namespace) {
 			continue
 		}
 		out.WriteString(" " + qualified(a.Name) + `="` + escapeText(a.Value) + `"`)
 	}
-	if scope[prefix] != wordNS {
-		out.WriteString(` xmlns:` + prefix + `="` + wordNS + `"`)
+	if namespace != "" && scope[prefix] != namespace {
+		out.WriteString(` xmlns:` + prefix + `="` + namespace + `"`)
 	}
 	keys := []string{}
 	for k := range values {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	if namespace == "" {
+		prefix = ""
+	} else {
+		prefix += ":"
+	}
 	for _, k := range keys {
-		out.WriteString(" " + prefix + ":" + k + `="` + escapeText(values[k]) + `"`)
+		out.WriteString(" " + prefix + k + `="` + escapeText(values[k]) + `"`)
 	}
 	out.WriteString(">" + closing)
 	return out.String(), nil

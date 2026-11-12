@@ -288,7 +288,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	seen := map[string]bool{}
 	var edits []replacement
 	headerCount := 0
-	var drawingID uint32
+	var drawingID uint64
 	imageCount := 0
 	textBytes := 0
 	structuralBytes := 0
@@ -372,24 +372,33 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		}
 		if op.Type == "update_image" {
 			target, ok := targets[op.TargetID]
-			if !ok || op.Image == nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+			if !ok || op.Image == nil || op.ListDefinition != nil || op.Table != nil || op.Math != nil || op.Comment != nil || op.Reference != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid DOCX image operation")
 			}
-			if imageCount == 0 {
-				drawingID, err = s.pkg.availableDrawingID()
-				if err != nil {
-					return nil, err
-				}
-			}
-			if imageCount >= 4 || drawingID == 0 {
+			if imageCount >= 4 {
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
-			edit, err := s.pkg.imageInsertion(s.pkg.document, target, *op.Image, drawingID, parts)
+			var edit replacement
+			if op.Image.Action == "set_alt" {
+				edit, err = s.pkg.pictureAltReplacement(target, *op.Image)
+			} else {
+				if drawingID == 0 {
+					next, err := s.pkg.availableDrawingID()
+					if err != nil {
+						return nil, err
+					}
+					drawingID = uint64(next)
+				}
+				if drawingID > 1<<32-1 {
+					return nil, fmt.Errorf("DOCX drawing IDs exhausted")
+				}
+				edit, err = s.pkg.imageInsertion(s.pkg.document, target, *op.Image, uint32(drawingID), parts)
+				drawingID++
+			}
 			if err != nil {
 				return nil, err
 			}
 			imageCount++
-			drawingID++
 			edits = append(edits, edit)
 			continue
 		}
