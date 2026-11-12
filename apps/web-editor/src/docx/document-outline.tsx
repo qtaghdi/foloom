@@ -19,6 +19,7 @@ function levelOf(paragraph:Paragraph,styles:Map<string,StyleInfo>):number|undefi
 export function DocumentOutline(props:{
   snapshot?:Snapshot; styles:StyleInfo[]; activeRun?:string;
   onLocate:(paragraphId:string)=>void;
+  pageCount:number; onLocatePage:(page:number)=>void;
 }) {
   const [open,setOpen]=createSignal(false);
   const [last,setLast]=createSignal<{snapshot:Snapshot;paragraphId:string}>();
@@ -64,6 +65,20 @@ export function DocumentOutline(props:{
       onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();}}}>
       <div class="flex items-center justify-between"><strong>문서 개요</strong><button type="button" class={quietButtonClass} onClick={close}>닫기</button></div>
       <div class="max-h-[50dvh] overflow-y-auto">
+      <Show when={props.snapshot?.id} keyed>
+        <form class="flex flex-wrap items-end gap-2 px-2 py-2" onSubmit={event=>{
+          event.preventDefault();
+          const input = event.currentTarget.elements.namedItem('page') as HTMLInputElement;
+          const number = input.valueAsNumber;
+          if (Number.isInteger(number) && number >= 1 && number <= props.pageCount) props.onLocatePage(number);
+        }}>
+          <label class="flex flex-col gap-1 text-sm">미리보기 페이지 (1–{props.pageCount})
+            <input name="page" type="number" min={1} max={props.pageCount} step={1} required
+              class="min-h-11 w-24 rounded border border-slate-300 px-2 focus-visible:outline-2 focus-visible:outline-teal-700"/>
+          </label>
+          <button type="submit" class={quietButtonClass}>페이지 이동</button>
+        </form>
+      </Show>
       <h2 class="px-2 pt-2 text-sm font-medium">제목</h2>
       <Show when={outline().headings.length} fallback={<p class="px-2 py-3 text-sm text-slate-600">개요 수준이 지정된 제목이 없습니다.</p>}>
         <ul aria-label="제목">
