@@ -12,7 +12,28 @@ import { ObjectPreview } from './document-objects';
 import { scopedDocumentURL } from '../transport/document-scope';
 import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
 
-export function DocumentContent(props: { onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export type PreviewPage = Array<{ block: Snapshot['blocks'][number]; index: number }>;
+
+export function previewPages(blocks: Snapshot['blocks']): PreviewPage[] {
+  let page: PreviewPage = [];
+  const pages = [page];
+  let nextPage = false;
+  let previousSection: string | undefined;
+  blocks.forEach((block, index) => {
+    const paragraph = block.type === 'paragraph' ? block.paragraph : undefined;
+    const section = block.type === 'table' ? block.rows[0]?.cells[0]?.paragraphs[0]?.sectionId : paragraph?.sectionId;
+    if ((nextPage || paragraph?.pageBreakBefore || section !== previousSection) && page.length) {
+      page = [];
+      pages.push(page);
+    }
+    page.push({ block, index });
+    nextPage = Boolean(paragraph?.pageBreakAfter);
+    previousSection = section;
+  });
+  return pages;
+}
+
+export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
   let frame=0;
@@ -35,34 +56,22 @@ export function DocumentContent(props: { onListLevel?: (selection:TextSelection,
     }
     return result;
   });
-  const pages = createMemo(() => {
-    const pages: Array<Array<{ block: Snapshot['blocks'][number]; index: number }>> = [[]];
-    let nextPage = false,previousSection:string|undefined;
-    props.snapshot.blocks.forEach((block, index) => {
-      const paragraph = block.type === 'paragraph' ? block.paragraph : undefined;
-      const section=paragraph?.sectionId??(block.type==='table'?block.rows[0]?.cells[0]?.paragraphs[0]?.sectionId:undefined);
-      if ((nextPage || paragraph?.pageBreakBefore || section!==previousSection) && pages.at(-1)!.length) pages.push([]);
-      pages.at(-1)!.push({ block, index });
-      nextPage = Boolean(paragraph?.pageBreakAfter);previousSection=section;
-    });
-    return pages;
-  });
-  const pageSection=(page:ReturnType<typeof pages>[number])=>{const block=page[0]?.block;const id=block?.type==='paragraph'?block.paragraph.sectionId:block?.rows[0]?.cells[0]?.paragraphs[0]?.sectionId;return props.snapshot.sections?.find(section=>section.id===id);};
-  const sectionStyle=(page:ReturnType<typeof pages>[number])=>{
+  const pageSection=(page:PreviewPage)=>{const block=page[0]?.block;const id=block?.type==='paragraph'?block.paragraph.sectionId:block?.rows[0]?.cells[0]?.paragraphs[0]?.sectionId;return props.snapshot.sections?.find(section=>section.id===id);};
+  const sectionStyle=(page:PreviewPage)=>{
    const info=pageSection(page);if(!info)return {'--docx-print-paper':printPaperFor(props.snapshot)};
    const p=info.page,width=`min(100cqi, ${p.width/15}px)`;
    return {'--docx-print-paper':printPaperFor(props.snapshot,info),width:`${p.width/15}px`,'max-width':'100%','min-block-size':`calc(${width} * ${p.height/p.width})`,'--paper-insets':[p.top,p.right,p.bottom,p.left].map(value=>`calc(${width} * ${value/p.width})`).join(' ')};
   };
   const pageOrdinals=createMemo(()=>{
    let previous:string|undefined, ordinal=0;
-   return pages().map(page=>{
+   return props.pages.map(page=>{
     const section=pageSection(page)?.id;
     ordinal=section===previous?ordinal+1:1;
     previous=section;
     return ordinal;
    });
   });
-  const headerText=(page:ReturnType<typeof pages>[number],index:number,kind:'header'|'footer')=>{
+  const headerText=(page:PreviewPage,index:number,kind:'header'|'footer')=>{
    const section=pageSection(page),ordinal=pageOrdinals()[index]??1;
    const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
    return resolveHeaderText(props.snapshot.sections??[],section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant));
@@ -128,7 +137,7 @@ export function DocumentContent(props: { onListLevel?: (selection:TextSelection,
       onKeyDown={input.keydown} onKeyUp={input.focus} onPointerUp={input.focus} onFocusIn={input.focus}
       onBeforeInput={input.beforeinput} onInput={event=>{input.input(event);scheduleTabs();}} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
       onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
-    <For each={pages()}>{(page,index) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id}>
+    <For each={props.pages}>{(page,index) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id} data-docx-page={index()+1} tabindex={-1}>
     <Show when={headerText(page,index(),'header')}>{text=><div contentEditable={false} aria-label="머리글 미리보기" class="mb-4 whitespace-pre-wrap border-b border-dashed border-slate-200 pb-2 text-xs text-stone-600">{text()}</div>}</Show>
     <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
     <Show when={pageSection(page)}>{section=><p contentEditable={false} data-docx-print-hide class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
