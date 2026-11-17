@@ -54,6 +54,12 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 	if media == "" || !bytes.Equal(s.pkg.partData(media, nil), pngBytes.Bytes()) || s.pkg.stylesPath == "" {
 		t.Fatal("new image or same-batch style relationship lost")
 	}
+	contentTypes := string(s.pkg.partData("[Content_Types].xml", nil))
+	relationships := string(s.pkg.partData(documentRelationships, nil))
+	if !strings.Contains(contentTypes, `<Override xmlns="http://schemas.openxmlformats.org/package/2006/content-types" PartName="/`+media+`"`) ||
+		!strings.Contains(relationships, `<Relationship xmlns="`+packageRelNS+`" Id="rIdFoloomImage1"`) {
+		t.Fatal("new package metadata uses an incompatible namespace prefix")
+	}
 	inserted := fileBytes(t, path)
 	priorParts := s.pkg.parts
 	alt := ImageEdit{Action: "set_alt", Alt: `대체 & "설명"`}
