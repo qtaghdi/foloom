@@ -118,8 +118,22 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 			continue
 		}
 		if d == nil || op.TargetID != "" || op.EndTargetID != "" || op.ExpectedText != "" || op.Text != "" || op.Paragraphs != nil ||
-			!listKey.MatchString(d.Key) || d.Kind != "bullet" && d.Kind != "decimal" || d.Start < 0 || d.Start > 9999 || d.Kind == "bullet" && d.Start > 1 {
+			!listKey.MatchString(d.Key) {
 			return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list definition")
+		}
+		var maxStart int
+		switch d.Kind {
+		case "bullet":
+			maxStart = 1
+		case "decimal":
+			maxStart = 9999
+		case "upperRoman", "lowerRoman":
+			maxStart = 3999
+		default:
+			return nil, numberingCatalog{}, fmt.Errorf("unsupported DOCX list format")
+		}
+		if d.Start < 0 || d.Start > maxStart {
+			return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list starting number")
 		}
 		defs = append(defs, *d)
 	}
