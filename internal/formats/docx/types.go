@@ -101,6 +101,7 @@ type ListLevelInfo struct {
 	Kind  string `json:"kind"`
 	Text  string `json:"text"`
 	Start int    `json:"start"`
+	Legal bool   `json:"legal,omitempty"`
 }
 type Paragraph struct {
 	List              *ParagraphList   `json:"list,omitempty"`
