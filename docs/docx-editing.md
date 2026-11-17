@@ -759,7 +759,7 @@ PNG가 들어갔고 편집 도구 문구는 추출 텍스트에 없었습니다.
 
 ### 링크·북마크·각주
 
-`링크·북마크·각주`에서 기존 웹 링크를 고르고 새 HTTP(S) 주소를 적용한 뒤 저장합니다.
+`링크·북마크·각주·미주`에서 기존 웹 링크를 고르고 새 HTTP(S) 주소를 적용한 뒤 저장합니다.
 HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url }`을
 사용합니다. 링크의 표시 문구와 서식, 다른 링크가 공유하는 관계를 유지합니다.
 
@@ -780,7 +780,7 @@ HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url
 `move_bookmark_up` 또는 `move_bookmark_down`을 적용합니다. 표·페이지·구역
 경계와 문단에 걸쳐 있는 북마크는 보호합니다.
 
-편집기의 `링크·북마크·각주`에서 편집 가능한 본문 문단을 골라 북마크, 웹 링크,
+편집기의 `링크·북마크·각주·미주`에서 편집 가능한 본문 문단을 골라 북마크, 웹 링크,
 북마크 링크를 추가합니다. 적용하고 저장한 뒤 내부 링크를 누르면 해당 본문
 문단으로 이동합니다. 웹 링크는 사용자가 선택할 때 별도 탭에서 열립니다.
 표시 가능한 북마크는 최대 500개이며 중복되거나 쌍이 끊어진 북마크와 안전하지
@@ -807,6 +807,12 @@ HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 쪽 아래 배치는 Word가 계산합니다. 사용자 지정 번호와
 미주는 지원 범위에 포함되지 않습니다.
 [Word 각주 참조 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.footnotereferencemark)을 사용합니다.
+
+편집 가능한 본문 문단에서 `미주 삽입`을 선택하면 문단 끝에 미주를 연결합니다.
+HTTP·MCP는 문단 ID에 `reference: { action: "insert_endnote", text }`를 적용합니다.
+미주 내용은 참조 옆에 표시하며, Word 미주 part와 번호 ID는 각주와 별도로 관리합니다.
+미주 본문 수정과 삭제는 Word에서 할 수 있습니다.
+[Word 미주 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.endnotes?view=openxml-3.0.1)을 사용합니다.
 
 `기존 각주`에서 편집 가능한 각주를 고르면 한 줄 텍스트를 수정할 수 있습니다.
 HTTP·MCP는 본문의 각주 run ID에 `reference: { action: "set_footnote_text", text }`를
