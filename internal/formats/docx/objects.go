@@ -19,13 +19,13 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
-	footnoteID string
-	Kind       string        `json:"kind"`
-	Author     string        `json:"author,omitempty"`
-	Label      string        `json:"label,omitempty"`
-	Text       string        `json:"text,omitempty"`
-	Editable   bool          `json:"editable"`
-	Fraction   *MathFraction `json:"fraction,omitempty"`
+	noteID   string
+	Kind     string        `json:"kind"`
+	Author   string        `json:"author,omitempty"`
+	Label    string        `json:"label,omitempty"`
+	Text     string        `json:"text,omitempty"`
+	Editable bool          `json:"editable"`
+	Fraction *MathFraction `json:"fraction,omitempty"`
 }
 
 func editableMath(math *node) bool {
@@ -105,13 +105,6 @@ func objectPreview(n *node) *ObjectInfo {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
-	case n.is("r") && countChild(n, "footnoteReference") == 1 &&
-		(len(n.children) == 1 || len(n.children) == 2 && n.child("rPr") != nil):
-		ref := n.child("footnoteReference")
-		if onOff(ref.attr("customMarkFollows"), false) {
-			return nil
-		}
-		return &ObjectInfo{Kind: "footnote", footnoteID: ref.attr("id")}
 	case n.is("sdt"):
 		return &ObjectInfo{Kind: "control", Text: reviewText(textContent(n), 1024)}
 	case n.is("object") || n.child("object") != nil:
@@ -121,6 +114,13 @@ func objectPreview(n *node) *ObjectInfo {
 			return &ObjectInfo{Kind: "textbox", Text: reviewText(textContent(n), 1024)}
 		}
 		return &ObjectInfo{Kind: "shape"}
+	}
+	if n.is("r") && (len(n.children) == 1 || len(n.children) == 2 && n.child("rPr") != nil) {
+		for _, kind := range []string{"footnote", "endnote"} {
+			if ref := n.child(kind + "Reference"); countChild(n, kind+"Reference") == 1 && !onOff(ref.attr("customMarkFollows"), false) {
+				return &ObjectInfo{Kind: kind, noteID: ref.attr("id")}
+			}
+		}
 	}
 	drawing := n.child("drawing")
 	if drawing == nil {

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (p *documentPackage) footnotesPart(changes map[string][]byte) (string, *node, error) {
+func (p *documentPackage) notesPart(kind string, changes map[string][]byte) (string, *node, error) {
 	data := p.partData(documentRelationships, changes)
 	if len(data) == 0 {
 		return "", nil, nil
@@ -18,15 +18,15 @@ func (p *documentPackage) footnotesPart(changes map[string][]byte) (string, *nod
 	var filename string
 	for _, rel := range rels.children {
 		if rel.name.Space != packageRelNS || rel.name.Local != "Relationship" ||
-			attribute(rel, "", "Type") != officeRelNS+"/footnotes" {
+			attribute(rel, "", "Type") != officeRelNS+"/"+kind+"s" {
 			continue
 		}
 		id := attribute(rel, "", "Id")
-		part := p.relatedPart(id, "footnotes", changes)
+		part := p.relatedPart(id, kind+"s", changes)
 		mode, target := attribute(rel, "", "TargetMode"), attribute(rel, "", "Target")
 		if filename != "" || id == "" || part == "" || target == "" || strings.ContainsAny(target, "\\?#:") ||
 			mode != "" && mode != "Internal" {
-			return "", nil, fmt.Errorf("ambiguous DOCX footnotes relationship")
+			return "", nil, fmt.Errorf("ambiguous DOCX %ss relationship", kind)
 		}
 		filename = part
 	}
@@ -34,17 +34,17 @@ func (p *documentPackage) footnotesPart(changes map[string][]byte) (string, *nod
 		return "", nil, nil
 	}
 	notes, err := parseXML(p.partData(filename, changes))
-	if err != nil || !notes.is("footnotes") {
-		return "", nil, fmt.Errorf("invalid DOCX footnotes part")
+	if err != nil || !notes.is(kind+"s") {
+		return "", nil, fmt.Errorf("invalid DOCX %ss part", kind)
 	}
 	return filename, notes, nil
 }
 
-func (p *documentPackage) appendFootnote(paragraph *node, text string, changes map[string][]byte) (string, error) {
+func (p *documentPackage) appendNote(kind string, paragraph *node, text string, changes map[string][]byte) (string, error) {
 	if !validInlineText(text) || strings.TrimSpace(text) == "" || len(text) > 4000 {
-		return "", fmt.Errorf("invalid DOCX footnote text")
+		return "", fmt.Errorf("invalid DOCX %s text", kind)
 	}
-	filename, notes, err := p.footnotesPart(changes)
+	filename, notes, err := p.notesPart(kind, changes)
 	if err != nil {
 		return "", err
 	}
@@ -52,12 +52,12 @@ func (p *documentPackage) appendFootnote(paragraph *node, text string, changes m
 	seen := map[int64]bool{}
 	if notes != nil {
 		for _, note := range notes.children {
-			if !note.is("footnote") {
+			if !note.is(kind) {
 				continue
 			}
 			id, err := strconv.ParseInt(note.attr("id"), 10, 32)
 			if err != nil || seen[id] {
-				return "", fmt.Errorf("invalid or duplicate DOCX footnote identifier")
+				return "", fmt.Errorf("invalid or duplicate DOCX %s identifier", kind)
 			}
 			seen[id] = true
 			highest = max(highest, id)
@@ -66,7 +66,7 @@ func (p *documentPackage) appendFootnote(paragraph *node, text string, changes m
 	// Reserve dangling references too so adding a note never changes their meaning.
 	var reserveReferences func(*node)
 	reserveReferences = func(n *node) {
-		if n.is("footnoteReference") || n.is("footnote") {
+		if n.is(kind+"Reference") || n.is(kind) {
 			if id, err := strconv.ParseInt(n.attr("id"), 10, 32); err == nil {
 				highest = max(highest, id)
 			}
@@ -80,25 +80,25 @@ func (p *documentPackage) appendFootnote(paragraph *node, text string, changes m
 		reserveReferences(root)
 	}
 	if highest >= 2147483647 || len(seen) >= 500 {
-		return "", fmt.Errorf("DOCX footnotes limit exceeded")
+		return "", fmt.Errorf("DOCX %ss limit exceeded", kind)
 	}
 	raw := p.partData(filename, changes)
 	if notes == nil {
-		filename, err = p.addWordPart(changes, "footnotes", "rIdFoloomFootnotes")
+		filename, err = p.addWordPart(changes, kind+"s", "rIdFoloom"+strings.ToUpper(kind[:1])+kind[1:]+"s")
 		if err != nil {
 			return "", err
 		}
-		raw = []byte(`<w:footnotes xmlns:w="` + wordNS + `"><w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote></w:footnotes>`)
+		raw = []byte(fmt.Sprintf(`<w:%[1]ss xmlns:w="%[2]s"><w:%[1]s w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:%[1]s><w:%[1]s w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:%[1]s></w:%[1]ss>`, kind, wordNS))
 	}
 	id := strconv.FormatInt(highest+1, 10)
-	note := `<dwn:footnote xmlns:dwn="` + wordNS + `" dwn:id="` + id + `"><dwn:p><dwn:r><dwn:rPr><dwn:vertAlign dwn:val="superscript"/></dwn:rPr><dwn:footnoteRef/></dwn:r><dwn:r>` +
-		inlineXML(" "+text) + `</dwn:r></dwn:p></dwn:footnote>`
+	note := `<dwn:` + kind + ` xmlns:dwn="` + wordNS + `" dwn:id="` + id + `"><dwn:p><dwn:r><dwn:rPr><dwn:vertAlign dwn:val="superscript"/></dwn:rPr><dwn:` + kind + `Ref/></dwn:r><dwn:r>` +
+		inlineXML(" "+text) + `</dwn:r></dwn:p></dwn:` + kind + `>`
 	raw, err = appendXMLChild(raw, note)
 	if err != nil {
 		return "", err
 	}
 	changes[filename] = raw
-	return `<dwn:r xmlns:dwn="` + wordNS + `"><dwn:rPr><dwn:vertAlign dwn:val="superscript"/></dwn:rPr><dwn:footnoteReference dwn:id="` + id + `"/></dwn:r>`, nil
+	return `<dwn:r xmlns:dwn="` + wordNS + `"><dwn:rPr><dwn:vertAlign dwn:val="superscript"/></dwn:rPr><dwn:` + kind + `Reference dwn:id="` + id + `"/></dwn:r>`, nil
 }
 
 func footnoteTextTarget(note *node, source []byte) *node {
@@ -141,7 +141,7 @@ func (p *documentPackage) changeFootnote(t target, edit ReferenceEdit, changes m
 		return fmt.Errorf("invalid DOCX footnote edit")
 	}
 	id := t.node.child("footnoteReference").attr("id")
-	filename, notes, err := p.footnotesPart(changes)
+	filename, notes, err := p.notesPart("footnote", changes)
 	if err != nil || notes == nil {
 		return fmt.Errorf("DOCX footnotes part unavailable")
 	}
@@ -195,7 +195,7 @@ func (p *documentPackage) deleteFootnote(t target, edit ReferenceEdit, changes m
 	if found != 1 {
 		return nil, fmt.Errorf("shared DOCX footnote cannot be removed")
 	}
-	filename, root, err := p.footnotesPart(changes)
+	filename, root, err := p.notesPart("footnote", changes)
 	if err != nil || root == nil {
 		return nil, fmt.Errorf("DOCX footnotes part unavailable")
 	}
@@ -216,15 +216,15 @@ func (p *documentPackage) deleteFootnote(t target, edit ReferenceEdit, changes m
 	return []replacement{{start: t.node.start, end: t.node.end}}, nil
 }
 
-func (p *documentPackage) projectFootnotes(blocks []Block, targets map[string]target) {
-	_, notes, err := p.footnotesPart(nil)
+func (p *documentPackage) projectNotes(kind string, blocks []Block, targets map[string]target) {
+	_, notes, err := p.notesPart(kind, nil)
 	if err != nil || notes == nil {
 		return
 	}
 	textByID := map[string]string{}
 	editableByID := map[string]bool{}
 	for _, note := range notes.children {
-		if !note.is("footnote") {
+		if !note.is(kind) {
 			continue
 		}
 		id := note.attr("id")
@@ -244,16 +244,16 @@ func (p *documentPackage) projectFootnotes(blocks []Block, targets map[string]ta
 			}
 		}
 		textByID[id] = reviewText(strings.Join(lines, "\n"), 1024)
-		editableByID[id] = footnoteTextTarget(note, notes.source) != nil
+		editableByID[id] = kind == "footnote" && footnoteTextTarget(note, notes.source) != nil
 	}
 	for _, block := range blocks {
 		if block.Paragraph == nil {
 			continue
 		}
 		for _, run := range block.Paragraph.Runs {
-			if run.Object != nil && run.Object.Kind == "footnote" {
-				run.Object.Text = textByID[run.Object.footnoteID]
-				run.Object.Editable = targets[run.ID].kind == "footnote" && editableByID[run.Object.footnoteID]
+			if run.Object != nil && run.Object.Kind == kind {
+				run.Object.Text = textByID[run.Object.noteID]
+				run.Object.Editable = targets[run.ID].kind == kind && editableByID[run.Object.noteID]
 			}
 		}
 	}

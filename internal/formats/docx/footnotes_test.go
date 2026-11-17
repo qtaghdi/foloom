@@ -39,7 +39,7 @@ func TestDOCXFootnotesPersistAndPreserveOriginalParts(t *testing.T) {
 			t.Fatalf("footnote %d not available after reopen: %+v", i+1, paragraph.Runs)
 		}
 	}
-	name, notes, err := reopened.pkg.footnotesPart(nil)
+	name, notes, err := reopened.pkg.notesPart("footnote", nil)
 	if err != nil || name == "" || len(notes.children) != 4 ||
 		notes.children[0].attr("type") != "separator" ||
 		notes.children[1].attr("type") != "continuationSeparator" ||
@@ -93,7 +93,7 @@ func TestDOCXFootnotesPersistAndPreserveOriginalParts(t *testing.T) {
 	if len(deleted.Blocks[0].Paragraph.Runs) != 1 || deleted.Blocks[1].Paragraph.Runs[1].Object.Text != b.Text {
 		t.Fatal("deletion changed another note or failed to remove its reference")
 	}
-	_, remaining, err := reopened.pkg.footnotesPart(nil)
+	_, remaining, err := reopened.pkg.notesPart("footnote", nil)
 	if err != nil || len(remaining.children) != 3 || remaining.children[2].attr("id") != "2" {
 		t.Fatal("deletion changed remaining notes or separators", err)
 	}
@@ -136,5 +136,42 @@ func TestDOCXFootnoteRemovalRejectsSharedReference(t *testing.T) {
 		{Type: "update_reference", TargetID: v.Blocks[0].Paragraph.Runs[1].ID, Reference: &ReferenceEdit{Action: "delete_footnote"}},
 	}}, "human"); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
 		t.Fatal("shared footnote deletion changed the package")
+	}
+}
+
+func TestDOCXEndnotePersistsIndependentlyOfFootnote(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>second</w:t></w:r></w:p>`))
+	original := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: v.Blocks[0].ID, Reference: &ReferenceEdit{Action: "insert_footnote", Text: "각주"}},
+		{Type: "update_reference", TargetID: v.Blocks[1].ID, Reference: &ReferenceEdit{Action: "insert_endnote", Text: "미주 & source"}},
+	}}
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := mustSnapshot(t, reopened)
+	for i, kind := range []string{"footnote", "endnote"} {
+		note := snapshot.Blocks[i].Paragraph.Runs[1].Object
+		if note == nil || note.Kind != kind || note.noteID != "1" || note.Text != input.Operations[i].Reference.Text {
+			t.Fatalf("%s preview after reopen: %+v", kind, note)
+		}
+		name, part, err := reopened.pkg.notesPart(kind, nil)
+		if err != nil || name != "word/"+kind+"s.xml" || len(part.children) != 3 ||
+			part.children[2].attr("id") != "1" || !part.children[2].has(kind+"Ref") {
+			t.Fatalf("native %s part missing or malformed: %v", kind, err)
+		}
+	}
+	if snapshot.Blocks[1].Paragraph.Runs[1].Object.Editable {
+		t.Fatal("endnote exposed unsupported edit")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore original package bytes")
 	}
 }
