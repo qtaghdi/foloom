@@ -292,3 +292,20 @@ func TestBrowserSessionsStayIndependentAcrossPorts(t *testing.T) {
 	}
 	request(http.MethodPost, docHTTP.URL, "/api/docx/operations", input, http.StatusOK)
 }
+
+func TestLandingDoesNotGrantDocumentAccess(t *testing.T) {
+	api := NewWithTokens(nil, securityBrowserToken, securityMCPToken)
+	t.Cleanup(func() { _ = api.Close() })
+	landing := httptest.NewRecorder()
+	api.Handler().ServeHTTP(landing, httptest.NewRequest(http.MethodGet, "/about", nil))
+	if landing.Code != http.StatusOK || !strings.Contains(landing.Body.String(), "Foloom 시작하기") || landing.Header().Get("Set-Cookie") != "" {
+		t.Fatalf("unexpected landing response: status %d", landing.Code)
+	}
+	for _, route := range []string{"/", "/api/documents", "/api/workbook"} {
+		response := httptest.NewRecorder()
+		api.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, route, nil))
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("%s returned %d without a session", route, response.Code)
+		}
+	}
+}
