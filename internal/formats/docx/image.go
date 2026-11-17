@@ -24,7 +24,7 @@ const (
 )
 
 type ImageEdit struct {
-	Action   string `json:"action" jsonschema:"insert or set_alt"`
+	Action   string `json:"action" jsonschema:"insert, set_alt, or delete"`
 	Base64   string `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
 	Alt      string `json:"alt,omitempty"`
 	WidthEMU int    `json:"widthEmu,omitempty"`
@@ -119,7 +119,7 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 	return replacement{paragraph.endStart, paragraph.endStart, []byte(drawing)}, nil
 }
 
-func (p *documentPackage) pictureAltReplacement(t target, edit ImageEdit) (replacement, error) {
+func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit) (replacement, error) {
 	if t.kind != "picture" || t.run == nil || edit.Base64 != "" || edit.WidthEMU != 0 ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture description")
@@ -149,6 +149,14 @@ func (p *documentPackage) pictureAltReplacement(t target, edit ImageEdit) (repla
 	part := p.picturePartMap()[relationship]
 	if _, _, err := imageConfig(p.partData(part, nil), maxImageReadBytes); err != nil {
 		return replacement{}, err
+	}
+	if edit.Action == "delete" {
+		if edit.Alt != "" || !t.run.parent.is("p") ||
+			strings.Contains(string(p.document[t.run.start:t.run.end]), "<!--") {
+			return replacement{}, fmt.Errorf("protected DOCX picture cannot be deleted")
+		}
+		// Keep package relationships and media because another drawing can share them.
+		return replacement{start: t.run.start, end: t.run.end}, nil
 	}
 	raw, err := patchScalarProperty(props, p.document, "docPr", "", map[string]string{"descr": edit.Alt}, nil)
 	if err != nil {
