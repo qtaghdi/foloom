@@ -632,8 +632,12 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 `pageNumberFormat`은 `decimal`, `upperRoman`, `lowerRoman`, `upperLetter`,
 `lowerLetter` 중 하나입니다. 생략된 속성과 기존 장 번호·구분 문자는
 유지합니다. [Open XML 쪽 번호 속성](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.pagenumbertype)을 따릅니다.
-이 설정은 기존 번호 필드에 적용되는 저장 속성입니다. 번호 필드 삽입,
-실제 페이지 수 계산과 화면에서 번호를 매기는 동작은 아직 지원하지 않습니다.
+머리글·바닥글 도구의 `쪽 번호 필드`를 켜면 내용 뒤에 Word의 PAGE 필드를
+추가합니다. HTTP·MCP는 머리글·바닥글 설정에 `pageNumber: true`를 보냅니다.
+`false`는 필드를 제거하고, 값 생략은 해당 구역의 기존 독립 필드를 유지합니다.
+브라우저에서는 필드 위치를 표시하며 실제 쪽 번호는 Word 등 외부 편집기에서
+계산합니다. [단일 Word 필드 구조](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.simplefield)를
+사용합니다.
 
 ### 문단 페이지 나눔과 구역 나눔
 
