@@ -88,6 +88,25 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 	if info := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Picture; info == nil || info.Alt != "" {
 		t.Fatalf("cleared description was not preserved: %+v", info)
 	}
+	beforeDelete := fileBytes(t, path)
+	before := mustSnapshot(t, reopened)
+	after, err := reopened.Apply(ctx, ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
+		{Type: "update_image", TargetID: before.Blocks[0].Paragraph.Runs[1].ID, Image: &ImageEdit{Action: "delete"}},
+	}}, "human")
+	if err != nil || len(after.Blocks[0].Paragraph.Runs) != 1 || after.Blocks[0].Paragraph.Runs[0].Text != "first" {
+		t.Fatalf("deletion did not preserve surrounding text: %v", err)
+	}
+	if reopened.pkg.relatedPart("rIdFoloomImage1", "image", nil) != media || !bytes.Equal(reopened.pkg.partData(media, nil), pngBytes.Bytes()) {
+		t.Fatal("deletion changed the relationship or media part")
+	}
+	reopened, err = Open(ctx, path)
+	if err != nil || len(mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs) != 1 {
+		t.Fatalf("deletion did not survive reopening: %v", err)
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(beforeDelete, fileBytes(t, path)) {
+		t.Fatal("undo did not restore the deleted picture")
+	}
 	historyRestore(t, reopened, "undo")
 	historyRestore(t, reopened, "undo")
 	if !bytes.Equal(inserted, fileBytes(t, path)) {
