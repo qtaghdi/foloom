@@ -62,6 +62,7 @@ export function DocumentImageToolbar(props: {
             </select>
           </label>
           <Show when={selectedPicture()} keyed>{picture=>
+            <>
             <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
               event.preventDefault();
               if (disabled()) return;
@@ -79,6 +80,23 @@ export function DocumentImageToolbar(props: {
                 setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
               }}>그림 삭제</button>
             </form>
+            <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if (disabled()) return;
+              const input=event.currentTarget.elements.namedItem('width') as HTMLInputElement;
+              const widthEmu=Math.round(input.valueAsNumber*12700);
+              if (!Number.isFinite(widthEmu)||widthEmu<9525||widthEmu>18288000) return;
+              const changed=props.onApply({type:'update_image',targetId:picture.id,image:{action:'resize',widthEmu}});
+              setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex flex-col gap-1">그림 너비 (pt)
+                <input name="width" type="number" min=".75" max="1440" step="any" required
+                  value={((picture.picture?.widthEmu??9525)/12700).toFixed(2)} disabled={disabled()}
+                  class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>비율 유지 크기 변경</button>
+            </form>
+            </>
           }</Show>
         </div>
       </Show>
