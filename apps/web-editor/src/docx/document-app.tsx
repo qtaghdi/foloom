@@ -115,10 +115,16 @@ export function DocumentApp() {
     if (a < 0 || b < 0) return undefined;
     const forwards = a < b || a === b && selection.anchor.offset <= selection.focus.offset;
     const [start,end] = forwards ? [selection.anchor,selection.focus] : [selection.focus,selection.anchor];
-    const selected = target.runs.slice(Math.min(a,b),Math.max(a,b)+1);
-    if (start.offset !== 0 || end.offset !== selected.at(-1)?.text.length || !selected.every(run=>run.editable) ||
-        !selected.some(run=>run.text.trim())) return undefined;
-    return {startRunId:start.runId,endRunId:end.runId};
+    const selected = target.runs.slice(Math.min(a,b),Math.max(a,b)+1)
+      .map((run,index,runs)=>{
+        const startOffset=index===0?start.offset:0;
+        const endOffset=index===runs.length-1?end.offset:run.text.length;
+        return {run,startOffset,endOffset,text:run.text.slice(startOffset,endOffset)};
+      });
+    if (!selected.every(part=>part.run.editable) || !selected.some(part=>part.text.trim())) return undefined;
+    const parts=selected.filter(part=>part.text.length>0);
+    const first=parts[0]!,last=parts.at(-1)!;
+    return {startRunId:first.run.id,endRunId:last.run.id,startOffset:first.startOffset,endOffset:last.endOffset};
   };
   const imagePending = () => { state().snapshot; draftVersion(); return controller.pendingImage(); };
   const pictures = createMemo(() => {

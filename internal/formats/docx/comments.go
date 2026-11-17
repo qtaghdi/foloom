@@ -10,9 +10,11 @@ import (
 )
 
 type CommentEdit struct {
-	Text       string `json:"text"`
-	StartRunID string `json:"startRunId,omitempty"`
-	EndRunID   string `json:"endRunId,omitempty"`
+	Text        string `json:"text"`
+	StartRunID  string `json:"startRunId,omitempty"`
+	EndRunID    string `json:"endRunId,omitempty"`
+	StartOffset *int   `json:"startOffset,omitempty" jsonschema:"UTF-16 start in the first run, inclusive"`
+	EndOffset   *int   `json:"endOffset,omitempty" jsonschema:"UTF-16 end in the last run, exclusive"`
 }
 
 type ReviewComment struct {
@@ -127,6 +129,67 @@ func (p *documentPackage) projectComments(root *node, blocks []Block) []ReviewCo
 	return out
 }
 
+func commentByteOffset(text string, units int) (int, bool) {
+	for offset, r := range text {
+		if units == 0 {
+			return offset, true
+		}
+		units--
+		if r > 0xffff {
+			units--
+		}
+		if units < 0 {
+			return 0, false
+		}
+	}
+	return len(text), units == 0
+}
+
+func commentRunFragments(data []byte, t target, offsets []int, markers []string) (replacement, error) {
+	run := t.run
+	var body strings.Builder
+	last := 0
+	whole := offsets[0] == 0 && offsets[len(offsets)-1] == len(t.text)
+	if len(offsets) == 1 && (offsets[0] == 0 || offsets[0] == len(t.text)) {
+		if offsets[0] == 0 {
+			return replacement{run.start, run.start, []byte(markers[0])}, nil
+		}
+		return replacement{run.end, run.end, []byte(markers[0])}, nil
+	}
+	if whole {
+		body.WriteString(markers[0])
+		body.Write(data[run.start:run.end])
+		body.WriteString(markers[1])
+		return replacement{run.start, run.end, []byte(body.String())}, nil
+	}
+	text := run.child("t")
+	props := run.child("rPr")
+	if text == nil || len(text.children) != 0 || countChild(run, "t") != 1 || len(run.children) > 2 ||
+		len(run.children) == 2 && props == nil || !plainTextAttributes(text) || !onlyNamespaceAttributes(run) ||
+		strings.ContainsAny(t.text, "\n\t") || strings.Contains(string(data[run.start:run.end]), "<!--") {
+		return replacement{}, fmt.Errorf("DOCX comment boundary requires splittable plain text")
+	}
+	open, close := scopedOpening(run, data, false)
+	writeFragment := func(value string) {
+		if value == "" {
+			return
+		}
+		body.WriteString(open)
+		if props != nil {
+			body.Write(data[props.start:props.end])
+		}
+		body.WriteString(inlineXML(value))
+		body.WriteString(close)
+	}
+	for i, offset := range offsets {
+		writeFragment(t.text[last:offset])
+		body.WriteString(markers[i])
+		last = offset
+	}
+	writeFragment(t.text[last:])
+	return replacement{run.start, run.end, []byte(body.String())}, nil
+}
+
 func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, actor string, targets map[string]target, changes map[string][]byte) ([]replacement, error) {
 	paragraph := t.paragraph
 	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") || len(edit.Text) > 4000 ||
@@ -137,7 +200,10 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 	if props := paragraph.child("pPr"); props != nil {
 		first = props.end
 	}
-	if edit.StartRunID != "" || edit.EndRunID != "" {
+	var rangeStart, rangeEnd target
+	var startByte, endByte int
+	useOffsets := edit.StartOffset != nil || edit.EndOffset != nil
+	if useOffsets || edit.StartRunID != "" || edit.EndRunID != "" {
 		start, end := targets[edit.StartRunID], targets[edit.EndRunID]
 		if start.kind != "replace_run_text" || end.kind != "replace_run_text" ||
 			start.run == nil || end.run == nil || start.run.parent != paragraph ||
@@ -145,6 +211,19 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 			return nil, fmt.Errorf("DOCX comment range requires ordered runs in the target paragraph")
 		}
 		first, last = start.run.start, end.run.end
+		if useOffsets {
+			if edit.StartOffset == nil || edit.EndOffset == nil {
+				return nil, fmt.Errorf("DOCX comment requires both character offsets")
+			}
+			var okStart, okEnd bool
+			startByte, okStart = commentByteOffset(start.text, *edit.StartOffset)
+			endByte, okEnd = commentByteOffset(end.text, *edit.EndOffset)
+			if !okStart || !okEnd || startByte == len(start.text) || endByte == 0 ||
+				start.run == end.run && startByte >= endByte {
+				return nil, fmt.Errorf("invalid DOCX comment character range")
+			}
+			rangeStart, rangeEnd = start, end
+		}
 	}
 	filename, raw, comments, err := p.commentsPart(changes)
 	if err != nil {
@@ -226,5 +305,17 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 	changes[filename] = next
 	start := `<dwc:commentRangeStart xmlns:dwc="` + wordNS + `" dwc:id="` + id + `"/>`
 	end := `<dwc:commentRangeEnd xmlns:dwc="` + wordNS + `" dwc:id="` + id + `"/><dwc:r xmlns:dwc="` + wordNS + `"><dwc:commentReference dwc:id="` + id + `"/></dwc:r>`
+	if useOffsets {
+		if rangeStart.run == rangeEnd.run {
+			edit, err := commentRunFragments(p.document, rangeStart, []int{startByte, endByte}, []string{start, end})
+			return []replacement{edit}, err
+		}
+		first, err := commentRunFragments(p.document, rangeStart, []int{startByte}, []string{start})
+		if err != nil {
+			return nil, err
+		}
+		last, err := commentRunFragments(p.document, rangeEnd, []int{endByte}, []string{end})
+		return []replacement{first, last}, err
+	}
 	return []replacement{{first, first, []byte(start)}, {last, last, []byte(end)}}, nil
 }
