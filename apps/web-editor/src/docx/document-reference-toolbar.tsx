@@ -21,6 +21,9 @@ export function DocumentReferenceToolbar(props:{
   const selectedLink = () => props.links.find(link=>link.id===linkId());
   const [footnoteId,setFootnoteId]=createSignal('');
   const selectedFootnote = () => props.footnotes.find(note=>note.id===footnoteId());
+  const [editBookmark,setEditBookmark]=createSignal('');
+  const renameableBookmarks=()=>props.bookmarks.filter(item=>item.renameEditable);
+  const bookmarkToRename=()=>renameableBookmarks().find(item=>item.name===editBookmark());
   const [error,setError]=createSignal('');
   const disabled=()=>props.disabled||props.pending;
   const apply=()=>{
@@ -139,6 +142,39 @@ export function DocumentReferenceToolbar(props:{
                 const accepted=props.onApply({type:'update_reference',targetId:note.id,reference:{action:'delete_footnote'}});
                 setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
               }}>각주 삭제</button>
+            </form>
+          }</Show>
+        </div>
+      </Show>
+      <Show when={renameableBookmarks().length}>
+        <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
+          <select aria-label="이름을 바꿀 북마크" class="editor-select min-h-11 max-w-56"
+            value={bookmarkToRename()?.name??''} disabled={disabled()} onChange={event=>{setEditBookmark(event.currentTarget.value);setError('');}}>
+            <option value="">북마크 선택</option>
+            <For each={renameableBookmarks()}>{item=><option value={item.name}>{item.name}</option>}</For>
+          </select>
+          <Show when={bookmarkToRename()} keyed>{item=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if (disabled()) return;
+              const input=event.currentTarget.elements.namedItem('newBookmark') as HTMLInputElement;
+              const newBookmark=input.value.trim();
+              if (!/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(newBookmark)){
+                setError('북마크 이름은 영문자로 시작하는 영문자·숫자·밑줄 1~40자를 사용하세요.');return;
+              }
+              if (newBookmark===item.name) return;
+              if (props.bookmarks.some(other=>other.name!==item.name&&other.name.toLowerCase()===newBookmark.toLowerCase())){
+                setError('같은 이름의 북마크가 있습니다.');return;
+              }
+              const accepted=props.onApply({type:'update_reference',targetId:item.paragraphId,
+                reference:{action:'rename_bookmark',bookmark:item.name,newBookmark}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">새 북마크 이름
+                <input name="newBookmark" type="text" maxlength="40" required disabled={disabled()}
+                  value={item.name} class="min-h-11 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>북마크 이름 변경 적용</button>
             </form>
           }</Show>
         </div>

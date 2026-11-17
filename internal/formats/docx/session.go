@@ -396,6 +396,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if !ok || op.Reference == nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX reference operation")
 			}
+			if op.Reference.Action == "rename_bookmark" && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX bookmark rename must stand alone")
+			}
 			if bookmarks == nil {
 				index := readBookmarks(root)
 				bookmarks = &index
