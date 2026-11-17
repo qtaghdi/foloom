@@ -751,6 +751,12 @@ HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url
 거절합니다. 주소는 관계로만 저장하며 저장 과정에서 접속하지 않습니다.
 [Open XML 북마크 쌍](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.bookmarkstart)을 따릅니다.
 
+`페이지` 도구의 `북마크가 있는 문단 이동`을 열어 이동할 문단을 고른 뒤
+앞뒤 문단과 순서를 바꿀 수 있습니다. 해당 문단 안에 시작과 끝이 있는
+유일한 북마크와 문단 XML을 함께 옮깁니다. HTTP·MCP는 본문 문단 ID로
+`move_bookmark_up` 또는 `move_bookmark_down`을 적용합니다. 표·페이지·구역
+경계와 문단에 걸쳐 있는 북마크는 보호합니다.
+
 편집기의 `링크·북마크·각주`에서 편집 가능한 본문 문단을 골라 북마크, 웹 링크,
 북마크 링크를 추가합니다. 적용하고 저장한 뒤 내부 링크를 누르면 해당 본문
 문단으로 이동합니다. 웹 링크는 사용자가 선택할 때 별도 탭에서 열립니다.

@@ -159,9 +159,10 @@ func escapeText(s string) string {
 }
 
 type target struct {
-	paragraph, run *node
-	node           *node
-	text, kind     string
+	moveUp, moveDown *node
+	paragraph, run   *node
+	node             *node
+	text, kind       string
 }
 
 func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
@@ -209,6 +210,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 	anchors := paragraphAnchors(root)
 	targets := map[string]target{}
 	blocks := []Block{}
+	bodyParagraphs := map[*node]*Paragraph{}
 	unsupported := false
 	counter := 0
 	id := func() string {
@@ -399,6 +401,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		case child.is("p"):
 			p := paragraph(child, true, "replace_run_text")
 			blocks = append(blocks, Block{ID: p.ID, Type: "paragraph", Paragraph: &p})
+			bodyParagraphs[child] = &p
 		case child.is("tbl"):
 			block := Block{ID: id(), Type: "table", Rows: []Row{}}
 			_, block.TableEditable = simpleTable(child)
@@ -458,5 +461,6 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			return nil, nil, false, fmt.Errorf("DOCX inspection structure limit exceeded")
 		}
 	}
+	markBookmarkMoves(root, bodyParagraphs, protected, targets)
 	return blocks, targets, unsupported, nil
 }
