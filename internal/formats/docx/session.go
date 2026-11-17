@@ -408,7 +408,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Type == "update_boundary" {
 			key := "boundary:" + op.TargetID
 			target, ok := targets[op.TargetID]
-			if seen[key] || !ok || (target.kind != "replace_paragraphs" && (target.kind != "update_boundary" || op.Boundary != "page_before" && op.Boundary != "no_page_before")) || op.ExpectedText != "" || op.EndTargetID != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.Paragraphs != nil || op.Text != "" || op.StyleDefinition != nil {
+			supported := target.kind == "replace_paragraphs" ||
+				target.kind == "update_boundary" && (op.Boundary == "page_before" || op.Boundary == "no_page_before" || op.Boundary == "no_page_after") ||
+				target.kind == "update_trailing_boundary" && op.Boundary == "no_page_after"
+			if seen[key] || !ok || !supported || op.ExpectedText != "" || op.EndTargetID != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.Paragraphs != nil || op.Text != "" || op.StyleDefinition != nil {
 				return nil, fmt.Errorf("invalid or stale DOCX boundary target")
 			}
 			seen[key] = true
