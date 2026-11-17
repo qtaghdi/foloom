@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"path"
 	"strings"
@@ -182,13 +183,25 @@ func (p *documentPackage) serialize(document []byte) ([]byte, error) {
 	writer := zip.NewWriter(&b)
 	for _, part := range p.parts {
 		header := part.header
-		w, err := writer.CreateHeader(&header)
-		if err != nil {
-			return nil, err
-		}
 		data := part.data
 		if header.Name == "word/document.xml" {
 			data = document
+		}
+		var w io.Writer
+		var err error
+		if header.Method == zip.Store {
+			// LibreOffice Writer cannot reliably discover the end of stored data when the
+			// local header omits its size in favor of a trailing descriptor.
+			header.Flags &^= 1 << 3
+			header.CRC32 = crc32.ChecksumIEEE(data)
+			header.UncompressedSize64 = uint64(len(data))
+			header.CompressedSize64 = header.UncompressedSize64
+			w, err = writer.CreateRaw(&header)
+		} else {
+			w, err = writer.CreateHeader(&header)
+		}
+		if err != nil {
+			return nil, err
 		}
 		if _, err := w.Write(data); err != nil {
 			return nil, err
