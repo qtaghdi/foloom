@@ -258,7 +258,7 @@ export class DocumentController {
     if(!focus)return false;this.remember(before);this.view.render(this.preview(),focus);
     if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
   }
-  applyList(selection: TextSelection, list: ParagraphList | {kind:'bullet'|'decimal';start?:number}): boolean {
+  applyList(selection: TextSelection, list: ParagraphList | Omit<ListDefinition,'key'>): boolean {
     if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
     const before=this.checkpoint(selection);
     let reference:ParagraphList;

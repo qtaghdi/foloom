@@ -183,3 +183,44 @@ func TestImportedListRestartsOnlyAtConfiguredLevels(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateRomanListFormats(t *testing.T) {
+	for _, tc := range []struct{ kind, first, second string }{
+		{"upperRoman", "IV.", "V."}, {"lowerRoman", "iv.", "v."},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>second</w:t></w:r></w:p>`))
+			v := mustSnapshot(t, s)
+			before := fileBytes(t, filename)
+			var contents []ParagraphContent
+			for _, block := range v.Blocks {
+				p := block.Paragraph
+				contents = append(contents, ParagraphContent{SourceID: p.ID, Format: &ParagraphFormat{List: &ParagraphList{Key: "roman"}},
+					Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: p.Runs[0].Text}}})
+			}
+			batch := paragraphPlan(v, contents...)
+			list := &ListDefinition{Key: "roman", Kind: tc.kind, Start: 4000}
+			batch.Operations = append([]Operation{{Type: "define_list", ListDefinition: list}}, batch.Operations...)
+			if _, err := s.Apply(context.Background(), batch, "human"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
+				t.Fatal("out-of-range Roman start was committed")
+			}
+			list.Start = 4
+			if _, err := s.Apply(context.Background(), batch, "human"); err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := Open(context.Background(), filename)
+			if err != nil {
+				t.Fatal(err)
+			}
+			saved := mustSnapshot(t, reopened)
+			if saved.Blocks[0].Paragraph.ListLabel != tc.first || saved.Blocks[1].Paragraph.ListLabel != tc.second ||
+				saved.Lists[0].Levels[0].Kind != tc.kind {
+				t.Fatalf("native list definition did not survive reopening: %+v", saved.Lists)
+			}
+			historyRestore(t, reopened, "undo")
+			if !bytes.Equal(before, fileBytes(t, filename)) {
+				t.Fatal("undo changed original bytes")
+			}
+		})
+	}
+}

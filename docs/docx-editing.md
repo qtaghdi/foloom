@@ -524,6 +524,11 @@ numbering part와 사용자 정의 글머리를 보존합니다. 일부 고급 �
 따라 지정한 상위 단계에서 다시 시작하거나 번호를 계속 이어갑니다.
 [법률식 번호 지정](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.islegalnumberingstyle)이
 켜진 목록 단계는 해당 표시 문자열에 포함된 모든 번호를 십진수로 표시합니다.
+새 번호 목록을 만들기 전에 `목록 번호 형식`에서 일반 숫자 또는 대문자·소문자
+로마 숫자를 선택할 수 있습니다. `define_list`의 `kind`는 `decimal`,
+`upperRoman`, `lowerRoman` 또는 `bullet`을 사용합니다. 로마 숫자 목록은
+시작 값을 1~3,999 사이로 지정합니다.
+
 로마 숫자 목록은 1~3,999 범위의 대문자·소문자 번호를 표시합니다. 다른 미지원 형식은 형식 이름으로 표시합니다. 기존 공유 번호 정의 자체를
 다른 내용으로 덮어쓰는 UI는 제공하지 않습니다.
 
