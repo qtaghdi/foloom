@@ -16,7 +16,7 @@ import (
 	"github.com/qtaghdi/foloom/internal/formats/xlsx"
 )
 
-//go:embed static
+//go:embed static landing.html
 var staticFS embed.FS
 
 const (
@@ -125,6 +125,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /launch/{token}", s.launchBrowserSession)
 	s.mux.Handle("/mcp", s.requireBearer(s.mcpHandler()))
 	s.mux.HandleFunc("GET /{$}", s.index)
+	s.mux.HandleFunc("GET /about", serveLanding)
 	s.docxRoutes()
 	s.workspaceRoutes()
 	s.fileRoutes()
