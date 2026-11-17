@@ -95,7 +95,7 @@ func (p *documentPackage) addHyperlink(raw string, changes map[string][]byte) (s
 	for i := 1; used[id]; i++ {
 		id = "rIdFoloomLink" + strconv.Itoa(i)
 	}
-	xml := `<dwr:Relationship xmlns:dwr="` + packageRelNS + `" Id="` + id + `" Type="` + officeRelNS + `/hyperlink" Target="` + escapeText(raw) + `" TargetMode="External"/>`
+	xml := `<Relationship xmlns="` + packageRelNS + `" Id="` + id + `" Type="` + officeRelNS + `/hyperlink" Target="` + escapeText(raw) + `" TargetMode="External"/>`
 	rels, err = appendXMLChild(rels, xml)
 	if err != nil {
 		return "", err
