@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"strings"
 	"testing"
@@ -104,6 +105,42 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 	historyRestore(t, reopened, "undo")
 	if !bytes.Equal(beforeResize, fileBytes(t, path)) {
 		t.Fatal("undo did not restore the original picture size")
+	}
+	beforeReplace := fileBytes(t, path)
+	before = mustSnapshot(t, reopened)
+	var jpegBytes bytes.Buffer
+	if err := jpeg.Encode(&jpegBytes, image.NewRGBA(image.Rect(0, 0, 2, 4)), nil); err != nil {
+		t.Fatal(err)
+	}
+	replace := ImageEdit{Action: "replace", Base64: "c3Zn"}
+	batch = ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
+		{Type: "update_image", TargetID: before.Blocks[0].Paragraph.Runs[1].ID, Image: &replace},
+	}}
+	if _, err := reopened.Apply(ctx, batch, "human"); err == nil || !bytes.Equal(beforeReplace, fileBytes(t, path)) {
+		t.Fatal("invalid replacement was persisted")
+	}
+	replace.Base64 = base64.StdEncoding.EncodeToString(jpegBytes.Bytes())
+	replaced, err := reopened.Apply(ctx, batch, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacedRun := replaced.Blocks[0].Paragraph.Runs[1]
+	if replacedRun.Picture == nil || *replacedRun.Picture != *before.Blocks[0].Paragraph.Runs[1].Picture ||
+		reopened.pkg.relatedPart("rIdFoloomImage1", "image", nil) != media ||
+		!bytes.Equal(reopened.pkg.partData(media, nil), pngBytes.Bytes()) {
+		t.Fatal("image replacement changed picture geometry or its original media")
+	}
+	reopened, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, mime, err = reopened.Picture(ctx, mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].ID)
+	if err != nil || mime != "image/jpeg" || !bytes.Equal(payload, jpegBytes.Bytes()) {
+		t.Fatal("new picture could not be read after reopening")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(beforeReplace, fileBytes(t, path)) {
+		t.Fatal("undo did not restore the original picture")
 	}
 	beforeDelete := fileBytes(t, path)
 	before = mustSnapshot(t, reopened)

@@ -24,7 +24,7 @@ const (
 )
 
 type ImageEdit struct {
-	Action   string `json:"action" jsonschema:"insert, set_alt, delete, or resize"`
+	Action   string `json:"action" jsonschema:"insert, replace, set_alt, delete, or resize"`
 	Base64   string `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
 	Alt      string `json:"alt,omitempty"`
 	WidthEMU int    `json:"widthEmu,omitempty"`
@@ -76,21 +76,12 @@ func (p *documentPackage) availableDrawingID() (uint32, error) {
 func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageEdit, drawingID uint32, changes map[string][]byte) (replacement, error) {
 	paragraph := target.paragraph
 	if edit.Action != "insert" || target.kind != "replace_paragraphs" || paragraph == nil ||
-		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) ||
-		len(edit.Base64) > base64.StdEncoding.EncodedLen(maxImageWriteBytes) {
+		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture insertion")
 	}
-	raw, err := base64.StdEncoding.Strict().DecodeString(edit.Base64)
-	if err != nil {
-		return replacement{}, fmt.Errorf("invalid DOCX picture data")
-	}
-	config, kind, err := imageConfig(raw, maxImageWriteBytes)
+	raw, config, kind, err := decodePicture(edit.Base64)
 	if err != nil {
 		return replacement{}, err
-	}
-	// Reject truncated uploads before allocating a package relationship.
-	if _, _, err = image.Decode(bytes.NewReader(raw)); err != nil {
-		return replacement{}, fmt.Errorf("invalid DOCX picture payload")
 	}
 	width := edit.WidthEMU
 	if width == 0 {
@@ -119,8 +110,27 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 	return replacement{paragraph.endStart, paragraph.endStart, []byte(drawing)}, nil
 }
 
-func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit) (replacement, error) {
-	if t.kind != "picture" || t.run == nil || edit.Base64 != "" || edit.Action != "resize" && edit.WidthEMU != 0 ||
+func decodePicture(encoded string) ([]byte, image.Config, string, error) {
+	if len(encoded) > base64.StdEncoding.EncodedLen(maxImageWriteBytes) {
+		return nil, image.Config{}, "", fmt.Errorf("DOCX picture exceeds the encoded size limit")
+	}
+	raw, err := base64.StdEncoding.Strict().DecodeString(encoded)
+	if err != nil {
+		return nil, image.Config{}, "", fmt.Errorf("invalid DOCX picture data")
+	}
+	config, kind, err := imageConfig(raw, maxImageWriteBytes)
+	if err != nil {
+		return nil, image.Config{}, "", err
+	}
+	// Reject truncated uploads before allocating a package relationship.
+	if _, _, err = image.Decode(bytes.NewReader(raw)); err != nil {
+		return nil, image.Config{}, "", fmt.Errorf("invalid DOCX picture payload")
+	}
+	return raw, config, kind, nil
+}
+
+func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, changes map[string][]byte) (replacement, error) {
+	if t.kind != "picture" || t.run == nil || edit.Action != "replace" && edit.Base64 != "" || edit.Action != "resize" && edit.WidthEMU != 0 ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture update")
 	}
@@ -149,6 +159,32 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit) (re
 	part := p.picturePartMap()[relationship]
 	if _, _, err := imageConfig(p.partData(part, nil), maxImageReadBytes); err != nil {
 		return replacement{}, err
+	}
+	if edit.Action == "replace" {
+		graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+		picture := childNS(graphic, pictureNS, "pic")
+		fill := childNS(picture, pictureNS, "blipFill")
+		blip := childNS(fill, drawingNS, "blip")
+		if edit.Alt != "" || childNS(fill, drawingNS, "srcRect") != nil ||
+			blip == nil || strings.Contains(string(p.document[blip.start:blip.end]), "<!--") {
+			return replacement{}, fmt.Errorf("protected DOCX picture cannot be replaced")
+		}
+		data, _, kind, err := decodePicture(edit.Base64)
+		if err != nil {
+			return replacement{}, err
+		}
+		filename := p.availablePart(changes, "word/media/foloom-image", "."+kind)
+		// Existing drawings can share this relationship, so replace only this blip.
+		relation, err := p.addRelatedPart(changes, filename, "image", "image/"+kind, "rIdFoloomReplacement")
+		if err != nil {
+			return replacement{}, err
+		}
+		raw, err := patchScalarProperty(blip, p.document, "blip", officeRelNS, map[string]string{"embed": relation}, nil)
+		if err != nil {
+			return replacement{}, err
+		}
+		changes[filename] = data
+		return replacement{blip.start, blip.end, []byte(raw)}, nil
 	}
 	if edit.Action == "resize" {
 		if edit.Alt != "" {

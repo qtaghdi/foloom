@@ -17,20 +17,26 @@ export function DocumentImageToolbar(props: {
   const selectedPicture = () => props.pictures.find(picture => picture.id === pictureId());
   const disabled=()=>props.disabled||props.pending||reading();
   let picker!:HTMLInputElement;
-  const apply=async()=>{
+  const apply=async(replace:boolean)=>{
     const target=props.target,fileToRead=file();
-    if(!target||!fileToRead||disabled())return;
+    const targetId=replace ? selectedPicture()?.id : target?.id;
+    if(!targetId||!fileToRead||disabled())return;
     if(fileToRead.size===0||fileToRead.size>maxBytes){setError('512 KiB 이하 PNG 또는 JPEG를 선택하세요.');return;}
     setReading(true);
     try{
       const bytes=new Uint8Array(await fileToRead.arrayBuffer());
       const png=bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71;
       const jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
-      if(!png&&!jpeg){setError('PNG 또는 JPEG 그림만 삽입할 수 있습니다.');return;}
-      if(props.target?.id!==target.id){setError('선택한 문단이 바뀌었습니다. 문단을 다시 선택하세요.');return;}
+      if(!png&&!jpeg){setError('PNG 또는 JPEG 그림을 선택하세요.');return;}
+      if((replace ? selectedPicture()?.id : props.target?.id)!==targetId){
+        setError('선택이 바뀌었습니다. 편집할 대상을 다시 선택하세요.');return;
+      }
       let binary='';
       for(let start=0;start<bytes.length;start+=8192)binary+=String.fromCharCode(...bytes.subarray(start,start+8192));
-      const accepted=props.onApply({type:'update_image',targetId:target.id,image:{action:'insert',base64:btoa(binary),alt:alt()}});
+      const base64=btoa(binary);
+      const accepted=props.onApply({type:'update_image',targetId,image:replace
+        ? {action:'replace',base64}
+        : {action:'insert',base64,alt:alt()}});
       setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
       if(accepted){setFile(undefined);setAlt('');picker.value='';}
     }catch{setError('그림 파일을 읽지 못했습니다.');}
@@ -48,8 +54,9 @@ export function DocumentImageToolbar(props: {
         <input type="text" maxlength="256" disabled={disabled()} value={alt()} class="min-h-11 rounded border border-slate-300 px-2"
           onInput={event=>setAlt(event.currentTarget.value)}/>
       </label>
-      <button type="button" class={buttonClass} disabled={disabled()||!file()||!props.target} onClick={()=>void apply()}>그림 적용</button>
-      <p class="basis-full text-slate-600">{props.pending?'그림을 저장하거나 실행 취소하세요.':'512 KiB 이하 그림을 선택한 문단의 끝에 삽입합니다.'}</p>
+      <button type="button" class={buttonClass} disabled={disabled()||!file()||!props.target} onClick={()=>void apply(false)}>그림 삽입</button>
+      <button type="button" class={buttonClass} disabled={disabled()||!file()||!selectedPicture()} onClick={()=>void apply(true)}>선택한 그림 교체</button>
+      <p class="basis-full text-slate-600">{props.pending?'그림을 저장하거나 실행 취소하세요.':'512 KiB 이하 파일을 문단 끝에 삽입하거나 기존 그림과 교체합니다.'}</p>
       <Show when={props.pictures.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
           <label class="flex min-w-0 flex-col gap-1">기존 그림
