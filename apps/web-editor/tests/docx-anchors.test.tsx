@@ -1,9 +1,9 @@
 import { expect,it } from 'vitest';
-import { compareParagraphs } from '../src/docx/paragraphs';
+import { compareParagraphs, restoreAnchoredPoint } from '../src/docx/paragraphs';
 import type { Snapshot } from '../src/docx/contracts';
 
 function block(id:string,text:string,anchor?:string):Snapshot['blocks'][number]{
-  return {type:'paragraph',id,paragraph:{id,anchor,runs:[{id:id+'-r',text,editable:true,bold:false,italic:false}]}};
+  return {type:'paragraph',id,paragraph:{id,anchor,structureEditable:true,runs:[{id:id+'-r',text,editable:true,bold:false,italic:false}]}};
 }
 const original:Snapshot={id:'document',name:'docx',revision:1,sequence:0,warnings:[],
   blocks:[block('a','same','00000001'),block('b','original','00000002'),block('plain','ambiguous')]};
@@ -21,4 +21,11 @@ it('uses positions only for a server-declared text-only commit',()=>{
   const next={...original,revision:2,blocks:[...original.blocks.slice(0,2),block('plain2','text edit')]};
   expect(compareParagraphs(original,next)).toEqual([]);
   expect(compareParagraphs(original,next,true)).toMatchObject([{key:'2',before:'ambiguous',after:'text edit'}]);
+});
+
+it('restores a point in the same paragraph after history changes its position',()=>{
+  const next={...original,revision:2,blocks:[block('b2','short','00000002'),block('a2','same','00000001')]};
+  expect(restoreAnchoredPoint(original,next,{runId:'b-r',offset:7})).toEqual({runId:'b2-r',offset:5});
+  expect(restoreAnchoredPoint(original,{...next,blocks:next.blocks.slice(1)},{runId:'b-r',offset:3})).toBeNull();
+  expect(restoreAnchoredPoint(original,next,{runId:'plain-r',offset:0})).toBeUndefined();
 });

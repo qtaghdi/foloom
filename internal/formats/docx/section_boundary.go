@@ -15,6 +15,20 @@ func boundaryReplacements(root *node, data []byte, session string, revision uint
 		return nil, fmt.Errorf("tracked DOCX paragraph boundaries are protected")
 	}
 	switch mode {
+	case "remove_section":
+		closing := props.child("sectPr")
+		if closing == nil || sectionChildCount(body, "sectPr") > 1 ||
+			strings.Contains(string(data[closing.start:closing.end]), "<!--") {
+			return nil, fmt.Errorf("DOCX section boundary is unavailable")
+		}
+		sections := inspectSections(root, session, revision)
+		for i, section := range sections[:len(sections)-1] {
+			next := sections[i+1]
+			if section.props == closing && section.info.Editable && next.info.Editable && next.info.StartBlock <= next.info.EndBlock {
+				return []replacement{{start: closing.start, end: closing.end}}, nil
+			}
+		}
+		return nil, fmt.Errorf("tracked, ambiguous or final DOCX section boundary is protected")
 	case "no_page_after":
 		trailing := trailingPageBreak(p)
 		if trailing == nil || len(trailing.children) != 0 || strings.TrimSpace(trailing.text.String()) != "" ||
