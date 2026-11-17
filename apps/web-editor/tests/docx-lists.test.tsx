@@ -63,16 +63,18 @@ it('continues existing numbering through table cells and leaves unsupported form
  expect(result.blocks[1]?.type==='table'&&result.blocks[1].rows[0]?.cells[0]?.paragraphs[0]?.listLabel).toBe('3.');
 });
 
-it('keeps Roman list labels during draft preview', () => {
+it('keeps Roman and legal list labels during draft preview', () => {
   const numbered=structuredClone(base);
   numbered.lists=[{id:7,levels:[
     {level:0,kind:'upperRoman',text:'%1.',start:4},
     {level:1,kind:'lowerRoman',text:'%1.%2.',start:9},
+    {level:2,kind:'lowerRoman',text:'%1.%2.%3.',start:2,legal:true},
   ]}];
   const first=numbered.blocks[0];
   if (first?.type!=='paragraph') throw new Error('paragraph fixture missing');
   first.paragraph.list={id:7,level:0};
   numbered.blocks.push({id:'next',type:'paragraph',paragraph:{id:'child',runs:[],list:{id:7,level:1}}});
+  numbered.blocks.push({id:'legal',type:'paragraph',paragraph:{id:'grandchild',runs:[],list:{id:7,level:2}}});
   const preview=previewLists(numbered);
-  expect(preview.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph.listLabel]:[])).toEqual(['IV.','IV.ix.']);
+  expect(preview.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph.listLabel]:[])).toEqual(['IV.','IV.ix.','4.9.2.']);
 });

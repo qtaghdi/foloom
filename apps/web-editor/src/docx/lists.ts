@@ -39,7 +39,7 @@ export function previewLists(snapshot: Snapshot, drafts: ListDefinition[] = []):
     let supported=true;
     const label=definition.text.replace(/%([1-9])/g, (_match,n:string)=>{
       const i=Number(n)-1,d=levels?.find(l=>l.level===i);
-      const formatted=formatListNumber(values[i]??Math.max(1,d?.start??1),d?.kind);
+      const formatted=formatListNumber(values[i]??Math.max(1,d?.start??1),definition.legal?'decimal':d?.kind);
       if (formatted===undefined) supported=false;
       return formatted??'';
     });

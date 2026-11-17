@@ -131,8 +131,8 @@ func TestListRemovalOverridesStyleWithoutDiscardingRunProperties(t *testing.T) {
 	}
 }
 
-func TestRomanListLabelsUseEachLevelsNumberFormat(t *testing.T) {
-	root, err := parseXML([]byte(`<w:numbering xmlns:w="` + wordNS + `"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="4"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl><w:lvl w:ilvl="1"><w:start w:val="9"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%1.%2."/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`))
+func TestImportedListLabelsUseEachLevelsNumberFormat(t *testing.T) {
+	root, err := parseXML([]byte(`<w:numbering xmlns:w="` + wordNS + `"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="4"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl><w:lvl w:ilvl="1"><w:start w:val="9"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%1.%2."/></w:lvl><w:lvl w:ilvl="2"><w:start w:val="2"/><w:numFmt w:val="lowerRoman"/><w:isLgl/><w:lvlText w:val="%1.%2.%3."/></w:lvl><w:lvl w:ilvl="3"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:isLgl w:val="0"/><w:lvlText w:val="%1.%4."/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,9 +140,15 @@ func TestRomanListLabelsUseEachLevelsNumberFormat(t *testing.T) {
 		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 0}}},
 		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 1}}},
 		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 1}}},
+		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 2}}},
+		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 3}}},
 	}
-	applyListLabels(blocks, readNumbering(root))
-	for i, want := range []string{"IV.", "IV.ix.", "IV.x."} {
+	catalog := readNumbering(root)
+	if metadata := listCatalog(catalog); !metadata[0].Levels[2].Legal || metadata[0].Levels[3].Legal {
+		t.Fatal("legal numbering settings not exposed")
+	}
+	applyListLabels(blocks, catalog)
+	for i, want := range []string{"IV.", "IV.ix.", "IV.x.", "4.10.2.", "IV.i."} {
 		if got := blocks[i].Paragraph.ListLabel; got != want {
 			t.Fatalf("label %d = %q, want %q", i, got, want)
 		}

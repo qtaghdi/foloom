@@ -16,6 +16,7 @@ type listLevel struct {
 	kind  string
 	text  string
 	start int
+	legal bool
 }
 
 type numberingCatalog struct {
@@ -33,7 +34,8 @@ func listInt(raw string, fallback int) int {
 
 func readListLevel(n *node) listLevel {
 	start := listInt(n.child("start").attr("val"), 1)
-	return listLevel{kind: n.child("numFmt").attr("val"), text: n.child("lvlText").attr("val"), start: start}
+	legal := n.child("isLgl")
+	return listLevel{kind: n.child("numFmt").attr("val"), text: n.child("lvlText").attr("val"), start: start, legal: legal != nil && onOff(legal.attr("val"), true)}
 }
 
 func readNumbering(root *node) numberingCatalog {
@@ -289,7 +291,7 @@ func listCatalog(c numberingCatalog) []ListInfo {
 		info := ListInfo{ID: id, Levels: []ListLevelInfo{}}
 		for level := 0; level <= 8; level++ {
 			if definition, ok := c.levels[id][level]; ok {
-				info.Levels = append(info.Levels, ListLevelInfo{Level: level, Kind: definition.kind, Text: definition.text, Start: definition.start})
+				info.Levels = append(info.Levels, ListLevelInfo{Level: level, Kind: definition.kind, Text: definition.text, Start: definition.start, Legal: definition.legal})
 			}
 		}
 		result = append(result, info)
@@ -355,6 +357,9 @@ func applyListLabels(blocks []Block, c numberingCatalog) {
 				continue
 			}
 			format := c.levels[id][i].kind
+			if definition.legal {
+				format = "decimal"
+			}
 			n := values[i]
 			if n == 0 {
 				n = max(1, c.levels[id][i].start)
