@@ -24,8 +24,8 @@ const (
 )
 
 type ImageEdit struct {
-	Action   string `json:"action" jsonschema:"insert"`
-	Base64   string `json:"base64" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
+	Action   string `json:"action" jsonschema:"insert or set_alt"`
+	Base64   string `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
 	Alt      string `json:"alt,omitempty"`
 	WidthEMU int    `json:"widthEmu,omitempty"`
 }
@@ -117,6 +117,44 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 		return replacement{paragraph.start, paragraph.end, []byte(open + drawing + close)}, nil
 	}
 	return replacement{paragraph.endStart, paragraph.endStart, []byte(drawing)}, nil
+}
+
+func (p *documentPackage) pictureAltReplacement(t target, edit ImageEdit) (replacement, error) {
+	if t.kind != "picture" || t.run == nil || edit.Base64 != "" || edit.WidthEMU != 0 ||
+		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
+		return replacement{}, fmt.Errorf("invalid DOCX picture description")
+	}
+	for parent := t.run.parent; parent != nil; parent = parent.parent {
+		if parent.is("ins") || parent.is("del") || parent.is("moveFrom") || parent.is("moveTo") {
+			return replacement{}, fmt.Errorf("tracked DOCX pictures are protected")
+		}
+	}
+	info, relationship := inlinePictureInfo(t.run)
+	inline := childNS(t.run.child("drawing"), drawingWordNS, "inline")
+	if info == nil || inline == nil {
+		return replacement{}, fmt.Errorf("DOCX picture description requires a supported inline picture")
+	}
+	var props *node
+	for _, child := range inline.children {
+		if child.name.Space == drawingWordNS && child.name.Local == "docPr" {
+			if props != nil {
+				return replacement{}, fmt.Errorf("ambiguous DOCX picture properties")
+			}
+			props = child
+		}
+	}
+	if props == nil {
+		return replacement{}, fmt.Errorf("DOCX picture properties are unavailable")
+	}
+	part := p.picturePartMap()[relationship]
+	if _, _, err := imageConfig(p.partData(part, nil), maxImageReadBytes); err != nil {
+		return replacement{}, err
+	}
+	raw, err := patchScalarProperty(props, p.document, "docPr", "", map[string]string{"descr": edit.Alt}, nil)
+	if err != nil {
+		return replacement{}, err
+	}
+	return replacement{props.start, props.end, []byte(raw)}, nil
 }
 
 func inlinePicture(id, relationship, alt string, width, height int) string {

@@ -648,10 +648,15 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 그림은 새로운 media part와 관계를 받습니다. 기존 media는 덮어쓰지
 않습니다. [Open XML 인라인 그림 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-picture-into-a-word-processing-document)를 따릅니다.
 
-브라우저의 `그림 삽입`에서 로컬 파일과 대체 텍스트를 선택하고 적용한 뒤
+브라우저의 `그림 편집`에서 로컬 파일과 대체 텍스트를 선택하고 적용한 뒤
 저장합니다. 저장된 PNG·JPEG는 문서 세션과 현재 리비전에 연결된 이미지
 진입점으로 표시합니다. HTTP는 외부 관계, SVG, 미지원 형식 또는 임의 패키지
 경로를 제공하지 않습니다. 떠 있는 그림과 특수 배치의 원본은 유지합니다.
+
+같은 도구에서 기존 인라인 PNG·JPEG를 선택하고 대체 텍스트를 바꾸거나
+비운 뒤 저장할 수 있습니다. HTTP와 MCP는 현재 리비전의 그림 run ID와
+`image: { action: "set_alt", alt }`를 사용합니다. 그림 파일·관계·크기·배치를
+유지합니다.
 
 ### 인쇄와 PDF 저장
 

@@ -29,6 +29,16 @@ type historyInput struct {
 	Direction    string `json:"direction,omitempty" jsonschema:"History direction: undo or redo"`
 }
 
+func serveLanding(w http.ResponseWriter, _ *http.Request) {
+	body, err := staticFS.ReadFile("landing.html")
+	if err != nil {
+		http.Error(w, "UI unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(body)
+}
+
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	if token := r.URL.Query().Get("token"); token != "" {
 		if !tokenMatches(token, s.browserToken) {
