@@ -296,8 +296,32 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	textBytes := 0
 	structuralBytes := 0
 	var bookmarks *bookmarkIndex
+	var moveTargets map[string]target
 	referenceCount := 0
 	for _, op := range input.Operations {
+		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" {
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid DOCX bookmark move fields")
+			}
+			if moveTargets == nil {
+				_, moveTargets, _, err = inspectDocument(root, s.id, s.revision, s.pkg.styles)
+				if err != nil {
+					return nil, err
+				}
+			}
+			edit, err := moveBookmarkedParagraph(s.pkg.document, moveTargets[op.TargetID], op.Type)
+			if err != nil {
+				return nil, err
+			}
+			structuralBytes += len(edit.data)
+			if structuralBytes > maxPartBytes {
+				return nil, fmt.Errorf("DOCX batch replacement XML exceeds 16 MiB limit")
+			}
+			edits = append(edits, edit)
+			continue
+		}
 		if op.Type == "update_table" {
 			key := "table:" + op.TargetID
 			t, ok := targets[op.TargetID]

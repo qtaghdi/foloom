@@ -10,6 +10,10 @@ import (
 // opaque anchors, section boundaries or extension metadata requires a contract
 // that the current source-reference plan does not yet provide.
 func structuralParagraph(p *node, data []byte) bool {
+	return structuralParagraphContents(p, data, false)
+}
+
+func structuralParagraphContents(p *node, data []byte, allowBookmarks bool) bool {
 	if strings.Contains(string(data[p.start:p.end]), "<!--") {
 		return false
 	}
@@ -72,7 +76,7 @@ func structuralParagraph(p *node, data []byte) bool {
 					return false
 				}
 			}
-		} else if !child.is("r") {
+		} else if !child.is("r") && !(allowBookmarks && (child.is("bookmarkStart") || child.is("bookmarkEnd"))) {
 			return false
 		}
 		if child.is("r") {
