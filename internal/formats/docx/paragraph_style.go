@@ -77,6 +77,14 @@ func patchScalarProperty(n *node, data []byte, name, namespace string, values ma
 		}
 		opening, closing = scopedOpening(n, data, false)
 	}
+	opening, err := patchOpeningAttributes(opening, namespace, values, remove)
+	if err != nil {
+		return "", err
+	}
+	return opening + closing, nil
+}
+
+func patchOpeningAttributes(opening, namespace string, values map[string]string, remove []string) (string, error) {
 	token, err := xml.NewDecoder(strings.NewReader(opening)).RawToken()
 	if err != nil {
 		return "", err
@@ -94,7 +102,7 @@ func patchScalarProperty(n *node, data []byte, name, namespace string, values ma
 		}
 	}
 	prefix := "dwf"
-	for scope[prefix] != "" && scope[prefix] != wordNS {
+	for scope[prefix] != "" && scope[prefix] != namespace {
 		prefix += "f"
 	}
 	qualified := func(n xml.Name) string {
@@ -134,7 +142,7 @@ func patchScalarProperty(n *node, data []byte, name, namespace string, values ma
 	for _, k := range keys {
 		out.WriteString(" " + prefix + k + `="` + escapeText(values[k]) + `"`)
 	}
-	out.WriteString(">" + closing)
+	out.WriteString(">")
 	return out.String(), nil
 }
 func paragraphProperties(props *node, data []byte, f *ParagraphFormat) (string, error) {
