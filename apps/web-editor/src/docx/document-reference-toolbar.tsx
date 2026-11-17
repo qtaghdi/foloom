@@ -12,13 +12,15 @@ function safeWebAddress(address:string):boolean {
 }
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;links:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;links:Run[];footnotes:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
   const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'footnote'>('bookmark');
   const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
   const [linkId,setLinkId]=createSignal('');
   const selectedLink = () => props.links.find(link=>link.id===linkId());
+  const [footnoteId,setFootnoteId]=createSignal('');
+  const selectedFootnote = () => props.footnotes.find(note=>note.id===footnoteId());
   const [error,setError]=createSignal('');
   const disabled=()=>props.disabled||props.pending;
   const apply=()=>{
@@ -107,6 +109,34 @@ export function DocumentReferenceToolbar(props:{
               setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
             }}>링크 해제</button>
           </>}</Show>
+        </div>
+      </Show>
+      <Show when={props.footnotes.length}>
+        <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
+          <label class="flex min-w-0 flex-col gap-1">기존 각주
+            <select class="editor-select min-h-11 max-w-56" disabled={disabled()} value={selectedFootnote()?.id??''}
+              onChange={event=>{setFootnoteId(event.currentTarget.value);setError('');}}>
+              <option value="">각주 선택</option>
+              <For each={props.footnotes}>{note=><option value={note.id}>{note.object?.text?.slice(0,60)||'각주'}</option>}</For>
+            </select>
+          </label>
+          <Show when={selectedFootnote()} keyed>{note=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if (disabled()) return;
+              const input=event.currentTarget.elements.namedItem('content') as HTMLInputElement;
+              if(!input.value.trim()){setError('각주 내용을 입력하세요.');return;}
+              const accepted=props.onApply({type:'update_reference',targetId:note.id,
+                reference:{action:'set_footnote_text',text:input.value}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">기존 각주 내용
+                <input name="content" type="text" required maxlength="256" disabled={disabled()}
+                  value={note.object?.text??''} class="min-h-11 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>각주 변경 적용</button>
+            </form>
+          }</Show>
         </div>
       </Show>
       <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
