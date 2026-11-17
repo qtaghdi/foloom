@@ -1,17 +1,20 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
-import type { ImageOperation, Paragraph } from './contracts';
+import type { ImageOperation, Paragraph, Run } from './contracts';
 
 const maxBytes = 512*1024;
 
 export function DocumentImageToolbar(props: {
   target?:Paragraph;
+  pictures: Run[];
   disabled:boolean;
   pending:boolean;
   onApply:(operation:ImageOperation)=>boolean;
 }) {
   const [file,setFile]=createSignal<File>(),[alt,setAlt]=createSignal('');
   const [reading,setReading]=createSignal(false),[error,setError]=createSignal('');
+  const [pictureId,setPictureId] = createSignal('');
+  const selectedPicture = () => props.pictures.find(picture => picture.id === pictureId());
   const disabled=()=>props.disabled||props.pending||reading();
   let picker!:HTMLInputElement;
   const apply=async()=>{
@@ -34,7 +37,7 @@ export function DocumentImageToolbar(props: {
     finally{setReading(false);}
   };
   return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
-    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">그림 삽입</summary>
+    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">그림 편집</summary>
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <label class="flex min-w-0 flex-col gap-1">PNG 또는 JPEG
         <input ref={picker} type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" disabled={disabled()}
@@ -47,6 +50,34 @@ export function DocumentImageToolbar(props: {
       </label>
       <button type="button" class={buttonClass} disabled={disabled()||!file()||!props.target} onClick={()=>void apply()}>그림 적용</button>
       <p class="basis-full text-slate-600">{props.pending?'그림을 저장하거나 실행 취소하세요.':'512 KiB 이하 그림을 선택한 문단의 끝에 삽입합니다.'}</p>
+      <Show when={props.pictures.length}>
+        <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
+          <label class="flex min-w-0 flex-col gap-1">기존 그림
+            <select class="editor-select min-h-11 max-w-64" disabled={disabled()} value={selectedPicture()?.id ?? ''}
+              onChange={event=>{setPictureId(event.currentTarget.value);setError('');}}>
+              <option value="">그림 선택</option>
+              <For each={props.pictures}>{(picture,index)=>
+                <option value={picture.id}>그림 {index()+1}{picture.picture?.alt ? ` · ${picture.picture.alt.slice(0,60)}` : ''}</option>
+              }</For>
+            </select>
+          </label>
+          <Show when={selectedPicture()} keyed>{picture=>
+            <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if (disabled()) return;
+              const input = event.currentTarget.elements.namedItem('description') as HTMLInputElement;
+              const changed = props.onApply({type:'update_image',targetId:picture.id,image:{action:'set_alt',alt:input.value}});
+              setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">기존 그림 대체 텍스트
+                <input name="description" type="text" maxlength="1024" value={picture.picture?.alt ?? ''}
+                  class="min-h-11 max-w-full rounded border border-slate-300 px-2" disabled={disabled()}/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>대체 텍스트 적용</button>
+            </form>
+          }</Show>
+        </div>
+      </Show>
       <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
     </div>
   </details>;

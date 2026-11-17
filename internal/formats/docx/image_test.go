@@ -53,9 +53,45 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 	if media == "" || !bytes.Equal(s.pkg.partData(media, nil), pngBytes.Bytes()) || s.pkg.stylesPath == "" {
 		t.Fatal("new image or same-batch style relationship lost")
 	}
+	inserted := fileBytes(t, path)
+	priorParts := s.pkg.parts
+	alt := ImageEdit{Action: "set_alt", Alt: `대체 & "설명"`}
+	update := ApplyInput{SessionID: saved.ID, BaseRevision: saved.Revision, Operations: []Operation{
+		{Type: "update_image", TargetID: pictureRun.ID, Image: &alt},
+	}}
+	if _, err := s.Apply(ctx, ApplyInput{SessionID: saved.ID, BaseRevision: saved.Revision, Operations: append(update.Operations, update.Operations[0])}, "human"); err == nil || !bytes.Equal(inserted, fileBytes(t, path)) {
+		t.Fatal("duplicate description edits changed the document")
+	}
+	updated, err := s.Apply(ctx, update, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := updated.Blocks[0].Paragraph.Runs[1].Picture
+	if info == nil || info.Alt != alt.Alt || info.WidthEMU != pictureRun.Picture.WidthEMU || info.HeightEMU != pictureRun.Picture.HeightEMU {
+		t.Fatalf("description or dimensions changed unexpectedly: %+v", info)
+	}
+	for _, part := range priorParts {
+		if part.header.Name != "word/document.xml" && !bytes.Equal(part.data, s.pkg.partData(part.header.Name, nil)) {
+			t.Fatalf("description edit changed %s", part.header.Name)
+		}
+	}
+	alt.Alt = ""
+	update.BaseRevision = updated.Revision
+	update.Operations[0].TargetID = updated.Blocks[0].Paragraph.Runs[1].ID
+	if _, err := s.Apply(ctx, update, "human"); err != nil {
+		t.Fatal(err)
+	}
 	reopened, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if info := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Picture; info == nil || info.Alt != "" {
+		t.Fatalf("cleared description was not preserved: %+v", info)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(inserted, fileBytes(t, path)) {
+		t.Fatal("undo of description changes did not restore the inserted picture")
 	}
 	historyRestore(t, reopened, "undo")
 	if !bytes.Equal(original, fileBytes(t, path)) {

@@ -103,6 +103,10 @@ export function DocumentApp() {
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
   const imagePending = () => { state().snapshot; draftVersion(); return controller.pendingImage(); };
+  const pictures = createMemo(() => {
+    const snapshot = state().snapshot;
+    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs.filter(run => run.picture?.preview)) : [];
+  });
   const imageParagraph = () => {
     const blocks = state().snapshot?.blocks??[];
     const paragraphs = blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph]:block.rows.flatMap(row=>row.cells.flatMap(cell=>cell.paragraphs)))
@@ -342,7 +346,7 @@ export function DocumentApp() {
     <DocumentTabsToolbar formats={selectedParagraphFormats()} disabled={!selectedStyles().length||state().composing||state().saving||state().loading||Boolean(state().error)} onFormat={applyParagraphFormat} onInsert={()=>{const selection=formattingSelection();if(selection&&controller.replaceSelection(selection,'\t',true))setDraftVersion(v=>v+1);}}/>
     </div>
     <div id="docx-tools-insert" hidden={toolGroup()!=='insert'}>
-    <DocumentImageToolbar target={imageParagraph()} pending={imagePending()}
+    <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentReferenceToolbar target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
