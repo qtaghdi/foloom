@@ -244,7 +244,12 @@ func (p *documentPackage) projectNotes(kind string, blocks []Block, targets map[
 			}
 		}
 		textByID[id] = reviewText(strings.Join(lines, "\n"), 1024)
-		editableByID[id] = kind == "footnote" && footnoteTextTarget(note, notes.source) != nil
+		if kind == "endnote" {
+			nodes, _ := plainEndnoteText(note, notes.source)
+			editableByID[id] = len(nodes) != 0
+		} else {
+			editableByID[id] = footnoteTextTarget(note, notes.source) != nil
+		}
 	}
 	for _, block := range blocks {
 		if block.Paragraph == nil {
