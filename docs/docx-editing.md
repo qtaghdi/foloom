@@ -864,8 +864,15 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 일부 | 미지원 | Word |
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
-| 콘텐츠 컨트롤 | 유형, 지원되는 인라인 텍스트 일부 | 미지원 | Word |
+| 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
+
+삽입의 `콘텐츠 컨트롤 편집`에서 일반 본문 평문 컨트롤을 골라 텍스트를
+바꿉니다. HTTP·MCP는 `update_control_text`에 컨트롤 run ID, 현재 문자열
+`expectedText`와 새 `text`를 보냅니다. 컨트롤 ID와 원본 속성·서식은 유지합니다.
+내용 잠금, 데이터 연결, 자리표시자와 복합 컨트롤은 보호합니다.
+[Word 콘텐츠 컨트롤 구조](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.sdtcontentrun)를
+사용합니다.
 
 인식하는 인라인 개체는 본문에 표시하고 원본 XML과 관련 part를 보존합니다.
 텍스트 상자와 컨트롤 표시가 원래 배치를 재현하지는 않습니다. 연결 데이터를

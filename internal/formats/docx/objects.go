@@ -22,6 +22,7 @@ type ObjectInfo struct {
 	footnoteID string
 	Kind       string        `json:"kind"`
 	Author     string        `json:"author,omitempty"`
+	Label      string        `json:"label,omitempty"`
 	Text       string        `json:"text,omitempty"`
 	Editable   bool          `json:"editable"`
 	Fraction   *MathFraction `json:"fraction,omitempty"`
