@@ -98,7 +98,7 @@ export type TableOperation = {type:'update_table';targetId:string;table:TableEdi
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'no_page_after' | 'section_next_page' | 'section_continuous' | 'remove_section';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
 export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}};
-export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} | {action:'insert_footnote'|'set_footnote_text';text:string} |
+export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} | {action:'insert_footnote'|'set_footnote_text';text:string} | {action:'delete_footnote'} |
   {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'unlink'};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};
