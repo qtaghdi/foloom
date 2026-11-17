@@ -312,6 +312,14 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 						}
 					}
 				}
+				if r.is("sdt") && reviewable && p.parent == body && !p.has("ins") && !p.has("del") &&
+					!p.has("fldSimple") && !p.has("fldChar") && !p.has("moveFrom") && !p.has("moveTo") {
+					if text := plainControlText(r, root.source); text != nil {
+						value := text.text.String()
+						run.Object = &ObjectInfo{Kind: "control", Text: value, Label: reviewText(r.child("sdtPr").child("alias").attr("val"), 160), Editable: true}
+						targets[run.ID] = target{node: text, text: value, paragraph: p, kind: "update_control_text"}
+					}
+				}
 				if r.is("hyperlink") {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
 				} else {

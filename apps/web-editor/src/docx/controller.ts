@@ -12,10 +12,10 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type BookmarkMoveOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type MathOperation, type TableOperation, type Snapshot, type ListDefinition, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type BookmarkMoveOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ControlOperation, type MathOperation, type TableOperation, type Snapshot, type ListDefinition, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
-type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|BookmarkMoveOperation|RevisionReviewOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|BookmarkMoveOperation|RevisionReviewOperation|ControlOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   recovery?(status: RecoveryStatus): void;
   composition?(active: boolean): void;
@@ -44,7 +44,7 @@ export class DocumentController {
   private disposed = false;
   private loading = false;
   private listDrafts=new Map<string,ListDefinition>();
-  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|BookmarkMoveOperation|RevisionReviewOperation;
+  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|BookmarkMoveOperation|RevisionReviewOperation|ControlOperation;
   private imageDraft?:ImageOperation;
   private boundaryDraft?: BoundaryOperation;
   private headerParityDraft?: boolean;
@@ -180,7 +180,7 @@ export class DocumentController {
   pendingTable(): boolean { return this.standaloneDraft?.type === 'update_table'; }
   editTable(operation: TableOperation): boolean { return this.editStandalone(operation); }
   pendingStandalone(): boolean { return Boolean(this.standaloneDraft); }
-  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation|TableOperation|BookmarkMoveOperation|RevisionReviewOperation): boolean {
+  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation|TableOperation|BookmarkMoveOperation|RevisionReviewOperation|ControlOperation): boolean {
     if(this.blocked||this.loading||this.disposed||!this.structureDraft||this.hasDrafts())return false;
     this.remember(this.checkpoint());
     this.standaloneDraft=operation;
