@@ -4,6 +4,9 @@ import type { ImageOperation, Paragraph, Run } from './contracts';
 
 const maxBytes = 512*1024;
 
+const cropSides={left:'왼쪽',top:'위쪽',right:'오른쪽',bottom:'아래쪽'} as const;
+const sides=Object.keys(cropSides) as (keyof typeof cropSides)[];
+
 export function DocumentImageToolbar(props: {
   target?:Paragraph;
   pictures: Run[];
@@ -103,6 +106,34 @@ export function DocumentImageToolbar(props: {
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>비율 유지 크기 변경</button>
             </form>
+            <Show when={picture.picture?.cropEditable}>
+              <form class="flex basis-full flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if (disabled()) return;
+                const fields=event.currentTarget.elements;
+                const value=(side:keyof typeof cropSides)=>Math.round((fields.namedItem(side) as HTMLInputElement).valueAsNumber*1000);
+                const crop={left:value('left'),top:value('top'),right:value('right'),bottom:value('bottom')};
+                if (!Object.values(crop).every(n=>Number.isInteger(n)&&n>=0&&n<=99000)||
+                    crop.left+crop.right>99000||crop.top+crop.bottom>99000){
+                  setError('서로 마주 보는 두 변의 합은 99% 이하여야 합니다.');return;
+                }
+                if (!picture.picture?.crop&&Object.values(crop).every(n=>n===0)) return;
+                const changed=props.onApply({type:'update_image',targetId:picture.id,image:{action:'crop',crop}});
+                setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <For each={sides}>{side=>
+                  <label class="flex flex-col gap-1">{cropSides[side]} 자르기 (%)
+                    <input name={side} type="number" min="0" max="99" step=".001" required disabled={disabled()}
+                      value={(picture.picture?.crop?.[side]??0)/1000} class="min-h-11 w-20 rounded border border-slate-300 px-2"/>
+                  </label>
+                }</For>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 자르기 적용</button>
+                <Show when={picture.picture?.crop}><button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+                  const changed=props.onApply({type:'update_image',targetId:picture.id,image:{action:'crop',crop:{left:0,top:0,right:0,bottom:0}}});
+                  setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+                }}>자르기 해제</button></Show>
+              </form>
+            </Show>
             </>
           }</Show>
         </div>

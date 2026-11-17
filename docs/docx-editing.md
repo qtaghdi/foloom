@@ -696,6 +696,13 @@ HTTP·MCP는 현재 그림 run ID에 `image: { action: "replace", base64 }`를
 표시 크기와 설명은 유지하고 새 media part 및 관계를 만들므로 기존 파일을
 공유하는 다른 그림은 영향을 받지 않습니다.
 
+기본 채우기와 사각형을 사용하는 인라인 PNG·JPEG를 선택하고 상하좌우의
+자르기 비율을 백분율로 입력합니다. 서로 마주 보는 두 변의 합은 99% 이하여야 합니다.
+HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
+0.001% 단위의 정수를 받습니다. 네 값을 모두 0으로 보내면 자르기를 해제합니다.
+표시 영역의 바깥 크기와 그림 파일·관계·설명은 유지합니다.
+[DrawingML 원본 자르기](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.sourcerectangle)를 사용합니다.
+
 ### 인쇄와 PDF 저장
 
 파일 작업의 `인쇄·PDF`는 저장된 문서를 브라우저 인쇄 창으로 보냅니다.

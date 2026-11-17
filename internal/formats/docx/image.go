@@ -24,10 +24,11 @@ const (
 )
 
 type ImageEdit struct {
-	Action   string `json:"action" jsonschema:"insert, replace, set_alt, delete, or resize"`
-	Base64   string `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
-	Alt      string `json:"alt,omitempty"`
-	WidthEMU int    `json:"widthEmu,omitempty"`
+	Crop     *ImageCrop `json:"crop,omitempty"`
+	Action   string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, or crop"`
+	Base64   string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
+	Alt      string     `json:"alt,omitempty"`
+	WidthEMU int        `json:"widthEmu,omitempty"`
 }
 
 func imageConfig(raw []byte, byteLimit int) (image.Config, string, error) {
@@ -75,7 +76,7 @@ func (p *documentPackage) availableDrawingID() (uint32, error) {
 
 func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageEdit, drawingID uint32, changes map[string][]byte) (replacement, error) {
 	paragraph := target.paragraph
-	if edit.Action != "insert" || target.kind != "replace_paragraphs" || paragraph == nil ||
+	if edit.Action != "insert" || edit.Crop != nil || target.kind != "replace_paragraphs" || paragraph == nil ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture insertion")
 	}
@@ -131,6 +132,7 @@ func decodePicture(encoded string) ([]byte, image.Config, string, error) {
 
 func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, changes map[string][]byte) (replacement, error) {
 	if t.kind != "picture" || t.run == nil || edit.Action != "replace" && edit.Base64 != "" || edit.Action != "resize" && edit.WidthEMU != 0 ||
+		edit.Action != "crop" && edit.Crop != nil ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture update")
 	}
@@ -159,6 +161,12 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 	part := p.picturePartMap()[relationship]
 	if _, _, err := imageConfig(p.partData(part, nil), maxImageReadBytes); err != nil {
 		return replacement{}, err
+	}
+	if edit.Action == "crop" {
+		if edit.Alt != "" {
+			return replacement{}, fmt.Errorf("unexpected DOCX picture description")
+		}
+		return cropInlinePicture(p.document, inline, edit.Crop)
 	}
 	if edit.Action == "replace" {
 		graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
@@ -243,10 +251,12 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
-	WidthEMU  int    `json:"widthEmu"`
-	HeightEMU int    `json:"heightEmu"`
-	Alt       string `json:"alt"`
-	Preview   bool   `json:"preview"`
+	Crop         *ImageCrop `json:"crop,omitempty"`
+	CropEditable bool       `json:"cropEditable,omitempty"`
+	WidthEMU     int        `json:"widthEmu"`
+	HeightEMU    int        `json:"heightEmu"`
+	Alt          string     `json:"alt"`
+	Preview      bool       `json:"preview"`
 }
 
 type pictureAsset struct {
@@ -344,6 +354,13 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				inline := childNS(source.run.child("drawing"), drawingWordNS, "inline")
+				if crop, _, _ := supportedPictureCrop(inline, s.pkg.document); crop != nil {
+					info.CropEditable = true
+					if *crop != (ImageCrop{}) {
+						info.Crop = crop
+					}
+				}
 				s.pictureAssets[run.ID] = asset
 			}
 		}
