@@ -254,6 +254,13 @@ Word와 LibreOffice 생산 fixture, native reopen, 시각 비교와 실제 호�
 workflow 인증은 남은 검증입니다. 기존 XLSX 인증 결과를 DOCX 인증으로 재사용하지
 않습니다.
 
+ZIP에서 압축하지 않은 원본 항목은 저장한 뒤에도 같은 방식으로 유지합니다.
+LibreOffice가 편집한 파일을 다시 열 수 있도록 각 항목의 CRC와 크기를 ZIP
+로컬 헤더에 기록합니다.
+
+새 part를 추가할 때는 LibreOffice가 인식하는 OPC 기본 네임스페이스 형식으로
+관련 관계와 파일 유형을 기록합니다. 기존 메타데이터는 보존합니다.
+
 ## 문단 구조 도구 계약
 
 `apply_docx_operations`와 `/api/docx/operations`의 `replace_paragraphs`는 같은

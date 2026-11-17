@@ -52,8 +52,9 @@ func (p *documentPackage) availablePart(changes map[string][]byte, stem, extensi
 }
 
 func (p *documentPackage) addRelatedPart(changes map[string][]byte, filename, kind, contentType, relationshipID string) (string, error) {
+	// LibreOffice requires unprefixed OPC elements when reading package metadata.
 	const ctPath = "[Content_Types].xml"
-	ct, err := appendXMLChild(p.partData(ctPath, changes), `<dwct:Override xmlns:dwct="http://schemas.openxmlformats.org/package/2006/content-types" PartName="/`+filename+`" ContentType="`+contentType+`"/>`)
+	ct, err := appendXMLChild(p.partData(ctPath, changes), `<Override xmlns="http://schemas.openxmlformats.org/package/2006/content-types" PartName="/`+filename+`" ContentType="`+contentType+`"/>`)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +78,7 @@ func (p *documentPackage) addRelatedPart(changes map[string][]byte, filename, ki
 	for ids[relationshipID] {
 		relationshipID += "X"
 	}
-	rels, err = appendXMLChild(rels, `<dwr:Relationship xmlns:dwr="http://schemas.openxmlformats.org/package/2006/relationships" Id="`+relationshipID+`" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/`+kind+`" Target="`+strings.TrimPrefix(filename, "word/")+`"/>`)
+	rels, err = appendXMLChild(rels, `<Relationship xmlns="http://schemas.openxmlformats.org/package/2006/relationships" Id="`+relationshipID+`" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/`+kind+`" Target="`+strings.TrimPrefix(filename, "word/")+`"/>`)
 	if err != nil {
 		return "", err
 	}

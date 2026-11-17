@@ -6,6 +6,12 @@ Semantic Versioning을 적용할 예정입니다.
 
 ## 미출시
 
+### 수정
+
+- #150 새 관계나 파일 유형이 추가된 DOCX를 LibreOffice에서 다시 열 수 있도록 패키지 메타데이터를 저장합니다.
+
+- #148 압축하지 않은 항목을 가진 DOCX를 편집하고 저장한 뒤 LibreOffice에서 다시 열 수 있습니다.
+
 ### 변경
 
 - #106 실행 명령·Go module·설치 스킬·릴리스 파일명과 GitHub 저장소를 `foloom`으로
