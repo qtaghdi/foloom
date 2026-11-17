@@ -101,3 +101,57 @@ func TestRemoveSectionBoundaryKeepsFollowingSettingsAndText(t *testing.T) {
 		t.Fatal("undo did not restore original section")
 	}
 }
+
+func TestMoveSectionBoundaryPreservesSettingsAndRequiresContentBothSides(t *testing.T) {
+	ctx := context.Background()
+	const first = `<w:p><w:r><w:t>first</w:t></w:r></w:p>`
+	const source = `<w:p><w:pPr><w:keepNext/><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgNumType w:start="12" w:fmt="upperRoman"/></w:sectPr></w:pPr><w:r><w:t>boundary</w:t></w:r></w:p>`
+	const next = `<w:p><w:pPr/><w:r><w:t>next</w:t></w:r></w:p>`
+	const final = `<w:p><w:r><w:t>last</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/></w:sectPr>`
+	for _, tc := range []struct {
+		mode string
+		end  int
+	}{
+		{"move_section_earlier", 0},
+		{"move_section_later", 2},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			s, filename := withDocument(t, bodyXML(first+source+next+final))
+			original := fileBytes(t, filename)
+			snapshot := mustSnapshot(t, s)
+			move := func(v Snapshot, index int, mode string) (Snapshot, error) {
+				return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+					{Type: "update_boundary", TargetID: v.Blocks[index].ID, Boundary: mode},
+				}}, "human")
+			}
+			result, err := move(snapshot, 1, tc.mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := Open(ctx, filename)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result = mustSnapshot(t, reopened)
+			if len(result.Sections) != 2 || result.Sections[0].EndBlock != tc.end ||
+				result.Sections[0].Page != snapshot.Sections[0].Page || result.Sections[0].PageNumberStart == nil ||
+				*result.Sections[0].PageNumberStart != 12 || result.Sections[0].PageNumberFormat != "upperRoman" ||
+				result.Sections[1].Orientation != "landscape" {
+				t.Fatalf("move changed original settings or section boundary: %+v", result.Sections)
+			}
+			for i, text := range []string{"first", "boundary", "next", "last"} {
+				if result.Blocks[i].Paragraph.Runs[0].Text != text {
+					t.Fatal("move changed body content")
+				}
+			}
+			current := fileBytes(t, filename)
+			if _, err := move(mustSnapshot(t, s), tc.end, tc.mode); err == nil || !bytes.Equal(current, fileBytes(t, filename)) {
+				t.Fatal("a section with no body content was allowed")
+			}
+			historyRestore(t, reopened, "undo")
+			if !bytes.Equal(original, fileBytes(t, filename)) {
+				t.Fatal("undo changed original bytes")
+			}
+		})
+	}
+}

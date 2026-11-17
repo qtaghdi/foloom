@@ -29,6 +29,8 @@ func boundaryReplacements(root *node, data []byte, session string, revision uint
 			}
 		}
 		return nil, fmt.Errorf("tracked, ambiguous or final DOCX section boundary is protected")
+	case "move_section_earlier", "move_section_later":
+		return relocateSectionBoundary(root, data, session, revision, p, mode)
 	case "no_page_after":
 		trailing := trailingPageBreak(p)
 		if trailing == nil || len(trailing.children) != 0 || strings.TrimSpace(trailing.text.String()) != "" ||
@@ -119,6 +121,59 @@ func boundaryReplacements(root *node, data []byte, session string, revision uint
 		return []replacement{{props.endStart, props.endStart, []byte(left)}, sectionEdit}, nil
 	}
 	return nil, fmt.Errorf("DOCX paragraph section unavailable")
+}
+
+func relocateSectionBoundary(root *node, data []byte, session string, revision uint64, paragraph *node, mode string) ([]replacement, error) {
+	body := root.child("body")
+	source := paragraph.child("pPr").child("sectPr")
+	if source == nil || sectionChildCount(paragraph.child("pPr"), "sectPr") != 1 ||
+		sectionChildCount(body, "sectPr") > 1 || !structuralParagraphContents(paragraph, data, false, source) {
+		return nil, fmt.Errorf("protected DOCX section source boundary")
+	}
+	delta := -1
+	if mode == "move_section_later" {
+		delta = 1
+	}
+	var destination *node
+	for i, child := range body.children {
+		if child == paragraph && i+delta >= 0 && i+delta < len(body.children) {
+			destination = body.children[i+delta]
+			break
+		}
+	}
+	if destination == nil || !destination.is("p") || !structuralParagraph(destination, data) ||
+		strings.TrimSpace(destination.text.String()) != "" || strings.TrimSpace(paragraph.text.String()) != "" {
+		return nil, fmt.Errorf("protected DOCX section destination paragraph")
+	}
+
+	sections := inspectSections(root, session, revision)
+	for i := 0; i+1 < len(sections); i++ {
+		left, right := sections[i], sections[i+1]
+		if left.props != source || !left.info.Editable || !right.info.Editable {
+			continue
+		}
+		newEnd := left.info.EndBlock + delta
+		if newEnd < left.info.StartBlock || newEnd >= right.info.EndBlock {
+			break
+		}
+		open, close := scopedOpening(source, data, false)
+		raw := open + close
+		if source.inner < source.endStart {
+			raw = open + string(data[source.inner:source.endStart]) + close
+		}
+		props := destination.child("pPr")
+		switch {
+		case props == nil:
+			return []replacement{{start: source.start, end: source.end}, newBoundaryProperties(destination, data, raw)}, nil
+		case strings.HasSuffix(string(data[props.start:props.inner]), "/>"):
+			open, close := scopedOpening(props, data, false)
+			insert := replacement{props.start, props.end, []byte(open + raw + close)}
+			return []replacement{{start: source.start, end: source.end}, insert}, nil
+		default:
+			return []replacement{{start: source.start, end: source.end}, {props.endStart, props.endStart, []byte(raw)}}, nil
+		}
+	}
+	return nil, fmt.Errorf("DOCX section move would leave a protected or empty section")
 }
 
 func newBoundaryProperties(p *node, data []byte, content string) replacement {

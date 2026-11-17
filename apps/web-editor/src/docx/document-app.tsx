@@ -162,7 +162,15 @@ export function DocumentApp() {
     return snapshot.sections.slice(0,-1).flatMap((section,index)=>{
       const block=snapshot.blocks[section.endBlock];
       const next=snapshot.sections?.[index+1];
-      return section.editable && next?.editable && next.startBlock<=next.endBlock && block?.type==='paragraph' ? [block.paragraph] : [];
+      if (!section.editable||!next?.editable||next.startBlock>next.endBlock||block?.type!=='paragraph') return [];
+      const canMove=(position:number)=>{
+        const destination=snapshot.blocks[position];
+        return destination?.type==='paragraph'&&destination.paragraph.structureEditable&&
+          !destination.paragraph.pageBreakBefore&&!destination.paragraph.pageBreakAfter;
+      };
+      return [{paragraph:block.paragraph,
+        earlier:section.endBlock>section.startBlock&&canMove(section.endBlock-1),
+        later:next.endBlock>next.startBlock&&canMove(section.endBlock+1)}];
     });
   });
   const stageBoundary = (targetId: string, boundary: BoundaryMode) => {
