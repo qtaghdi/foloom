@@ -362,7 +362,7 @@ export function DocumentApp() {
     <div id="docx-tools-layout" hidden={toolGroup()!=='layout'}>
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentBoundaryToolbar target={boundaryParagraph()} pending={boundaryPending()}
+    <DocumentBoundaryToolbar target={boundaryParagraph()} trailingBreaks={state().snapshot?.blocks.flatMap(block=>block.type==='paragraph' && block.paragraph.pageBreakAfter ? [block.paragraph] : []) ?? []} pending={boundaryPending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
     </div>
     <div id="docx-tools-recovery" hidden={toolGroup()!=='recovery'}>
