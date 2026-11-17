@@ -78,3 +78,18 @@ it('keeps Roman and legal list labels during draft preview', () => {
   const preview=previewLists(numbered);
   expect(preview.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph.listLabel]:[])).toEqual(['IV.','IV.ix.','4.9.2.']);
 });
+
+it('keeps continuous levels and resets configured levels in draft list labels', () => {
+  const numbered=structuredClone(base);
+  numbered.lists=[{id:7,levels:[
+    {level:0,kind:'decimal',text:'%1.',start:1},
+    {level:1,kind:'decimal',text:'%2.',start:2,restart:0},
+    {level:2,kind:'upperRoman',text:'%3.',start:4,restart:1},
+  ]}];
+  numbered.blocks=[0,1,2,1,2,0,1,2].map((level,index)=>({
+    id:'block'+index,type:'paragraph',paragraph:{id:'paragraph'+index,runs:[],list:{id:7,level}},
+  }));
+  const preview=previewLists(numbered);
+  expect(preview.blocks.map(block=>block.type==='paragraph'&&block.paragraph.listLabel))
+    .toEqual(['1.','2.','IV.','3.','V.','2.','4.','IV.']);
+});

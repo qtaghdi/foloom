@@ -97,11 +97,12 @@ type ListInfo struct {
 	Levels []ListLevelInfo `json:"levels"`
 }
 type ListLevelInfo struct {
-	Level int    `json:"level"`
-	Kind  string `json:"kind"`
-	Text  string `json:"text"`
-	Start int    `json:"start"`
-	Legal bool   `json:"legal,omitempty"`
+	Level   int    `json:"level"`
+	Kind    string `json:"kind"`
+	Text    string `json:"text"`
+	Start   int    `json:"start"`
+	Legal   bool   `json:"legal,omitempty"`
+	Restart *int   `json:"restart,omitempty"`
 }
 type Paragraph struct {
 	List              *ParagraphList   `json:"list,omitempty"`

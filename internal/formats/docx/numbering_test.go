@@ -154,3 +154,32 @@ func TestImportedListLabelsUseEachLevelsNumberFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestImportedListRestartsOnlyAtConfiguredLevels(t *testing.T) {
+	root, err := parseXML([]byte(`<w:numbering xmlns:w="` + wordNS + `">
+		<w:abstractNum w:abstractNumId="1">
+			<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>
+			<w:lvl w:ilvl="1"><w:start w:val="2"/><w:numFmt w:val="decimal"/><w:lvlRestart w:val="0"/><w:lvlText w:val="%2."/></w:lvl>
+			<w:lvl w:ilvl="2"><w:start w:val="3"/><w:numFmt w:val="decimal"/><w:lvlRestart w:val="1"/><w:lvlText w:val="%3."/></w:lvl>
+		</w:abstractNum>
+		<w:num w:numId="1"><w:abstractNumId w:val="1"/>
+			<w:lvlOverride w:ilvl="2">
+				<w:startOverride w:val="4"/>
+				<w:lvl w:ilvl="2"><w:start w:val="3"/><w:numFmt w:val="upperRoman"/><w:lvlRestart w:val="0"/><w:lvlText w:val="%3."/></w:lvl>
+			</w:lvlOverride>
+		</w:num></w:numbering>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blocks []Block
+	for _, level := range []int{0, 1, 2, 1, 2, 0, 1, 2} {
+		blocks = append(blocks, Block{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: level}}})
+	}
+	catalog := readNumbering(root)
+	applyListLabels(blocks, catalog)
+	for i, want := range []string{"1.", "2.", "IV.", "3.", "V.", "2.", "4.", "IV."} {
+		if got := blocks[i].Paragraph.ListLabel; got != want {
+			t.Fatalf("list label %d = %q, want %q", i, got, want)
+		}
+	}
+}
