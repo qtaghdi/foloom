@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action   string `json:"action" jsonschema:"insert_link or insert_bookmark"`
+	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, or set_link_url"`
 	Text     string `json:"text,omitempty"`
 	URL      string `json:"url,omitempty"`
 	Bookmark string `json:"bookmark,omitempty"`
@@ -105,6 +105,9 @@ func (p *documentPackage) addHyperlink(raw string, changes map[string][]byte) (s
 }
 
 func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEdit, bookmarks *bookmarkIndex, changes map[string][]byte) ([]replacement, error) {
+	if edit.Action == "set_link_url" {
+		return p.changeWebLink(data, t, edit, changes)
+	}
 	paragraph := t.paragraph
 	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") {
 		return nil, fmt.Errorf("DOCX reference requires an editable body paragraph")
@@ -152,6 +155,37 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 	default:
 		return nil, fmt.Errorf("unsupported DOCX reference action")
 	}
+}
+
+func (p *documentPackage) changeWebLink(data []byte, target target, edit ReferenceEdit, changes map[string][]byte) ([]replacement, error) {
+	link := target.node
+	if target.kind != "hyperlink" || link == nil || !link.parent.is("p") || edit.Text != "" || edit.Bookmark != "" ||
+		attribute(link, officeRelNS, "id") == "" || attribute(link, wordNS, "anchor") != "" || !safeLink(edit.URL) {
+		return nil, fmt.Errorf("invalid DOCX web link update")
+	}
+	for _, name := range []string{"fldChar", "instrText", "fldSimple", "ins", "del", "moveFrom", "moveTo", "sdt", "rPrChange", "pPrChange"} {
+		if link.parent.has(name) {
+			return nil, fmt.Errorf("protected DOCX web link cannot be changed")
+		}
+	}
+	for parent := link.parent; parent != nil; parent = parent.parent {
+		if parent.is("ins") || parent.is("del") || parent.is("moveFrom") || parent.is("moveTo") || parent.is("sdt") {
+			return nil, fmt.Errorf("protected DOCX web link cannot be changed")
+		}
+	}
+	if len(link.children) == 0 {
+		return nil, fmt.Errorf("DOCX web link has no displayed content")
+	}
+	relationship, err := p.addHyperlink(edit.URL, changes)
+	if err != nil {
+		return nil, err
+	}
+	opening, _ := scopedOpening(link, data, false)
+	opening, err = patchOpeningAttributes(opening, officeRelNS, map[string]string{"id": relationship}, nil)
+	if err != nil {
+		return nil, err
+	}
+	return []replacement{{start: link.start, end: link.inner, data: []byte(opening)}}, nil
 }
 
 func (index bookmarkIndex) hasTarget(name string) bool {

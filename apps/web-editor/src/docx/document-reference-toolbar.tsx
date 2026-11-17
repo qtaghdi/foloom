@@ -1,13 +1,24 @@
 import { createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
-import type { Paragraph, ReferenceEdit, ReferenceOperation, Snapshot } from './contracts';
+import type { Paragraph, Run, ReferenceEdit, ReferenceOperation, Snapshot } from './contracts';
+
+function safeWebAddress(address:string):boolean {
+  try {
+    const parsed=new URL(address);
+    return /^https?:\/\/\S+$/.test(address) && !parsed.username && !parsed.password && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;links:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
   const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'>('bookmark');
   const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
+  const [linkId,setLinkId]=createSignal('');
+  const selectedLink = () => props.links.find(link=>link.id===linkId());
   const [error,setError]=createSignal('');
   const disabled=()=>props.disabled||props.pending;
   const apply=()=>{
@@ -21,10 +32,7 @@ export function DocumentReferenceToolbar(props:{
       if(!text().trim()){setError('표시할 링크 텍스트를 입력하세요.');return;}
       if(mode()==='url'){
         const value=url().trim();
-        try{
-          const parsed=new URL(value);
-          if(!/^https?:\/\/\S+$/.test(value)||parsed.username||parsed.password||!parsed.hostname)throw new Error();
-        }catch{setError('인증 정보가 없는 HTTP 또는 HTTPS 주소를 입력하세요.');return;}
+        if(!safeWebAddress(value)){setError('인증 정보가 없는 HTTP 또는 HTTPS 주소를 입력하세요.');return;}
         reference={action:'insert_link',text:text(),url:value};
       }else{
         const name=anchor()||props.bookmarks[0]?.name;
@@ -60,6 +68,34 @@ export function DocumentReferenceToolbar(props:{
       <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':props.target?.structureEditable
         ? `대상 문단: ${props.target.runs.map(run=>run.text).join('').trim().slice(0,80)||'빈 문단'}`
         : '편집 가능한 본문 문단에 커서를 놓으세요.'}</p>
+      <Show when={props.links.length}>
+        <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
+          <label class="flex min-w-0 flex-col gap-1">기존 웹 링크
+            <select aria-label="기존 웹 링크" class="editor-select min-h-11 max-w-64" value={selectedLink()?.id??''}
+              disabled={disabled()} onChange={event=>{setLinkId(event.currentTarget.value);setError('');}}>
+              <option value="">웹 링크 선택</option>
+              <For each={props.links}>{(link,index)=><option value={link.id}>{index()+1}. {link.text.slice(0,60)}</option>}</For>
+            </select>
+          </label>
+          <Show when={selectedLink()} keyed>{link=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if (disabled()) return;
+              const input=event.currentTarget.elements.namedItem('address') as HTMLInputElement;
+              const address=input.value.trim();
+              if (!safeWebAddress(address)) {setError('인증 정보가 없는 HTTP 또는 HTTPS 주소를 입력하세요.');return;}
+              const changed=props.onApply({type:'update_reference',targetId:link.id,reference:{action:'set_link_url',url:address}});
+              setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">새 웹 주소
+                <input name="address" type="url" required maxlength="2048" value={link.link?.url??''} disabled={disabled()}
+                  class="min-h-11 max-w-full rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>웹 주소 변경 적용</button>
+            </form>
+          }</Show>
+        </div>
+      </Show>
       <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
     </div>
   </details>;
