@@ -15,6 +15,18 @@ func boundaryReplacements(root *node, data []byte, session string, revision uint
 		return nil, fmt.Errorf("tracked DOCX paragraph boundaries are protected")
 	}
 	switch mode {
+	case "no_page_after":
+		trailing := trailingPageBreak(p)
+		if trailing == nil || len(trailing.children) != 0 || strings.TrimSpace(trailing.text.String()) != "" ||
+			strings.Contains(string(data[trailing.start:trailing.end]), "<!--") {
+			return nil, fmt.Errorf("DOCX trailing page break is unavailable")
+		}
+		for _, attr := range trailing.attrs {
+			if !isNamespaceAttribute(attr) && !(attr.Name.Space == wordNS && attr.Name.Local == "type") {
+				return nil, fmt.Errorf("opaque DOCX page break is protected")
+			}
+		}
+		return []replacement{{start: trailing.start, end: trailing.end}}, nil
 	case "page_before", "no_page_before":
 		if sectionChildCount(props, "pageBreakBefore") > 1 {
 			return nil, fmt.Errorf("duplicate DOCX page break property")

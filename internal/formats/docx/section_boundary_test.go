@@ -41,3 +41,36 @@ func TestBoundarySeparatesPageBreaksAndSectionLayout(t *testing.T) {
 		t.Fatal("undo changed original bytes")
 	}
 }
+
+func TestRemoveTrailingPageBreakPreservesRunAndSection(t *testing.T) {
+	ctx := context.Background()
+	s, path := withDocument(t, bodyXML(`<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>first</w:t><w:br w:type="page"/></w:r></w:p><w:p><w:r><w:br w:type="page"/><w:t>middle</w:t></w:r></w:p><w:p><w:r><w:t>opaque</w:t><w:br w:type="page" w:clear="all"/></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>`))
+	original := fileBytes(t, path)
+	expected := bytes.Replace(s.pkg.document, []byte(`<w:br w:type="page"/>`), nil, 1)
+	before := mustSnapshot(t, s)
+	remove := func(block int) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
+			{Type: "update_boundary", TargetID: before.Blocks[block].ID, Boundary: "no_page_after"},
+		}}, "human")
+	}
+	for _, block := range []int{1, 2} {
+		if _, err := remove(block); err == nil || !bytes.Equal(original, fileBytes(t, path)) {
+			t.Fatal("unsupported break removal changed the file")
+		}
+	}
+	after, err := remove(0)
+	if err != nil || after.Blocks[0].Paragraph.PageBreakAfter || !bytes.Equal(expected, s.pkg.document) {
+		t.Fatalf("trailing break removal changed other XML: %v", err)
+	}
+	reopened, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mustSnapshot(t, reopened).Blocks[0].Paragraph.PageBreakAfter {
+		t.Fatal("trailing break still present after reopening")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("undo did not restore original bytes")
+	}
+}
