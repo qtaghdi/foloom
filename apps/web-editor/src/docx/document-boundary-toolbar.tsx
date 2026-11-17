@@ -13,6 +13,7 @@ export function DocumentBoundaryToolbar(props: {
   const available = () => {
     const paragraph = props.target?.paragraph;
     if (!paragraph) return false;
+    if (mode() === 'no_page_after') return Boolean(paragraph.pageBreakAfter);
     if (mode() === 'page_before' || mode() === 'no_page_before') {
       return Boolean(paragraph.structureEditable || paragraph.pageBreakBefore);
     }
@@ -25,6 +26,7 @@ export function DocumentBoundaryToolbar(props: {
         disabled={props.disabled || props.pending} value={mode()} onChange={event => { setMode(event.currentTarget.value as BoundaryMode); setError(''); }}>
         <option value="page_before">문단 앞에 페이지 나눔</option>
         <option value="no_page_before">문단 앞 페이지 나눔 해제</option>
+        <option value="no_page_after">문단 끝 페이지 나눔 해제</option>
         <option value="section_next_page">문단 뒤에 다음 페이지 구역 나눔</option>
         <option value="section_continuous">문단 뒤에 연속 구역 나눔</option>
       </select>
