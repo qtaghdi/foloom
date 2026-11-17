@@ -19,10 +19,11 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
-	Kind     string        `json:"kind"`
-	Text     string        `json:"text,omitempty"`
-	Editable bool          `json:"editable"`
-	Fraction *MathFraction `json:"fraction,omitempty"`
+	footnoteID string
+	Kind       string        `json:"kind"`
+	Text       string        `json:"text,omitempty"`
+	Editable   bool          `json:"editable"`
+	Fraction   *MathFraction `json:"fraction,omitempty"`
 }
 
 func editableMath(math *node) bool {
@@ -102,6 +103,13 @@ func objectPreview(n *node) *ObjectInfo {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
+	case n.is("r") && countChild(n, "footnoteReference") == 1 &&
+		(len(n.children) == 1 || len(n.children) == 2 && n.child("rPr") != nil):
+		ref := n.child("footnoteReference")
+		if onOff(ref.attr("customMarkFollows"), false) {
+			return nil
+		}
+		return &ObjectInfo{Kind: "footnote", footnoteID: ref.attr("id")}
 	case n.is("sdt"):
 		return &ObjectInfo{Kind: "control", Text: reviewText(textContent(n), 1024)}
 	case n.is("object") || n.child("object") != nil:
