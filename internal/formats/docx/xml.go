@@ -483,6 +483,6 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			return nil, nil, false, fmt.Errorf("DOCX inspection structure limit exceeded")
 		}
 	}
-	markBookmarkMoves(root, bodyParagraphs, protected, targets)
+	markBookmarkParagraphs(root, bodyParagraphs, protected, targets)
 	return blocks, targets, unsupported, nil
 }

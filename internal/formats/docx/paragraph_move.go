@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func markBookmarkMoves(root *node, paragraphs map[*node]*Paragraph, protected map[*node]bool, targets map[string]target) {
+func markBookmarkParagraphs(root *node, paragraphs map[*node]*Paragraph, protected map[*node]bool, targets map[string]target) {
 	if !root.has("bookmarkStart") {
 		return
 	}
@@ -58,14 +58,12 @@ func markBookmarkMoves(root *node, paragraphs map[*node]*Paragraph, protected ma
 		}
 		paragraph := paragraphs[p]
 		paragraph.MoveBookmarkUp, paragraph.MoveBookmarkDown = before != nil, after != nil
-		if before != nil || after != nil {
-			targets[paragraph.ID] = target{kind: "move_bookmark", paragraph: p, moveUp: before, moveDown: after}
-		}
+		targets[paragraph.ID] = target{kind: "bookmark_paragraph", paragraph: p, moveUp: before, moveDown: after}
 	}
 }
 
 func moveBookmarkedParagraph(data []byte, target target, operation string) (replacement, error) {
-	if target.kind != "move_bookmark" {
+	if target.kind != "bookmark_paragraph" {
 		return replacement{}, fmt.Errorf("DOCX bookmark movement requires a supported body paragraph")
 	}
 	first, second := target.paragraph, target.moveDown

@@ -12,15 +12,17 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, set_footnote_text, delete_footnote, set_link_url, or unlink"`
-	Text     string `json:"text,omitempty"`
-	URL      string `json:"url,omitempty"`
-	Bookmark string `json:"bookmark,omitempty"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, set_footnote_text, delete_footnote, rename_bookmark, set_link_url, or unlink"`
+	Text        string `json:"text,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Bookmark    string `json:"bookmark,omitempty"`
+	NewBookmark string `json:"newBookmark,omitempty"`
 }
 
 type BookmarkInfo struct {
-	Name        string `json:"name"`
-	ParagraphID string `json:"paragraphId"`
+	Name           string `json:"name"`
+	ParagraphID    string `json:"paragraphId"`
+	RenameEditable bool   `json:"renameEditable,omitempty"`
 }
 
 type LinkInfo struct {
@@ -105,6 +107,12 @@ func (p *documentPackage) addHyperlink(raw string, changes map[string][]byte) (s
 }
 
 func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEdit, bookmarks *bookmarkIndex, changes map[string][]byte) ([]replacement, error) {
+	if edit.Action == "rename_bookmark" {
+		return p.renameBookmark(data, t, edit, bookmarks)
+	}
+	if edit.NewBookmark != "" {
+		return nil, fmt.Errorf("unexpected DOCX bookmark name")
+	}
 	if edit.Action == "set_link_url" {
 		return p.changeWebLink(data, t, edit, changes)
 	}
@@ -295,7 +303,7 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 			if marker.is("bookmarkStart") && index.safeStart(marker) {
 				name := attribute(marker, wordNS, "name")
 				names[name] = true
-				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID})
+				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID, RenameEditable: targets[block.Paragraph.ID].kind == "bookmark_paragraph"})
 			}
 		}
 	}
