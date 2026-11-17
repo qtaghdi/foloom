@@ -5,7 +5,7 @@ const bookmarkName=z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
 const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.string().max(1027)});
 
 export const runSchema = z.object({
-  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing']),text:z.string().max(1027).optional(),editable:z.boolean(),fraction:fractionSchema.optional()}).optional(),
+  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote']),text:z.string().max(1027).optional(),editable:z.boolean(),fraction:fractionSchema.optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean()}).optional(),
@@ -98,7 +98,7 @@ export type TableOperation = {type:'update_table';targetId:string;table:TableEdi
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'no_page_after' | 'section_next_page' | 'section_continuous' | 'remove_section';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
 export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}};
-export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} |
+export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} | {action:'insert_footnote';text:string} |
   {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'unlink'};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};

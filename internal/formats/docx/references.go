@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, set_link_url, or unlink"`
+	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, set_link_url, or unlink"`
 	Text     string `json:"text,omitempty"`
 	URL      string `json:"url,omitempty"`
 	Bookmark string `json:"bookmark,omitempty"`
@@ -123,6 +123,15 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 		return []replacement{{paragraph.endStart, paragraph.endStart, []byte(raw)}}
 	}
 	switch edit.Action {
+	case "insert_footnote":
+		if edit.URL != "" || edit.Bookmark != "" {
+			return nil, fmt.Errorf("unexpected DOCX footnote fields")
+		}
+		marker, err := p.appendFootnote(paragraph, edit.Text, changes)
+		if err != nil {
+			return nil, err
+		}
+		return appendRun(marker), nil
 	case "insert_bookmark":
 		key := strings.ToLower(edit.Bookmark)
 		if edit.Text != "" || edit.URL != "" || !bookmarkName.MatchString(edit.Bookmark) || bookmarks.names[key] != 0 || bookmarks.highest >= 2147483647 {
