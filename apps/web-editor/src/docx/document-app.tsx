@@ -13,7 +13,7 @@ import { connectWorkspaceBridge, publishEditorState } from '../ui/workspace-brid
 import { DocumentSearch } from '../ui/document-search';
 import { readTextSelection, restoreTextSelection, revealTextSelection } from './selection';
 import { searchDocument } from './search';
-import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
 import { createDocumentView } from './view';
 import { StatusPanel } from '../ui/status-panel';
@@ -39,6 +39,13 @@ import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chro
 const defaultPaper = { width: 11906, height: 16838, top: 1440, right: 1440, bottom: 1440, left: 1440 };
 
 export function DocumentApp() {
+  const toolGroups = [
+    {id:'format',label:'서식'},
+    {id:'insert',label:'삽입'},
+    {id:'layout',label:'페이지'},
+    {id:'recovery',label:'복구'},
+  ] as const;
+  const [toolGroup,setToolGroup] = createSignal<(typeof toolGroups)[number]['id']>();
   const { state, view, activity } = createDocumentView();
   const recoveryAvailable = new URLSearchParams(window.location.search).has('document');
   const [recovery, setRecovery] = createSignal<RecoveryStatus>({});
@@ -322,19 +329,23 @@ export function DocumentApp() {
     <DocumentToolbar stylesCatalog={stylesCatalog()} paragraphStyleIds={selectedParagraphStyleIds()} characterStyleIds={selectedCharacterStyleIds()} definitionDisabled={tablePending()||state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} stylePending={stylePending()} onApplyStyle={(kind,id)=>kind==='paragraph'?applyParagraphFormat({styleId:id}):applyFormat({styleId:id})} onDefineStyle={definition=>{if(controller.editStyle(definition))setDraftVersion(v=>v+1);}} paragraphs={selectedParagraphFormats()} onParagraphFormat={applyParagraphFormat} styles={selectedStyles()} formatDisabled={!selectedStyles().length || state().composing || state().saving || state().loading || Boolean(state().error)} onFormat={applyFormat} history={state().history} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteMode={setPasteMode} saving={state().saving} loading={state().loading}
       needsRecovery={Boolean(state().error)} run={focusedRun()} zoom={zoom()} onZoom={setZoom}
       onReload={requestReload}/>
+    <div role="group" aria-label="추가 편집 도구" class="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-3 py-1 sm:px-6">
+      <For each={toolGroups}>{group=>
+        <Show when={group.id!=='recovery' || recoveryAvailable}>
+          <button type="button" class="editor-action min-h-11 rounded-md px-3 text-sm font-medium text-slate-700 aria-pressed:bg-teal-50 aria-pressed:text-teal-900"
+            aria-pressed={toolGroup()===group.id} aria-controls={`docx-tools-${group.id}`}
+            onClick={()=>setToolGroup(current=>current===group.id?undefined:group.id)}>{group.label}</button>
+        </Show>
+      }</For>
+    </div>
+    <div id="docx-tools-format" hidden={toolGroup()!=='format'}>
     <DocumentListToolbar paragraphs={(() => {draftVersion();state().snapshot;return formattingSelection()?controller.selectedParagraphs(formattingSelection()!):[];})()}
       lists={state().snapshot?.lists??[]} disabled={state().saving||state().loading||Boolean(state().error||state().composing)}
       onList={list=>{const selection=formattingSelection();if(selection&&controller.applyList(selection,list))setDraftVersion(v=>v+1);}}
       onLevel={delta=>{const selection=formattingSelection();if(selection&&controller.changeListLevel(selection,delta))setDraftVersion(v=>v+1);}}/>
     <DocumentTabsToolbar formats={selectedParagraphFormats()} disabled={!selectedStyles().length||state().composing||state().saving||state().loading||Boolean(state().error)} onFormat={applyParagraphFormat} onInsert={()=>{const selection=formattingSelection();if(selection&&controller.replaceSelection(selection,'\t',true))setDraftVersion(v=>v+1);}}/>
-    <Show when={recoveryAvailable && state().snapshot}>
-      <RecoveryControls status={recovery()} disabled={state().saving || state().loading || Boolean(state().composing || state().validation)}
-        onEnable={() => controller.enableRecovery()} onDelete={() => controller.removeRecovery()} onRetry={retryRecovery}/>
-    </Show>
-    <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentBoundaryToolbar target={boundaryParagraph()} pending={boundaryPending()}
-      disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
+    </div>
+    <div id="docx-tools-insert" hidden={toolGroup()!=='insert'}>
     <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
@@ -347,6 +358,19 @@ export function DocumentApp() {
     <DocumentTableToolbar blocks={state().snapshot?.blocks??[]} insertAfter={insertTableAfter()} pending={tablePending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const applied=controller.editTable(operation);if(applied)setDraftVersion(v=>v+1);return applied;}}/>
+    </div>
+    <div id="docx-tools-layout" hidden={toolGroup()!=='layout'}>
+    <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentBoundaryToolbar target={boundaryParagraph()} pending={boundaryPending()}
+      disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
+    </div>
+    <div id="docx-tools-recovery" hidden={toolGroup()!=='recovery'}>
+    <Show when={recoveryAvailable && state().snapshot}>
+      <RecoveryControls status={recovery()} disabled={state().saving || state().loading || Boolean(state().composing || state().validation)}
+        onEnable={() => controller.enableRecovery()} onDelete={() => controller.removeRecovery()} onRetry={retryRecovery}/>
+    </Show>
+    </div>
     </section>
     <Show when={printError()}><p role="alert" class="border-b border-red-200 px-4 py-2 text-sm text-red-800">{printError()}</p></Show>
     <Show when={state().error}>{(message) => <StatusPanel id="document-error" panel={{ title: t('reviewRequired'), message: message(), details: state().errorDetails, dismissible: false }} danger onDismiss={() => {}}/>}</Show>
