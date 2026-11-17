@@ -130,3 +130,21 @@ func TestListRemovalOverridesStyleWithoutDiscardingRunProperties(t *testing.T) {
 		t.Fatal("list removal lost unrelated properties")
 	}
 }
+
+func TestRomanListLabelsUseEachLevelsNumberFormat(t *testing.T) {
+	root, err := parseXML([]byte(`<w:numbering xmlns:w="` + wordNS + `"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="4"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl><w:lvl w:ilvl="1"><w:start w:val="9"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%1.%2."/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := []Block{
+		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 0}}},
+		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 1}}},
+		{Paragraph: &Paragraph{List: &ParagraphList{ID: 1, Level: 1}}},
+	}
+	applyListLabels(blocks, readNumbering(root))
+	for i, want := range []string{"IV.", "IV.ix.", "IV.x."} {
+		if got := blocks[i].Paragraph.ListLabel; got != want {
+			t.Fatalf("label %d = %q, want %q", i, got, want)
+		}
+	}
+}

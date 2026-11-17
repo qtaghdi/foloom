@@ -297,6 +297,36 @@ func listCatalog(c numberingCatalog) []ListInfo {
 	return result
 }
 
+func formatListNumber(value int, format string) string {
+	switch format {
+	case "decimal", "bullet":
+		return strconv.Itoa(value)
+	case "upperRoman", "lowerRoman":
+		if value < 1 || value > 3999 {
+			return ""
+		}
+		var out strings.Builder
+		for _, digit := range []struct {
+			number int
+			symbol string
+		}{
+			{1000, "M"}, {900, "CM"}, {500, "D"}, {400, "CD"}, {100, "C"}, {90, "XC"}, {50, "L"},
+			{40, "XL"}, {10, "X"}, {9, "IX"}, {5, "V"}, {4, "IV"}, {1, "I"},
+		} {
+			for value >= digit.number {
+				out.WriteString(digit.symbol)
+				value -= digit.number
+			}
+		}
+		if format == "lowerRoman" {
+			return strings.ToLower(out.String())
+		}
+		return out.String()
+	default:
+		return ""
+	}
+}
+
 func applyListLabels(blocks []Block, c numberingCatalog) {
 	counters := map[int][9]int{}
 	visit := func(p *Paragraph) {
@@ -329,11 +359,12 @@ func applyListLabels(blocks []Block, c numberingCatalog) {
 			if n == 0 {
 				n = max(1, c.levels[id][i].start)
 			}
-			if format != "decimal" && format != "bullet" {
+			formatted := formatListNumber(n, format)
+			if formatted == "" {
 				p.ListLabel = "[" + definition.kind + "]"
 				return
 			}
-			label = strings.ReplaceAll(label, token, strconv.Itoa(n))
+			label = strings.ReplaceAll(label, token, formatted)
 		}
 		if len(label) <= 240 {
 			p.ListLabel = label
