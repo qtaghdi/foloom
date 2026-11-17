@@ -56,6 +56,33 @@ func TestDOCXFootnotesPersistAndPreserveOriginalParts(t *testing.T) {
 			t.Fatalf("unrelated part %s changed", part.header.Name)
 		}
 	}
+	beforeEdit := fileBytes(t, filename)
+	bodyBefore := bytes.Clone(reopened.pkg.document)
+	footnote := snapshot.Blocks[0].Paragraph.Runs[1]
+	if !footnote.Object.Editable {
+		t.Fatal("simple footnote was not marked editable")
+	}
+	updated, err := reopened.Apply(ctx, ApplyInput{SessionID: snapshot.ID, BaseRevision: snapshot.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: footnote.ID, Reference: &ReferenceEdit{Action: "set_footnote_text", Text: "새 각주 & 교체"}},
+	}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(bodyBefore, reopened.pkg.document) || updated.Blocks[0].Paragraph.Runs[1].Object.Text != "새 각주 & 교체" ||
+		updated.Blocks[1].Paragraph.Runs[1].Object.Text != b.Text {
+		t.Fatal("editing the footnote changed its referent or another note")
+	}
+	reopened, err = Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Object; note.Text != "새 각주 & 교체" {
+		t.Fatal("edited footnote text was not persisted")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(beforeEdit, fileBytes(t, filename)) {
+		t.Fatal("undo changed the original footnote")
+	}
 	historyRestore(t, reopened, "undo")
 	if !bytes.Equal(original, fileBytes(t, filename)) {
 		t.Fatal("undo did not restore the original package")

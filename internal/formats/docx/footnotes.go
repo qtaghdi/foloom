@@ -101,12 +101,80 @@ func (p *documentPackage) appendFootnote(paragraph *node, text string, changes m
 	return `<dwn:r xmlns:dwn="` + wordNS + `"><dwn:rPr><dwn:vertAlign dwn:val="superscript"/></dwn:rPr><dwn:footnoteReference dwn:id="` + id + `"/></dwn:r>`, nil
 }
 
-func (p *documentPackage) projectFootnotes(blocks []Block) {
+func footnoteTextTarget(note *node, source []byte) *node {
+	if kind := note.attr("type"); kind != "" && kind != "normal" {
+		return nil
+	}
+	if len(note.children) != 1 || !note.children[0].is("p") ||
+		strings.Contains(string(source[note.start:note.end]), "<!--") {
+		return nil
+	}
+	paragraph := note.children[0]
+	runs := paragraph.children
+	if len(runs) > 0 && runs[0].is("pPr") {
+		runs = runs[1:]
+	}
+	if len(runs) != 2 || !runs[0].is("r") || !runs[1].is("r") {
+		return nil
+	}
+	mark := runs[0].child("footnoteRef")
+	text := runs[1].child("t")
+	if mark == nil || text == nil || len(text.children) != 0 || !plainTextAttributes(text) ||
+		!validText(text.text.String()) || len(text.text.String()) > 1024 {
+		return nil
+	}
+	if len(runs[0].children) != 1 && (len(runs[0].children) != 2 || runs[0].child("rPr") == nil) ||
+		len(runs[1].children) != 1 && (len(runs[1].children) != 2 || runs[1].child("rPr") == nil) {
+		return nil
+	}
+	for _, name := range []string{"ins", "del", "rPrChange", "pPrChange"} {
+		if note.has(name) {
+			return nil
+		}
+	}
+	return text
+}
+
+func (p *documentPackage) changeFootnote(t target, edit ReferenceEdit, changes map[string][]byte) error {
+	if t.kind != "footnote" || edit.URL != "" || edit.Bookmark != "" ||
+		!validText(edit.Text) || strings.TrimSpace(edit.Text) == "" || len(edit.Text) > 1024 {
+		return fmt.Errorf("invalid DOCX footnote edit")
+	}
+	id := t.node.child("footnoteReference").attr("id")
+	filename, notes, err := p.footnotesPart(changes)
+	if err != nil || notes == nil {
+		return fmt.Errorf("DOCX footnotes part unavailable")
+	}
+	var text *node
+	seen := false
+	for _, note := range notes.children {
+		if note.is("footnote") && note.attr("id") == id {
+			if seen {
+				return fmt.Errorf("ambiguous DOCX footnote")
+			}
+			seen = true
+			text = footnoteTextTarget(note, notes.source)
+		}
+	}
+	if text == nil {
+		return fmt.Errorf("protected DOCX footnote cannot be changed")
+	}
+	prefix := ""
+	if strings.HasPrefix(text.text.String(), " ") {
+		prefix = " "
+	}
+	raw := append(append([]byte(nil), notes.source[:text.start]...), inlineXML(prefix+strings.TrimSpace(edit.Text))...)
+	changes[filename] = append(raw, notes.source[text.end:]...)
+	return nil
+}
+
+func (p *documentPackage) projectFootnotes(blocks []Block, targets map[string]target) {
 	_, notes, err := p.footnotesPart(nil)
 	if err != nil || notes == nil {
 		return
 	}
 	textByID := map[string]string{}
+	editableByID := map[string]bool{}
 	for _, note := range notes.children {
 		if !note.is("footnote") {
 			continue
@@ -114,6 +182,7 @@ func (p *documentPackage) projectFootnotes(blocks []Block) {
 		id := note.attr("id")
 		if _, seen := textByID[id]; seen {
 			textByID[id] = ""
+			delete(editableByID, id)
 			continue
 		}
 		textByID[id] = ""
@@ -127,6 +196,7 @@ func (p *documentPackage) projectFootnotes(blocks []Block) {
 			}
 		}
 		textByID[id] = reviewText(strings.Join(lines, "\n"), 1024)
+		editableByID[id] = footnoteTextTarget(note, notes.source) != nil
 	}
 	for _, block := range blocks {
 		if block.Paragraph == nil {
@@ -135,6 +205,7 @@ func (p *documentPackage) projectFootnotes(blocks []Block) {
 		for _, run := range block.Paragraph.Runs {
 			if run.Object != nil && run.Object.Kind == "footnote" {
 				run.Object.Text = textByID[run.Object.footnoteID]
+				run.Object.Editable = targets[run.ID].kind == "footnote" && editableByID[run.Object.footnoteID]
 			}
 		}
 	}

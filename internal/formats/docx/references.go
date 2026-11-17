@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, set_link_url, or unlink"`
+	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, set_footnote_text, set_link_url, or unlink"`
 	Text     string `json:"text,omitempty"`
 	URL      string `json:"url,omitempty"`
 	Bookmark string `json:"bookmark,omitempty"`
@@ -110,6 +110,9 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 	}
 	if edit.Action == "unlink" {
 		return unlinkReference(data, t, edit)
+	}
+	if edit.Action == "set_footnote_text" {
+		return nil, p.changeFootnote(t, edit, changes)
 	}
 	paragraph := t.paragraph
 	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") {

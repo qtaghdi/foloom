@@ -138,7 +138,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	}
 	s.addPicturePreviews(blocks, targetsByID)
 	if root.has("footnoteReference") {
-		s.pkg.projectFootnotes(blocks)
+		s.pkg.projectFootnotes(blocks, targetsByID)
 	}
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID)
 	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 떠 있는 그림과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
