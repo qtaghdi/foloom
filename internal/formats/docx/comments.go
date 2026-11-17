@@ -10,7 +10,9 @@ import (
 )
 
 type CommentEdit struct {
-	Text string `json:"text"`
+	Text       string `json:"text"`
+	StartRunID string `json:"startRunId,omitempty"`
+	EndRunID   string `json:"endRunId,omitempty"`
 }
 
 type ReviewComment struct {
@@ -125,11 +127,24 @@ func (p *documentPackage) projectComments(root *node, blocks []Block) []ReviewCo
 	return out
 }
 
-func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, actor string, changes map[string][]byte) ([]replacement, error) {
+func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, actor string, targets map[string]target, changes map[string][]byte) ([]replacement, error) {
 	paragraph := t.paragraph
 	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") || len(edit.Text) > 4000 ||
 		strings.TrimSpace(edit.Text) == "" || !validInlineText(edit.Text) || strings.TrimSpace(textContent(paragraph)) == "" {
 		return nil, fmt.Errorf("DOCX comment requires a non-empty body paragraph and bounded text")
+	}
+	first, last := paragraph.inner, paragraph.endStart
+	if props := paragraph.child("pPr"); props != nil {
+		first = props.end
+	}
+	if edit.StartRunID != "" || edit.EndRunID != "" {
+		start, end := targets[edit.StartRunID], targets[edit.EndRunID]
+		if start.kind != "replace_run_text" || end.kind != "replace_run_text" ||
+			start.run == nil || end.run == nil || start.run.parent != paragraph ||
+			end.run.parent != paragraph || start.run.start > end.run.start {
+			return nil, fmt.Errorf("DOCX comment range requires ordered runs in the target paragraph")
+		}
+		first, last = start.run.start, end.run.end
 	}
 	filename, raw, comments, err := p.commentsPart(changes)
 	if err != nil {
@@ -209,11 +224,7 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 		return nil, err
 	}
 	changes[filename] = next
-	first := paragraph.inner
-	if props := paragraph.child("pPr"); props != nil {
-		first = props.end
-	}
 	start := `<dwc:commentRangeStart xmlns:dwc="` + wordNS + `" dwc:id="` + id + `"/>`
 	end := `<dwc:commentRangeEnd xmlns:dwc="` + wordNS + `" dwc:id="` + id + `"/><dwc:r xmlns:dwc="` + wordNS + `"><dwc:commentReference dwc:id="` + id + `"/></dwc:r>`
-	return []replacement{{first, first, []byte(start)}, {paragraph.endStart, paragraph.endStart, []byte(end)}}, nil
+	return []replacement{{first, first, []byte(start)}, {last, last, []byte(end)}}, nil
 }

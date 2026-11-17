@@ -41,11 +41,23 @@ func TestNativeMathEditsPreserveComplexObjectXML(t *testing.T) {
 	if err != nil || len(next.Blocks[0].Paragraph.Runs) != 1 || !strings.Contains(string(s.pkg.document), fraction+chart) {
 		t.Fatal("equation removal altered other objects", err)
 	}
+	if _, err := apply(next, next.Blocks[0].ID, MathEdit{Action: "insert_fraction", Fraction: &MathFraction{Numerator: "x"}}); err == nil {
+		t.Fatal("missing denominator was accepted")
+	}
+	next, err = apply(next, next.Blocks[0].ID, MathEdit{Action: "insert_fraction", Fraction: &MathFraction{Numerator: "x < y", Denominator: "2"}})
+	if err != nil || !strings.Contains(string(s.pkg.document), `<dwm:num><dwm:r><dwm:t xml:space="preserve">x &lt; y</dwm:t></dwm:r></dwm:num>`) ||
+		!strings.Contains(string(s.pkg.document), fraction+chart) {
+		t.Fatalf("fraction did not retain native math and neighboring objects: %v", err)
+	}
 	reopened, err := Open(ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for range 3 {
+	object := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Object
+	if object == nil || object.Fraction == nil || object.Fraction.Numerator != "x < y" || object.Fraction.Denominator != "2" || object.Editable {
+		t.Fatalf("fraction preview unavailable after reload: %+v", object)
+	}
+	for range 4 {
 		historyRestore(t, reopened, "undo")
 	}
 	if !bytes.Equal(before, fileBytes(t, filename)) {
