@@ -10,10 +10,10 @@ import (
 // opaque anchors, section boundaries or extension metadata requires a contract
 // that the current source-reference plan does not yet provide.
 func structuralParagraph(p *node, data []byte) bool {
-	return structuralParagraphContents(p, data, false)
+	return structuralParagraphContents(p, data, false, nil)
 }
 
-func structuralParagraphContents(p *node, data []byte, allowBookmarks bool) bool {
+func structuralParagraphContents(p *node, data []byte, allowBookmarks bool, ignoredProperty *node) bool {
 	if strings.Contains(string(data[p.start:p.end]), "<!--") {
 		return false
 	}
@@ -36,6 +36,9 @@ func structuralParagraphContents(p *node, data []byte, allowBookmarks bool) bool
 	allowedProps := " pStyle keepNext keepLines widowControl numPr suppressLineNumbers pBdr shd tabs suppressAutoHyphens contextualSpacing mirrorIndents suppressOverlap bidi adjustRightInd snapToGrid spacing ind jc textDirection textAlignment textboxTightWrap outlineLvl cnfStyle rPr "
 	var safeProperties func(*node) bool
 	safeProperties = func(n *node) bool {
+		if n == ignoredProperty {
+			return true
+		}
 		if strings.TrimSpace(n.text.String()) != "" {
 			return false
 		}
@@ -65,6 +68,9 @@ func structuralParagraphContents(p *node, data []byte, allowBookmarks bool) bool
 	for _, child := range p.children {
 		if child.is("pPr") {
 			for _, prop := range child.children {
+				if prop == ignoredProperty {
+					continue
+				}
 				// An explicit off value can travel with normal paragraph formatting.
 				if prop.is("pageBreakBefore") && sectionChildCount(child, "pageBreakBefore") == 1 {
 					switch attribute(prop, wordNS, "val") {

@@ -23,7 +23,7 @@ func markBookmarkMoves(root *node, paragraphs map[*node]*Paragraph, protected ma
 			candidates[p] = true
 			continue
 		}
-		if !structuralParagraphContents(p, root.source, true) {
+		if !structuralParagraphContents(p, root.source, true, nil) {
 			continue
 		}
 		hasBookmark, safe := false, true

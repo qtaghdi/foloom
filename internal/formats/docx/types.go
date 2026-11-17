@@ -223,7 +223,7 @@ type Operation struct {
 	Comment           *CommentEdit       `json:"comment,omitempty"`
 	Reference         *ReferenceEdit     `json:"reference,omitempty"`
 	Image             *ImageEdit         `json:"image,omitempty"`
-	Boundary          string             `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, no_page_after, section_next_page, section_continuous, or remove_section"`
+	Boundary          string             `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, no_page_after, section_next_page, section_continuous, remove_section, move_section_earlier, or move_section_later"`
 	EvenAndOddHeaders *bool              `json:"evenAndOddHeaders,omitempty" jsonschema:"Document-wide odd/even header and footer setting for update_header_parity"`
 	SectionID         string             `json:"sectionId,omitempty"`
 	Section           *SectionFormat     `json:"section,omitempty"`
