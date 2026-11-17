@@ -519,6 +519,8 @@ Enter는 같은 목록의 다음 항목을 만들고, 빈 목록 항목에서 En
 새 목록은 기본 글머리와 decimal 9수준을 지원합니다. 가져온 목록은 원래
 numbering part와 사용자 정의 글머리를 보존합니다. 일부 고급 번호 형식과
 재시작·스타일 연결 규칙은 브라우저 미리보기와 native 비교를 추가 검증 중이며
+가져온 목록은 [Word의 단계별 재시작 규칙](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/140a2cd9-2f26-456d-9760-ae6ecef4e8b5)에
+따라 지정한 상위 단계에서 다시 시작하거나 번호를 계속 이어갑니다.
 [법률식 번호 지정](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.islegalnumberingstyle)이
 켜진 목록 단계는 해당 표시 문자열에 포함된 모든 번호를 십진수로 표시합니다.
 로마 숫자 목록은 1~3,999 범위의 대문자·소문자 번호를 표시합니다. 다른 미지원 형식은 형식 이름으로 표시합니다. 기존 공유 번호 정의 자체를

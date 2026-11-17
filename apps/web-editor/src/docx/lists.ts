@@ -35,7 +35,10 @@ export function previewLists(snapshot: Snapshot, drafts: ListDefinition[] = []):
     if (!definition) return {...p,listLabel:undefined};
     const values = counters.get(id) ?? [];
     values[level] = values[level]===undefined?Math.max(1,definition.start):values[level]!+1;
-    values.length = level+1; counters.set(id,values);
+    for (const deeper of levels??[]) {
+      if (deeper.level>level&&(deeper.restart===undefined||level+1<=deeper.restart)) values[deeper.level]=undefined;
+    }
+    counters.set(id,values);
     let supported=true;
     const label=definition.text.replace(/%([1-9])/g, (_match,n:string)=>{
       const i=Number(n)-1,d=levels?.find(l=>l.level===i);

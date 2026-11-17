@@ -13,10 +13,11 @@ const numberingRelationship = "http://schemas.openxmlformats.org/officeDocument/
 var listKey = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`)
 
 type listLevel struct {
-	kind  string
-	text  string
-	start int
-	legal bool
+	kind    string
+	text    string
+	start   int
+	legal   bool
+	restart *int
 }
 
 type numberingCatalog struct {
@@ -35,7 +36,13 @@ func listInt(raw string, fallback int) int {
 func readListLevel(n *node) listLevel {
 	start := listInt(n.child("start").attr("val"), 1)
 	legal := n.child("isLgl")
-	return listLevel{kind: n.child("numFmt").attr("val"), text: n.child("lvlText").attr("val"), start: start, legal: legal != nil && onOff(legal.attr("val"), true)}
+	level := listLevel{kind: n.child("numFmt").attr("val"), text: n.child("lvlText").attr("val"), start: start, legal: legal != nil && onOff(legal.attr("val"), true)}
+	index := listInt(n.attr("ilvl"), 0)
+	restart := listInt(n.child("lvlRestart").attr("val"), -1)
+	if restart >= 0 && restart <= min(index, 7) {
+		level.restart = &restart
+	}
+	return level
 }
 
 func readNumbering(root *node) numberingCatalog {
@@ -82,7 +89,10 @@ func readNumbering(root *node) numberingCatalog {
 			}
 			level, ok := levels[index]
 			if child := override.child("lvl"); child != nil {
-				level, ok = readListLevel(child), true
+				overrideLevel := readListLevel(child)
+				// Word uses the abstract level's restart rule even when an instance overrides its format.
+				overrideLevel.restart = level.restart
+				level, ok = overrideLevel, true
 			}
 			if ok {
 				level.start = listInt(override.child("startOverride").attr("val"), level.start)
@@ -291,7 +301,7 @@ func listCatalog(c numberingCatalog) []ListInfo {
 		info := ListInfo{ID: id, Levels: []ListLevelInfo{}}
 		for level := 0; level <= 8; level++ {
 			if definition, ok := c.levels[id][level]; ok {
-				info.Levels = append(info.Levels, ListLevelInfo{Level: level, Kind: definition.kind, Text: definition.text, Start: definition.start, Legal: definition.legal})
+				info.Levels = append(info.Levels, ListLevelInfo{Level: level, Kind: definition.kind, Text: definition.text, Start: definition.start, Legal: definition.legal, Restart: definition.restart})
 			}
 		}
 		result = append(result, info)
@@ -346,8 +356,11 @@ func applyListLabels(blocks []Block, c numberingCatalog) {
 		} else {
 			values[level]++
 		}
-		for i := level + 1; i < 9; i++ {
-			values[i] = 0
+		for i := level + 1; i < len(values); i++ {
+			restart := c.levels[id][i].restart
+			if restart == nil || level+1 <= *restart {
+				values[i] = 0
+			}
 		}
 		counters[id] = values
 		label := definition.text
