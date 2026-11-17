@@ -81,6 +81,24 @@ func TestDOCXReferencesPreserveTargetsAndRejectUnsafeURLs(t *testing.T) {
 	if !bytes.Equal(prior, fileBytes(t, filename)) {
 		t.Fatal("undo did not restore the original URL")
 	}
+	current := mustSnapshot(t, reopened)
+	unlinked, err := reopened.Apply(ctx, ApplyInput{SessionID: current.ID, BaseRevision: current.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: current.Blocks[2].Paragraph.Runs[1].ID, Reference: &ReferenceEdit{Action: "unlink"}},
+	}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := unlinked.Blocks[2].Paragraph.Runs[1]
+	if plain.Text != "web" || plain.Link != nil || !plain.Editable || !plain.Underline || plain.Color != "#0563C1" {
+		t.Fatalf("unlink changed text or format: %+v", plain)
+	}
+	if !strings.Contains(string(reopened.pkg.partData(documentRelationships, nil)), `Target="https://example.com/path?q=1&amp;test=2"`) {
+		t.Fatal("unlink removed the original relationship")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(prior, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the original hyperlink")
+	}
 	for range 3 {
 		historyRestore(t, reopened, "undo")
 	}
