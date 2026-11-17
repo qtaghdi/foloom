@@ -2,8 +2,10 @@ import { z } from 'zod';
 
 const baseStyleSchema = z.object({styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
 const bookmarkName=z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
+const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.string().max(1027)});
+
 export const runSchema = z.object({
-  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing']),text:z.string().max(1027).optional(),editable:z.boolean()}).optional(),
+  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing']),text:z.string().max(1027).optional(),editable:z.boolean(),fraction:fractionSchema.optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean()}).optional(),
@@ -101,7 +103,7 @@ export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} |
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>};
-export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete';expression?:string}};
+export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete';expression?:string}|{action:'insert_fraction';fraction:z.infer<typeof fractionSchema>}};
 export type Operation = TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';
