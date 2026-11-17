@@ -29,7 +29,7 @@ export function DocumentComments(props:{
         <input type="checkbox" checked={useRange()} onChange={event=>setUseRange(event.currentTarget.checked)} disabled={disabled()}/>
         선택한 텍스트에만 주석 달기
       </label>
-      <Show when={useRange()&&!props.range}><p class="mb-2 text-xs text-slate-600">한 문단에서 서식 구간 전체를 선택하세요.</p></Show>
+      <Show when={useRange()&&!props.range}><p class="mb-2 text-xs text-slate-600">한 본문 문단 안에서 일반 텍스트를 선택하세요.</p></Show>
       <textarea aria-label="새 주석" rows="3" maxlength="1000" class="w-full rounded border border-slate-300 p-2 text-sm"
         disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/>
       <button type="button" class={buttonClass} disabled={disabled()||!targetText()||!text().trim()||useRange()&&!props.range} onClick={add}>주석 적용</button>
