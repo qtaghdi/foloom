@@ -24,7 +24,7 @@ const (
 )
 
 type ImageEdit struct {
-	Action   string `json:"action" jsonschema:"insert, set_alt, or delete"`
+	Action   string `json:"action" jsonschema:"insert, set_alt, delete, or resize"`
 	Base64   string `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
 	Alt      string `json:"alt,omitempty"`
 	WidthEMU int    `json:"widthEmu,omitempty"`
@@ -120,9 +120,9 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 }
 
 func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit) (replacement, error) {
-	if t.kind != "picture" || t.run == nil || edit.Base64 != "" || edit.WidthEMU != 0 ||
+	if t.kind != "picture" || t.run == nil || edit.Base64 != "" || edit.Action != "resize" && edit.WidthEMU != 0 ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
-		return replacement{}, fmt.Errorf("invalid DOCX picture description")
+		return replacement{}, fmt.Errorf("invalid DOCX picture update")
 	}
 	for parent := t.run.parent; parent != nil; parent = parent.parent {
 		if parent.is("ins") || parent.is("del") || parent.is("moveFrom") || parent.is("moveTo") {
@@ -150,6 +150,12 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit) (re
 	if _, _, err := imageConfig(p.partData(part, nil), maxImageReadBytes); err != nil {
 		return replacement{}, err
 	}
+	if edit.Action == "resize" {
+		if edit.Alt != "" {
+			return replacement{}, fmt.Errorf("unexpected DOCX picture description")
+		}
+		return resizeInlinePicture(p.document, inline, info, edit.WidthEMU)
+	}
 	if edit.Action == "delete" {
 		if edit.Alt != "" || !t.run.parent.is("p") ||
 			strings.Contains(string(p.document[t.run.start:t.run.end]), "<!--") {
@@ -163,6 +169,36 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit) (re
 		return replacement{}, err
 	}
 	return replacement{props.start, props.end, []byte(raw)}, nil
+}
+
+func resizeInlinePicture(data []byte, inline *node, info *PictureInfo, width int) (replacement, error) {
+	if width < 9525 || width > maxImageExtent {
+		return replacement{}, fmt.Errorf("invalid DOCX picture width")
+	}
+	height := int(int64(width) * int64(info.HeightEMU) / int64(info.WidthEMU))
+	if height < 1 || height > maxImageExtent {
+		return replacement{}, fmt.Errorf("invalid DOCX picture height")
+	}
+	extent := childNS(inline, drawingWordNS, "extent")
+	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+	picture := childNS(graphic, pictureNS, "pic")
+	transform := childNS(childNS(picture, pictureNS, "spPr"), drawingNS, "xfrm")
+	innerExtent := childNS(transform, drawingNS, "ext")
+	if extent == nil || innerExtent == nil || extent.end > innerExtent.start ||
+		attribute(innerExtent, "", "cx") != strconv.Itoa(info.WidthEMU) || attribute(innerExtent, "", "cy") != strconv.Itoa(info.HeightEMU) {
+		return replacement{}, fmt.Errorf("DOCX picture resize requires matching inline and transform sizes")
+	}
+	dimensions := map[string]string{"cx": strconv.Itoa(width), "cy": strconv.Itoa(height)}
+	outer, err := patchScalarProperty(extent, data, "extent", "", dimensions, nil)
+	if err != nil {
+		return replacement{}, err
+	}
+	inner, err := patchScalarProperty(innerExtent, data, "ext", "", dimensions, nil)
+	if err != nil {
+		return replacement{}, err
+	}
+	raw := outer + string(data[extent.end:innerExtent.start]) + inner
+	return replacement{start: extent.start, end: innerExtent.end, data: []byte(raw)}, nil
 }
 
 func inlinePicture(id, relationship, alt string, width, height int) string {

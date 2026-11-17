@@ -379,7 +379,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
 			var edit replacement
-			if op.Image.Action == "set_alt" || op.Image.Action == "delete" {
+			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" {
 				edit, err = s.pkg.pictureUpdateReplacement(target, *op.Image)
 			} else {
 				if drawingID == 0 {
