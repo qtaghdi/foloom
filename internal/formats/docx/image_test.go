@@ -112,6 +112,41 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 	if !bytes.Equal(beforeResize, fileBytes(t, path)) {
 		t.Fatal("undo did not restore the original picture size")
 	}
+	beforeCrop := fileBytes(t, path)
+	before = mustSnapshot(t, reopened)
+	crop := ImageCrop{Left: 80000, Right: 30000}
+	cropInput := ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
+		{Type: "update_image", TargetID: before.Blocks[0].Paragraph.Runs[1].ID, Image: &ImageEdit{Action: "crop", Crop: &crop}},
+	}}
+	if _, err := reopened.Apply(ctx, cropInput, "human"); err == nil || !bytes.Equal(beforeCrop, fileBytes(t, path)) {
+		t.Fatal("invalid crop changed the picture")
+	}
+	crop = ImageCrop{Left: 25000, Top: 12345}
+	if _, err := reopened.Apply(ctx, cropInput, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cropped := mustSnapshot(t, reopened)
+	croppedRun := cropped.Blocks[0].Paragraph.Runs[1]
+	if croppedRun.Picture == nil || croppedRun.Picture.Crop == nil || *croppedRun.Picture.Crop != crop ||
+		croppedRun.Picture.WidthEMU != 400000 || croppedRun.Picture.HeightEMU != 200000 ||
+		!bytes.Equal(reopened.pkg.partData(media, nil), pngBytes.Bytes()) {
+		t.Fatal("crop or original image was not preserved after reopen")
+	}
+	crop = ImageCrop{}
+	cropInput.SessionID, cropInput.BaseRevision, cropInput.Operations[0].TargetID = cropped.ID, cropped.Revision, croppedRun.ID
+	clear, err := reopened.Apply(ctx, cropInput, "human")
+	if err != nil || clear.Blocks[0].Paragraph.Runs[1].Picture.Crop != nil {
+		t.Fatal("crop reset did not remove the source rectangle", err)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(beforeCrop, fileBytes(t, path)) {
+		t.Fatal("undo did not restore original picture crop")
+	}
 	beforeReplace := fileBytes(t, path)
 	before = mustSnapshot(t, reopened)
 	var jpegBytes bytes.Buffer

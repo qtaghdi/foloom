@@ -105,10 +105,19 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
             rel={link().url?'noopener noreferrer':undefined}
             onClick={event=>{const name=link().bookmark;if(name){event.preventDefault();goToBookmark(name);}}}>{run.text}</a>
         }</Show>}>
-          <img loading="lazy" class="inline-block max-w-full align-middle" contentEditable={false}
+          <Show when={run.picture?.crop} fallback={<img loading="lazy" class="inline-block max-w-full align-middle" contentEditable={false}
             src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}
             width={Math.max(1,Math.round(run.picture!.widthEmu/9525))} height={Math.max(1,Math.round(run.picture!.heightEmu/9525))}
-            style={{height:'auto'}}/>
+            style={{height:'auto'}}/>}>{crop=>{
+            const wide=()=>100000-crop().left-crop().right;
+            const high=()=>100000-crop().top-crop().bottom;
+            return <span data-docx-crop contentEditable={false} class="relative inline-block max-w-full overflow-hidden align-middle"
+              style={{width:`${Math.max(1,Math.round(run.picture!.widthEmu/9525))}px`,'aspect-ratio':`${run.picture!.widthEmu}/${run.picture!.heightEmu}`}}>
+              <img loading="lazy" class="absolute" style={{'max-width':'none',
+                width:`${10000000/wide()}%`,height:`${10000000/high()}%`,left:`${-100*crop().left/wide()}%`,top:`${-100*crop().top/high()}%`}}
+                src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}/>
+            </span>;
+          }}</Show>
         </Show>}>
           <Show when={p.structureEditable} fallback={<><span aria-hidden="true" data-docx-print-text class="hidden whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text}</span><RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
