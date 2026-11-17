@@ -168,6 +168,54 @@ func (p *documentPackage) changeFootnote(t target, edit ReferenceEdit, changes m
 	return nil
 }
 
+func (p *documentPackage) deleteFootnote(t target, edit ReferenceEdit, changes map[string][]byte) ([]replacement, error) {
+	if t.kind != "footnote" || edit.Text != "" || edit.URL != "" || edit.Bookmark != "" ||
+		!onlyNamespaceAttributes(t.node) || strings.Contains(string(p.document[t.node.start:t.node.end]), "<!--") {
+		return nil, fmt.Errorf("invalid DOCX footnote removal")
+	}
+	id, err := strconv.ParseInt(t.node.child("footnoteReference").attr("id"), 10, 32)
+	if err != nil || id < 1 {
+		return nil, fmt.Errorf("invalid DOCX footnote identifier")
+	}
+	matches := func(n *node) bool {
+		found, err := strconv.ParseInt(n.attr("id"), 10, 32)
+		return err == nil && found == id
+	}
+	found := 0
+	var findReferences func(n *node)
+	findReferences = func(n *node) {
+		if n.is("footnoteReference") && matches(n) {
+			found++
+		}
+		for _, child := range n.children {
+			findReferences(child)
+		}
+	}
+	findReferences(t.paragraph.parent)
+	if found != 1 {
+		return nil, fmt.Errorf("shared DOCX footnote cannot be removed")
+	}
+	filename, root, err := p.footnotesPart(changes)
+	if err != nil || root == nil {
+		return nil, fmt.Errorf("DOCX footnotes part unavailable")
+	}
+	var note *node
+	for _, child := range root.children {
+		if child.is("footnote") && matches(child) {
+			if note != nil {
+				return nil, fmt.Errorf("ambiguous DOCX footnote")
+			}
+			note = child
+		}
+	}
+	if note == nil || footnoteTextTarget(note, root.source) == nil {
+		return nil, fmt.Errorf("protected DOCX footnote cannot be removed")
+	}
+	raw := append([]byte(nil), root.source[:note.start]...)
+	changes[filename] = append(raw, root.source[note.end:]...)
+	return []replacement{{start: t.node.start, end: t.node.end}}, nil
+}
+
 func (p *documentPackage) projectFootnotes(blocks []Block, targets map[string]target) {
 	_, notes, err := p.footnotesPart(nil)
 	if err != nil || notes == nil {

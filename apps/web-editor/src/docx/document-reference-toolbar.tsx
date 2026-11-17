@@ -135,6 +135,10 @@ export function DocumentReferenceToolbar(props:{
                   value={note.object?.text??''} class="min-h-11 rounded border border-slate-300 px-2"/>
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>각주 변경 적용</button>
+              <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+                const accepted=props.onApply({type:'update_reference',targetId:note.id,reference:{action:'delete_footnote'}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>각주 삭제</button>
             </form>
           }</Show>
         </div>

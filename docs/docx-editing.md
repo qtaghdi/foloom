@@ -764,7 +764,7 @@ HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 각주의 번호와
-쪽 아래 배치는 Word가 계산합니다. 각주 삭제, 사용자 지정 번호와
+쪽 아래 배치는 Word가 계산합니다. 사용자 지정 번호와
 미주는 지원 범위에 포함되지 않습니다.
 [Word 각주 참조 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.footnotereferencemark)을 사용합니다.
 
@@ -772,6 +772,10 @@ HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 HTTP·MCP는 본문의 각주 run ID에 `reference: { action: "set_footnote_text", text }`를
 적용합니다. 각주 ID와 본문 참조 및 다른 각주의 내용은 유지합니다.
 복합 각주는 내용을 미리 볼 수 있습니다.
+
+`각주 삭제`를 적용하고 저장하면 본문 참조와 그 각주가 함께 삭제됩니다.
+HTTP·MCP는 각주 run ID에 `reference: { action: "delete_footnote" }`를
+적용합니다. 다른 각주와 공유 참조, 구분선 및 관계는 보호합니다.
 
 ### AI 활동의 문단 위치
 
