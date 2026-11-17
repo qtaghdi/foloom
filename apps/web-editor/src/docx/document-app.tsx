@@ -100,8 +100,26 @@ export function DocumentApp() {
     });
   };
   const standalonePending = () => { state().snapshot; draftVersion(); return controller.pendingStandalone(); };
+  const webLinks = createMemo(() => {
+    const snapshot = state().snapshot;
+    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs.filter(run => run.link?.url)) : [];
+  });
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
+  const commentRange = () => {
+    const target = referenceParagraph();
+    const selection = formattingSelection();
+    if (!target?.structureEditable || !selection) return undefined;
+    const a = target.runs.findIndex(run=>run.id===selection.anchor.runId);
+    const b = target.runs.findIndex(run=>run.id===selection.focus.runId);
+    if (a < 0 || b < 0) return undefined;
+    const forwards = a < b || a === b && selection.anchor.offset <= selection.focus.offset;
+    const [start,end] = forwards ? [selection.anchor,selection.focus] : [selection.focus,selection.anchor];
+    const selected = target.runs.slice(Math.min(a,b),Math.max(a,b)+1);
+    if (start.offset !== 0 || end.offset !== selected.at(-1)?.text.length || !selected.every(run=>run.editable) ||
+        !selected.some(run=>run.text.trim())) return undefined;
+    return {startRunId:start.runId,endRunId:end.runId};
+  };
   const imagePending = () => { state().snapshot; draftVersion(); return controller.pendingImage(); };
   const pictures = createMemo(() => {
     const snapshot = state().snapshot;
@@ -319,7 +337,7 @@ export function DocumentApp() {
       const changed=controller.replaceSearchMatches(ranges,text);
       if(changed)setDraftVersion(version=>version+1);
       return changed;
-    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentComments snapshot={state().snapshot} target={referenceParagraph()} pending={standalonePending()}
+    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentComments snapshot={state().snapshot} target={referenceParagraph()} range={commentRange()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}
       onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading} pageCount={pages().length} onLocatePage={locatePage}/></>}
@@ -349,7 +367,7 @@ export function DocumentApp() {
     <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentReferenceToolbar target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
+    <DocumentReferenceToolbar links={webLinks()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}

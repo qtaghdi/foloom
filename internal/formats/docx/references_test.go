@@ -51,6 +51,36 @@ func TestDOCXReferencesPreserveTargetsAndRejectUnsafeURLs(t *testing.T) {
 	if internal == nil || internal.Bookmark != "Target" || web == nil || web.URL != external {
 		t.Fatal("safe links not projected after reopen")
 	}
+	prior := fileBytes(t, filename)
+	ref := ReferenceEdit{Action: "set_link_url", URL: "javascript:alert(1)"}
+	update := ApplyInput{SessionID: reloaded.ID, BaseRevision: reloaded.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: reloaded.Blocks[2].Paragraph.Runs[1].ID, Reference: &ref},
+	}}
+	if _, err := reopened.Apply(ctx, update, "human"); err == nil || !bytes.Equal(prior, fileBytes(t, filename)) {
+		t.Fatal("unsafe retarget changed file")
+	}
+	ref.URL = "https://example.org/new"
+	after, err := reopened.Apply(ctx, update, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := after.Blocks[2].Paragraph.Runs[1]
+	if run.Text != "web" || run.Link == nil || run.Link.URL != ref.URL ||
+		!strings.Contains(string(reopened.pkg.document), `<dwb:color dwb:val="0563C1"/>`) ||
+		!strings.Contains(string(reopened.pkg.partData(documentRelationships, nil)), `Target="https://example.com/path?q=1&amp;test=2"`) {
+		t.Fatal("retarget changed the displayed text, style, or former relationship")
+	}
+	reopened, err = Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link := mustSnapshot(t, reopened).Blocks[2].Paragraph.Runs[1].Link; link == nil || link.URL != ref.URL {
+		t.Fatal("new URL did not survive reopening")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(prior, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the original URL")
+	}
 	for range 3 {
 		historyRestore(t, reopened, "undo")
 	}
