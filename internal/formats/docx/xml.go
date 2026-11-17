@@ -396,7 +396,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			run.Trackable = trackableParagraph && editable && trackableRun(r, texts, root.source)
 			out.Runs = append(out.Runs, run)
 			if allowed && !protected[r] && p.parent == body && run.Object != nil && run.Object.Kind == "footnote" &&
-				run.Object.footnoteID != "" {
+				run.Object.noteID != "" {
 				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "footnote"}
 			}
 			if !editable && r.child("drawing") != nil {
