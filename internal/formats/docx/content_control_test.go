@@ -59,3 +59,36 @@ func TestContentControlRejectsLockedBoundAndPlaceholderText(t *testing.T) {
 		}
 	}
 }
+
+func TestPlainContentControlRetainsUnaffectedRunFormatting(t *testing.T) {
+	ctx := context.Background()
+	control := `<w:sdt><w:sdtPr><w:id w:val="42"/><w:text/></w:sdtPr><w:sdtContent>` +
+		`<w:r><w:rPr/></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>팀🙂 이름</w:t></w:r>` +
+		`<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve"> 변경 확인</w:t></w:r>` +
+		`<w:r><w:t>!</w:t></w:r></w:sdtContent></w:sdt>`
+	s, filename := withDocument(t, bodyXML(`<w:p>`+control+`</w:p>`))
+	original := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	run := v.Blocks[0].Paragraph.Runs[0]
+	if run.Object == nil || !run.Object.Editable || run.Object.Text != "팀🙂 이름 변경 확인!" {
+		t.Fatal("multi-run content control was not exposed")
+	}
+	op := Operation{Type: "update_control_text", TargetID: run.ID, ExpectedText: run.Object.Text, Text: "팀🙂 새 확인!"}
+	if _, err := s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[0]
+	want := `<w:r><w:rPr/></w:r><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">팀🙂 새</w:t></w:r>` +
+		`<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve"> 확인</w:t></w:r><w:r><w:t>!</w:t></w:r>`
+	if saved.Object == nil || saved.Object.Text != op.Text || !strings.Contains(string(reopened.pkg.document), want) {
+		t.Fatal("the edit moved untouched text across formatting runs")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo changed original package bytes")
+	}
+}
