@@ -339,7 +339,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("invalid or duplicate DOCX comment operation")
 			}
 			seen[key] = true
-			changes, err := s.pkg.appendComment(root, t, *op.Comment, actor, parts)
+			changes, err := s.pkg.appendComment(root, t, *op.Comment, actor, targets, parts)
 			if err != nil {
 				return nil, err
 			}
