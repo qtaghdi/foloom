@@ -5,12 +5,13 @@ import (
 	"strings"
 )
 
-func (p *documentPackage) renameBookmark(data []byte, t target, edit ReferenceEdit, index *bookmarkIndex) ([]replacement, error) {
-	if t.kind != "bookmark_paragraph" || edit.Text != "" || edit.URL != "" ||
-		!bookmarkName.MatchString(edit.Bookmark) || !bookmarkName.MatchString(edit.NewBookmark) || edit.NewBookmark == edit.Bookmark {
-		return nil, fmt.Errorf("invalid DOCX bookmark rename")
+func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit, index *bookmarkIndex) ([]replacement, error) {
+	deleting := edit.Action == "delete_bookmark"
+	if t.kind != "bookmark_paragraph" || edit.Text != "" || edit.URL != "" || !bookmarkName.MatchString(edit.Bookmark) ||
+		deleting && edit.NewBookmark != "" || !deleting && (!bookmarkName.MatchString(edit.NewBookmark) || edit.NewBookmark == edit.Bookmark) {
+		return nil, fmt.Errorf("invalid DOCX bookmark edit")
 	}
-	if !strings.EqualFold(edit.Bookmark, edit.NewBookmark) && index.names[strings.ToLower(edit.NewBookmark)] != 0 {
+	if !deleting && !strings.EqualFold(edit.Bookmark, edit.NewBookmark) && index.names[strings.ToLower(edit.NewBookmark)] != 0 {
 		return nil, fmt.Errorf("duplicate DOCX bookmark name")
 	}
 	var start *node
@@ -23,24 +24,38 @@ func (p *documentPackage) renameBookmark(data []byte, t target, edit ReferenceEd
 	if start == nil {
 		return nil, fmt.Errorf("DOCX bookmark target has changed")
 	}
-	raw, err := patchScalarProperty(start, data, "bookmarkStart", wordNS, map[string]string{"name": edit.NewBookmark}, nil)
-	if err != nil {
-		return nil, err
+	var edits []replacement
+	if deleting {
+		end := index.ends[start.attr("id")][0]
+		edits = []replacement{{start: start.start, end: start.end}, {start: end.start, end: end.end}}
+	} else {
+		raw, err := patchScalarProperty(start, data, "bookmarkStart", wordNS, map[string]string{"name": edit.NewBookmark}, nil)
+		if err != nil {
+			return nil, err
+		}
+		edits = []replacement{{start.start, start.end, []byte(raw)}}
 	}
-	edits := []replacement{{start.start, start.end, []byte(raw)}}
 	var walk func(*node, bool) error
 	walk = func(n *node, main bool) error {
 		switch {
 		case n.is("fldChar") || n.is("instrText") || n.is("delInstrText") ||
 			n.is("fldSimple") && !strings.EqualFold(strings.TrimSpace(n.attr("instr")), "PAGE"):
-			return fmt.Errorf("DOCX bookmark rename requires a document without opaque fields")
+			return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 		case !main && n.is("bookmarkStart") &&
-			(strings.EqualFold(n.attr("name"), edit.Bookmark) || strings.EqualFold(n.attr("name"), edit.NewBookmark)):
+			(strings.EqualFold(n.attr("name"), edit.Bookmark) || !deleting && strings.EqualFold(n.attr("name"), edit.NewBookmark)):
 			return fmt.Errorf("DOCX bookmark name exists in another story")
 		case n.is("hyperlink") && strings.EqualFold(n.attr("anchor"), edit.Bookmark):
 			if attribute(n, officeRelNS, "id") == "" {
 				if !main || n.attr("docLocation") != "" || protectedLink(n) {
 					return fmt.Errorf("protected DOCX bookmark reference")
+				}
+				if deleting {
+					unlinked, err := unlinkReference(data, target{kind: "hyperlink", node: n}, ReferenceEdit{Action: "unlink"})
+					if err != nil {
+						return err
+					}
+					edits = append(edits, unlinked...)
+					return nil
 				}
 				open, close := scopedOpening(n, data, false)
 				open, err := patchOpeningAttributes(open, wordNS, map[string]string{"anchor": edit.NewBookmark}, nil)
