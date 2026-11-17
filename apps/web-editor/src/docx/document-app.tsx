@@ -30,7 +30,7 @@ import { DocumentOutline } from './document-outline';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
 import { DocumentMathToolbar } from './document-objects';
-import { paragraphs } from './paragraphs';
+import { paragraphs, restoreAnchoredPoint } from './paragraphs';
 import { DocumentTableToolbar } from './document-table-toolbar';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
 
@@ -144,6 +144,15 @@ export function DocumentApp() {
     const section = snapshot?.sections?.find(section => section.id === block.paragraph.sectionId);
     return {paragraph: block.paragraph, canSplit: Boolean(section?.editable && index < section.endBlock)};
   };
+  const sectionBreaks = createMemo(() => {
+    const snapshot = state().snapshot;
+    if (!snapshot?.sections) return [];
+    return snapshot.sections.slice(0,-1).flatMap((section,index)=>{
+      const block=snapshot.blocks[section.endBlock];
+      const next=snapshot.sections?.[index+1];
+      return section.editable && next?.editable && next.startBlock<=next.endBlock && block?.type==='paragraph' ? [block.paragraph] : [];
+    });
+  });
   const stageBoundary = (targetId: string, boundary: BoundaryMode) => {
     const changed = controller.editBoundary({type:'update_boundary', targetId, boundary});
     if (changed) setDraftVersion(version => version + 1);
@@ -203,6 +212,7 @@ export function DocumentApp() {
     const article = document.getElementById('document-content');
     const active = document.activeElement;
     const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
+    const previousSnapshot = state().snapshot;
     const richSelection = previousEditor && (readTextSelection(previousEditor) ?? (state().snapshot?.id===snapshot.id ? formattingSelection() : undefined));
     const previousRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
     const fields = [...article?.querySelectorAll('textarea') ?? []];
@@ -228,12 +238,17 @@ export function DocumentApp() {
         const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
         const currentRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
         const remap = (point: typeof richSelection.anchor) => {
+          if (previousSnapshot) {
+            const anchored = restoreAnchoredPoint(previousSnapshot,snapshot,point);
+            if (anchored !== undefined) return anchored;
+          }
           const index = previousRuns.findIndex(run => run.dataset.docxRun === point.runId);
           const run = index >= 0 ? currentRuns[Math.min(index, currentRuns.length - 1)] : undefined;
           return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
         };
         const anchor = remap(richSelection.anchor), focus = remap(richSelection.focus);
         if (editor && anchor && focus) {setFormattingSelection({anchor,focus});restoreTextSelection(editor, { anchor, focus });}
+        else setFormattingSelection(undefined);
       });
     } else if (selection && (restoringSave || document.activeElement === document.body)) {
       const field = article?.querySelectorAll('textarea')[index];
@@ -380,7 +395,7 @@ export function DocumentApp() {
     <div id="docx-tools-layout" hidden={toolGroup()!=='layout'}>
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentBoundaryToolbar target={boundaryParagraph()} trailingBreaks={state().snapshot?.blocks.flatMap(block=>block.type==='paragraph' && block.paragraph.pageBreakAfter ? [block.paragraph] : []) ?? []} pending={boundaryPending()}
+    <DocumentBoundaryToolbar sectionBreaks={sectionBreaks()} target={boundaryParagraph()} trailingBreaks={state().snapshot?.blocks.flatMap(block=>block.type==='paragraph' && block.paragraph.pageBreakAfter ? [block.paragraph] : []) ?? []} pending={boundaryPending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
     </div>
     <div id="docx-tools-recovery" hidden={toolGroup()!=='recovery'}>

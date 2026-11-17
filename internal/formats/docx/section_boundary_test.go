@@ -74,3 +74,30 @@ func TestRemoveTrailingPageBreakPreservesRunAndSection(t *testing.T) {
 		t.Fatal("undo did not restore original bytes")
 	}
 }
+
+func TestRemoveSectionBoundaryKeepsFollowingSettingsAndText(t *testing.T) {
+	ctx := context.Background()
+	const boundary = `<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>`
+	const following = `<w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/><w:cols w:num="2"/></w:sectPr>`
+	s, path := withDocument(t, bodyXML(`<w:p><w:pPr><w:keepNext/>`+boundary+`</w:pPr><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>next</w:t></w:r></w:p>`+following))
+	original := fileBytes(t, path)
+	expected := bytes.Replace(s.pkg.document, []byte(boundary), nil, 1)
+	before := mustSnapshot(t, s)
+	next, err := s.Apply(ctx, ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
+		{Type: "update_boundary", TargetID: before.Blocks[0].ID, Boundary: "remove_section"},
+	}}, "human")
+	if err != nil || len(next.Sections) != 1 || next.Sections[0].Orientation != "landscape" || next.Sections[0].Columns != 2 || !bytes.Equal(expected, s.pkg.document) {
+		t.Fatalf("section removal altered other content: %v", err)
+	}
+	reopened, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mustSnapshot(t, reopened).Sections) != 1 {
+		t.Fatal("section boundary retained after reopening")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("undo did not restore original section")
+	}
+}

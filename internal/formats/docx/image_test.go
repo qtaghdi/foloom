@@ -88,8 +88,25 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 	if info := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Picture; info == nil || info.Alt != "" {
 		t.Fatalf("cleared description was not preserved: %+v", info)
 	}
-	beforeDelete := fileBytes(t, path)
+	beforeResize := fileBytes(t, path)
 	before := mustSnapshot(t, reopened)
+	resized, err := reopened.Apply(ctx, ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
+		{Type: "update_image", TargetID: before.Blocks[0].Paragraph.Runs[1].ID, Image: &ImageEdit{Action: "resize", WidthEMU: 600000}},
+	}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	size := resized.Blocks[0].Paragraph.Runs[1].Picture
+	if size == nil || size.WidthEMU != 600000 || size.HeightEMU != 300000 || !bytes.Equal(reopened.pkg.partData(media, nil), pngBytes.Bytes()) ||
+		!strings.Contains(string(reopened.pkg.document), `cx="600000" cy="300000"`) {
+		t.Fatal("resize did not preserve the aspect ratio and media")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(beforeResize, fileBytes(t, path)) {
+		t.Fatal("undo did not restore the original picture size")
+	}
+	beforeDelete := fileBytes(t, path)
+	before = mustSnapshot(t, reopened)
 	after, err := reopened.Apply(ctx, ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
 		{Type: "update_image", TargetID: before.Blocks[0].Paragraph.Runs[1].ID, Image: &ImageEdit{Action: "delete"}},
 	}}, "human")
