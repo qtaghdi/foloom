@@ -4,7 +4,7 @@ import type { MathOperation, Paragraph, Run, Snapshot } from './contracts';
 
 const labels:Record<NonNullable<Run['object']>['kind'],string> = {
   math:'수식',shape:'도형',textbox:'텍스트 상자',chart:'차트',smartart:'SmartArt',
-  control:'콘텐츠 컨트롤',embedded:'내장 개체',drawing:'그리기 개체',footnote:'각주',
+  control:'콘텐츠 컨트롤',embedded:'내장 개체',drawing:'그리기 개체',footnote:'각주',tracked_insert:'추적 삽입',tracked_delete:'추적 삭제',
 };
 
 export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {

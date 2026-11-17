@@ -811,8 +811,14 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 선택한 전체 run에 주석을 연결합니다.
 
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
-보호합니다. 답글·해결, 변경 추적 작성·수락·거절은 현재 지원 범위에 포함되지
-않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+보호합니다. 답글·해결과 변경 추적 작성은 현재 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+
+검토의 변경 추적 목록에서 기존 본문 텍스트 삽입·삭제를 하나씩
+수락하거나 거절하고 저장합니다. HTTP·MCP는 현재 변경 run ID에
+`accept_revision` 또는 `reject_revision`을 적용합니다. 유지한 텍스트의
+서식과 관련 없는 변경은 보존합니다. 중첩 변경, 표, 문단 경계와 필드는
+보호합니다. [Word의 변경 추적 규칙](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-accept-all-revisions-in-a-word-processing-document)을
+따릅니다.
 
 ### 고급 개체
 

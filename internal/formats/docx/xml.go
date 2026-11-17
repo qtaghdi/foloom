@@ -275,6 +275,19 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				allowed = false
 			}
 		}
+		reviewable := kind == "replace_run_text" && p.parent == body && !protected[p]
+		if reviewable && (p.has("ins") || p.has("del")) {
+			for _, name := range []string{"fldChar", "instrText", "delInstrText", "fldSimple", "moveFrom", "moveTo", "sdt",
+				"pPrChange", "rPrChange", "commentRangeStart", "commentRangeEnd", "bookmarkStart", "bookmarkEnd"} {
+				if p.has(name) {
+					reviewable = false
+					break
+				}
+			}
+			if props := p.child("pPr"); props != nil && (props.has("ins") || props.has("del")) {
+				reviewable = false
+			}
+		}
 		for _, r := range p.children {
 			if r.is("pPr") {
 				continue
@@ -289,6 +302,15 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				}
 				if run.Object != nil && run.Object.Editable && targets[run.ID].kind != "math_object" {
 					run.Object.Editable = false
+				}
+				if r.is("ins") || r.is("del") {
+					if change := reviewTextRevision(r, root.source); change != nil {
+						run.Object = change
+						change.Editable = reviewable
+						if reviewable {
+							targets[run.ID] = target{node: r, paragraph: p, kind: "tracked_text"}
+						}
+					}
 				}
 				if r.is("hyperlink") {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
