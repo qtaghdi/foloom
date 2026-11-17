@@ -9,7 +9,7 @@ import (
 
 func TestNativeMathEditsPreserveComplexObjectXML(t *testing.T) {
 	ctx := context.Background()
-	fraction := `<m:oMath xmlns:m="` + mathNS + `"><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath>`
+	fraction := `<m:oMath xmlns:m="` + mathNS + `"><m:f><m:fPr><m:type m:val="bar"/></m:fPr><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath>`
 	chart := `<w:r><w:drawing><wp:inline xmlns:wp="` + drawingWordNS + `"><a:graphic xmlns:a="` + drawingNS + `"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"/></a:graphic></wp:inline></w:drawing></w:r>`
 	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>plain</w:t></w:r></w:p><w:p>`+fraction+chart+`</w:p>`))
 	before := fileBytes(t, filename)
@@ -49,15 +49,27 @@ func TestNativeMathEditsPreserveComplexObjectXML(t *testing.T) {
 		!strings.Contains(string(s.pkg.document), fraction+chart) {
 		t.Fatalf("fraction did not retain native math and neighboring objects: %v", err)
 	}
+	fractionRun := next.Blocks[0].Paragraph.Runs[1]
+	approved := MathEdit{Action: "replace_fraction", Fraction: &MathFraction{Numerator: "배율 < x", Denominator: "3"}}
+	if _, err := apply(next, next.Blocks[1].Paragraph.Runs[0].ID, approved); err == nil {
+		t.Fatal("fraction with special settings was editable")
+	}
+	if _, err := apply(next, fractionRun.ID, MathEdit{Action: "replace", Expression: "x"}); err == nil {
+		t.Fatal("plain replacement was allowed on a fraction")
+	}
+	next, err = apply(next, fractionRun.ID, approved)
+	if err != nil || !strings.Contains(string(s.pkg.document), "배율 &lt; x") || !strings.Contains(string(s.pkg.document), fraction+chart) {
+		t.Fatalf("fraction edit lost native math or neighboring objects: %v", err)
+	}
 	reopened, err := Open(ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 	object := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Object
-	if object == nil || object.Fraction == nil || object.Fraction.Numerator != "x < y" || object.Fraction.Denominator != "2" || object.Editable {
+	if object == nil || object.Fraction == nil || object.Fraction.Numerator != "배율 < x" || object.Fraction.Denominator != "3" || !object.Editable {
 		t.Fatalf("fraction preview unavailable after reload: %+v", object)
 	}
-	for range 4 {
+	for range 5 {
 		historyRestore(t, reopened, "undo")
 	}
 	if !bytes.Equal(before, fileBytes(t, filename)) {

@@ -784,12 +784,14 @@ HTTP·MCP 작업은 같은 문단의 `comment.startRunId`와 `comment.endRunId`�
 
 삽입 도구의 `수식`에서 `분수 삽입`을 선택하고 분자·분모를 입력한 뒤
 저장합니다. [Office Open XML 분수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.fraction?view=openxml-3.0.1)로 저장됩니다.
-
+기존 분수는 `분수 바꾸기`에서 고른 뒤 분자와 분모를 바꿀 수 있습니다.
+HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fraction: { numerator, denominator } }`를 적용합니다.
+분자·분모가 하나의 텍스트 run이고 별도 수식 속성이 없는 구조를 지원합니다.
 
 | 개체 | 브라우저 표시 | 편집 | 외부 편집 |
 | --- | --- | --- | --- |
 | 단순 인라인 수식 | 수식 텍스트 | 삽입·교체·삭제 | Word 수식 개체 |
-| 단순 분수 | 분자·분모와 가로 분수선 | 삽입 | Word |
+| 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 일부 | 미지원 | Word |
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |

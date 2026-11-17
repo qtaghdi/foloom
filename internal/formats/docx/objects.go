@@ -8,7 +8,7 @@ import (
 const mathNS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 type MathEdit struct {
-	Action     string        `json:"action" jsonschema:"insert, insert_fraction, replace, or delete"`
+	Action     string        `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, or delete"`
 	Expression string        `json:"expression,omitempty"`
 	Fraction   *MathFraction `json:"fraction,omitempty"`
 }
@@ -46,12 +46,18 @@ func editableMath(math *node) bool {
 	return true
 }
 
-func previewFraction(math *node) *MathFraction {
-	if math.name.Local != "oMath" || len(math.children) != 1 {
+func previewFraction(math *node, strict bool) *MathFraction {
+	if math.name.Space != mathNS || math.name.Local != "oMath" || len(math.children) != 1 {
 		return nil
 	}
 	fraction := childNS(math, mathNS, "f")
 	if fraction == nil || len(fraction.children) != 2 {
+		return nil
+	}
+	plain := func(n *node) bool {
+		return onlyNamespaceAttributes(n) && strings.TrimSpace(n.text.String()) == ""
+	}
+	if strict && (!plain(math) || !plain(fraction)) {
 		return nil
 	}
 	read := func(name string) string {
@@ -67,7 +73,19 @@ func previewFraction(math *node) *MathFraction {
 		if text == nil || len(text.children) != 0 {
 			return ""
 		}
-		return reviewText(text.text.String(), 1024)
+		value := text.text.String()
+		if strict {
+			if !plain(arg) || !plain(run) || !validMathText(value) {
+				return ""
+			}
+			for _, attr := range text.attrs {
+				if !isNamespaceAttribute(attr) && (attr.Name.Space != "http://www.w3.org/XML/1998/namespace" || attr.Name.Local != "space") {
+					return ""
+				}
+			}
+			return value
+		}
+		return reviewText(value, 1024)
 	}
 	numerator, denominator := read("num"), read("den")
 	if strings.TrimSpace(numerator) == "" || strings.TrimSpace(denominator) == "" {
@@ -79,8 +97,8 @@ func previewFraction(math *node) *MathFraction {
 func objectPreview(n *node) *ObjectInfo {
 	switch {
 	case n.name.Space == mathNS && (n.name.Local == "oMath" || n.name.Local == "oMathPara"):
-		out := &ObjectInfo{Kind: "math", Editable: editableMath(n), Fraction: previewFraction(n)}
-		if out.Editable {
+		out := &ObjectInfo{Kind: "math", Editable: editableMath(n) || previewFraction(n, true) != nil, Fraction: previewFraction(n, false)}
+		if out.Editable && out.Fraction == nil {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
@@ -120,8 +138,13 @@ func objectPreview(n *node) *ObjectInfo {
 	}
 }
 
+func validMathText(text string) bool {
+	return validText(text) && len(text) <= 1024 && strings.TrimSpace(text) != ""
+}
+
 func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) {
-	if edit.Action != "insert_fraction" && edit.Fraction != nil {
+	fractionEdit := edit.Action == "insert_fraction" || edit.Action == "replace_fraction"
+	if !fractionEdit && edit.Fraction != nil {
 		return replacement{}, fmt.Errorf("unexpected DOCX fraction fields")
 	}
 	if edit.Action == "delete" {
@@ -133,18 +156,15 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 	mathRun := func(text string) string {
 		return `<dwm:r><dwm:t xml:space="preserve">` + escapeText(text) + `</dwm:t></dwm:r>`
 	}
-	validExpression := func(text string) bool {
-		return validText(text) && len(text) <= 1024 && strings.TrimSpace(text) != ""
-	}
 	var contents string
-	if edit.Action == "insert_fraction" {
+	if fractionEdit {
 		fraction := edit.Fraction
-		if edit.Expression != "" || fraction == nil || !validExpression(fraction.Numerator) || !validExpression(fraction.Denominator) {
+		if edit.Expression != "" || fraction == nil || !validMathText(fraction.Numerator) || !validMathText(fraction.Denominator) {
 			return replacement{}, fmt.Errorf("invalid DOCX fraction")
 		}
 		contents = `<dwm:f><dwm:num>` + mathRun(fraction.Numerator) + `</dwm:num><dwm:den>` + mathRun(fraction.Denominator) + `</dwm:den></dwm:f>`
 	} else {
-		if !validExpression(edit.Expression) {
+		if !validMathText(edit.Expression) {
 			return replacement{}, fmt.Errorf("invalid DOCX equation text")
 		}
 		contents = mathRun(edit.Expression)
@@ -154,6 +174,12 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 	case "replace":
 		if t.kind != "math_object" || !editableMath(t.node) || strings.Contains(string(data[t.node.start:t.node.end]), "<!--") {
 			return replacement{}, fmt.Errorf("protected DOCX equation")
+		}
+		return replacement{t.node.start, t.node.end, []byte(raw)}, nil
+	case "replace_fraction":
+		if t.kind != "math_object" || previewFraction(t.node, true) == nil ||
+			strings.Contains(string(data[t.node.start:t.node.end]), "<!--") {
+			return replacement{}, fmt.Errorf("protected DOCX fraction")
 		}
 		return replacement{t.node.start, t.node.end, []byte(raw)}, nil
 	case "insert", "insert_fraction":
