@@ -9,13 +9,16 @@ export function resolveHeaderText(sections:SectionInfo[],slot:HeaderFooterInfo|u
 }
 export function DocumentHeaderFooter(props:{evenAndOddHeaders?:boolean;onParityChange?:(enabled:boolean)=>boolean;sections:SectionInfo[];disabled:boolean;onApply:(id:string,format:SectionFormat)=>boolean}) {
  const [id,setId]=createSignal(''),[kind,setKind]=createSignal<'header'|'footer'>('header'),[variant,setVariant]=createSignal<'default'|'first'|'even'>('default'),[text,setText]=createSignal(''),[firstPage,setFirstPage]=createSignal(false),[error,setError]=createSignal('');
+ const [pageNumber,setPageNumber]=createSignal(false);
  const selected=createMemo(()=>props.sections.find(section=>section.id===id())??props.sections[0]);
  const slot=createMemo(()=>selected()?.headerFooters?.find(info=>info.kind===kind()&&info.variant===variant()));
- createEffect(()=>{setText(resolveHeaderText(props.sections,slot()));setFirstPage(Boolean(selected()?.firstPage));setError('');});
+ createEffect(()=>{setText(resolveHeaderText(props.sections,slot()));setFirstPage(Boolean(selected()?.firstPage));setPageNumber(Boolean(slot()?.pageNumber));setError('');});
  const disabled=()=>props.disabled||!selected()?.editable||!slot()?.editable;
  const apply=(linkPrevious=false)=>{
   const section=selected();if(!section)return;
-  const update={kind:kind(),variant:variant(),...(linkPrevious?{linkPrevious:true}:{text:text()})};
+  const changingField=pageNumber()!==Boolean(slot()?.pageNumber)||Boolean(slot()?.linked&&pageNumber());
+  const independent={text:text(),...(changingField?{pageNumber:pageNumber()}:{})};
+  const update={kind:kind(),variant:variant(),...(linkPrevious?{linkPrevious:true}:independent)};
   const format:SectionFormat={headerFooters:[update]};if(firstPage()!==Boolean(section.firstPage))format.firstPage=firstPage();
   setError(props.onApply(section.id,format)?'':'내용 크기와 문서 연결 상태를 확인하세요.');
  };
@@ -38,6 +41,10 @@ export function DocumentHeaderFooter(props:{evenAndOddHeaders?:boolean;onParityC
    <p class="basis-full text-slate-600">{slot()?.linked?'이전 구역과 연결됨. 내용을 적용하면 이 구역만 독립된 내용으로 바뀝니다.':'이 구역의 독립된 내용입니다.'}</p>
    <Show when={!slot()?.editable}><p role="status" class="basis-full text-amber-800">원본 서식·필드 또는 내용 한도를 보존하기 위해 읽기 전용입니다.</p></Show>
    <textarea aria-label="머리글 바닥글 내용" rows="3" class="w-full min-w-0 cursor-text rounded border border-slate-300 bg-white p-2" value={text()} disabled={disabled()} onInput={e=>setText(e.currentTarget.value)}/>
+   <label class="flex min-h-11 cursor-pointer items-center gap-2">
+    <input type="checkbox" checked={pageNumber()} disabled={disabled()} onChange={event=>setPageNumber(event.currentTarget.checked)}/>
+    쪽 번호 필드
+   </label>
    <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>apply()}>내용 적용</button>
    <button type="button" class={quietButtonClass} disabled={disabled()||props.sections[0]?.id===selected()?.id||Boolean(slot()?.linked)} onClick={()=>apply(true)}>이전 구역 연결</button>
    <p class="basis-full text-slate-600">적용 뒤 저장으로 확정합니다. 빈 내용과 이전 구역 연결은 다릅니다. 홀수·짝수 구분은 문서 전체에 적용됩니다. 실제 페이지 조판은 검증 중입니다.</p>

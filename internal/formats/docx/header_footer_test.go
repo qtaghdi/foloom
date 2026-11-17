@@ -126,3 +126,58 @@ func TestFormattedInheritedHeaderIsProtected(t *testing.T) {
 		t.Fatal("protected inherited header flattened")
 	}
 }
+
+func TestPageNumberFieldPersistsAndRespectsSectionLinks(t *testing.T) {
+	ctx := context.Background()
+	s, filename := headerDocument(t)
+	before := fileBytes(t, filename)
+	initial := mustSnapshot(t, s)
+	yes, no := true, false
+	text := "Page marker"
+	created, err := s.Apply(ctx, headerBatch(initial, 0, HeaderFooterUpdate{Kind: "footer", Variant: "default", Text: &text, PageNumber: &yes}), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstFooter := headerSlot(t, created, 0, "footer", "default")
+	secondFooter := headerSlot(t, created, 1, "footer", "default")
+	if !firstFooter.PageNumber || firstFooter.Text != text || !secondFooter.PageNumber || !secondFooter.Linked {
+		t.Fatal("field or inherited footer not exposed")
+	}
+	root, err := parseXML(s.pkg.document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := inspectSections(root, created.ID, created.Revision)[0]
+	ref, err := headerReference(section.props, "footer", "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := s.pkg.relatedPart(attribute(ref, officeRelNS, "id"), "footer", nil)
+	originalFooter := bytes.Clone(s.pkg.partData(part, nil))
+	if !bytes.Contains(originalFooter, []byte(`w:instr="PAGE"`)) {
+		t.Fatal("PAGE field missing from saved footer")
+	}
+	text = "Revised text"
+	retained, err := s.Apply(ctx, headerBatch(created, 0, HeaderFooterUpdate{Kind: "footer", Variant: "default", Text: &text}), "human")
+	if err != nil || !headerSlot(t, retained, 0, "footer", "default").PageNumber {
+		t.Fatal("existing text edit cleared page number", err)
+	}
+	removed, err := s.Apply(ctx, headerBatch(retained, 0, HeaderFooterUpdate{Kind: "footer", Variant: "default", Text: &text, PageNumber: &no}), "human")
+	if err != nil || headerSlot(t, removed, 0, "footer", "default").PageNumber ||
+		!bytes.Equal(originalFooter, s.pkg.partData(part, nil)) {
+		t.Fatal("removing field changed a previously shared part", err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if headerSlot(t, mustSnapshot(t, reopened), 0, "footer", "default").PageNumber {
+		t.Fatal("removal did not survive reopen")
+	}
+	for range 3 {
+		historyRestore(t, reopened, "undo")
+	}
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo changed original file")
+	}
+}
