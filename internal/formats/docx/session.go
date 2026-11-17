@@ -589,6 +589,14 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
 			}
 		}
+		if op.Type == "update_control_text" {
+			changes, err := controlTextEdits(s.pkg.document, t, op.Text)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, changes...)
+			continue
+		}
 		opening := string(s.pkg.document[n.start:n.inner])
 		if n.is("p") || n.is("r") {
 			// Insert into a verified empty container. A local namespace declaration
@@ -621,46 +629,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, replacement{n.start, n.end, []byte(inlineXML(op.Text))})
 			continue
 		}
-		// Self-closing text elements need an explicit close tag after insertion.
-		if strings.HasSuffix(opening, "/>") {
-			name := strings.Fields(strings.TrimPrefix(opening, "<"))[0]
-			name = strings.TrimSuffix(strings.TrimSuffix(name, "/>"), ">")
-			space := false
-			for _, a := range n.attrs {
-				if a.Name.Space == "http://www.w3.org/XML/1998/namespace" && a.Name.Local == "space" {
-					space = true
-					if a.Value != "preserve" && strings.TrimSpace(op.Text) != op.Text {
-						return nil, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
-					}
-				}
-			}
-			opening = strings.TrimSuffix(opening, "/>")
-			if !space {
-				opening += ` xml:space="preserve"`
-			}
-			opening += ">"
-			edits = append(edits, replacement{n.start, n.end, []byte(opening + escapeText(op.Text) + "</" + name + ">")})
-		} else {
-			// Preserve existing whitespace semantics without rewriting surrounding
-			// run attributes or namespace declarations.
-			space := false
-			for _, a := range n.attrs {
-				if a.Name.Space == "http://www.w3.org/XML/1998/namespace" && a.Name.Local == "space" {
-					space = true
-				}
-			}
-			if space {
-				// Existing default whitespace semantics cannot preserve new edge spaces.
-				for _, a := range n.attrs {
-					if a.Name.Local == "space" && a.Value != "preserve" && strings.TrimSpace(op.Text) != op.Text {
-						return nil, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
-					}
-				}
-			} else {
-				opening = strings.TrimSuffix(opening, ">") + ` xml:space="preserve">`
-			}
-			edits = append(edits, replacement{n.start, n.endStart, []byte(opening + escapeText(op.Text))})
+		edit, err := replaceTextNode(s.pkg.document, n, op.Text)
+		if err != nil {
+			return nil, err
 		}
+		edits = append(edits, edit)
 	}
 	if len(edits) == 0 && len(parts) == 0 {
 		return nil, nil
@@ -687,6 +660,50 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	}
 	document = append(document, s.pkg.document[offset:]...)
 	return s.pkg.serializeParts(document, parts)
+}
+
+func replaceTextNode(data []byte, n *node, text string) (replacement, error) {
+	opening := string(data[n.start:n.inner])
+	// Self-closing text elements need an explicit close tag after insertion.
+	if strings.HasSuffix(opening, "/>") {
+		name := strings.Fields(strings.TrimPrefix(opening, "<"))[0]
+		name = strings.TrimSuffix(strings.TrimSuffix(name, "/>"), ">")
+		space := false
+		for _, a := range n.attrs {
+			if a.Name.Space == "http://www.w3.org/XML/1998/namespace" && a.Name.Local == "space" {
+				space = true
+				if a.Value != "preserve" && strings.TrimSpace(text) != text {
+					return replacement{}, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
+				}
+			}
+		}
+		opening = strings.TrimSuffix(opening, "/>")
+		if !space {
+			opening += ` xml:space="preserve"`
+		}
+		opening += ">"
+		return replacement{n.start, n.end, []byte(opening + escapeText(text) + "</" + name + ">")}, nil
+	} else {
+		// Preserve existing whitespace semantics without rewriting surrounding
+		// run attributes or namespace declarations.
+		space := false
+		for _, a := range n.attrs {
+			if a.Name.Space == "http://www.w3.org/XML/1998/namespace" && a.Name.Local == "space" {
+				space = true
+			}
+		}
+		if space {
+			// Existing default whitespace semantics cannot preserve new edge spaces.
+			for _, a := range n.attrs {
+				if a.Name.Local == "space" && a.Value != "preserve" && strings.TrimSpace(text) != text {
+					return replacement{}, fmt.Errorf("target whitespace mode cannot preserve edge spaces")
+				}
+			}
+		} else {
+			opening = strings.TrimSuffix(opening, ">") + ` xml:space="preserve">`
+		}
+		return replacement{n.start, n.endStart, []byte(opening + escapeText(text))}, nil
+	}
 }
 
 func (s *Session) checkSource() error {
