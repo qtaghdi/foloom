@@ -845,7 +845,14 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 선택한 전체 run에 주석을 연결합니다.
 
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
-보호합니다. 답글·해결과 변경 추적 작성은 현재 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+보호합니다. 주석 답글과 해결은 현재 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+
+검토의 `텍스트 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
+교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존
+텍스트는 삭제 변경으로, 교체 텍스트는 삽입 변경으로 기록되며 두 변경에 원래
+서식과 작성자·시각이 유지됩니다. HTTP·MCP는 `track_run_text`에 현재 run ID,
+정확한 `expectedText`와 새 `text`를 보냅니다. 서식 자체의 추적 변경이나
+필드·북마크·주석을 포함한 보호 범위에서는 이 도구를 사용할 수 없습니다.
 
 검토의 변경 추적 목록에서 기존 본문 텍스트 삽입·삭제를 하나씩
 수락하거나 거절하고 저장합니다. HTTP·MCP는 현재 변경 run ID에

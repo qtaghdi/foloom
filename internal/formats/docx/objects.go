@@ -21,6 +21,7 @@ type MathFraction struct {
 type ObjectInfo struct {
 	footnoteID string
 	Kind       string        `json:"kind"`
+	Date       string        `json:"date,omitempty"`
 	Author     string        `json:"author,omitempty"`
 	Label      string        `json:"label,omitempty"`
 	Text       string        `json:"text,omitempty"`
