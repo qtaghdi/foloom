@@ -148,7 +148,7 @@ export function DocumentReferenceToolbar(props:{
       </Show>
       <Show when={renameableBookmarks().length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
-          <select aria-label="이름을 바꿀 북마크" class="editor-select min-h-11 max-w-56"
+          <select aria-label="편집할 북마크" class="editor-select min-h-11 max-w-56"
             value={bookmarkToRename()?.name??''} disabled={disabled()} onChange={event=>{setEditBookmark(event.currentTarget.value);setError('');}}>
             <option value="">북마크 선택</option>
             <For each={renameableBookmarks()}>{item=><option value={item.name}>{item.name}</option>}</For>
@@ -175,6 +175,11 @@ export function DocumentReferenceToolbar(props:{
                   value={item.name} class="min-h-11 rounded border border-slate-300 px-2"/>
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>북마크 이름 변경 적용</button>
+              <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+                const accepted=props.onApply({type:'update_reference',targetId:item.paragraphId,
+                  reference:{action:'delete_bookmark',bookmark:item.name}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>북마크와 내부 링크 해제</button>
             </form>
           }</Show>
         </div>

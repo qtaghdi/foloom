@@ -61,3 +61,33 @@ func TestRenameBookmarkRejectsOpaqueFieldReferences(t *testing.T) {
 		t.Fatal("bookmark rename broke an opaque field")
 	}
 }
+
+func TestDeleteBookmarkUnlinksInternalReferencesWithoutRemovingText(t *testing.T) {
+	ctx := context.Background()
+	marked := `<w:p><w:bookmarkStart w:id="3" w:name="Old"/><w:r><w:t>target</w:t></w:r><w:bookmarkEnd w:id="3"/></w:p>`
+	link := `<w:p><w:hyperlink w:anchor="Old"><w:r><w:rPr><w:b/></w:rPr><w:t>click</w:t></w:r></w:hyperlink></w:p>`
+	other := `<w:p><w:bookmarkStart w:id="4" w:name="Other"/><w:r><w:t>other</w:t></w:r><w:bookmarkEnd w:id="4"/></w:p>`
+	s, filename := withDocument(t, bodyXML(marked+link+other))
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	if _, err := s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: v.Bookmarks[0].ParagraphID, Reference: &ReferenceEdit{Action: "delete_bookmark", Bookmark: "Old"}},
+	}}, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := mustSnapshot(t, reopened)
+	click := result.Blocks[1].Paragraph.Runs[0]
+	if len(result.Bookmarks) != 1 || result.Bookmarks[0].Name != "Other" ||
+		result.Blocks[0].Paragraph.Runs[0].Text != "target" || click.Text != "click" || !click.Bold || click.Link != nil ||
+		strings.Contains(string(reopened.pkg.document), `w:id="3"`) {
+		t.Fatal("deletion changed unrelated text and formatting or retained an internal link")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo changed original package")
+	}
+}

@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, set_footnote_text, delete_footnote, rename_bookmark, set_link_url, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, set_footnote_text, delete_footnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -107,8 +107,8 @@ func (p *documentPackage) addHyperlink(raw string, changes map[string][]byte) (s
 }
 
 func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEdit, bookmarks *bookmarkIndex, changes map[string][]byte) ([]replacement, error) {
-	if edit.Action == "rename_bookmark" {
-		return p.renameBookmark(data, t, edit, bookmarks)
+	if edit.Action == "rename_bookmark" || edit.Action == "delete_bookmark" {
+		return p.editBookmark(data, t, edit, bookmarks)
 	}
 	if edit.NewBookmark != "" {
 		return nil, fmt.Errorf("unexpected DOCX bookmark name")
