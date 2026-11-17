@@ -160,6 +160,7 @@ func escapeText(s string) string {
 
 type target struct {
 	trackable        bool
+	controlTexts     []*node
 	moveUp, moveDown *node
 	paragraph, run   *node
 	node             *node
@@ -322,10 +323,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				}
 				if r.is("sdt") && reviewable && p.parent == body && !p.has("ins") && !p.has("del") &&
 					!p.has("fldSimple") && !p.has("fldChar") && !p.has("moveFrom") && !p.has("moveTo") {
-					if text := plainControlText(r, root.source); text != nil {
-						value := text.text.String()
+					if texts, value := plainControlText(r, root.source); len(texts) != 0 {
 						run.Object = &ObjectInfo{Kind: "control", Text: value, Label: reviewText(r.child("sdtPr").child("alias").attr("val"), 160), Editable: true}
-						targets[run.ID] = target{node: text, text: value, paragraph: p, kind: "update_control_text"}
+						targets[run.ID] = target{node: r, text: value, paragraph: p, kind: "update_control_text", controlTexts: texts}
 					}
 				}
 				if r.is("hyperlink") {

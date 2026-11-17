@@ -882,7 +882,8 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 삽입의 `콘텐츠 컨트롤 편집`에서 일반 본문 평문 컨트롤을 골라 텍스트를
 바꿉니다. HTTP·MCP는 `update_control_text`에 컨트롤 run ID, 현재 문자열
 `expectedText`와 새 `text`를 보냅니다. 컨트롤 ID와 원본 속성·서식은 유지합니다.
-내용 잠금, 데이터 연결, 자리표시자와 복합 컨트롤은 보호합니다.
+여러 텍스트 run이 있으면 공통된 앞뒤 문자열은 기존 서식 구간에 남고, 새로 입력한 부분은
+변경 시작 위치의 서식을 따릅니다. 내용 잠금, 데이터 연결, 자리표시자와 복합 컨트롤은 보호합니다.
 [Word 콘텐츠 컨트롤 구조](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.sdtcontentrun)를
 사용합니다.
 
