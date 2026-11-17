@@ -1,5 +1,22 @@
 import type { Snapshot, ListDefinition, Paragraph } from './contracts';
 
+const romanDigits = [
+  [1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],
+  [40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I'],
+] as const;
+
+function formatListNumber(value: number, kind?: string): string | undefined {
+  if (kind==='decimal'||kind==='bullet') return String(value);
+  if (kind!=='upperRoman'&&kind!=='lowerRoman'||value<1||value>3999) return undefined;
+  let remaining=value, result='';
+  for (const [number,symbol] of romanDigits) {
+    const count=Math.floor(remaining/number);
+    result+=symbol.repeat(count);
+    remaining-=number*count;
+  }
+  return kind==='lowerRoman'?result.toLowerCase():result;
+}
+
 // This preview deliberately labels unsupported imported numbering formats.
 // The original numbering XML remains authoritative when reopened in Word.
 export function previewLists(snapshot: Snapshot, drafts: ListDefinition[] = []): Snapshot {
@@ -17,13 +34,14 @@ export function previewLists(snapshot: Snapshot, drafts: ListDefinition[] = []):
     const levels = catalog.get(id), definition = levels?.find(l=>l.level===level);
     if (!definition) return {...p,listLabel:undefined};
     const values = counters.get(id) ?? [];
-    values[level] = values[level]===undefined?definition.start:values[level]!+1;
+    values[level] = values[level]===undefined?Math.max(1,definition.start):values[level]!+1;
     values.length = level+1; counters.set(id,values);
     let supported=true;
     const label=definition.text.replace(/%([1-9])/g, (_match,n:string)=>{
       const i=Number(n)-1,d=levels?.find(l=>l.level===i);
-      if (d?.kind!=='decimal' && d?.kind!=='bullet') supported=false;
-      return String(values[i]??d?.start??1);
+      const formatted=formatListNumber(values[i]??Math.max(1,d?.start??1),d?.kind);
+      if (formatted===undefined) supported=false;
+      return formatted??'';
     });
     return {...p,listLabel:supported?label:`[${definition.kind}]`};
   };
