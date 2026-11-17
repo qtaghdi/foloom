@@ -70,14 +70,15 @@ export function DocumentReferenceToolbar(props:{
         : '편집 가능한 본문 문단에 커서를 놓으세요.'}</p>
       <Show when={props.links.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
-          <label class="flex min-w-0 flex-col gap-1">기존 웹 링크
-            <select aria-label="기존 웹 링크" class="editor-select min-h-11 max-w-64" value={selectedLink()?.id??''}
+          <label class="flex min-w-0 flex-col gap-1">기존 링크
+            <select aria-label="기존 링크" class="editor-select min-h-11 max-w-64" value={selectedLink()?.id??''}
               disabled={disabled()} onChange={event=>{setLinkId(event.currentTarget.value);setError('');}}>
-              <option value="">웹 링크 선택</option>
+              <option value="">링크 선택</option>
               <For each={props.links}>{(link,index)=><option value={link.id}>{index()+1}. {link.text.slice(0,60)}</option>}</For>
             </select>
           </label>
-          <Show when={selectedLink()} keyed>{link=>
+          <Show when={selectedLink()} keyed>{link=><>
+            <Show when={link.link?.url}>
             <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
               event.preventDefault();
               if (disabled()) return;
@@ -93,7 +94,12 @@ export function DocumentReferenceToolbar(props:{
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>웹 주소 변경 적용</button>
             </form>
-          }</Show>
+            </Show>
+            <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+              const changed=props.onApply({type:'update_reference',targetId:link.id,reference:{action:'unlink'}});
+              setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>링크 해제</button>
+          </>}</Show>
         </div>
       </Show>
       <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>

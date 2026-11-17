@@ -99,7 +99,7 @@ export type BoundaryMode = 'page_before' | 'no_page_before' | 'no_page_after' | 
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
 export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}};
 export type ReferenceEdit = {action:'insert_bookmark';bookmark:string} |
-  {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string};
+  {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'unlink'};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>};

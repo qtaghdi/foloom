@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, or set_link_url"`
+	Action   string `json:"action" jsonschema:"insert_link, insert_bookmark, set_link_url, or unlink"`
 	Text     string `json:"text,omitempty"`
 	URL      string `json:"url,omitempty"`
 	Bookmark string `json:"bookmark,omitempty"`
@@ -108,6 +108,9 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 	if edit.Action == "set_link_url" {
 		return p.changeWebLink(data, t, edit, changes)
 	}
+	if edit.Action == "unlink" {
+		return unlinkReference(data, t, edit)
+	}
 	paragraph := t.paragraph
 	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") {
 		return nil, fmt.Errorf("DOCX reference requires an editable body paragraph")
@@ -163,16 +166,10 @@ func (p *documentPackage) changeWebLink(data []byte, target target, edit Referen
 		attribute(link, officeRelNS, "id") == "" || attribute(link, wordNS, "anchor") != "" || !safeLink(edit.URL) {
 		return nil, fmt.Errorf("invalid DOCX web link update")
 	}
-	for _, name := range []string{"fldChar", "instrText", "fldSimple", "ins", "del", "moveFrom", "moveTo", "sdt", "rPrChange", "pPrChange"} {
-		if link.parent.has(name) {
-			return nil, fmt.Errorf("protected DOCX web link cannot be changed")
-		}
+	if protectedLink(link) {
+		return nil, fmt.Errorf("protected DOCX web link cannot be changed")
 	}
-	for parent := link.parent; parent != nil; parent = parent.parent {
-		if parent.is("ins") || parent.is("del") || parent.is("moveFrom") || parent.is("moveTo") || parent.is("sdt") {
-			return nil, fmt.Errorf("protected DOCX web link cannot be changed")
-		}
-	}
+
 	if len(link.children) == 0 {
 		return nil, fmt.Errorf("DOCX web link has no displayed content")
 	}
@@ -186,6 +183,68 @@ func (p *documentPackage) changeWebLink(data []byte, target target, edit Referen
 		return nil, err
 	}
 	return []replacement{{start: link.start, end: link.inner, data: []byte(opening)}}, nil
+}
+
+func protectedLink(link *node) bool {
+	for _, name := range []string{"fldChar", "instrText", "fldSimple", "ins", "del", "moveFrom", "moveTo", "sdt", "rPrChange", "pPrChange"} {
+		if link.parent.has(name) {
+			return true
+		}
+	}
+	for parent := link.parent; parent != nil; parent = parent.parent {
+		if parent.is("ins") || parent.is("del") || parent.is("moveFrom") || parent.is("moveTo") || parent.is("sdt") {
+			return true
+		}
+	}
+	return false
+}
+
+func unlinkReference(data []byte, target target, edit ReferenceEdit) ([]replacement, error) {
+	link := target.node
+	if target.kind != "hyperlink" || link == nil || !link.parent.is("p") ||
+		edit.Text != "" || edit.URL != "" || edit.Bookmark != "" ||
+		len(link.children) == 0 || strings.TrimSpace(link.text.String()) != "" {
+		return nil, fmt.Errorf("invalid DOCX link removal")
+	}
+	if protectedLink(link) {
+		return nil, fmt.Errorf("protected DOCX link cannot be removed")
+	}
+	for _, a := range link.attrs {
+		if isNamespaceAttribute(a) || a.Name.Space == officeRelNS && a.Name.Local == "id" {
+			continue
+		}
+		switch a.Name.Local {
+		case "anchor", "history", "tooltip", "tgtFrame", "docLocation":
+			if a.Name.Space == wordNS {
+				continue
+			}
+		}
+		return nil, fmt.Errorf("protected DOCX link metadata")
+	}
+	var out strings.Builder
+	start := link.inner
+	for _, run := range link.children {
+		if !run.is("r") || strings.HasSuffix(string(data[run.start:run.inner]), "/>") {
+			return nil, fmt.Errorf("DOCX link has protected content")
+		}
+		for _, child := range run.children {
+			if !child.is("rPr") && !child.is("t") && !plainLineBreak(child) && !plainTab(child) {
+				return nil, fmt.Errorf("DOCX link has protected content")
+			}
+		}
+		if run.has("rPrChange") {
+			return nil, fmt.Errorf("DOCX link has tracked formatting")
+		}
+		// Runs can inherit prefixes defined on the hyperlink being removed.
+		open, close := scopedOpening(run, data, false)
+		out.Write(data[start:run.start])
+		out.WriteString(open)
+		out.Write(data[run.inner:run.endStart])
+		out.WriteString(close)
+		start = run.end
+	}
+	out.Write(data[start:link.endStart])
+	return []replacement{{start: link.start, end: link.end, data: []byte(out.String())}}, nil
 }
 
 func (index bookmarkIndex) hasTarget(name string) bool {
