@@ -18,9 +18,15 @@ type RectangleColorEdit struct {
 	Stroke string `json:"stroke" jsonschema:"Six hexadecimal RGB digits for the solid outline, without a hash prefix"`
 }
 
+type RectangleSizeEdit struct {
+	WidthEMU  int `json:"widthEmu" jsonschema:"Rectangle width in EMUs, from 12700 through 18288000"`
+	HeightEMU int `json:"heightEmu" jsonschema:"Rectangle height in EMUs, from 12700 through 18288000"`
+}
+
 type inlineRectangleInfo struct {
 	RectanglePreview
-	fillNode, strokeNode *node
+	fillNode, strokeNode     *node
+	frameSize, transformSize *node
 }
 
 func validRectangleColor(rgb string) bool {
@@ -92,16 +98,71 @@ func inspectInlineRectangle(inline, graphic *node) *inlineRectangleInfo {
 	return &inlineRectangleInfo{
 		RectanglePreview: RectanglePreview{WidthEMU: *width, HeightEMU: *height, Fill: attribute(fill, "", "val"), Stroke: attribute(stroke, "", "val")},
 		fillNode:         fill, strokeNode: stroke,
+		frameSize: outer, transformSize: inner,
 	}
+}
+
+func rectangleForRun(run *node) *inlineRectangleInfo {
+	inline := childNS(run.child("drawing"), drawingWordNS, "inline")
+	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+	return inspectInlineRectangle(inline, graphic)
+}
+
+func (info *inlineRectangleInfo) canResize(data []byte) bool {
+	if info == nil {
+		return false
+	}
+	frames := 0
+	for _, child := range info.frameSize.parent.children {
+		if child.name.Space != drawingWordNS {
+			continue
+		}
+		if child.name.Local == "extent" {
+			frames++
+		}
+		if child.name.Local == "effectExtent" {
+			for _, attr := range child.attrs {
+				if !isNamespaceAttribute(attr) && attr.Value != "0" {
+					return false
+				}
+			}
+		}
+	}
+	if frames != 1 {
+		return false
+	}
+	for _, size := range []*node{info.frameSize, info.transformSize} {
+		if len(size.children) != 0 || strings.TrimSpace(string(data[size.inner:size.endStart])) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func resizeInlineRectangle(data []byte, t target, edit RectangleSizeEdit) ([]replacement, error) {
+	info := rectangleForRun(t.run)
+	if !info.canResize(data) || edit.WidthEMU < 12700 || edit.WidthEMU > maxImageExtent ||
+		edit.HeightEMU < 12700 || edit.HeightEMU > maxImageExtent ||
+		edit.WidthEMU == info.WidthEMU && edit.HeightEMU == info.HeightEMU {
+		return nil, fmt.Errorf("invalid or unsupported DOCX rectangle size")
+	}
+	dimensions := map[string]string{"cx": strconv.Itoa(edit.WidthEMU), "cy": strconv.Itoa(edit.HeightEMU)}
+	replacements := make([]replacement, 0, 2)
+	for _, size := range []*node{info.frameSize, info.transformSize} {
+		raw, err := patchScalarProperty(size, data, size.name.Local, "", dimensions, nil)
+		if err != nil {
+			return nil, err
+		}
+		replacements = append(replacements, replacement{size.start, size.end, []byte(raw)})
+	}
+	return replacements, nil
 }
 
 func editInlineRectangleColors(data []byte, t target, edit RectangleColorEdit) ([]replacement, error) {
 	if !validRectangleColor(edit.Fill) || !validRectangleColor(edit.Stroke) {
 		return nil, fmt.Errorf("DOCX rectangle colors require six hexadecimal digits")
 	}
-	inline := childNS(t.run.child("drawing"), drawingWordNS, "inline")
-	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
-	info := inspectInlineRectangle(inline, graphic)
+	info := rectangleForRun(t.run)
 	if info == nil {
 		return nil, fmt.Errorf("unsupported DOCX rectangle")
 	}

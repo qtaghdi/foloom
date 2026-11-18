@@ -139,3 +139,73 @@ func TestDeleteRectangleRemovesOnlySelectedShape(t *testing.T) {
 		t.Fatal("undo did not recover the exact original DOCX")
 	}
 }
+
+func TestResizeInlineRectangleKeepsColorsAndSynchronizesExtents(t *testing.T) {
+	ctx := context.Background()
+	drawing := strings.ReplaceAll(strings.ReplaceAll(inlineRectangle(12), "D7EAE4", "A12B3C"), "0F766E", "1F4F32")
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>adjacent text</w:t></w:r>`+drawing+`</w:p>`))
+	before := fileBytes(t, filename)
+	original := bytes.Clone(s.pkg.document)
+	v := mustSnapshot(t, s)
+	run := v.Blocks[0].Paragraph.Runs[1]
+	if run.Object == nil || !run.Object.RectangleResizeEditable {
+		t.Fatal("basic inline rectangle should expose its size")
+	}
+	size := RectangleSizeEdit{WidthEMU: 0, HeightEMU: 381000}
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "resize_rectangle", TargetID: run.ID, RectangleSize: &size},
+	}}
+	if _, err := s.Apply(ctx, input, "human"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("invalid dimension changed the source")
+	}
+	size.WidthEMU = 1714500
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, reopened)
+	rectangle := v.Blocks[0].Paragraph.Runs[1].Object
+	want := RectanglePreview{WidthEMU: size.WidthEMU, HeightEMU: size.HeightEMU, Fill: "A12B3C", Stroke: "1F4F32"}
+	if rectangle == nil || !rectangle.RectangleResizeEditable || rectangle.Rectangle == nil || *rectangle.Rectangle != want {
+		t.Fatalf("unexpected rectangle after resize: %+v", rectangle)
+	}
+	root, err := parseXML(reopened.pkg.document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runNode := root.child("body").child("p").children[1]
+	info := rectangleForRun(runNode)
+	for _, size := range []*node{info.frameSize, info.transformSize} {
+		if attribute(size, "", "cx") != "1714500" || attribute(size, "", "cy") != "381000" {
+			t.Fatalf("inline and inner transform dimensions differ: %+v", size.attrs)
+		}
+	}
+	extents := regexp.MustCompile(`<(?:wp:extent|a:ext) [^>]+?(?:/>|></(?:wp:extent|a:ext)>)`)
+	if !bytes.Equal(extents.ReplaceAll(original, nil), extents.ReplaceAll(reopened.pkg.document, nil)) {
+		t.Fatal("rectangle resize changed XML beyond its two size elements")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover the original DOCX")
+	}
+}
+
+func TestRectangleEffectMarginsKeepSizeProtected(t *testing.T) {
+	drawing := strings.Replace(inlineRectangle(12), "<wp:docPr", `<wp:effectExtent l="0" t="1000" r="0" b="0"/><wp:docPr`, 1)
+	s, filename := withDocument(t, bodyXML("<w:p>"+drawing+"</w:p>"))
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	run := v.Blocks[0].Paragraph.Runs[0]
+	if run.Object == nil || !run.Object.Editable || run.Object.RectangleResizeEditable {
+		t.Fatal("effect margins must protect resizing while preserving existing color and delete tools")
+	}
+	_, err := s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "resize_rectangle", TargetID: run.ID, RectangleSize: &RectangleSizeEdit{WidthEMU: 1714500, HeightEMU: 381000}},
+	}}, "human")
+	if err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("resizing a protected rectangle must leave the package untouched")
+	}
+}
