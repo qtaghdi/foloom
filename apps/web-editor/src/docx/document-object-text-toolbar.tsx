@@ -2,7 +2,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
 import type { ObjectTextOperation, Paragraph, Snapshot } from './contracts';
 import { utf8Length, validChartValue } from './validation';
-import { DocumentPieChartForm } from './document-pie-chart-form';
+import { DocumentChartForm } from './document-chart-form';
 
 const objectLabels={
   control:{title:'콘텐츠 컨트롤 편집',select:'편집할 콘텐츠 컨트롤',name:'컨트롤',text:'콘텐츠 컨트롤 텍스트'},
@@ -37,7 +37,7 @@ export function DocumentObjectTextToolbar(props:{
       <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">{labels().title}</summary>
       <div class="flex min-w-0 flex-wrap items-end gap-2 pb-2">
         <Show when={props.kind==='chart'&&chartFormOpened()}>
-          <DocumentPieChartForm target={props.target} disabled={disabled()} onApply={props.onApply}/>
+          <DocumentChartForm target={props.target} disabled={disabled()} onApply={props.onApply}/>
         </Show>
         <Show when={insertable()}>
           <form class="flex basis-full flex-wrap items-end gap-2" onSubmit={event=>{

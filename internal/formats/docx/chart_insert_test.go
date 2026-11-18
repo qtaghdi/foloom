@@ -109,3 +109,102 @@ func TestInsertPieChartInvalidInputRejectsEntireBatch(t *testing.T) {
 		})
 	}
 }
+
+func TestInsertBarAndLineChartsWithLinkedNativeAxes(t *testing.T) {
+	ctx := context.Background()
+	session, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>Bar source</w:t></w:r></w:p><w:p><w:r><w:t>Line source</w:t></w:r></w:p>`))
+	original := fileBytes(t, filename)
+	baseline := session.pkg
+	initial := mustSnapshot(t, session)
+	points := []ChartInputPoint{{Label: "Loss", Value: "-4"}, {Label: "Even", Value: "0"}, {Label: "Gain & more", Value: "6.5"}}
+	after, err := session.Apply(ctx, ApplyInput{SessionID: initial.ID, BaseRevision: initial.Revision, Operations: []Operation{
+		{Type: "insert_chart", TargetID: initial.Blocks[0].ID, ChartInsert: &ChartInsert{Kind: "bar", Title: "Balance bars", Points: points}},
+		{Type: "insert_chart", TargetID: initial.Blocks[1].ID, ChartInsert: &ChartInsert{Kind: "line", Title: "Balance line", Points: points}},
+	}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != initial.Revision+1 || after.Sequence != initial.Sequence+1 {
+		t.Fatal("chart insertion batch did not commit once")
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := mustSnapshot(t, reopened)
+	for index, chart := range []struct{ filename, family, title, crossing string }{
+		{"word/charts/foloom-chart.xml", "barChart", "Balance bars", "between"},
+		{"word/charts/foloom-chart-1.xml", "lineChart", "Balance line", "midCat"},
+	} {
+		run := state.Blocks[index].Paragraph.Runs[1]
+		if run.Object == nil || run.Object.Text != chart.title || !run.Object.Editable ||
+			!run.Object.DeleteEditable || run.Object.ChartFrame == nil || !slices.Equal(run.Object.ChartValues, []string{"-4", "0", "6.5"}) {
+			t.Fatalf("%s did not reopen with its current values and edit affordances", chart.family)
+		}
+		raw := reopened.pkg.partData(chart.filename, nil)
+		root, err := parseXML(raw)
+		if err != nil || hasChartDataSource(root) {
+			t.Fatalf("%s has an invalid or externally sourced part: %v", chart.family, err)
+		}
+		plot := onlyChartChild(onlyChartChild(root, "chart"), "plotArea")
+		family := chartFamily(plot)
+		cat, value := onlyChartChild(plot, "catAx"), onlyChartChild(plot, "valAx")
+		var ids []string
+		if family == nil || family.name.Local != chart.family || cat == nil || value == nil {
+			t.Fatalf("%s has no native chart family or axes", chart.family)
+		}
+		for _, child := range family.children {
+			if child.name.Space == chartNS && child.name.Local == "axId" {
+				ids = append(ids, attribute(child, "", "val"))
+			}
+		}
+		axisValue := func(axis *node, name string) string { return attribute(onlyChartChild(axis, name), "", "val") }
+		if !slices.Equal(ids, []string{"1", "2"}) || axisValue(cat, "axId") != ids[0] || axisValue(cat, "crossAx") != ids[1] ||
+			axisValue(value, "axId") != ids[1] || axisValue(value, "crossAx") != ids[0] || axisValue(value, "crossBetween") != chart.crossing {
+			t.Fatalf("%s axis references were not reciprocal", chart.family)
+		}
+		if !bytes.Contains(raw, []byte("Gain &amp; more")) {
+			t.Fatal("category labels were lost")
+		}
+	}
+	for _, part := range baseline.parts {
+		switch part.header.Name {
+		case "word/document.xml", documentRelationships, "[Content_Types].xml":
+		default:
+			if !bytes.Equal(part.data, reopened.pkg.partData(part.header.Name, nil)) {
+				t.Fatalf("chart creation changed unrelated part %s", part.header.Name)
+			}
+		}
+	}
+	point := 0
+	edited, err := reopened.Apply(ctx, ApplyInput{SessionID: state.ID, BaseRevision: state.Revision, Operations: []Operation{
+		{Type: "update_chart_title", TargetID: state.Blocks[0].Paragraph.Runs[1].ID, ExpectedText: "Balance bars", Text: "Revised bars"},
+		{Type: "update_chart_value", TargetID: state.Blocks[1].Paragraph.Runs[1].ID,
+			ChartValue: &ChartValueEdit{Point: &point, ExpectedValue: "-4", Value: "-8"}},
+	}}, "ai")
+	if err != nil || edited.Blocks[0].Paragraph.Runs[1].Object.Text != "Revised bars" ||
+		edited.Blocks[1].Paragraph.Runs[1].Object.ChartValues[0] != "-8" {
+		t.Fatalf("existing edit actions could not use the new charts: %v", err)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore exact original DOCX")
+	}
+}
+
+func TestInsertChartRejectsUnknownKindAndOnePointLine(t *testing.T) {
+	for _, kind := range []string{"3D", "line"} {
+		session, filename := withDocument(t, bodyXML(`<w:p/>`))
+		original := fileBytes(t, filename)
+		state := mustSnapshot(t, session)
+		_, err := session.Apply(context.Background(), ApplyInput{SessionID: state.ID, BaseRevision: state.Revision, Operations: []Operation{
+			{Type: "insert_chart", TargetID: state.Blocks[0].ID, ChartInsert: &ChartInsert{
+				Kind: kind, Title: "Single value", Points: []ChartInputPoint{{Label: "First", Value: "-2"}},
+			}},
+		}}, "human")
+		if err == nil || !bytes.Equal(original, fileBytes(t, filename)) || mustSnapshot(t, session).Revision != state.Revision {
+			t.Fatalf("%s changed the source despite invalid chart options", kind)
+		}
+	}
+}
