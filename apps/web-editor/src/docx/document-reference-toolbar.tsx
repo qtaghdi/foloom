@@ -12,7 +12,7 @@ function safeWebAddress(address:string):boolean {
 }
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;links:Run[];notes:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;links:Run[];notes:Run[];toc?:Run;bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
   const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'contents'|'footnote'|'endnote'>('bookmark');
@@ -94,6 +94,12 @@ export function DocumentReferenceToolbar(props:{
       <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':props.target?.structureEditable
         ? `대상 문단: ${props.target.runs.map(run=>run.text).join('').trim().slice(0,80)||'빈 문단'}`
         : '편집 가능한 본문 문단에 커서를 놓으세요.'}</p>
+      <Show when={props.toc}>{toc=>
+        <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+          const accepted=props.onApply({type:'update_reference',targetId:toc().id,reference:{action:'update_toc'}});
+          setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+        }}>목차 제목 업데이트</button>
+      }</Show>
       <Show when={props.links.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
           <label class="flex min-w-0 flex-col gap-1">기존 링크
