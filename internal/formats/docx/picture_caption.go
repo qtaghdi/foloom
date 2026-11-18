@@ -17,42 +17,64 @@ func supportedFigureSequence(instruction string) bool {
 	return strings.EqualFold(strings.Join(strings.Fields(instruction), " "), figureSequence)
 }
 
-func captionParagraph(t target) bool {
+func captionFollowingPicture(t target) (*node, bool) {
 	p := t.paragraph
 	if t.kind != "picture" || p == nil || !p.parent.is("body") || t.run == nil || t.run.parent != p ||
 		p.has("sectPr") || p.has("br") || p.has("bookmarkStart") || p.has("bookmarkEnd") ||
 		p.has("commentRangeStart") || p.has("commentRangeEnd") {
-		return false
+		return nil, false
 	}
 	for _, child := range p.children {
 		if child == t.run || child.is("pPr") {
 			continue
 		}
 		if !child.is("r") || child.has("drawing") || child.has("pict") || child.has("object") {
-			return false
+			return nil, false
 		}
 	}
 	for i, child := range p.parent.children {
-		if child != p {
-			continue
+		if child == p && i+1 < len(p.parent.children) {
+			return p.parent.children[i+1], true
 		}
-		if i+1 == len(p.parent.children) {
-			break
+	}
+	return nil, true
+}
+
+func captionParagraph(t target) bool {
+	next, eligible := captionFollowingPicture(t)
+	if !eligible || next == nil || !next.is("p") {
+		return eligible
+	}
+	if strings.EqualFold(next.child("pPr").child("pStyle").attr("val"), "Caption") {
+		return false
+	}
+	for _, field := range next.children {
+		if field.is("fldSimple") && isFigureSequence(field.attr("instr")) {
+			return false
 		}
-		next := p.parent.children[i+1]
-		if next.is("p") {
-			if strings.EqualFold(next.child("pPr").child("pStyle").attr("val"), "Caption") {
-				return false
-			}
-			for _, field := range next.children {
-				if field.is("fldSimple") && isFigureSequence(field.attr("instr")) {
-					return false
-				}
-			}
-		}
-		break
 	}
 	return true
+}
+
+func editablePictureCaption(t target, data []byte) (*node, string) {
+	next, eligible := captionFollowingPicture(t)
+	if !eligible || next == nil || !next.is("p") || next.has("sectPr") ||
+		strings.Contains(string(data[next.start:next.end]), "<!--") {
+		return nil, ""
+	}
+	children := next.children
+	if len(children) > 0 && children[0].is("pPr") {
+		children = children[1:]
+	}
+	if len(children) != 3 || !children[1].is("fldSimple") || !supportedFigureSequence(children[1].attr("instr")) {
+		return nil, ""
+	}
+	_, prefix := plainTextRunNodes(children[:1])
+	nodes, label := plainTextRunNodes(children[2:])
+	if len(nodes) != 1 || prefix != "그림 " || !strings.HasPrefix(label, ". ") || len(label) <= 2 || len(label) > 1026 || !validText(label) {
+		return nil, ""
+	}
+	return nodes[0], strings.TrimPrefix(label, ". ")
 }
 
 func documentFigureFields(body *node) ([]*node, error) {
@@ -126,4 +148,11 @@ func (p *documentPackage) pictureCaption(t target, text string) ([]replacement, 
 		`" w:dirty="true"><w:r>` + inlineXML(strconv.Itoa(number)) + `</w:r></w:fldSimple><w:r>` +
 		inlineXML(". "+strings.TrimSpace(text)) + `</w:r></w:p>`
 	return append(edits, replacement{start: at, end: at, data: []byte(xml)}), nil
+}
+func (p *documentPackage) editPictureCaption(t target, expected, text string) (replacement, error) {
+	node, current := editablePictureCaption(t, p.document)
+	if node == nil || current != expected || !validText(text) || strings.TrimSpace(text) == "" || len(text) > 1024 {
+		return replacement{}, fmt.Errorf("DOCX caption requires the current plain numbered picture caption")
+	}
+	return replaceTextNode(p.document, node, ". "+strings.TrimSpace(text))
 }
