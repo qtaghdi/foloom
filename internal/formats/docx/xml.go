@@ -159,6 +159,7 @@ func escapeText(s string) string {
 }
 
 type target struct {
+	picturePlacement   string
 	alignmentTrackable bool
 	trackable          bool
 	boldTrackable      bool
@@ -451,7 +452,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: run.Object.Kind}
 			}
 			if !editable && r.child("drawing") != nil && targets[run.ID].kind == "" {
-				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "picture"}
+				picture := target{node: r, run: r, paragraph: p, kind: "picture"}
+				if allowed && !protected[r] && p.parent == body && out.List == nil && !out.PageBreakBefore && !out.PageBreakAfter {
+					picture.picturePlacement = supportedPicturePlacement(picture, root.source, layout)
+				}
+				targets[run.ID] = picture
 			}
 			if editable {
 				textNode := r

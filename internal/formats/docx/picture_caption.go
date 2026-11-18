@@ -232,6 +232,10 @@ func captionMoveProperties(p *node) bool {
 }
 
 func dedicatedPictureParagraph(t target, data []byte) bool {
+	return dedicatedDrawingParagraph(t, data) && sameDrawingName(t.run.child("drawing").children[0], "inline")
+}
+
+func dedicatedDrawingParagraph(t target, data []byte) bool {
 	p := t.paragraph
 	if !t.run.parent.is("p") || !t.run.parent.parent.is("body") || p != t.run.parent ||
 		strings.TrimSpace(p.text.String()) != "" || bytes.Contains(data[p.start:p.end], []byte("<!--")) ||
@@ -240,7 +244,7 @@ func dedicatedPictureParagraph(t target, data []byte) bool {
 		return false
 	}
 	drawing := t.run.child("drawing")
-	if len(drawing.children) != 1 || childNS(drawing, drawingWordNS, "inline") == nil {
+	if len(drawing.children) != 1 {
 		return false
 	}
 	for _, child := range p.children {

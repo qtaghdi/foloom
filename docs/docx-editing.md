@@ -842,6 +842,19 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
 [Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
 
+본문 전용 문단의 지원 인라인 그림을 `그림 배치`에서 `위아래 감싸기`의
+왼쪽·가운데·오른쪽 중 하나로 변경할 수 있습니다. Word는 문단을 anchor로 삼고
+가로는 단, 세로는 문단 시작점을 기준으로 배치합니다. 주변 텍스트는 그림의
+위아래에 있고 기존 캡션·대체 텍스트·그림 크기·파일은 유지합니다. `인라인`을
+선택하면 원래 문단 서식으로 그림을 표시합니다. HTTP·MCP에서는 현재 그림
+run ID를 대상으로 `update_image`에
+`image: { action: "set_placement", placement: "floating_center" }`를 보냅니다.
+허용값은 `inline`, `floating_left`, `floating_center`, `floating_right`입니다.
+임의 위치·감싸기, 세로쓰기, 들여쓰기, 회전, 표와 여러 개체를 포함한 문단은
+보호됩니다. 화면은 지원되는 위아래 배치를 미리 보며 실제 자동 조판은
+Word 계열 편집기에서 확인합니다.
+[Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
+
 같은 그림을 다시 고른 뒤 `그림 캡션 변경`으로 기존 설명을 바꿀 수 있습니다.
 Word 번호 필드와 그림은 유지됩니다. HTTP·MCP에서는 그림 run ID,
 현재 설명의 `expectedText`, 새 `text`를 `edit_picture_caption`에 보냅니다.
