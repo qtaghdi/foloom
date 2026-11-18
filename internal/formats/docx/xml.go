@@ -159,22 +159,25 @@ func escapeText(s string) string {
 }
 
 type target struct {
-	pictureOffsetLimit     *int
-	squareWrap             bool
-	splitNoteParagraph     bool
-	picturePlacement       string
-	tableCaptionInsertable bool
-	refreshableBookmarkRef bool
-	linkAnchorEditable     bool
-	pictureAlign           string
-	alignmentTrackable     bool
-	trackable              bool
-	boldTrackable          bool
-	textStories            [][]*node
-	moveUp, moveDown       *node
-	paragraph, run         *node
-	node                   *node
-	text, kind             string
+	pictureOffsetLimit         *int
+	pictureVerticalOffsetLimit *int
+
+	trackableParagraphBreak bool
+	squareWrap              bool
+	splitNoteParagraph      bool
+	picturePlacement        string
+	tableCaptionInsertable  bool
+	refreshableBookmarkRef  bool
+	linkAnchorEditable      bool
+	pictureAlign            string
+	alignmentTrackable      bool
+	trackable               bool
+	boldTrackable           bool
+	textStories             [][]*node
+	moveUp, moveDown        *node
+	paragraph, run          *node
+	node                    *node
+	text, kind              string
 }
 
 func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
@@ -474,7 +477,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 							picturePageChecked = true
 						}
 						if picturePageValid {
-							picture.pictureOffsetLimit = pictureOffsetLimit(picture, picturePage)
+							picture.pictureOffsetLimit, picture.pictureVerticalOffsetLimit = pictureOffsetLimits(picture, picturePage)
 							if !squareWrapChecked {
 								squareWrapChecked = true
 								picture.squareWrap = canSquareWrapPicture(picture, root.source, picturePage)
@@ -602,6 +605,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			return nil, nil, false, fmt.Errorf("DOCX inspection structure limit exceeded")
 		}
 	}
+	markTrackableParagraphBreaks(root, bodyParagraphs, targets)
 	markParagraphBreakRevisions(root, bodyParagraphs, protected, targets)
 	markBookmarkParagraphs(root, bodyParagraphs, protected, targets)
 	markHyperlinkParagraphs(root, bodyParagraphs, protected, targets)

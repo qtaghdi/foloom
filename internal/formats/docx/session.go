@@ -337,6 +337,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var controlIDs map[int64]bool
 	nextControlID := int64(1)
 	for _, op := range input.Operations {
+		if op.LineSize != nil && op.Type != "insert_line" {
+			return nil, fmt.Errorf("unexpected DOCX line size")
+		}
 		if op.DefaultTabStop != nil && op.Type != "update_default_tab_stop" {
 			return nil, fmt.Errorf("unexpected DOCX default tab stop")
 		}
@@ -527,7 +530,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, edit)
 			continue
 		}
-		if op.Type == "track_run_text" || op.Type == "track_run_bold" || op.Type == "track_paragraph_alignment" {
+		if op.Type == "track_run_text" || op.Type == "track_run_bold" || op.Type == "track_paragraph_alignment" || op.Type == "track_paragraph_break" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || referenceCount >= 32 {
@@ -544,6 +547,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			var edit replacement
 			var err error
 			switch op.Type {
+			case "track_paragraph_break":
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX tracked paragraph split must stand alone")
+				}
+				_, styledTargets, _, inspectErr := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+				if inspectErr != nil {
+					return nil, inspectErr
+				}
+				edit, err = trackParagraphBreak(s.pkg.document, styledTargets[op.TargetID], op, usedParagraphIDs(root), author, revisionDate, revisionIDs, &nextRevisionID)
 			case "track_paragraph_alignment":
 				edit, err = trackedParagraphAlignment(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
 			case "track_run_bold":
@@ -776,7 +788,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, added...)
 			continue
 		}
-		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" || op.Type == "insert_chart" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_line" || op.Type == "insert_control_text" || op.Type == "insert_chart" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -823,9 +835,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				continue
 			}
 			var drawing string
-			if op.Type == "insert_rectangle" {
+			switch op.Type {
+			case "insert_line":
+				if op.LineSize == nil || !op.LineSize.valid() || op.Text != "" {
+					return nil, fmt.Errorf("DOCX line creation requires width and height from 1 to 1440 pt")
+				}
+				drawing = inlineLine(id, *op.LineSize)
+			case "insert_rectangle":
 				drawing = inlineRectangle(id)
-			} else {
+			default:
 				drawing = inlineTextBox(id, op.Text)
 			}
 			edits = append(edits, appendParagraphContent(s.pkg.document, t.paragraph, drawing))

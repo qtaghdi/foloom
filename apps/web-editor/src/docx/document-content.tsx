@@ -216,7 +216,9 @@ function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
   const high=()=>100000-(crop()?.top??0)-(crop()?.bottom??0);
   return <span data-docx-picture contentEditable={false} class="relative inline-block max-w-full align-middle"
     style={{width:`${widthPx()}px`,'aspect-ratio':`${width()}/${height()}`,float:wrapSide(),
-      'max-width':wrapSide()?'50%':undefined,'margin-left':margin()}}>
+      'max-width':wrapSide()?'50%':undefined,'margin-left':margin(),
+      'margin-top':props.picture.placement==='floating_offset'&&props.picture.verticalOffsetEmu?
+        `${props.picture.verticalOffsetEmu/9525}px`:undefined}}>
     <span data-docx-crop={crop()?'':undefined} class="absolute left-1/2 top-1/2 overflow-hidden"
       style={{width:quarterTurn()?`${100*height()/width()}%`:'100%',height:quarterTurn()?`${100*width()/height()}%`:'100%',
         transform:`translate(-50%, -50%) rotate(${rotation()}deg)`}}>
