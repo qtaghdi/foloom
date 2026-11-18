@@ -1034,6 +1034,13 @@ HTTP·MCP는 본문의 각주 run ID에 `reference: { action: "set_footnote_text
 HTTP·MCP는 각주 run ID에 `reference: { action: "delete_footnote" }`를
 적용합니다. 다른 각주와 공유 참조, 구분선 및 관계는 보호합니다.
 
+`페이지` 도구의 `각주·미주가 있는 문단 이동`에서 일반 각주나 미주가 붙은
+문단을 골라 같은 구역의 인접 일반 문단 위나 아래로 옮기고 저장합니다.
+각주·미주의 원래 관계, ID, 내용과 본문 서식은 유지됩니다. 번호와 쪽 배치는
+Word 계열 편집기가 처리합니다. HTTP·MCP에서는 문단 ID와
+`move_note_up` 또는 `move_note_down`을 적용합니다. 다른 구조와 겹치는 범위,
+사용자 지정 번호, 공유 또는 손상된 참조를 포함한 문단은 보호합니다.
+
 ### AI 활동의 문단 위치
 
 원본의 고유한 `w14:paraId`를 세션 안의 문단 위치 식별자로 사용합니다.

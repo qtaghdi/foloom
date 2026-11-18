@@ -3,10 +3,20 @@ package docx
 import "strings"
 
 func markHyperlinkParagraphs(root *node, paragraphs map[*node]*Paragraph, protected map[*node]bool, targets map[string]target) {
-	body := root.child("body")
-	if !body.has("hyperlink") {
+	if !root.child("body").has("hyperlink") {
 		return
 	}
+	markBodyParagraphMoves(root, paragraphs, protected, func(p *node) bool {
+		return p.child("hyperlink") != nil && structuralParagraphContents(p, root.source, "hyperlink", nil)
+	}, func(p, before, after *node) {
+		paragraph := paragraphs[p]
+		paragraph.MoveHyperlinkUp, paragraph.MoveHyperlinkDown = before != nil, after != nil
+		targets[paragraph.ID] = target{kind: "hyperlink_paragraph", paragraph: p, moveUp: before, moveDown: after}
+	})
+}
+
+func markBodyParagraphMoves(root *node, paragraphs map[*node]*Paragraph, protected map[*node]bool, matches func(*node) bool, mark func(p, before, after *node)) {
+	body := root.child("body")
 	ranged, valid := bodyRangeBlocks(body)
 	if !valid {
 		return
@@ -17,7 +27,7 @@ func markHyperlinkParagraphs(root *node, paragraphs map[*node]*Paragraph, protec
 			strings.TrimSpace(p.text.String()) == ""
 	}
 	for i, p := range body.children {
-		if !safe(p) || p.child("hyperlink") == nil || !structuralParagraphContents(p, root.source, "hyperlink", nil) {
+		if !safe(p) || !matches(p) {
 			continue
 		}
 		var before, after *node
@@ -34,9 +44,7 @@ func markHyperlinkParagraphs(root *node, paragraphs map[*node]*Paragraph, protec
 			}
 		}
 		if before != nil || after != nil {
-			paragraph := paragraphs[p]
-			paragraph.MoveHyperlinkUp, paragraph.MoveHyperlinkDown = before != nil, after != nil
-			targets[paragraph.ID] = target{kind: "hyperlink_paragraph", paragraph: p, moveUp: before, moveDown: after}
+			mark(p, before, after)
 		}
 	}
 }
