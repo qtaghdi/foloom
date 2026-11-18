@@ -138,6 +138,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	s.addPicturePreviews(blocks, targetsByID)
+	s.pkg.projectChartTitles(root, blocks, targetsByID)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
 			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
@@ -327,12 +328,30 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var revisionIDs map[int64]bool
 	var nextRevisionID int64
 	var revisionDate string
+	var chartCounts map[string]int
 	for _, op := range input.Operations {
 		if op.RectangleColors != nil && op.Type != "update_rectangle_colors" {
 			return nil, fmt.Errorf("unexpected DOCX rectangle colors")
 		}
 		if op.RectangleSize != nil && op.Type != "resize_rectangle" {
 			return nil, fmt.Errorf("unexpected DOCX rectangle size")
+		}
+		if op.Type == "update_chart_title" {
+			t := targets[op.TargetID]
+			if t.kind != op.Type || seen[op.TargetID] ||
+				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
+				return nil, fmt.Errorf("invalid DOCX chart title operation")
+			}
+			if chartCounts == nil {
+				chartCounts = s.pkg.chartUseCounts(root)
+			}
+			if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
+				return nil, err
+			}
+			seen[op.TargetID] = true
+			continue
 		}
 		if op.Type == "update_rectangle_colors" || op.Type == "delete_rectangle" || op.Type == "resize_rectangle" {
 			t := targets[op.TargetID]

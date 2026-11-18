@@ -414,7 +414,7 @@ export function DocumentApp() {
     <DocumentShapeToolbar snapshot={state().snapshot} target={referenceParagraph()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <For each={['control','textbox'] as const}>{kind=>
+    <For each={['control','textbox','chart'] as const}>{kind=>
       <DocumentObjectTextToolbar kind={kind} target={referenceParagraph()} snapshot={state().snapshot} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
