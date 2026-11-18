@@ -18,6 +18,11 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
         <span class="px-1">{fraction().denominator}</span>
       </span>
     }</Show>
+    <Show when={props.object.squareRoot}>{text=>
+      <span class="inline-flex max-w-full items-start font-serif align-middle" aria-label={`제곱근 ${text()}`}>
+        <span aria-hidden="true">√</span><span class="border-t border-current px-0.5">{text()}</span>
+      </span>
+    }</Show>
     <Show when={props.object.text}>{text=><span classList={{'font-serif':props.object.kind==='math'}}>{text()}</span>}</Show>
   </span>}>{rectangle=>
     <span data-docx-rectangle data-docx-opaque contentEditable={false} role="img" aria-label="인라인 사각형"
@@ -123,18 +128,21 @@ export function DocumentMathToolbar(props:{
   const objects=createMemo(()=>{
     const paragraphs=props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph]:block.rows.flatMap(row=>row.cells.flatMap(cell=>cell.paragraphs)))??[];
     return paragraphs.flatMap(paragraph=>paragraph.runs.filter(run=>
-      run.object?.kind==='math'&&run.object.editable&&Boolean(run.object.fraction)===(action()==='replace_fraction'))).slice(0,200);
+      run.object?.kind==='math'&&run.object.editable&&
+      (action()==='replace_root'?Boolean(run.object.squareRoot):action()==='replace_fraction'?Boolean(run.object.fraction):
+        !run.object.squareRoot&&!run.object.fraction))).slice(0,200);
   });
   const selected=()=>objects().find(item=>item.id===id())??objects()[0];
   createEffect(()=>{
     const kind=action(),math=selected()?.object;
-    setExpression(kind==='replace' ? math?.text??'' : '');
+    setExpression(kind==='replace' ? math?.text??'' : kind==='replace_root'?math?.squareRoot??'':'');
     setNumerator(kind==='replace_fraction' ? math?.fraction?.numerator??'' : '');
     setDenominator(kind==='replace_fraction' ? math?.fraction?.denominator??'' : '');
     setError('');
   });
   const disabled=()=>props.pending||props.disabled;
-  const inserting=()=>action()==='insert'||action()==='insert_fraction';
+  const inserting=()=>action()==='insert'||action()==='insert_fraction'||action()==='insert_root';
+  const editingRoot=()=>action()==='insert_root'||action()==='replace_root';
   const editingFraction=()=>action()==='insert_fraction'||action()==='replace_fraction';
   const targetID=()=>inserting()?props.target?.id:selected()?.id;
   const apply=()=>{
@@ -158,14 +166,14 @@ export function DocumentMathToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="수식 작업" class="editor-select min-h-11" disabled={disabled()} value={action()}
         onChange={event=>setAction(event.currentTarget.value as MathOperation['math']['action'])}>
-        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
+        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="insert_root">제곱근 삽입</option><option value="replace_root">제곱근 바꾸기</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
       </select>
       <Show when={!inserting()}><select aria-label="편집할 수식" class="editor-select min-h-11 max-w-48"
         disabled={disabled()} value={selected()?.id??''} onChange={event=>setID(event.currentTarget.value)}>
         <Show when={!objects().length}><option value="">편집할 수식 없음</option></Show>
-        <For each={objects()}>{item=><option value={item.id}>{item.object?.fraction ? item.object.fraction.numerator+' / '+item.object.fraction.denominator : item.object?.text||'수식'}</option>}</For>
+        <For each={objects()}>{item=><option value={item.id}>{item.object?.fraction ? item.object.fraction.numerator+' / '+item.object.fraction.denominator : item.object?.squareRoot||item.object?.text||'수식'}</option>}</For>
       </select></Show>
-      <Show when={action()!=='delete'&&!editingFraction()}><input type="text" maxlength="256" aria-label="수식 텍스트" placeholder="x² + y²"
+      <Show when={action()!=='delete'&&!editingFraction()}><input type="text" maxlength="256" aria-label={editingRoot()?'피제곱근':'수식 텍스트'} placeholder="x² + y²"
         class="min-h-11 min-w-24 rounded border border-slate-300 px-2" disabled={disabled()} value={expression()}
         onInput={event=>setExpression(event.currentTarget.value)}/></Show>
       <Show when={editingFraction()}>
@@ -175,7 +183,7 @@ export function DocumentMathToolbar(props:{
           value={denominator()} disabled={disabled()} onInput={event=>setDenominator(event.currentTarget.value)}/>
       </Show>
       <button type="button" class={buttonClass} disabled={disabled()||!targetID()} onClick={apply}>수식 적용</button>
-      <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':'단순 수식과 분수를 삽입하거나 바꿀 수 있습니다.'}</p>
+      <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':'단순 수식, 분수, 제곱근을 삽입하거나 바꿀 수 있습니다.'}</p>
       <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
     </div>
   </details>;
