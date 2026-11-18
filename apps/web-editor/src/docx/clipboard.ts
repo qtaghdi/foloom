@@ -73,7 +73,7 @@ export function parseClipboardHTML(html: string, document: Document): { paragrap
 }
 const escape=(text:string)=>text.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 export function clipboardHTML(paragraphs: ClipboardParagraph[]): string {
-  return paragraphs.map(p=>'<p>'+p.map(run=>{
+  return paragraphs.map(p=>'<p style="white-space:pre-wrap">'+p.map(run=>{
     const s=run.style??{};
     const css=[`font-weight:${s.bold?'700':'400'}`,`font-style:${s.italic?'italic':'normal'}`];
     const decoration = [s.underline?'underline':'',s.strike?'line-through':''].filter(Boolean).join(' ');

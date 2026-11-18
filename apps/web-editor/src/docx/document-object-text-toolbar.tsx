@@ -21,7 +21,8 @@ export function DocumentObjectTextToolbar(props:{
   const [point,setPoint]=createSignal(0);
   const labels=()=>objectLabels[props.kind];
   const objects=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
-    ? block.paragraph.runs.filter(run=>run.object?.kind===props.kind&&run.object.editable)
+    ? block.paragraph.runs.filter(run=>run.object?.kind===props.kind&&
+      (run.object.editable||props.kind==='chart'&&run.object.deleteEditable))
     : []).slice(0,200)??[];
   const selected=()=>objects().find(run=>run.id===id());
   const disabled=()=>props.pending||props.disabled;
@@ -63,6 +64,7 @@ export function DocumentObjectTextToolbar(props:{
         </select>
         <Show when={selected()} keyed>{run=>
           <>
+          <Show when={run.object?.editable}>
           <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
             event.preventDefault();
             if (disabled()) return;
@@ -81,6 +83,7 @@ export function DocumentObjectTextToolbar(props:{
             </label>
             <button type="submit" class={buttonClass} disabled={disabled()}>{props.kind==='chart'?'차트 제목 적용':`${labels().name} 내용 적용`}</button>
           </form>
+          </Show>
           <Show when={run.object?.chartFrame}>{frame=>
             <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
               event.preventDefault();
@@ -132,6 +135,12 @@ export function DocumentObjectTextToolbar(props:{
               <button type="submit" class={buttonClass} disabled={disabled()}>차트 데이터 값 적용</button>
             </form>
           }</Show>
+          <Show when={props.kind==='chart'&&run.object?.deleteEditable}>
+            <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+              const accepted=props.onApply({type:'delete_chart',targetId:run.id});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>선택한 차트 제거</button>
+          </Show>
           </>
         }</Show>
         </Show>

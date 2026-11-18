@@ -167,6 +167,26 @@ export function DocumentImageToolbar(props: {
                 }</For>
               </div>
             </Show>
+            <Show when={!selectedIsFloating()&&picture.picture?.align}>{current=>
+              <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(disabled())return;
+                const select=event.currentTarget.elements.namedItem('align') as HTMLSelectElement;
+                const align=select.value;
+                if((align!=='start'&&align!=='center'&&align!=='end')||align===current())return;
+                const accepted=props.onApply({type:'update_image',targetId:picture.id,image:{action:'align',align}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <label class="flex flex-col gap-1">그림 정렬
+                  <select name="align" class="editor-select min-h-11" value={current()} disabled={disabled()}>
+                    <option value="start">왼쪽</option>
+                    <option value="center">가운데</option>
+                    <option value="end">오른쪽</option>
+                  </select>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 정렬 적용</button>
+              </form>
+            }</Show>
             <Show when={picture.picture?.rotationEditable}>
               <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
                 event.preventDefault();

@@ -30,7 +30,7 @@ func drawingFields(n *node, values map[string]string) bool {
 }
 
 func supportedPicturePlacement(t target, data []byte, layout ParagraphLayout) string {
-	if !captionMoveProperties(t.paragraph) || !dedicatedDrawingParagraph(t, data) ||
+	if !plainVisualParagraphProperties(t.paragraph) || !dedicatedDrawingParagraph(t, data) ||
 		layout.Bidi || layout.TextDirection != "" || layout.Left != nil || layout.Right != nil ||
 		layout.FirstLine != nil || layout.Hanging != nil || t.paragraph.child("pPr").child("ind") != nil {
 		return ""

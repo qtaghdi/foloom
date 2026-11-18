@@ -22,6 +22,13 @@ it('encodes only known clipboard styles and escaped text', () => {
  expect(html).toContain('&lt;img&gt;&amp;<br>text');expect(html).not.toContain('<img>');
  expect(html).toContain('font-family:&quot;name; color:red&quot;');
 });
+it('keeps literal tabs, repeated spaces and line breaks in copied basic formatting', () => {
+ const result=parseClipboardHTML(clipboardHTML([[{text:'  left\t two  words\n tail ',style:{bold:true}}]]),document)!;
+ expect(result.text).toBe('  left\t two  words\n tail ');
+ expect(result.paragraphs[0]).toMatchObject([{style:{bold:true}}]);
+ expect(parseClipboardHTML('<p>left\t two  words</p>',document)?.text).toBe('left two words');
+});
+
 it('round-trips inherited underline and strike while normalizing unsupported decoration', () => {
  const source='<p><u>하나 <s>둘</s><span style="text-decoration:none"> 셋</span></u><span style="text-decoration-line:line-through overline"> 넷</span></p>';
  const result=parseClipboardHTML(source,document)!;

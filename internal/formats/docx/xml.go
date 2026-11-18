@@ -159,15 +159,18 @@ func escapeText(s string) string {
 }
 
 type target struct {
-	picturePlacement   string
-	alignmentTrackable bool
-	trackable          bool
-	boldTrackable      bool
-	textStories        [][]*node
-	moveUp, moveDown   *node
-	paragraph, run     *node
-	node               *node
-	text, kind         string
+	picturePlacement       string
+	tableCaptionInsertable bool
+	linkAnchorEditable     bool
+	pictureAlign           string
+	alignmentTrackable     bool
+	trackable              bool
+	boldTrackable          bool
+	textStories            [][]*node
+	moveUp, moveDown       *node
+	paragraph, run         *node
+	node                   *node
+	text, kind             string
 }
 
 func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
@@ -344,7 +347,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					}
 				}
 				if r.is("hyperlink") {
-					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
+					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink", linkAnchorEditable: allowed && p.parent == body &&
+						attribute(r, officeRelNS, "id") == "" && strings.TrimSpace(run.Text) != "" && allowPlainHyperlink(r, plainHyperlinkRun)}
 				} else if _, name := bookmarkFieldTarget(r); name != "" {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
 				} else if run.Object != nil && run.Object.Kind == "date_field" && !protected[p] && dateFieldCache(r, root.source) != nil {
@@ -454,6 +458,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			if !editable && r.child("drawing") != nil && targets[run.ID].kind == "" {
 				picture := target{node: r, run: r, paragraph: p, kind: "picture"}
 				if allowed && !protected[r] && p.parent == body && out.List == nil && !out.PageBreakBefore && !out.PageBreakAfter {
+					picture.pictureAlign = pictureParagraphAlignment(picture, root.source, layout)
 					picture.picturePlacement = supportedPicturePlacement(picture, root.source, layout)
 				}
 				targets[run.ID] = picture
@@ -495,7 +500,18 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 		return out
 	}
-	for _, child := range body.children {
+	var captionRange map[*node]bool
+	captionReady := false
+	if body.has("tbl") && !body.has("permStart") && !body.has("permEnd") {
+		var valid bool
+		captionRange, valid = bodyRangeBlocks(body)
+		if valid {
+			_, err := documentTableCaptionFields(body)
+			captionReady = err == nil
+		}
+	}
+
+	for index, child := range body.children {
 		switch {
 		case child.is("p"):
 			p := paragraph(child, true, "replace_run_text")
@@ -506,7 +522,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			_, block.TableEditable = simpleTable(child)
 			block.PrependParagraph = leadingBodyTable(child)
 			if block.TableEditable {
-				targets[block.ID] = target{node: child, kind: "update_table"}
+				block.TableCaptionInsertable = captionReady && !captionRange[child] && !protected[child] &&
+					!child.has("tblpPr") && tableCaptionBoundary(body.children, index)
+				targets[block.ID] = target{node: child, kind: "update_table", tableCaptionInsertable: block.TableCaptionInsertable}
 			} else if block.PrependParagraph {
 				targets[block.ID] = target{node: child, kind: "leading_body_table"}
 			}

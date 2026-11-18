@@ -159,13 +159,15 @@ export class DocumentController {
     const snapshot=this.structureDraft!.snapshot([...this.listDrafts.values()]);
     const draft=this.imageDraft;
     let blocks=snapshot.blocks;
-    if(draft?.type==='update_image'&&draft.image.action==='set_placement'){
-      const placement=draft.image.placement;
+    if(draft?.type==='update_image'&&(draft.image.action==='align'||draft.image.action==='set_placement')){
+      const image=draft.image;
+      const settings=image.action==='align'?{align:image.align}:{placement:image.placement};
       blocks=blocks.map(block=>{
         if(block.type!=='paragraph'||!block.paragraph.runs.some(run=>run.id===draft.targetId))return block;
         const paragraph=block.paragraph;
-        return {...block,paragraph:{...paragraph,runs:paragraph.runs.map(run=>
-          run.id===draft.targetId&&run.picture?{...run,picture:{...run.picture,placement}}:run,
+        const layout=image.action==='align'?{...paragraph.layout,align:image.align}:paragraph.layout;
+        return {...block,paragraph:{...paragraph,layout,runs:paragraph.runs.map(run=>
+          run.id===draft.targetId&&run.picture?{...run,picture:{...run.picture,...settings}}:run,
         )}};
       });
     }
