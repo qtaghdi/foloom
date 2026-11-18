@@ -154,7 +154,24 @@ export class DocumentController {
     if (!this.blocked) this.view.status('미저장 변경','pending');
     this.updateSave();return true;
   }
-  private preview():Snapshot {return {...this.structureDraft!.snapshot([...this.listDrafts.values()]),evenAndOddHeaders:this.headerParityDraft??this.snapshot?.evenAndOddHeaders,sections:this.sections()};}
+  private preview():Snapshot {
+    const snapshot=this.structureDraft!.snapshot([...this.listDrafts.values()]);
+    const draft=this.imageDraft;
+    let blocks=snapshot.blocks;
+    if(draft?.type==='move_picture_caption_up'||draft?.type==='move_picture_caption_down'){
+      const index=blocks.findIndex(block=>block.type==='paragraph'&&block.paragraph.runs.some(run=>run.id===draft.targetId));
+      const image=blocks[index], caption=blocks[index+1];
+      const picture=image?.type==='paragraph' ? image.paragraph.runs.find(run=>run.id===draft.targetId)?.picture : undefined;
+      const up=draft.type==='move_picture_caption_up';
+      const neighbor=blocks[up?index-1:index+2];
+      if(image&&caption&&neighbor&&(up?picture?.moveCaptionUp:picture?.moveCaptionDown)){
+        blocks=blocks.slice();
+        if(up) blocks.splice(index-1,3,image,caption,neighbor);
+        else blocks.splice(index,3,neighbor,image,caption);
+      }
+    }
+    return {...snapshot,blocks,evenAndOddHeaders:this.headerParityDraft??this.snapshot?.evenAndOddHeaders,sections:this.sections()};
+  }
   sections(){return previewSections(this.snapshot?.sections??[],this.sectionDrafts);}
   replaceSearchMatches(ranges:TextSelection[],replacement:string):boolean {
     if(this.blocked||this.loading||this.busy||this.disposed||this.composing||this.boundaryDraft||this.imageDraft||this.standaloneDraft||

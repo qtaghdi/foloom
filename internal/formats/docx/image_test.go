@@ -417,3 +417,114 @@ func TestPictureCaptionRenumbersExistingFigureAndKeepsMedia(t *testing.T) {
 		t.Fatal("undo changed original picture package bytes")
 	}
 }
+
+func TestCaptionedPictureMovesAsOnePair(t *testing.T) {
+	ctx := context.Background()
+	const textBefore = `<w:p><w:r><w:t>Before</w:t></w:r></w:p>`
+	const textAfter = `<w:p><w:r><w:t>After</w:t></w:r></w:p>`
+	s, filename := withDocument(t, bodyXML(textBefore+"\n  <w:p/>\n"+textAfter))
+	save := func(s *Session, v Snapshot, ops ...Operation) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: ops}, "human")
+	}
+	v := mustSnapshot(t, s)
+	var pngBytes bytes.Buffer
+	if err := png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 4, 2))); err != nil {
+		t.Fatal(err)
+	}
+	picture := &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pngBytes.Bytes()), Alt: "fidelity"}
+	v, err := save(s, v, Operation{Type: "update_image", TargetID: v.Blocks[1].ID, Image: picture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pictureRun := v.Blocks[1].Paragraph.Runs[0]
+	if pictureRun.Picture.MoveCaptionUp || pictureRun.Picture.MoveCaptionDown {
+		t.Fatal("uncaptioned image offered movement")
+	}
+	v, err = save(s, v, Operation{Type: "insert_picture_caption", TargetID: pictureRun.ID, Text: "First caption"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pictureRun = v.Blocks[1].Paragraph.Runs[0]
+	if !pictureRun.Picture.MoveCaptionUp || !pictureRun.Picture.MoveCaptionDown {
+		t.Fatal("both directions should be available")
+	}
+	original := fileBytes(t, filename)
+	baseline := bytes.Clone(s.pkg.document)
+	up := Operation{Type: "move_picture_caption_up", TargetID: pictureRun.ID}
+	if _, err := save(s, v, up, up); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("movement accepted a compound operation")
+	}
+	v, err = save(s, v, up)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pictureRun = v.Blocks[0].Paragraph.Runs[0]
+	if pictureRun.Picture.Alt != "fidelity" || pictureRun.Picture.Caption != "First caption" ||
+		pictureRun.Picture.MoveCaptionUp || !pictureRun.Picture.MoveCaptionDown ||
+		v.Blocks[1].Paragraph.Runs[1].Text != "1" || v.Blocks[2].Paragraph.Runs[0].Text != "Before" {
+		t.Fatal("picture, caption, number or new order did not survive movement")
+	}
+	moved := fileBytes(t, filename)
+	if _, err := save(s, v, up); err == nil || !bytes.Equal(moved, fileBytes(t, filename)) {
+		t.Fatal("movement used an earlier picture run ID")
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, reopened)
+	run := v.Blocks[0].Paragraph.Runs[0]
+	if media, _, err := reopened.Picture(ctx, run.ID); err != nil || !bytes.Equal(media, pngBytes.Bytes()) {
+		t.Fatal("reopened image bytes differed", err)
+	}
+	if _, err := save(reopened, v, Operation{Type: "move_picture_caption_up", TargetID: run.ID}); err == nil ||
+		!bytes.Equal(fileBytes(t, filename), moved) {
+		t.Fatal("movement accepted a forbidden direction")
+	}
+	if _, err := save(reopened, v, Operation{Type: "move_picture_caption_down", TargetID: run.ID}); err != nil ||
+		!bytes.Equal(baseline, reopened.pkg.document) {
+		t.Fatal("inverse move did not restore original XML bytes", err)
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(fileBytes(t, filename), moved) {
+		t.Fatal("undo did not restore the exact moved package")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(fileBytes(t, filename), original) {
+		t.Fatal("undo did not restore the exact original package")
+	}
+}
+
+func TestCaptionMoveProtectsComplexBoundaries(t *testing.T) {
+	const plain = `<w:p><w:r><w:t>Plain</w:t></w:r></w:p>`
+	const label = `<w:r><w:t>그림 </w:t></w:r><w:fldSimple w:instr="SEQ Figure \* ARABIC"><w:r><w:t>1</w:t></w:r></w:fldSimple><w:r><w:t>. Caption</w:t></w:r>`
+	picture := inlinePicture("1", "rId1", "", 100000, 100000)
+	for _, tc := range []struct {
+		name, before, picture, gap, caption, after string
+	}{
+		{name: "section", before: `<w:p><w:pPr><w:sectPr/></w:pPr></w:p>`},
+		{name: "table", before: `<w:tbl/>`},
+		{name: "mixed-picture-and-text", before: plain, picture: `<w:r><w:t>Text</w:t></w:r>`},
+		{name: "intervening-markup", before: plain, gap: "<!-- private marker -->"},
+		{name: "caption-style", before: plain, caption: `<w:pPr><w:pStyle w:val="Caption"/></w:pPr>`},
+		{name: "bookmark-spanning-picture", before: `<w:p><w:bookmarkStart w:id="1" w:name="B"/></w:p>` + plain,
+			after: `<w:p><w:bookmarkEnd w:id="1"/></w:p>`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, targets, _, err := inspect([]byte(bodyXML(tc.before+"<w:p>"+tc.picture+picture+"</w:p>"+tc.gap+
+				"<w:p>"+tc.caption+label+"</w:p>"+tc.after)), "test", 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, target := range targets {
+				if target.kind == "picture" {
+					if target.moveUp != nil || target.moveDown != nil {
+						t.Fatal("protected boundary was offered for movement")
+					}
+					return
+				}
+			}
+			t.Fatal("test did not contain a picture target")
+		})
+	}
+}
