@@ -6,7 +6,7 @@ export function previewSection(original:SectionInfo,format:SectionFormat):Sectio
  const page={...original.page};
  for(const key of ['width','height','top','right','bottom','left'] as const)if(format[key]!==undefined)page[key]=format[key]!;
  return {
-  ...original,page,
+  ...original,page,gutter:format.gutter??original.gutter,
   headerDistance:format.headerDistance??original.headerDistance,
   footerDistance:format.footerDistance??original.footerDistance,
   pageNumberStart:format.pageNumberStart===-1?undefined:format.pageNumberStart??original.pageNumberStart,
@@ -18,10 +18,17 @@ export function previewSection(original:SectionInfo,format:SectionFormat):Sectio
   breakType:format.breakType??original.breakType,
  };
 }
+export function sectionPaper(section:SectionInfo):SectionInfo['page'] {
+ const page=section.page;
+ const safeGutter=Math.min(section.gutter??0,Math.max(0,page.width-page.left-page.right-1200));
+ return safeGutter?{...page,left:page.left+safeGutter}:page;
+}
+
 export function validateSection(section:SectionInfo):string {
  const {page,columns,columnSpace}=section;
- if(page.width-page.left-page.right<1200||page.height-page.top-page.bottom<1200)return '여백을 줄여 본문 영역을 확보하세요.';
- if(page.width-page.left-page.right-(columns-1)*columnSpace<columns*240)return '단 수나 간격을 줄여 본문 폭을 확보하세요.';
+ const bodyWidth=page.width-page.left-page.right-(section.gutter??0);
+ if(bodyWidth<1200||page.height-page.top-page.bottom<1200)return '여백을 줄여 본문 영역을 확보하세요.';
+ if(bodyWidth-(columns-1)*columnSpace<columns*240)return '단 수나 간격을 줄여 본문 폭을 확보하세요.';
  return '';
 }
 

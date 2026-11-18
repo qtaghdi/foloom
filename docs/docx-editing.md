@@ -580,6 +580,18 @@ nextColumn을 사용합니다. 생략한 속성, 머리글·바닥글 참조, �
 페이지 나눔이나 실제 쪽 수로 간주하지 않습니다.
 
 
+### 구역별 왼쪽 제본 여백
+
+`구역·용지 설정`에서 왼쪽 제본 여백을 pt 단위로 입력합니다. 미리보기와 인쇄에서는
+이 값을 본문 왼쪽 여백에 더합니다. 설정을 저장하면 구역의 `w:pgMar/@w:gutter`만
+별도로 기록해 기존 왼쪽 여백과 머리글·바닥글 연결을 유지합니다.
+
+HTTP·MCP는 snapshot의 `sections[].gutter`와 `update_section.section.gutter`에
+twip 단위의 0~31680 정수를 사용합니다. 용지 안에 본문과 단을 배치할 공간이
+남아야 합니다. 미러 여백, 오른쪽·위쪽 제본, 책 접기, 두 쪽 모아 찍기 및
+사용자 지정 열을 사용하는 원본은 제본 여백을 그대로 보존합니다.
+[Word 제본 여백 속성](https://learn.microsoft.com/en-us/office/vba/api/Word.pagesetup.gutter)을 따릅니다.
+
 ### 머리글·바닥글의 구역 계약
 
 `update_section.section.headerFooters`는 최대 여섯 가지 `kind: header|footer`,

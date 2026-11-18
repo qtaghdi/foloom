@@ -1,5 +1,5 @@
 import { For,Show,createEffect,createMemo,createSignal } from 'solid-js';
-import { maxHeaderFooterDistance,type SectionFormat,type SectionInfo } from './contracts';
+import { maxHeaderFooterDistance,maxSectionGutter,type SectionFormat,type SectionInfo } from './contracts';
 import { buttonClass } from '../ui/editor-chrome';
 import { defaultHeaderFooterDistance,previewSection,validateSection } from './sections';
 
@@ -15,7 +15,7 @@ export function DocumentSectionToolbar(props:{sections:SectionInfo[];disabled:bo
   const section=selected();
   if(!section)return;
   setValues({
-   ...section.page,
+   ...section.page,gutter:section.gutter,
    headerDistance:section.headerDistance??defaultHeaderFooterDistance,
    footerDistance:section.footerDistance??defaultHeaderFooterDistance,
    pageNumberStart:section.pageNumberStart??-1,
@@ -27,9 +27,9 @@ export function DocumentSectionToolbar(props:{sections:SectionInfo[];disabled:bo
  });
  const update=(patch:SectionFormat)=>setValues(previous=>({...previous,...patch}));
  const disabled=()=>props.disabled||!selected()?.editable;
- const field=(key:'width'|'height'|'top'|'right'|'bottom'|'left'|'columnSpace'|'headerDistance'|'footerDistance',label:string)=>{
+ const field=(key:'width'|'height'|'top'|'right'|'bottom'|'left'|'columnSpace'|'headerDistance'|'footerDistance'|'gutter',label:string)=>{
   const distance=key==='headerDistance'||key==='footerDistance';
-  const max=distance?maxHeaderFooterDistance/20:key==='columnSpace'?720:2500;
+  const max=distance?maxHeaderFooterDistance/20:key==='gutter'?maxSectionGutter/20:key==='columnSpace'?720:2500;
   return <label class="flex min-h-11 items-center gap-1">{label}
    <input type="number" aria-label={label} class="w-20 min-h-11 rounded border border-slate-300 px-2"
     min={key==='width'||key==='height'?100:0} max={max} step="0.05" disabled={disabled()}
@@ -41,9 +41,13 @@ export function DocumentSectionToolbar(props:{sections:SectionInfo[];disabled:bo
   const section=selected();
   if(!section)return;
   const form=values();
-  const { headerDistance,footerDistance,pageNumberStart }=form;
+  const { headerDistance,footerDistance,pageNumberStart,gutter }=form;
   if([headerDistance,footerDistance].some(value=>value===undefined||!Number.isInteger(value)||value<0||value>maxHeaderFooterDistance)){
    setError(`머리글과 바닥글 거리를 0~${maxHeaderFooterDistance/20}pt 범위로 입력하세요.`);
+   return;
+  }
+  if(gutter!==undefined&&(!Number.isInteger(gutter)||gutter<0||gutter>maxSectionGutter)){
+   setError(`제본 여백을 0~${maxSectionGutter/20}pt 범위로 입력하세요.`);
    return;
   }
   const message=validateSection(previewSection(section,form));
@@ -53,7 +57,7 @@ export function DocumentSectionToolbar(props:{sections:SectionInfo[];disabled:bo
    return;
   }
   const original={
-   ...section.page,
+   ...section.page,gutter:section.gutter,
    headerDistance:section.headerDistance??defaultHeaderFooterDistance,
    footerDistance:section.footerDistance??defaultHeaderFooterDistance,
    pageNumberStart:section.pageNumberStart??-1,pageNumberFormat:section.pageNumberFormat||'decimal',
@@ -70,6 +74,9 @@ export function DocumentSectionToolbar(props:{sections:SectionInfo[];disabled:bo
    <select aria-label="용지 크기" class="editor-select min-h-11" disabled={disabled()} value="custom" onChange={e=>{const [width,height]=e.currentTarget.value==='letter'?[12240,15840]:[11906,16838];update({width:values().orientation==='landscape'?height:width,height:values().orientation==='landscape'?width:height});}}><option value="custom" disabled>사용자 지정 크기</option><option value="a4">A4</option><option value="letter">Letter</option></select>
    <select aria-label="용지 방향" class="editor-select min-h-11" disabled={disabled()} value={values().orientation} onChange={e=>{const orientation=e.currentTarget.value as 'portrait'|'landscape',width=values().width!,height=values().height!;update({orientation,width:orientation==='landscape'?Math.max(width,height):Math.min(width,height),height:orientation==='landscape'?Math.min(width,height):Math.max(width,height)});}}><option value="portrait">세로 용지</option><option value="landscape">가로 용지</option></select>
    {field('width','용지 폭')}{field('height','용지 높이')}{field('top','위 여백')}{field('right','오른쪽 여백')}{field('bottom','아래 여백')}{field('left','왼쪽 여백')}{field('headerDistance','위쪽 모서리에서 머리글까지')}{field('footerDistance','아래쪽 모서리에서 바닥글까지')}
+   <Show when={selected()?.gutter!==undefined} fallback={<span class="text-slate-600">원본 제본 방식 유지</span>}>
+    {field('gutter','왼쪽 제본 여백')}
+   </Show>
    <label class="flex min-h-11 items-center gap-1">단 수<input type="number" aria-label="단 수" min="1" max="12" class="w-16 min-h-11 rounded border border-slate-300 px-2" value={values().columns} disabled={disabled()} onChange={e=>update({columns:e.currentTarget.valueAsNumber})}/></label>{field('columnSpace','단 간격')}
    <select aria-label="구역 나누기 유형" class="editor-select min-h-11" disabled={disabled()} value={values().breakType} onChange={e=>update({breakType:e.currentTarget.value as SectionFormat['breakType']})}><option value="nextPage">다음 페이지</option><option value="continuous">연속 구역</option><option value="evenPage">짝수 페이지</option><option value="oddPage">홀수 페이지</option><option value="nextColumn">다음 단</option></select>
    <label class="flex min-h-11 items-center gap-1">쪽 번호<select aria-label="쪽 번호 시작 방식" class="editor-select min-h-11" disabled={disabled()} value={values().pageNumberStart===-1?'continue':'restart'} onChange={e=>update({pageNumberStart:e.currentTarget.value==='continue'?-1:1})}><option value="continue">이전 구역에서 계속</option><option value="restart">지정 번호부터 시작</option></select></label>
