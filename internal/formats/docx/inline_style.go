@@ -29,7 +29,7 @@ func validateInlineStyle(style *InlineStyle) error {
 	if style.SizeHalfPoints != nil && (*style.SizeHalfPoints < 8 || *style.SizeHalfPoints > 288) {
 		return fmt.Errorf("DOCX inline font size is outside preview bounds")
 	}
-	for _, font := range []string{style.Font, style.EastAsiaFont} {
+	for _, font := range []string{style.Font, style.LatinFont, style.EastAsiaFont} {
 		if len(font) > 120 || !utf8.ValidString(font) || strings.ContainsAny(font, "\"\\") {
 			return fmt.Errorf("invalid DOCX inline font")
 		}
@@ -118,7 +118,7 @@ func inlineProperties(props *node, data []byte, style *InlineStyle, inheritedLan
 		property("sz", strconv.Itoa(*style.SizeHalfPoints))
 		property("szCs", strconv.Itoa(*style.SizeHalfPoints))
 	}
-	if style.Font != "" || style.EastAsiaFont != "" {
+	if style.Font != "" || style.LatinFont != "" || style.EastAsiaFont != "" {
 		if countChild(props, "rFonts") > 1 {
 			return "", fmt.Errorf("duplicate DOCX font properties cannot be changed")
 		}
@@ -134,9 +134,13 @@ func inlineProperties(props *node, data []byte, style *InlineStyle, inheritedLan
 				values[script] = style.Font
 			}
 		}
+		if style.LatinFont != "" {
+			values["ascii"], values["hAnsi"] = style.LatinFont, style.LatinFont
+			themes = append(themes, "asciiTheme", "hAnsiTheme")
+		}
 		if style.EastAsiaFont != "" {
 			values["eastAsia"] = style.EastAsiaFont
-			themes = []string{"eastAsiaTheme"}
+			themes = append(themes, "eastAsiaTheme")
 		}
 		fontsXML, err := patchProperty(fonts, data, "rFonts", values, themes)
 		if err != nil {

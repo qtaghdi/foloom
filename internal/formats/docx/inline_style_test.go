@@ -183,3 +183,49 @@ func TestEastAsianFontChangesOnlySelectedSlot(t *testing.T) {
 		t.Fatal("undo failed to restore source bytes")
 	}
 }
+
+func TestLatinFontKeepsOtherSlotsAndOnlyPatchesSelectedRun(t *testing.T) {
+	ctx := context.Background()
+	source := bodyXML(`<w:p><w:r><w:rPr><w:rFonts w:ascii="Old ASCII" w:hAnsi="Old ANSI" w:asciiTheme="majorAscii" w:hAnsiTheme="majorHAnsi" w:eastAsia="East" w:eastAsiaTheme="minorEastAsia" w:cs="Arabic" w:cstheme="minorBidi" w:hint="eastAsia"/><w:i/></w:rPr><w:t>Latin 한글</w:t></w:r></w:p>`)
+	s, filename := withDocument(t, source)
+	original := fileBytes(t, filename)
+	before := mustSnapshot(t, s)
+	p := before.Blocks[0].Paragraph
+	input := paragraphPlan(before, ParagraphContent{SourceID: p.ID, Runs: []RunContent{
+		{SourceID: p.Runs[0].ID, Text: "Latin", Style: &InlineStyle{LatinFont: "New Latin & Co"}},
+		{SourceID: p.Runs[0].ID, Text: " 한글"},
+	}})
+	_, err := s.Apply(ctx, input, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := parseXML(reopened.pkg.document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := root.child("body").child("p").children
+	selected, outside := runs[0].child("rPr").child("rFonts"), runs[1].child("rPr").child("rFonts")
+	if selected.attr("ascii") != "New Latin & Co" || selected.attr("hAnsi") != "New Latin & Co" ||
+		selected.attr("asciiTheme") != "" || selected.attr("hAnsiTheme") != "" ||
+		outside.attr("ascii") != "Old ASCII" || outside.attr("hAnsi") != "Old ANSI" ||
+		outside.attr("asciiTheme") != "majorAscii" || outside.attr("hAnsiTheme") != "majorHAnsi" {
+		t.Fatal("incorrect selected or unselected Latin font attributes")
+	}
+	for _, name := range []string{"eastAsia", "eastAsiaTheme", "cs", "cstheme", "hint"} {
+		if selected.attr(name) == "" || selected.attr(name) != outside.attr(name) {
+			t.Fatalf("other font attribute changed: %s", name)
+		}
+	}
+	after := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs
+	if len(after) != 2 || after[0].Font != "New Latin & Co" || !after[0].Italic || !after[1].Italic {
+		t.Fatalf("unexpected saved text or style: %+v", after)
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore original bytes")
+	}
+}
