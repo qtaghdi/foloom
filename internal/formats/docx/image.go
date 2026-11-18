@@ -262,6 +262,7 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
+	Caption          string     `json:"caption,omitempty"`
 	CaptionEditable  bool       `json:"captionEditable,omitempty"`
 	Rotation         int        `json:"rotation,omitempty"`
 	RotationEditable bool       `json:"rotationEditable,omitempty"`
@@ -369,6 +370,7 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				_, info.Caption = editablePictureCaption(source, s.pkg.document)
 				if captionParagraph(source) {
 					if !captionFieldsChecked {
 						_, err := documentFigureFields(source.paragraph.parent)
