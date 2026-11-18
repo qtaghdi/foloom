@@ -1229,6 +1229,13 @@ HTTP·MCP는 현재 앞 문단 ID로 `accept_revision` 또는 `reject_revision`�
 포함된 나눔은 읽기 전용으로 표시합니다.
 [Word의 삽입된 문단 표시](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/1d66ba8a-1eeb-4cff-ab8a-eaa79113cc89)를 따릅니다.
 
+가져온 `문단 나눔 삭제`를 수락하면 양쪽 텍스트를 이어 붙이고 뒤쪽
+문단의 ID와 정렬을 사용합니다. 거절하면 나눔과 각 문단의 속성을 유지합니다.
+양쪽 글자 서식은 두 경우 모두 유지됩니다. 목록이나 다른 복합 속성,
+참조 범위와 쪽·구역 경계가 걸린 경우 읽기 전용으로 표시합니다.
+HTTP·MCP는 검토에 표시된 앞 문단 ID로 기존 수락·거절 작업을 단독 적용합니다.
+[Word의 삭제된 문단 표시](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.deleted)를 따릅니다.
+
 검토의 `텍스트·서식 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존
 텍스트는 삭제 변경으로, 교체 텍스트는 삽입 변경으로 기록되며 두 변경에 원래
