@@ -627,6 +627,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if !ok || op.Reference == nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX reference operation")
 			}
+			if op.Reference.Action != "insert_figure_ref" && op.Reference.FigureID != "" {
+				return nil, fmt.Errorf("unexpected DOCX figure reference target")
+			}
+			if op.Reference.Action == "insert_figure_ref" && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX figure reference must stand alone")
+			}
 			if (op.Reference.Action == "rename_bookmark" || op.Reference.Action == "delete_bookmark") && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark edit must stand alone")
 			}
@@ -643,7 +649,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				index := readBookmarks(root)
 				bookmarks = &index
 			}
-			replacements, err := s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			var replacements []replacement
+			if op.Reference.Action == "insert_figure_ref" {
+				replacements, err = s.pkg.insertFigureReference(t, targets[op.Reference.FigureID], *op.Reference, bookmarks)
+			} else {
+				replacements, err = s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			}
 			if err != nil {
 				return nil, err
 			}
