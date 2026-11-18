@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
-import type { ObjectTextOperation, Snapshot } from './contracts';
+import type { ObjectTextOperation, Paragraph, Snapshot } from './contracts';
 import { utf8Length } from './validation';
 
 const objectLabels={
@@ -10,6 +10,7 @@ const objectLabels={
 
 export function DocumentObjectTextToolbar(props:{
   snapshot?:Snapshot;
+  target?:Paragraph;
   kind:'control'|'textbox';
   pending:boolean;
   disabled:boolean;
@@ -22,10 +23,31 @@ export function DocumentObjectTextToolbar(props:{
     : []).slice(0,200)??[];
   const selected=()=>objects().find(run=>run.id===id());
   const disabled=()=>props.pending||props.disabled;
-  return <Show when={objects().length}>
+  return <Show when={objects().length||props.kind==='textbox'}>
     <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
       <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">{labels().title}</summary>
       <div class="flex min-w-0 flex-wrap items-end gap-2 pb-2">
+        <Show when={props.kind==='textbox'}>
+          <form class="flex basis-full flex-wrap items-end gap-2" onSubmit={event=>{
+            event.preventDefault();
+            const target=props.target;
+            if(disabled()||!target?.structureEditable)return;
+            const input=event.currentTarget.elements.namedItem('newBoxText') as HTMLInputElement;
+            const text=input.value;
+            if(!text.trim()){setError('텍스트 상자 내용을 입력하세요.');return;}
+            if(utf8Length(text)>1024){setError('텍스트를 UTF-8 1 KiB 이하로 줄이세요.');return;}
+            const accepted=props.onApply({type:'insert_textbox',targetId:target.id,expectedText:'',text});
+            setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            if(accepted)input.value='';
+          }}>
+            <label class="flex min-w-0 flex-col gap-1">새 텍스트 상자 내용
+              <input name="newBoxText" type="text" maxlength="1024" class="min-h-11 rounded border border-slate-300 px-2"
+                disabled={disabled()||!props.target?.structureEditable}/>
+            </label>
+            <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>텍스트 상자 삽입</button>
+          </form>
+        </Show>
+        <Show when={objects().length}>
         <select aria-label={labels().select} class="editor-select min-h-11 max-w-56"
           value={selected()?.id??''} disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setError('');}}>
           <option value="">{labels().name} 선택</option>
@@ -51,6 +73,7 @@ export function DocumentObjectTextToolbar(props:{
             <button type="submit" class={buttonClass} disabled={disabled()}>{labels().name} 내용 적용</button>
           </form>
         }</Show>
+        </Show>
         <Show when={props.pending}><p class="basis-full text-slate-600">{labels().name} 내용을 저장하거나 실행 취소하세요.</p></Show>
         <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
       </div>
