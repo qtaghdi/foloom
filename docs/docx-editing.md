@@ -607,6 +607,18 @@ nextColumn을 사용합니다. 생략한 속성, 머리글·바닥글 참조, �
 페이지 나눔이나 실제 쪽 수로 간주하지 않습니다.
 
 
+### 구역별 왼쪽 제본 여백
+
+`구역·용지 설정`에서 왼쪽 제본 여백을 pt 단위로 입력합니다. 미리보기와 인쇄에서는
+이 값을 본문 왼쪽 여백에 더합니다. 설정을 저장하면 구역의 `w:pgMar/@w:gutter`만
+별도로 기록해 기존 왼쪽 여백과 머리글·바닥글 연결을 유지합니다.
+
+HTTP·MCP는 snapshot의 `sections[].gutter`와 `update_section.section.gutter`에
+twip 단위의 0~31680 정수를 사용합니다. 용지 안에 본문과 단을 배치할 공간이
+남아야 합니다. 미러 여백, 오른쪽·위쪽 제본, 책 접기, 두 쪽 모아 찍기 및
+사용자 지정 열을 사용하는 원본은 제본 여백을 그대로 보존합니다.
+[Word 제본 여백 속성](https://learn.microsoft.com/en-us/office/vba/api/Word.pagesetup.gutter)을 따릅니다.
+
 ### 머리글·바닥글의 구역 계약
 
 `update_section.section.headerFooters`는 최대 여섯 가지 `kind: header|footer`,
@@ -627,9 +639,7 @@ snapshot은 각 variant의 직접·상속 상태, 내용 원본 구역, 단순 �
 않습니다. 서식·필드·그림·추적 변경 등 단순 텍스트가 아닌 기존 내용은 보호합니다.
 
 `firstPage`는 구역의 `titlePg`만 바꾸며 첫 페이지 머리글과 바닥글을 구분합니다.
-even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 설정을 새로 켜는
-화면과 실제 쪽 선택은 아직 구현 중입니다. 화면 작성 도구는 다음 커밋에서
-연결하며 native Word 조판은 미검증입니다.
+첫 페이지 전용 내용은 그 쪽의 홀짝보다 우선합니다.
 
 이전 구역 상속과 첫·홀짝 구분은 [Microsoft Open XML 문서](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.headerreference)를 기준으로 구현합니다.
 
@@ -639,10 +649,25 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 반영됩니다. 연결된 내용을 적용하면 그 구역의 독립된 내용이 되며, `이전
 구역 연결`로 다시 상속할 수 있습니다. 미저장 머리글·바닥글도 본문과 같은
 실행 취소·다시 실행에 포함합니다. 서로 다른 variant의 초안을 덮어쓰지 않습니다.
-미리보기는 구역의 첫 페이지 구분에 맞는 대표 머리글·바닥글을 보여 주며 정확한
-쪽 수·페이지별 반복은 아직 검증하지 않습니다. 새 홀짝 구분 활성화는 후속입니다.
+명시적 페이지 미리보기에는 해당 구역의 첫 페이지·홀짝 내용이 표시됩니다.
 
 보호된 머리글 내용도 `첫 페이지 구분 적용`으로 구분 설정만 바꿀 수 있습니다. 이 동작은 내용이나 참조를 평탄화하지 않습니다.
+
+### 구역별 머리글·바닥글 위치
+
+`구역·용지 설정`에서 위쪽 모서리에서 머리글까지, 아래쪽 모서리에서 바닥글까지
+거리를 pt 단위로 바꿉니다. 선택 구역에 적용하면 명시적 페이지 단위의 위치를
+미리 볼 수 있고 저장은 본문과 같은 리비전과 이력을 사용합니다. 머리글과
+바닥글 내용은 해당 구역의 첫 페이지·홀짝·이전 구역 연결 규칙을 따릅니다.
+
+`update_section`과 snapshot의 `sections`는 `headerDistance`, `footerDistance`를
+twip 단위로 사용합니다. 0은 용지 모서리이며 각 값은 0~31680 twip입니다.
+기존 원본에 값이 생략된 경우 화면은 720 twip을 사용합니다. 변경 시
+`w:pgMar`의 선택한 `w:header` 또는 `w:footer`를 저장하고 기존 본문 여백,
+내용 및 관계를 유지합니다. 브라우저 미리보기는 머리글·바닥글이 본문을
+덮지 않도록 긴 내용을 배치합니다. 실제 자동 페이지 배치는 Word 계열
+편집기에서 확인할 수 있습니다.
+[Word Open XML 페이지 여백](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/5a1cdacc-ee75-4453-8118-de48e5e370d6)을 따릅니다.
 
 ### 문서 전체의 홀수·짝수 구분
 
@@ -650,9 +675,12 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 짝수 내용을 따로 편집할 수 있습니다. `update_header_parity`는
 `evenAndOddHeaders`에 불리언을 받으며 문서의 settings part에서 해당 속성만
 바꿉니다. 다른 머리글 참조와 첫 페이지 구분은 그대로 유지됩니다. 브라우저
-미리보기는 같은 구역에 속한 명시적 페이지 그룹을 세며, 정확한 자동 페이지
-구성과 홀짝 계산은 #93에서 다룹니다.
-[Open XML 홀짝 설정](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.evenandoddheaders)을 따릅니다.
+미리보기와 브라우저 인쇄는 명시적 페이지 그룹의 번호를 사용합니다. 일반
+`nextPage` 구역은 앞 구역의 번호를 이어가고 시작값을 지정한 구역은 그 값부터
+다시 셉니다. 연속·다음 단·홀짝 구역에서 실제 조판이 바뀌는 경우에는 명시적
+시작값이 나타날 때까지 구역 안의 페이지 그룹 순서로 표시합니다. 자동 페이지
+구성과 삽입된 빈 페이지의 정확한 계산은 #93에서 다룹니다.
+[Word 홀짝 머리글·바닥글 구현 규칙](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/e9535962-4cf3-4279-9367-637241e4b195)을 따릅니다.
 
 ### 구역별 쪽 번호
 
@@ -677,6 +705,18 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 `totalPages: false`를 사용합니다. 쪽 번호 필드와 독립적으로 바뀌며, 브라우저는
 계산값 대신 필드 위치를 보여 줍니다.
 [Word 필드 코드 목록](https://support.microsoft.com/en-us/word/list-of-field-codes-in-word)에서 NUMPAGES를 확인할 수 있습니다.
+
+두 필드를 모두 켜면 `한 줄에 쪽 번호 / 전체 쪽 수`를 선택할 수 있습니다.
+선택한 구역과 페이지 종류에 `PAGE / NUMPAGES`를 한 문단으로 저장하며
+끄면 두 필드를 각각 이전과 같이 한 줄씩 표시합니다. 다른 구역에 연결된
+머리글·바닥글에도 해당 배치가 상속됩니다. 브라우저는 필드 자리와 배치를
+미리 보여 주며 실제 번호는 문서를 여는 편집기가 계산합니다.
+
+HTTP·MCP는 `update_section.section.headerFooters`에서 두 필드와
+`compactPageNumbers: true`를 사용합니다. 기존에 두 필드를 사용 중이면
+배치만 바꿀 수도 있습니다. `compactPageNumbers: false`는 두 줄 배치로
+돌리며, 필드 하나를 해제하면 남은 필드만 표시합니다. 임의 문구나 여러 필드를
+조합한 원본 머리글·바닥글은 그대로 보존합니다.
 
 ### 문단 페이지 나눔과 구역 나눔
 
@@ -959,16 +999,51 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 단순 인라인 수식 | 수식 텍스트 | 삽입·교체·삭제 | Word 수식 개체 |
 | 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
+| 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 및 크기 변경·삭제 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
-| 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
+| 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기 | 제목 수정·크기 변경 | Word 차트 |
+| 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
+| SmartArt | 내부 데이터에 있는 도형 문구 | 미지원 | Word |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
+
+삽입의 `차트 편집`에서 차트를 고르고 평문 제목을 입력합니다.
+현재 차트 run ID, 원래 제목 `expectedText`와 새 `text`를
+`update_chart_title`에 보낼 수도 있습니다. 본문에서 내부 관계로 연결한 기본
+막대·선·원형 차트의 한 줄 제목을 지원하고 데이터 정의와 포함 통합 문서는 유지합니다.
+외부 연결, 공유된 차트, 여러 줄·여러 서식 구간·수식으로 된 제목은 보호합니다.
+같은 도구에서 지원 인라인 차트의 새 너비를 입력하면 높이가 원래 비율에
+맞춰 바뀝니다. HTTP·MCP는 차트 run ID와 `type: "resize_chart"`,
+`chartWidthEmu`로 새 너비를 보냅니다. 문단의 크기 속성만 수정하며
+차트 도형과 데이터는 Word에서 확인할 수 있습니다.
+[Word DrawingML 차트 제목](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.charts.title)을 사용합니다.
+
+삽입의 `도형`에서 `인라인 사각형 삽입`을 누르고 저장하면 선택한 본문 문단의
+끝에 기본 사각형을 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
+`type: "insert_rectangle"`을 보냅니다. 단순 채우기와 테두리를 가진 인라인
+사각형은 브라우저에도 모양과 색을 표시합니다. 해당 도구에서 사각형을 선택하고
+채우기와 테두리 색을 바꾼 뒤 `사각형 색 적용`을 누릅니다. HTTP·MCP는 대상
+도형 run ID와 `type: "update_rectangle_colors"`,
+`rectangleColors: { fill: "F3D6C7", stroke: "8A341D" }`를 보냅니다.
+두 값은 # 없이 여섯 자리 RGB 색을 사용합니다. 사각형을 선택하고 `사각형 삭제`를
+누른 뒤 저장하면 그 사각형만 제거합니다. HTTP·MCP는 사각형 run ID와
+`type: "delete_rectangle"`을 보냅니다. 지원 사각형은 너비와 높이를 pt로 입력하고
+`사각형 크기 적용`을 누릅니다. HTTP·MCP는 `type: "resize_rectangle"`과
+EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상과 테두리는
+그대로 유지합니다. 위치와 다른 서식은 Word에서
+수정할 수 있습니다. [Word 도형 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/69190647-27d1-4890-8089-a8aca57becb9)를 사용합니다.
 
 수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
 `제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을
 유지합니다. HTTP·MCP는 `update_math`의 `math: { action: "insert_root", expression }` 또는
 `math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
 [Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
+
+내부 데이터가 있는 SmartArt는 실제 도형 문구를 원본 데이터 순서에 따라 읽기
+전용 목록으로 표시합니다. 자리표시자와 화면에 그리기 위한 중복 항목은 제외합니다.
+목록은 도형 하나당 최대 32개 항목을 표시하며 배치와 서식은 Word에서 확인할 수
+있습니다. 외부 연결을 읽지 않으며 다른 본문을 저장해도 관련 part를 보존합니다.
+[SmartArt의 데이터와 표시 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/c36c1152-3aec-45e5-8f16-936da2678e5d)를 따릅니다.
 
 삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
 기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와

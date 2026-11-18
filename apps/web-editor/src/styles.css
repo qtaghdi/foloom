@@ -286,6 +286,7 @@
   }
   [data-docx-app] .docx-paper {
     page: var(--docx-print-paper);
+    display: block;
     width: auto !important;
     min-block-size: 0 !important;
     padding: 0 !important;
@@ -296,6 +297,7 @@
   }
   [data-docx-app] .docx-paper + .docx-paper { break-before: page; }
   [data-docx-app] .docx-paper > * { content-visibility: visible; }
+  [data-docx-app] .docx-page-edge { min-block-size: 0; }
   [data-docx-app] .docx-table { overflow: visible; }
   [data-docx-app] img { break-inside: avoid; }
   [data-docx-app] [data-docx-print-text] { display: inline !important; }

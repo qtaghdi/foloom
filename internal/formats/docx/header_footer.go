@@ -10,23 +10,25 @@ import (
 const officeRelNS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
 type HeaderFooterUpdate struct {
-	Kind         string  `json:"kind"`
-	Variant      string  `json:"variant"`
-	LinkPrevious bool    `json:"linkPrevious,omitempty"`
-	Text         *string `json:"text,omitempty"`
-	PageNumber   *bool   `json:"pageNumber,omitempty"`
-	TotalPages   *bool   `json:"totalPages,omitempty"`
+	Kind               string  `json:"kind"`
+	Variant            string  `json:"variant"`
+	LinkPrevious       bool    `json:"linkPrevious,omitempty"`
+	Text               *string `json:"text,omitempty"`
+	PageNumber         *bool   `json:"pageNumber,omitempty"`
+	TotalPages         *bool   `json:"totalPages,omitempty"`
+	CompactPageNumbers *bool   `json:"compactPageNumbers,omitempty" jsonschema:"Place PAGE and NUMPAGES together as PAGE / NUMPAGES. Both fields must be enabled"`
 }
 type HeaderFooterInfo struct {
-	Truncated       bool   `json:"truncated,omitempty"`
-	Kind            string `json:"kind"`
-	Variant         string `json:"variant"`
-	Linked          bool   `json:"linked"`
-	SourceSectionID string `json:"sourceSectionId,omitempty"`
-	Text            string `json:"text"`
-	Editable        bool   `json:"editable"`
-	PageNumber      bool   `json:"pageNumber,omitempty"`
-	TotalPages      bool   `json:"totalPages,omitempty"`
+	Truncated          bool   `json:"truncated,omitempty"`
+	Kind               string `json:"kind"`
+	Variant            string `json:"variant"`
+	Linked             bool   `json:"linked"`
+	SourceSectionID    string `json:"sourceSectionId,omitempty"`
+	Text               string `json:"text"`
+	Editable           bool   `json:"editable"`
+	PageNumber         bool   `json:"pageNumber,omitempty"`
+	TotalPages         bool   `json:"totalPages,omitempty"`
+	CompactPageNumbers bool   `json:"compactPageNumbers,omitempty"`
 }
 
 func attribute(n *node, namespace, name string) string {
@@ -103,10 +105,11 @@ func headerReference(props *node, kind, variant string) (*node, error) {
 }
 
 type headerFooterContent struct {
-	text       string
-	editable   bool
-	pageNumber bool
-	totalPages bool
+	text               string
+	editable           bool
+	pageNumber         bool
+	totalPages         bool
+	compactPageNumbers bool
 }
 
 func plainHeader(data []byte, kind string) headerFooterContent {
@@ -123,6 +126,10 @@ func plainHeader(data []byte, kind string) headerFooterContent {
 	for _, paragraph := range root.children {
 		if !paragraph.is("p") || !onlyNamespaceAttributes(paragraph) || paragraph.child("pPr") != nil || strings.TrimSpace(paragraph.text.String()) != "" {
 			info.editable = false
+		}
+		if !info.pageNumber && !info.totalPages && compactHeaderFields(paragraph.children) {
+			info.pageNumber, info.totalPages, info.compactPageNumbers = true, true, true
+			continue
 		}
 		if len(paragraph.children) == 1 {
 			switch simplePageField(paragraph.children[0]) {
@@ -153,6 +160,14 @@ func plainHeader(data []byte, kind string) headerFooterContent {
 		return headerFooterContent{}
 	}
 	return info
+}
+
+func compactHeaderFields(nodes []*node) bool {
+	if len(nodes) != 3 || simplePageField(nodes[0]) != "PAGE" || simplePageField(nodes[2]) != "NUMPAGES" {
+		return false
+	}
+	separator := nodes[1]
+	return plainHeaderRun(separator) && len(separator.children) == 1 && textContent(separator) == " / "
 }
 
 func plainHeaderRun(run *node) bool {
@@ -241,6 +256,7 @@ func (p *documentPackage) headerFooterCatalog(targets []sectionTarget) [][]Heade
 						info.Truncated = inherited.Truncated
 						info.PageNumber = inherited.PageNumber
 						info.TotalPages = inherited.TotalPages
+						info.CompactPageNumbers = inherited.CompactPageNumbers
 					}
 				} else {
 					info.Linked = false
@@ -254,6 +270,7 @@ func (p *documentPackage) headerFooterCatalog(targets []sectionTarget) [][]Heade
 					info.Text, info.Editable = item.text, item.editable && plainHeaderReference(ref)
 					info.PageNumber = item.pageNumber
 					info.TotalPages = item.totalPages
+					info.CompactPageNumbers = item.compactPageNumbers
 					if len(info.Text) > remaining {
 						info.Text = ""
 						info.Editable = false
@@ -272,7 +289,7 @@ func (p *documentPackage) headerFooterCatalog(targets []sectionTarget) [][]Heade
 
 // Every edit gets a fresh part and reference. A shared imported header is never
 // overwritten through another section, and unrelated original parts stay intact.
-func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterUpdate, sectionIndex int, changes map[string][]byte) (string, error) {
+func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterUpdate, sectionIndex int, current []HeaderFooterInfo, changes map[string][]byte) (string, error) {
 	if len(updates) > 6 {
 		return "", fmt.Errorf("DOCX section permits six header/footer variants")
 	}
@@ -283,7 +300,8 @@ func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterU
 			return "", fmt.Errorf("invalid or duplicate DOCX header/footer variant")
 		}
 		seen[key] = true
-		if update.LinkPrevious && (sectionIndex == 0 || update.Text != nil || update.PageNumber != nil || update.TotalPages != nil) || !update.LinkPrevious && (update.Text == nil || !validInlineText(*update.Text)) {
+		if update.LinkPrevious && (sectionIndex == 0 || update.Text != nil || update.PageNumber != nil || update.TotalPages != nil || update.CompactPageNumbers != nil) ||
+			!update.LinkPrevious && (update.Text == nil || !validInlineText(*update.Text)) {
 			return "", fmt.Errorf("DOCX header/footer requires text or a previous section link")
 		}
 		data := []byte(raw)
@@ -301,20 +319,33 @@ func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterU
 
 		replacement := ""
 		if !update.LinkPrevious {
-			pageNumber, totalPages := false, false
+			pageNumber, totalPages, compact := false, false, false
 			if ref != nil {
 				filename := p.relatedPart(attribute(ref, officeRelNS, "id"), update.Kind, changes)
 				content := plainHeader(p.partData(filename, changes), update.Kind)
 				if !content.editable {
 					return "", fmt.Errorf("formatted or protected DOCX header/footer cannot be flattened")
 				}
-				pageNumber, totalPages = content.pageNumber, content.totalPages
+				pageNumber, totalPages, compact = content.pageNumber, content.totalPages, content.compactPageNumbers
+			} else {
+				for _, slot := range current {
+					if slot.Kind == update.Kind && slot.Variant == update.Variant {
+						pageNumber, totalPages, compact = slot.PageNumber, slot.TotalPages, slot.CompactPageNumbers
+						break
+					}
+				}
 			}
 			if update.PageNumber != nil {
 				pageNumber = *update.PageNumber
 			}
 			if update.TotalPages != nil {
 				totalPages = *update.TotalPages
+			}
+			if update.CompactPageNumbers != nil {
+				compact = *update.CompactPageNumbers
+				if compact && (!pageNumber || !totalPages) {
+					return "", fmt.Errorf("compact DOCX page numbering requires PAGE and NUMPAGES")
+				}
 			}
 			filename, err := p.addWordPart(changes, update.Kind, "rIdDocx"+update.Kind)
 			if err != nil {
@@ -329,11 +360,19 @@ func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterU
 			for _, line := range strings.Split(*update.Text, "\n") {
 				content.WriteString(`<w:p><w:r>` + inlineXML(line) + `</w:r></w:p>`)
 			}
-			if pageNumber {
+			if compact && pageNumber && totalPages {
+				content.WriteString(`<w:p>`)
 				content.WriteString(headerPageFieldXML("PAGE"))
-			}
-			if totalPages {
+				content.WriteString(`<w:r><w:t xml:space="preserve"> / </w:t></w:r>`)
 				content.WriteString(headerPageFieldXML("NUMPAGES"))
+				content.WriteString(`</w:p>`)
+			} else {
+				if pageNumber {
+					content.WriteString(`<w:p>` + headerPageFieldXML("PAGE") + `</w:p>`)
+				}
+				if totalPages {
+					content.WriteString(`<w:p>` + headerPageFieldXML("NUMPAGES") + `</w:p>`)
+				}
 			}
 			content.WriteString(`</w:` + tag + `>`)
 			changes[filename] = []byte(content.String())
@@ -379,5 +418,5 @@ func plainHeaderReference(ref *node) bool {
 }
 
 func headerPageFieldXML(instruction string) string {
-	return `<w:p><w:fldSimple w:instr="` + instruction + `" w:dirty="true"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p>`
+	return `<w:fldSimple w:instr="` + instruction + `" w:dirty="true"><w:r><w:t>1</w:t></w:r></w:fldSimple>`
 }
