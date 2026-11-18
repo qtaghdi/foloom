@@ -6,12 +6,13 @@ import { utf8Length } from './validation';
 const objectLabels={
   control:{title:'콘텐츠 컨트롤 편집',select:'편집할 콘텐츠 컨트롤',name:'컨트롤',text:'콘텐츠 컨트롤 텍스트'},
   textbox:{title:'텍스트 상자 편집',select:'편집할 텍스트 상자',name:'텍스트 상자',text:'텍스트 상자 내용'},
+  chart:{title:'차트 제목 편집',select:'편집할 차트',name:'차트',text:'차트 제목'},
 };
 
 export function DocumentObjectTextToolbar(props:{
   snapshot?:Snapshot;
   target?:Paragraph;
-  kind:'control'|'textbox';
+  kind:'control'|'textbox'|'chart';
   pending:boolean;
   disabled:boolean;
   onApply:(operation:ObjectTextOperation)=>boolean;
@@ -23,6 +24,7 @@ export function DocumentObjectTextToolbar(props:{
     : []).slice(0,200)??[];
   const selected=()=>objects().find(run=>run.id===id());
   const disabled=()=>props.pending||props.disabled;
+  const maxBytes=()=>props.kind==='chart'?256:1024;
   return <Show when={objects().length||props.kind==='textbox'}>
     <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
       <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">{labels().title}</summary>
@@ -62,15 +64,17 @@ export function DocumentObjectTextToolbar(props:{
             const input=event.currentTarget.elements.namedItem('objectText') as HTMLInputElement;
             const text=input.value,expectedText=run.object?.text??'';
             if(text===expectedText)return;
-            if(utf8Length(text)>1024){setError('텍스트를 UTF-8 1 KiB 이하로 줄이세요.');return;}
-            const accepted=props.onApply({type:props.kind==='control'?'update_control_text':'update_textbox_text',targetId:run.id,expectedText,text});
+            if(props.kind==='chart'&&!text.trim()){setError('차트 제목을 입력하세요.');return;}
+            if(utf8Length(text)>maxBytes()){setError(`텍스트를 UTF-8 ${maxBytes()}바이트 이하로 줄이세요.`);return;}
+            const type=props.kind==='chart'?'update_chart_title':props.kind==='control'?'update_control_text':'update_textbox_text';
+            const accepted=props.onApply({type,targetId:run.id,expectedText,text});
             setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
           }}>
             <label class="flex min-w-0 flex-col gap-1">{labels().text}
-              <input name="objectText" type="text" maxlength="1024" value={run.object?.text??''} disabled={disabled()}
+              <input name="objectText" type="text" maxlength={maxBytes()} value={run.object?.text??''} disabled={disabled()}
                 class="min-h-11 rounded border border-slate-300 px-2"/>
             </label>
-            <button type="submit" class={buttonClass} disabled={disabled()}>{labels().name} 내용 적용</button>
+            <button type="submit" class={buttonClass} disabled={disabled()}>{props.kind==='chart'?'차트 제목 적용':`${labels().name} 내용 적용`}</button>
           </form>
         }</Show>
         </Show>

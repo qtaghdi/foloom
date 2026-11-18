@@ -134,7 +134,7 @@ func objectPreview(n *node) *ObjectInfo {
 	}
 	graphic := childNS(childNS(container, drawingNS, "graphic"), drawingNS, "graphicData")
 	switch attribute(graphic, "", "uri") {
-	case drawingNS + "/chart", "http://schemas.openxmlformats.org/drawingml/2006/chart":
+	case drawingNS + "/chart", chartNS:
 		return &ObjectInfo{Kind: "chart"}
 	case drawingNS + "/diagram", "http://schemas.openxmlformats.org/drawingml/2006/diagram":
 		return &ObjectInfo{Kind: "smartart"}
