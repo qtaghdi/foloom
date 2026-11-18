@@ -24,7 +24,7 @@ const (
 )
 
 type ImageEdit struct {
-	Rotation *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0 and 180"`
+	Rotation *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
 	Crop     *ImageCrop `json:"crop,omitempty"`
 	Action   string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, or rotate"`
 	Base64   string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
@@ -262,6 +262,7 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
+	Caption          string     `json:"caption,omitempty"`
 	CaptionEditable  bool       `json:"captionEditable,omitempty"`
 	Rotation         int        `json:"rotation,omitempty"`
 	RotationEditable bool       `json:"rotationEditable,omitempty"`
@@ -369,6 +370,7 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				_, info.Caption = editablePictureCaption(source, s.pkg.document)
 				if captionParagraph(source) {
 					if !captionFieldsChecked {
 						_, err := documentFigureFields(source.paragraph.parent)

@@ -28,6 +28,7 @@ export function DocumentTableToolbar(props: {
   const [height,setHeight] = createSignal(24);
   const [error,setError] = createSignal('');
   const tables = createMemo(()=>props.blocks.filter(block=>block.type==='table'));
+  const leading=()=>tables().find(table=>table.prependParagraph);
   const selected = createMemo(()=>tables().find(table=>table.id===tableId())??tables()[0]);
   const dimension = () => (action().endsWith('_row') || action()==='set_row_height') ? selected()?.rows.length??0 : selected()?.rows[0]?.cells.length??0;
   const disabled = () => props.disabled||props.pending;
@@ -70,6 +71,10 @@ export function DocumentTableToolbar(props: {
     }
     setError(props.onApply(operation)?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
   };
+  const prepend = (tableId:string) => {
+    const operation:TableOperation={type:'update_table',targetId:tableId,table:{action:'insert_body_paragraph_before'}};
+    setError(props.onApply(operation)?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+  };
   const field = (label:string,value:()=>number,setValue:(value:number)=>void,max:()=>number) =>
     <label class="flex min-h-11 items-center gap-2">{label}
       <input type="number" aria-label={label} min="1" max={max()} step="1"
@@ -79,6 +84,8 @@ export function DocumentTableToolbar(props: {
   return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
     <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">표 편집</summary>
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
+      <Show when={leading()}>{table=><button type="button" class={buttonClass} disabled={disabled()}
+        onClick={()=>prepend(table().id)}>첫 표 앞에 본문 문단 추가</button>}</Show>
       <select aria-label="표 작업" class="editor-select min-h-11" value={action()} disabled={disabled()}
         onChange={event=>{setAction(event.currentTarget.value as TableAction);setError('');}}>
         <For each={Object.entries(actions)}>{([value,label])=><option value={value}>{label}</option>}</For>

@@ -319,7 +319,7 @@ it('offers plain and basic style paste and never deletes selected text for an im
   expect(spans(root)[0]?.textContent).toBe('new');expect(spans(root)[0]?.style.fontStyle).toBe('italic');
   button(root,'저장').click();await settle();
   const body=JSON.parse(f.fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
-  expect(body.operations[0].paragraphs[0].runs[0].style).toEqual({bold:false,italic:true,color:'#112233'});
+  expect(body.operations[0].paragraphs[0].runs[0].style).toEqual({bold:false,italic:true,underline:false,strike:false,color:'#112233'});
 });
 it('preserves selected source text when writing a cut clipboard fails', async () => {
   const initial: Snapshot = { ...snapshot, blocks: [{ id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'keep',editable:true,bold:false,italic:false}]}}] };
