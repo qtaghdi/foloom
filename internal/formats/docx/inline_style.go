@@ -29,18 +29,25 @@ func validateInlineStyle(style *InlineStyle) error {
 	if style.SizeHalfPoints != nil && (*style.SizeHalfPoints < 8 || *style.SizeHalfPoints > 288) {
 		return fmt.Errorf("DOCX inline font size is outside preview bounds")
 	}
-	if len(style.Font) > 120 || !utf8.ValidString(style.Font) || strings.ContainsAny(style.Font, "\"\\") {
-		return fmt.Errorf("invalid DOCX inline font")
-	}
-	for _, r := range style.Font {
-		if r < 0x20 || r == 0x7f {
+	for _, font := range []string{style.Font, style.EastAsiaFont} {
+		if len(font) > 120 || !utf8.ValidString(font) || strings.ContainsAny(font, "\"\\") {
 			return fmt.Errorf("invalid DOCX inline font")
+		}
+		for _, r := range font {
+			if r < 0x20 || r == 0x7f {
+				return fmt.Errorf("invalid DOCX inline font")
+			}
+		}
+	}
+	for _, tag := range []string{style.ProofingLang, style.EastAsiaLang} {
+		if tag != "" && !validProofingLanguage(tag) {
+			return fmt.Errorf("invalid DOCX proofing language")
 		}
 	}
 	return nil
 }
 
-func inlineProperties(props *node, data []byte, style *InlineStyle) (string, error) {
+func inlineProperties(props *node, data []byte, style *InlineStyle, inheritedLang *node) (string, error) {
 	if err := validateInlineStyle(style); err != nil {
 		return "", err
 	}
@@ -111,10 +118,43 @@ func inlineProperties(props *node, data []byte, style *InlineStyle) (string, err
 		property("sz", strconv.Itoa(*style.SizeHalfPoints))
 		property("szCs", strconv.Itoa(*style.SizeHalfPoints))
 	}
-	if style.Font != "" {
+	if style.Font != "" || style.EastAsiaFont != "" {
+		if countChild(props, "rFonts") > 1 {
+			return "", fmt.Errorf("duplicate DOCX font properties cannot be changed")
+		}
 		overrides["rFonts"] = true
-		value := escapeText(style.Font)
-		additions.WriteString(`<dw:rFonts xmlns:dw="` + wordNS + `" dw:ascii="` + value + `" dw:hAnsi="` + value + `" dw:eastAsia="` + value + `" dw:cs="` + value + `"/>`)
+		fonts := props.child("rFonts")
+		values := map[string]string{}
+		var themes []string
+		if style.Reset || style.Font != "" {
+			fonts = nil
+		}
+		if style.Font != "" {
+			for _, script := range []string{"ascii", "hAnsi", "eastAsia", "cs"} {
+				values[script] = style.Font
+			}
+		}
+		if style.EastAsiaFont != "" {
+			values["eastAsia"] = style.EastAsiaFont
+			themes = []string{"eastAsiaTheme"}
+		}
+		fontsXML, err := patchProperty(fonts, data, "rFonts", values, themes)
+		if err != nil {
+			return "", err
+		}
+		additions.WriteString(fontsXML)
+	}
+	if style.ProofingLang != "" || style.EastAsiaLang != "" {
+		if countChild(props, "lang") > 1 {
+			return "", fmt.Errorf("duplicate DOCX proofing language properties cannot be changed")
+		}
+		overrides["lang"] = true
+		source, sourceData := withProofingSource(props.child("lang"), inheritedLang, data)
+		languages, err := patchProofingLanguages(source, sourceData, style)
+		if err != nil {
+			return "", err
+		}
+		additions.WriteString(languages)
 	}
 	// Insert named properties in schema order without reordering untouched XML.
 	type chunk struct{ name, raw string }
