@@ -104,7 +104,7 @@ export function DocumentApp() {
   const standalonePending = () => { state().snapshot; draftVersion(); return controller.pendingStandalone(); };
   const documentLinks = createMemo(() => {
     const snapshot = state().snapshot;
-    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs.filter(run => run.link)) : [];
+    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs.filter(run => run.link && !('field' in run.link && run.link.field))) : [];
   });
   const documentNotes = createMemo(() => {
     const snapshot = state().snapshot;

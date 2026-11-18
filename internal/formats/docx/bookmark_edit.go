@@ -25,7 +25,9 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 		return nil, fmt.Errorf("DOCX bookmark target has changed")
 	}
 	var edits []replacement
+	display := ""
 	if deleting {
+		display = bookmarkedPlainText(index, start)
 		end := index.ends[start.attr("id")][0]
 		edits = []replacement{{start: start.start, end: start.end}, {start: end.start, end: end.end}}
 	} else {
@@ -38,9 +40,24 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 	var walk func(*node, bool) error
 	walk = func(n *node, main bool) error {
 		switch {
-		case n.is("fldChar") || n.is("instrText") || n.is("delInstrText") ||
-			n.is("fldSimple") && !strings.EqualFold(strings.TrimSpace(n.attr("instr")), "PAGE"):
+		case n.is("fldChar") || n.is("instrText") || n.is("delInstrText"):
 			return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
+		case n.is("fldSimple"):
+			bookmark := bookmarkFieldName(n)
+			if bookmark == "" && !strings.EqualFold(strings.TrimSpace(n.attr("instr")), "PAGE") &&
+				!strings.EqualFold(strings.TrimSpace(n.attr("instr")), "NUMPAGES") {
+				return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
+			}
+			if bookmark != "" && strings.EqualFold(bookmark, edit.Bookmark) {
+				if !main {
+					return fmt.Errorf("protected DOCX bookmark field outside body")
+				}
+				result, err := patchBookmarkField(data, n, deleting, edit.NewBookmark, display)
+				if err != nil {
+					return err
+				}
+				edits = append(edits, result)
+			}
 		case !main && n.is("bookmarkStart") &&
 			(strings.EqualFold(n.attr("name"), edit.Bookmark) || !deleting && strings.EqualFold(n.attr("name"), edit.NewBookmark)):
 			return fmt.Errorf("DOCX bookmark name exists in another story")
