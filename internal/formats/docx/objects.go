@@ -115,6 +115,8 @@ func objectPreview(n *node) *ObjectInfo {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
+	case supportedDateInstruction(n):
+		return &ObjectInfo{Kind: "date_field", Text: reviewText(textContent(n), 1024)}
 	case supportedTOCField(n):
 		return &ObjectInfo{Kind: "toc", Text: reviewText(textContent(n), 1024)}
 	case n.is("sdt"):
