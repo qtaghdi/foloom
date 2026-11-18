@@ -191,7 +191,8 @@ export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPage
 function paragraphAlignment(paragraph:Paragraph) {
   const placement=paragraph.runs.find(run=>run.picture?.placement?.startsWith('floating_'))?.picture?.placement;
   switch(placement){
-    case 'floating_left':return 'start';
+    case 'floating_left':
+    case 'floating_offset':return 'start';
     case 'floating_center':return 'center';
     case 'floating_right':return 'end';
     default:return paragraph.layout?.align;
@@ -204,12 +205,18 @@ function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
   const quarterTurn=()=>rotation()===90||rotation()===270;
   const width=()=>quarterTurn()?props.picture.heightEmu:props.picture.widthEmu;
   const height=()=>quarterTurn()?props.picture.widthEmu:props.picture.heightEmu;
+  const widthPx=()=>Math.max(1,Math.round(width()/9525));
+  const margin=()=>{
+    const offset=props.picture.horizontalOffsetEmu;
+    if(props.picture.placement!=='floating_offset'||offset===undefined)return undefined;
+    return `min(${offset/9525}px, max(0px, calc(100% - ${widthPx()}px)))`;
+  };
   const crop=()=>props.picture.crop;
   const wide=()=>100000-(crop()?.left??0)-(crop()?.right??0);
   const high=()=>100000-(crop()?.top??0)-(crop()?.bottom??0);
   return <span data-docx-picture contentEditable={false} class="relative inline-block max-w-full align-middle"
-    style={{width:`${Math.max(1,Math.round(width()/9525))}px`,'aspect-ratio':`${width()}/${height()}`,float:wrapSide(),
-      'max-width':wrapSide()?'50%':undefined}}>
+    style={{width:`${widthPx()}px`,'aspect-ratio':`${width()}/${height()}`,float:wrapSide(),
+      'max-width':wrapSide()?'50%':undefined,'margin-left':margin()}}>
     <span data-docx-crop={crop()?'':undefined} class="absolute left-1/2 top-1/2 overflow-hidden"
       style={{width:quarterTurn()?`${100*height()/width()}%`:'100%',height:quarterTurn()?`${100*width()/height()}%`:'100%',
         transform:`translate(-50%, -50%) rotate(${rotation()}deg)`}}>

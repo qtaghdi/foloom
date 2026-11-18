@@ -767,3 +767,79 @@ func TestSquarePictureWrapValidatesTextFlowAndRestoresInline(t *testing.T) {
 		t.Fatal("oversized picture changed placement")
 	}
 }
+
+func TestDedicatedPictureOffsetValidatesColumnAndKeepsNativeInline(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(
+		`<w:p/><w:p><w:r><w:t>Following text</w:t></w:r></w:p><w:sectPr><w:pgMar w:gutter="360"/></w:sectPr>`))
+	save := func(snapshot Snapshot, operations ...Operation) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: snapshot.ID, BaseRevision: snapshot.Revision, Operations: operations}, "human")
+	}
+	var pixels bytes.Buffer
+	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	v, err := save(v, Operation{Type: "update_image", TargetID: v.Blocks[0].ID, Image: &ImageEdit{
+		Action: "insert", Base64: base64.StdEncoding.EncodeToString(pixels.Bytes()), WidthEMU: 1270000,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := bytes.Clone(s.pkg.document)
+	baseline := fileBytes(t, filename)
+	run := v.Blocks[0].Paragraph.Runs[0]
+	const limit = (11906-1440-1440-360)*635 - 1270000
+	if run.Picture.OffsetLimitEMU == nil || *run.Picture.OffsetLimitEMU != limit {
+		t.Fatal("bound did not include existing page margins and binding gutter")
+	}
+	place := func(id string, mode string, distance *int) Operation {
+		return Operation{Type: "update_image", TargetID: id,
+			Image: &ImageEdit{Action: "set_placement", Placement: mode, HorizontalOffsetEMU: distance}}
+	}
+	negative, oversized := -1, limit+1
+	for _, invalid := range []Operation{place(run.ID, "floating_offset", nil),
+		place(run.ID, "floating_offset", &negative), place(run.ID, "floating_offset", &oversized),
+		place(run.ID, "floating_center", &oversized)} {
+		if _, err := save(v, invalid); err == nil || !bytes.Equal(baseline, fileBytes(t, filename)) {
+			t.Fatal("invalid offset changed the package")
+		}
+	}
+	initialized := place(run.ID, "floating_offset", new(int))
+	if _, err := save(v, initialized, initialized); err == nil || !bytes.Equal(baseline, fileBytes(t, filename)) {
+		t.Fatal("compound offset changed the package")
+	}
+	for _, distance := range []int{0, 635000, 1270000} {
+		v, err = save(v, place(v.Blocks[0].Paragraph.Runs[0].ID, "floating_offset", &distance))
+		if err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := Open(ctx, filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[0].Picture
+		if info.Placement != "floating_offset" || info.HorizontalOffsetEMU == nil || *info.HorizontalOffsetEMU != distance ||
+			info.WidthEMU != 1270000 || !bytes.Contains(s.pkg.document, []byte(`<wp:wrapTopAndBottom/>`)) {
+			t.Fatal("reopen lost native picture layout", distance, info)
+		}
+	}
+	offsetPackage := fileBytes(t, filename)
+	if _, err := save(v, initialized); err == nil || !bytes.Equal(offsetPackage, fileBytes(t, filename)) {
+		t.Fatal("stale picture ID was accepted")
+	}
+	raw := bytes.Replace(s.pkg.document, []byte(`<w:sectPr><w:pgMar`),
+		[]byte(`<w:sectPr><w:cols w:num="2"/><w:pgMar`), 1)
+	_, inspectTargets, _, err := inspect(raw, v.ID, v.Revision)
+	if err != nil || inspectTargets[v.Blocks[0].Paragraph.Runs[0].ID].pictureOffsetLimit != nil {
+		t.Fatal("multi-column layout allowed new numeric placement", err)
+	}
+	if _, err := save(v, place(v.Blocks[0].Paragraph.Runs[0].ID, "inline", nil)); err != nil ||
+		!bytes.Equal(s.pkg.document, original) {
+		t.Fatal("inline fallback did not restore the original XML", err)
+	}
+	historyRestore(t, s, "undo")
+	if !bytes.Equal(fileBytes(t, filename), offsetPackage) {
+		t.Fatal("undo did not restore exact offset package")
+	}
+}
