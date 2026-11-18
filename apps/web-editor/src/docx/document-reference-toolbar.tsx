@@ -15,7 +15,7 @@ export function DocumentReferenceToolbar(props:{
   target?:Paragraph;links:Run[];notes:Run[];toc?:Run;bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
-  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'footnote'|'endnote'>('bookmark');
+  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'figureList'|'tableList'|'footnote'|'endnote'>('bookmark');
   const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
   const crossReference=()=>mode()==='reference'||mode()==='pageReference'||mode()==='numberReference';
   const bookmarkChoices=()=>crossReference()?props.bookmarks.filter(item=>mode()==='numberReference'?item.numberReference:item.textReference):props.bookmarks;
@@ -41,6 +41,8 @@ export function DocumentReferenceToolbar(props:{
       reference={action:'insert_bookmark',bookmark:bookmark()};
     }else if(mode()==='contents'){
       reference={action:'insert_toc'};
+    }else if(mode()==='figureList'||mode()==='tableList'){
+      reference={action:mode()==='figureList'?'insert_figure_list':'insert_table_list'};
     }else if(crossReference()){
       const name=targetBookmark();
       if(!name){setError('평문 북마크를 선택하세요.');return;}
@@ -69,9 +71,11 @@ export function DocumentReferenceToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="참조 작업" class="editor-select min-h-11" disabled={disabled()} value={mode()}
         onChange={event=>{setMode(event.currentTarget.value as ReturnType<typeof mode>);setError('');}}>
-        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="pageReference">쪽 번호 상호 참조 삽입</option><option value="numberReference">목록 번호 상호 참조 삽입</option><option value="contents">자동 목차 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
+        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="pageReference">쪽 번호 상호 참조 삽입</option><option value="numberReference">목록 번호 상호 참조 삽입</option><option value="contents">자동 목차 삽입</option><option value="figureList">그림 목록 삽입</option><option value="tableList">표 목록 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
       </select>
-      <Show when={mode()!=='contents'} fallback={<span class="text-slate-600">선택한 문단 앞에 제목 1~3 수준의 목차를 넣습니다.</span>}>
+      <Show when={mode()!=='contents'&&mode()!=='figureList'&&mode()!=='tableList'} fallback={<span class="text-slate-600">
+        {mode()==='contents'?'선택한 문단 앞에 제목 1~3 수준의 목차를 넣습니다.':'선택한 문단 앞에 본문의 번호 캡션을 모읍니다.'}
+      </span>}>
       <Show when={addingNote()} fallback={<Show when={mode()==='bookmark'} fallback={<>
         <Show when={!crossReference()}><input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
           disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/></Show>

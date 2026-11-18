@@ -105,6 +105,9 @@ func previewFraction(math *node, strict bool) *MathFraction {
 }
 
 func objectPreview(n *node) *ObjectInfo {
+	if kind := tocObjectKind(n); kind != "" {
+		return &ObjectInfo{Kind: kind, Text: reviewText(textContent(n), 1024)}
+	}
 	switch {
 	case n.name.Space == mathNS && (n.name.Local == "oMath" || n.name.Local == "oMathPara"):
 		out := &ObjectInfo{Kind: "math", Editable: editableMath(n) || previewFraction(n, true) != nil, Fraction: previewFraction(n, false)}
@@ -115,8 +118,6 @@ func objectPreview(n *node) *ObjectInfo {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
-	case supportedTOCField(n):
-		return &ObjectInfo{Kind: "toc", Text: reviewText(textContent(n), 1024)}
 	case n.is("sdt"):
 		return &ObjectInfo{Kind: "control", Text: reviewText(textContent(n), 1024)}
 	case n.is("object") || n.child("object") != nil:
