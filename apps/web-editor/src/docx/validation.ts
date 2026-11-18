@@ -13,13 +13,17 @@ export function validateRunText(text: string): string {
   if (utf8Length(text) > 64 * 1024) return '한 입력은 UTF-8 64 KiB 이하여야 합니다. 내용을 줄인 뒤 저장하세요.';
   return '';
 }
+export function validChartValue(value: string): boolean {
+  return value.length <= 64 && /^[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][-+]?[0-9]{1,3})?$/.test(value) &&
+    Math.abs(Number(value)) <= 1e15;
+}
 export function validateDrafts(sessionId: string, revision: number, operations: Operation[]): string {
   if (operations.length > 1000) return '한 번에 1,000개 입력까지 저장할 수 있습니다. 수정 범위를 줄이세요.';
   if (operations.filter(op=>op.type==='define_list').length>32) return '한 번에 새 목록은 32개까지 만들 수 있습니다. 실행 취소 후 작업을 나누어 저장하세요.';
   let textBytes = 0;
   for (const operation of operations) {
     if(operation.type==='move_picture_caption_up'||operation.type==='move_picture_caption_down'||operation.type==='update_table'||operation.type==='move_bookmark_up'||operation.type==='move_bookmark_down'||operation.type==='move_hyperlink_up'||operation.type==='move_hyperlink_down'||operation.type==='move_note_up'||operation.type==='move_note_down'||
-      operation.type==='accept_revision'||operation.type==='reject_revision'||operation.type==='track_run_bold'||operation.type==='track_paragraph_alignment'||operation.type==='resize_chart'||operation.type==='delete_chart'||operation.type==='update_chart_value'||operation.type==='insert_rectangle'||operation.type==='update_rectangle_colors'||operation.type==='delete_rectangle'||operation.type==='resize_rectangle')continue;
+      operation.type==='accept_revision'||operation.type==='reject_revision'||operation.type==='track_run_bold'||operation.type==='track_paragraph_alignment'||operation.type==='insert_chart'||operation.type==='resize_chart'||operation.type==='delete_chart'||operation.type==='update_chart_value'||operation.type==='insert_rectangle'||operation.type==='update_rectangle_colors'||operation.type==='delete_rectangle'||operation.type==='resize_rectangle')continue;
     if(operation.type==='define_list'||operation.type==='update_image'||operation.type==='update_reference'||operation.type==='add_comment'||operation.type==='resolve_comment'||operation.type==='reopen_comment'||operation.type==='update_math'||operation.type==='reply_comment')continue;
     const texts = operation.type==='update_section' ? (operation.section.headerFooters??[]).flatMap(slot=>slot.text===undefined?[]:[slot.text]) : operation.type === 'define_style' || operation.type === 'update_header_parity' || operation.type === 'update_boundary' ? [] : operation.type === 'replace_paragraphs' ? operation.paragraphs.flatMap(p => p.runs.map(r => r.text)) : [operation.text];
     for (const text of texts) { const error = validateRunText(text); if (error) return error; textBytes += utf8Length(text); }

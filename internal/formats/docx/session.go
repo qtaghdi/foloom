@@ -344,6 +344,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.RectangleSize != nil && op.Type != "resize_rectangle" {
 			return nil, fmt.Errorf("unexpected DOCX rectangle size")
 		}
+		if op.ChartInsert != nil && op.Type != "insert_chart" {
+			return nil, fmt.Errorf("unexpected DOCX chart insertion fields")
+		}
 		if op.ChartWidthEMU != nil && op.Type != "resize_chart" {
 			return nil, fmt.Errorf("unexpected DOCX chart width")
 		}
@@ -688,7 +691,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, added...)
 			continue
 		}
-		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" || op.Type == "insert_chart" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -722,6 +725,17 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			id, err := nextDrawingID()
 			if err != nil {
 				return nil, err
+			}
+			if op.Type == "insert_chart" {
+				if op.ChartInsert == nil || op.Text != "" {
+					return nil, fmt.Errorf("DOCX chart creation requires chartInsert")
+				}
+				edit, err := s.pkg.insertPieChart(t.paragraph, *op.ChartInsert, id, parts)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
 			}
 			var drawing string
 			if op.Type == "insert_rectangle" {
