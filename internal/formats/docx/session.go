@@ -133,7 +133,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	blocks, targetsByID, unsupported, err := s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+	blocks, targetsByID, unsupported, err := s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -425,6 +425,23 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, updated...)
 			continue
 		}
+		if op.Type == "split_note_paragraph" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
+				return nil, fmt.Errorf("invalid DOCX note paragraph split fields")
+			}
+			_, noteTargets, _, err := s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
+			if err != nil {
+				return nil, err
+			}
+			edit, err := splitNoteParagraph(s.pkg.document, noteTargets[op.TargetID], op, usedParagraphIDs(root))
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
 		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" ||
 			op.Type == "move_note_up" || op.Type == "move_note_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -433,7 +450,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
 			if layoutTargets == nil {
-				_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+				_, layoutTargets, _, err = s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
 				if err != nil {
 					return nil, err
 				}
@@ -725,7 +742,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			if op.Image.Action == "align" || op.Image.Action == "set_placement" {
 				if layoutTargets == nil {
-					_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+					_, layoutTargets, _, err = s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
 					if err != nil {
 						return nil, err
 					}
