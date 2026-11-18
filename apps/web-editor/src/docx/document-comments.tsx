@@ -14,6 +14,10 @@ export function DocumentComments(props:{
   const changes=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ? block.paragraph.runs.filter(run=>run.object?.kind==='tracked_insert'||run.object?.kind==='tracked_delete')
     : []).slice(0,100)??[];
+  const [replyTo,setReplyTo]=createSignal('');
+  const comments=()=>props.snapshot?.comments??[];
+  const threads=()=>comments().filter(comment=>!comment.parentId||!comments().some(parent=>parent.id===comment.parentId));
+  const replies=(parentId:string)=>comments().filter(comment=>comment.parentId===parentId);
   const [trackId,setTrackId]=createSignal('');
   const availableRuns=()=>props.target?.runs.filter(run=>run.trackable).slice(0,200)??[];
   const trackRun=()=>availableRuns().find(run=>run.id===trackId());
@@ -98,7 +102,7 @@ export function DocumentComments(props:{
       <button type="button" class={buttonClass} disabled={disabled()||!targetText()||!text().trim()||useRange()&&!props.range} onClick={add}>주석 적용</button>
       <Show when={error()}><p role="alert" class="py-2 text-sm text-red-700">{error()}</p></Show>
       <ul class="mt-3 space-y-2" aria-label="저장된 주석">
-        <For each={props.snapshot?.comments??[]}>{comment=><li class="rounded border border-slate-200 p-2">
+        <For each={threads()}>{comment=><li class="rounded border border-slate-200 p-2">
           <p class="text-xs font-semibold">{comment.author||'작성자 미상'} <Show when={comment.date}>{date=><time dateTime={date()}>{date()}</time>}</Show></p>
           <p class="whitespace-pre-wrap break-words text-sm">{comment.text}</p>
           <Show when={comment.resolutionEditable}>
@@ -109,6 +113,33 @@ export function DocumentComments(props:{
             </button>
           </Show>
           <Show when={comment.paragraphId}>{id=><button type="button" class={quietButtonClass} onClick={()=>props.onLocate(id())}>주석 위치로 이동</button>}</Show>
+          <Show when={comment.resolutionEditable}>
+            <button type="button" class={quietButtonClass} disabled={disabled()} onClick={()=>setReplyTo(id=>id===comment.id?'':comment.id)}>답글 쓰기</button>
+          </Show>
+          <Show when={replyTo()===comment.id}>
+            <form class="mt-2 grid gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const input=event.currentTarget.elements.namedItem('replyText') as HTMLTextAreaElement;
+              if(!input.value.trim()){setError('답글 내용을 입력하세요.');return;}
+              if(utf8Length(input.value)>4000){setError('답글을 UTF-8 4,000바이트 이하로 줄이세요.');return;}
+              const accepted=props.onApply({type:'reply_comment',targetId:comment.id,comment:{text:input.value}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              if(accepted){setReplyTo('');setOpen(false);}
+            }}>
+              <textarea name="replyText" aria-label="새 답글" rows="2" maxlength="1000" disabled={disabled()}
+                class="w-full rounded border border-slate-300 p-2 text-sm"/>
+              <button type="submit" class={buttonClass} disabled={disabled()}>답글 적용</button>
+            </form>
+          </Show>
+          <Show when={replies(comment.id).length}>
+            <ul aria-label="답글" class="mt-2 space-y-2 border-l border-slate-200 pl-3">
+              <For each={replies(comment.id)}>{reply=><li>
+                <p class="text-xs font-semibold">{reply.author||'작성자 미상'} <Show when={reply.date}>{date=><time dateTime={date()}>{date()}</time>}</Show></p>
+                <p class="whitespace-pre-wrap break-words text-sm">{reply.text}</p>
+              </li>}</For>
+            </ul>
+          </Show>
         </li>}</For>
       </ul>
     </section></Show>

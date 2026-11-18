@@ -139,6 +139,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	}
 	s.addPicturePreviews(blocks, targetsByID)
 	s.pkg.projectSmartArt(blocks, targetsByID)
+	s.pkg.projectChartTitles(root, blocks, targetsByID)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
 			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
@@ -165,7 +166,15 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	sections := []SectionInfo{}
 	targets := inspectSections(root, s.id, s.revision)
 	headers := s.pkg.headerFooterCatalog(targets)
+	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
+	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
+	var parity *bool
+	if settingsErr == nil {
+		value := headerParity(settings)
+		parity = &value
+	}
 	for index, target := range targets {
+		target.info.Gutter = sectionGutter(target.props, fixedLeft)
 		target.info.HeaderFooters = headers[index]
 		if n := target.props.child("titlePg"); n != nil {
 			target.info.FirstPage = onOff(n.attr("val"), true)
@@ -188,7 +197,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	listRoot, _ := parseXML(s.pkg.partData(s.pkg.numberingPath, nil))
 	numbering := readNumbering(listRoot)
 	applyListLabels(blocks, numbering)
-	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -320,7 +329,71 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var revisionIDs map[int64]bool
 	var nextRevisionID int64
 	var revisionDate string
+	var chartCounts map[string]int
 	for _, op := range input.Operations {
+		if op.RectangleColors != nil && op.Type != "update_rectangle_colors" {
+			return nil, fmt.Errorf("unexpected DOCX rectangle colors")
+		}
+		if op.RectangleSize != nil && op.Type != "resize_rectangle" {
+			return nil, fmt.Errorf("unexpected DOCX rectangle size")
+		}
+		if op.ChartWidthEMU != nil && op.Type != "resize_chart" {
+			return nil, fmt.Errorf("unexpected DOCX chart width")
+		}
+		if op.Type == "update_chart_title" || op.Type == "resize_chart" {
+			t := targets[op.TargetID]
+			if t.kind != "chart" || seen[op.TargetID] ||
+				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
+				return nil, fmt.Errorf("invalid DOCX chart operation")
+			}
+			if chartCounts == nil {
+				chartCounts = s.pkg.chartUseCounts(root)
+			}
+			seen[op.TargetID] = true
+			if op.Type == "resize_chart" {
+				if op.ChartWidthEMU == nil || op.Text != "" || op.ExpectedText != "" {
+					return nil, fmt.Errorf("invalid DOCX chart resize fields")
+				}
+				edit, err := s.pkg.resizeInlineChart(t, chartCounts, *op.ChartWidthEMU)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+			} else if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if op.Type == "update_rectangle_colors" || op.Type == "delete_rectangle" || op.Type == "resize_rectangle" {
+			t := targets[op.TargetID]
+			if t.kind != "inline_rectangle" || seen[op.TargetID] ||
+				op.Type == "update_rectangle_colors" && op.RectangleColors == nil ||
+				op.Type == "resize_rectangle" && op.RectangleSize == nil ||
+				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid DOCX rectangle operation")
+			}
+			seen[op.TargetID] = true
+			if op.Type == "delete_rectangle" {
+				edits = append(edits, replacement{start: t.run.start, end: t.run.end})
+				continue
+			}
+			var updated []replacement
+			var err error
+			if op.Type == "resize_rectangle" {
+				updated, err = resizeInlineRectangle(s.pkg.document, t, *op.RectangleSize)
+			} else {
+				updated, err = editInlineRectangleColors(s.pkg.document, t, *op.RectangleColors)
+			}
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, updated...)
+			continue
+		}
 		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
@@ -363,6 +436,19 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, err
 			}
 			edits = append(edits, edit)
+			referenceCount++
+			continue
+		}
+		if op.Type == "reply_comment" {
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment == nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" ||
+				referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX comment reply fields")
+			}
+			if err := s.pkg.appendCommentReply(root, op.TargetID, *op.Comment, actor, parts); err != nil {
+				return nil, err
+			}
 			referenceCount++
 			continue
 		}
@@ -473,20 +559,45 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
 		}
-		if op.Type == "insert_textbox" {
+		if op.Type == "insert_picture_caption" {
+			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid or duplicate DOCX figure caption operation")
+			}
+			added, err := s.pkg.pictureCaption(targets[op.TargetID], op.Text)
+			if err != nil {
+				return nil, err
+			}
+			seen[op.Type] = true
+			edits = append(edits, added...)
+			continue
+		}
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
-				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" ||
-				len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "" {
-				return nil, fmt.Errorf("DOCX text box requires plain text and an editable body paragraph")
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
+				return nil, fmt.Errorf("DOCX inline shape requires an editable body paragraph")
+			}
+			if op.Type == "insert_rectangle" && op.Text != "" {
+				return nil, fmt.Errorf("unexpected DOCX rectangle text")
+			}
+			if op.Type == "insert_textbox" && (len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "") {
+				return nil, fmt.Errorf("DOCX text box requires plain text")
 			}
 			id, err := nextDrawingID()
 			if err != nil {
 				return nil, err
 			}
-			edits = append(edits, appendDrawingRun(s.pkg.document, t.paragraph, inlineTextBox(id, op.Text)))
+			var drawing string
+			if op.Type == "insert_rectangle" {
+				drawing = inlineRectangle(id)
+			} else {
+				drawing = inlineTextBox(id, op.Text)
+			}
+			edits = append(edits, appendDrawingRun(s.pkg.document, t.paragraph, drawing))
 			continue
 		}
 		if op.Type == "update_image" {
@@ -607,7 +718,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if err != nil {
 				return nil, err
 			}
-			edit, err := paragraphReplacement(s.pkg.document, targets, op)
+			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles)
 			if err != nil {
 				return nil, err
 			}
