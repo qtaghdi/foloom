@@ -160,6 +160,7 @@ func escapeText(s string) string {
 
 type target struct {
 	trackableParagraphBreak bool
+	pictureOffsetLimit      *int
 	squareWrap              bool
 	splitNoteParagraph      bool
 	picturePlacement        string
@@ -231,6 +232,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		return sessionID + ":" + strconv.FormatUint(revision, 10) + ":" + strconv.Itoa(counter)
 	}
 	squareWrapChecked := false
+	var picturePage PageLayout
+	picturePageChecked, picturePageValid := false, false
 	var paragraph func(*node, bool, string) Paragraph
 	paragraph = func(p *node, allowed bool, kind string) Paragraph {
 		allowed = allowed && !protected[p]
@@ -466,9 +469,18 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				if allowed && !protected[r] && p.parent == body && out.List == nil && !out.PageBreakBefore && !out.PageBreakAfter {
 					picture.pictureAlign = pictureParagraphAlignment(picture, root.source, layout)
 					picture.picturePlacement = supportedPicturePlacement(picture, root.source, layout)
-					if picture.picturePlacement != "" && !squareWrapChecked {
-						squareWrapChecked = true
-						picture.squareWrap = canSquareWrapPicture(picture, root.source)
+					if picture.picturePlacement != "" {
+						if !picturePageChecked {
+							picturePage, picturePageValid = pictureColumnPage(body)
+							picturePageChecked = true
+						}
+						if picturePageValid {
+							picture.pictureOffsetLimit = pictureOffsetLimit(picture, picturePage)
+							if !squareWrapChecked {
+								squareWrapChecked = true
+								picture.squareWrap = canSquareWrapPicture(picture, root.source, picturePage)
+							}
+						}
 					}
 				}
 				targets[run.ID] = picture
@@ -597,5 +609,6 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 	markHyperlinkParagraphs(root, bodyParagraphs, protected, targets)
 	markNoteParagraphs(root, bodyParagraphs, protected, targets)
 	markCaptionedPictureMoves(root, bodyParagraphs, protected, targets)
+	markChartMoves(root, bodyParagraphs, protected, targets, styles)
 	return blocks, targets, unsupported, nil
 }

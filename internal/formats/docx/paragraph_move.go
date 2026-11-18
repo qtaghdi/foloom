@@ -69,12 +69,14 @@ func movePreservedParagraph(data []byte, target target, operation string) (repla
 		requiredKind = "hyperlink_paragraph"
 	case "move_note_up", "move_note_down":
 		requiredKind = "note_paragraph"
+	case "move_chart_up", "move_chart_down":
+		requiredKind = "chart"
 	}
 	if target.kind != requiredKind {
 		return replacement{}, fmt.Errorf("DOCX movement requires a supported body paragraph")
 	}
 	first, second := target.paragraph, target.moveDown
-	if operation == "move_bookmark_up" || operation == "move_hyperlink_up" || operation == "move_note_up" {
+	if strings.HasSuffix(operation, "_up") {
 		first, second = target.moveUp, target.paragraph
 	}
 	if first == nil || second == nil || first.end > second.start {
