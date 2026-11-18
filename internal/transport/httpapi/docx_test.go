@@ -233,7 +233,7 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 	}
 	server := httptest.NewServer(api.Handler())
 	defer server.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/api/docx/events?session="+snapshot.ID, nil)
 	if err != nil {
@@ -254,22 +254,41 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanner := bufio.NewScanner(response.Body)
-	found := false
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "data: ") {
-			var event docx.Event
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(scanner.Text(), "data: ")), &event); err != nil {
-				t.Fatal(err)
+	readEvent := func() docx.Event {
+		t.Helper()
+		for scanner.Scan() {
+			if data, ok := strings.CutPrefix(scanner.Text(), "data: "); ok {
+				var event docx.Event
+				if err := json.Unmarshal([]byte(data), &event); err != nil {
+					t.Fatal(err)
+				}
+				return event
 			}
-			if event.Type != "docx.committed" || event.Sequence != 1 || event.Revision != 2 || event.Actor != "ai" {
-				t.Fatalf("invalid event: %+v", event)
-			}
-			found = true
-			break
 		}
+		t.Fatalf("no DOCX SSE event: %v", scanner.Err())
+		return docx.Event{}
 	}
-	if !found {
-		t.Fatalf("no SSE commit: %v", scanner.Err())
+	commit := readEvent()
+	if commit.Type != "docx.committed" || commit.Sequence != 1 || commit.Revision != 2 || commit.Actor != "ai" || !commit.TextOnly || commit.HistoryDirection != "" {
+		t.Fatalf("invalid commit event: %+v", commit)
+	}
+	for _, step := range []struct {
+		direction string
+		actor     string
+		base      uint64
+	}{
+		{"undo", "human", 2},
+		{"redo", "ai", 3},
+	} {
+		input := docx.HistoryInput{SessionID: snapshot.ID, BaseRevision: step.base, Direction: step.direction}
+		if _, err := api.restoreDOCX(ctx, input, step.actor); err != nil {
+			t.Fatal(err)
+		}
+		event := readEvent()
+		if event.Type != "docx.committed" || event.Sequence != step.base || event.Revision != step.base+1 ||
+			event.Actor != step.actor || event.HistoryDirection != step.direction || event.TextOnly {
+			t.Fatalf("invalid history event: %+v", event)
+		}
 	}
 	switchedPath := filepath.Join(t.TempDir(), "switched.docx")
 	content, err := os.ReadFile(path)
@@ -282,20 +301,8 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 	if _, err = api.OpenDOCX(ctx, switchedPath); err != nil {
 		t.Fatal(err)
 	}
-	found = false
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "data: ") {
-			var event docx.Event
-			json.Unmarshal([]byte(strings.TrimPrefix(scanner.Text(), "data: ")), &event)
-			if event.Type != "docx.reload" {
-				t.Fatalf("session switch did not resync: %+v", event)
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("no SSE resync: %v", scanner.Err())
+	if event := readEvent(); event.Type != "docx.reload" || event.HistoryDirection != "" {
+		t.Fatalf("session switch did not resync: %+v", event)
 	}
 }
 

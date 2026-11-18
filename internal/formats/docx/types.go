@@ -268,9 +268,10 @@ type InitialBlock struct {
 }
 
 type Event struct {
-	TextOnly bool   `json:"textOnly,omitempty"`
-	Sequence uint64 `json:"sequence"`
-	Revision uint64 `json:"revision"`
-	Actor    string `json:"actor"`
-	Type     string `json:"type"`
+	HistoryDirection string `json:"historyDirection,omitempty"`
+	TextOnly         bool   `json:"textOnly,omitempty"`
+	Sequence         uint64 `json:"sequence"`
+	Revision         uint64 `json:"revision"`
+	Actor            string `json:"actor"`
+	Type             string `json:"type"`
 }

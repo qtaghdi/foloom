@@ -12,9 +12,10 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type ListDefinition, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type ListDefinition, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction, type DocumentEvent } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
+const historyTitle = {undo: '실행 취소', redo: '다시 실행'} as const;
 type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   recovery?(status: RecoveryStatus): void;
@@ -22,7 +23,7 @@ export interface DocumentView {
   history?(controls: HistoryControls): void;
   validation?(message: string): void;
   activity?(entry: ActivityEntry): void;
-  render(snapshot: Snapshot, focus?: DraftFocus): void;
+  render(snapshot: Snapshot, focus?: DraftFocus, preserveRemoteSelection?: boolean): void;
   status(message: string, state: 'pending' | 'committed' | 'failed' | 'conflicted'): void;
   error(message: string, details?: string): void;
   canSave(enabled: boolean): void;
@@ -329,7 +330,7 @@ export class DocumentController {
     }
   }
 
-  async load(observed?: { sequence: number; revision: number; actor?: string; textOnly?:boolean }): Promise<void> {
+  async load(observed?: DocumentEvent): Promise<void> {
     if (this.busy || this.loading || this.disposed || this.composing) return;
     this.loading = true;
     this.disconnect();
@@ -339,11 +340,12 @@ export class DocumentController {
     try {
       const snapshot = await this.request('/api/docx');
       if (this.disposed) return;
+      const observedHistory = observed?.historyDirection !== undefined && snapshot.revision === observed.revision;
       if (observed && this.snapshot && snapshot.revision === observed.revision && observed.actor === 'ai') {
         const changes = compareParagraphs(this.snapshot, snapshot, observed.textOnly===true).slice(0, 60);
         for (const [index, change] of changes.entries()) {
           this.view.activity?.({ id: index === 0 ? `event:${observed.sequence}` : `event:${observed.sequence}:${change.key}`, actor: 'ai', state: 'committed',
-            title: '텍스트 변경', location: change.label, revision: observed.revision,
+            title: observed.historyDirection ? historyTitle[observed.historyDirection] : '텍스트 변경', location: change.label, revision: observed.revision,
             documentChange: { session: snapshot.id, key: change.key, anchor:change.anchor, before: change.before, after: change.after } });
         }
       }
@@ -351,7 +353,7 @@ export class DocumentController {
       this.resetDraft(snapshot);
       this.blocked = false;
       this.view.error('');
-      this.view.render(snapshot);
+      this.view.render(snapshot, undefined, observedHistory);
       this.view.status('저장됨', 'committed');
       this.connect(snapshot);
       this.connectRecovery(snapshot);
@@ -422,12 +424,12 @@ export class DocumentController {
     if (this.hasDrafts() || !this.snapshot.history?.[direction]) return false;
     this.busy = true; this.disconnect(); this.updateSave(); this.view.status('저장 중','pending');
     const activityId = `local:${++this.activitySequence}`;
-    this.view.activity?.({id:activityId,actor:'human',state:'pending',title:direction==='undo'?'실행 취소':'다시 실행'});
+    this.view.activity?.({id:activityId,actor:'human',state:'pending',title:historyTitle[direction]});
     try {
       const next = await this.request('/api/docx/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:this.snapshot.id,baseRevision:this.snapshot.revision,direction})});
       if (this.disposed) return false;
       this.snapshot=next;this.resetDraft(next);this.view.render(next);this.view.status('저장됨','committed');
-      this.view.activity?.({id:activityId,actor:'human',state:'committed',title:direction==='undo'?'실행 취소':'다시 실행',revision:next.revision});
+      this.view.activity?.({id:activityId,actor:'human',state:'committed',title:historyTitle[direction],revision:next.revision});
       this.connect(next);return true;
     } catch(error) {
       this.view.activity?.({id:activityId,actor:'human',state:'uncertain',title:'이력 복원 결과 확인 필요'});this.fail(error);return false;
@@ -486,7 +488,8 @@ export class DocumentController {
       try {
         const event = eventSchema.parse(JSON.parse((raw as MessageEvent<string>).data));
         if (event.type === 'docx.committed' && event.revision > (this.snapshot?.revision ?? 0)) {
-          this.view.activity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: event.revision });
+          this.view.activity?.({ id: `event:${event.sequence}`, actor: event.actor === 'ai' ? 'ai' : 'human', state: 'committed',
+            title: event.historyDirection ? historyTitle[event.historyDirection] : '본문·표 텍스트 저장', revision: event.revision });
         }
         if (event.type === 'docx.reload' || event.revision > (this.snapshot?.revision ?? 0)) {
           if (this.hasDrafts()) {
