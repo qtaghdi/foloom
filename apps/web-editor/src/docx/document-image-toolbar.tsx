@@ -107,7 +107,7 @@ export function DocumentImageToolbar(props: {
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>비율 유지 크기 변경</button>
             </form>
-            <Show when={picture.picture?.captionEditable}>
+            <Show when={picture.picture?.captionEditable || picture.picture?.caption}>
               <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
                 event.preventDefault();
                 if(disabled())return;
@@ -115,13 +115,16 @@ export function DocumentImageToolbar(props: {
                 const text=input.value.trim();
                 if(!text){setError('그림 캡션을 입력하세요.');return;}
                 if(utf8Length(text)>1024){setError('캡션을 UTF-8 1 KiB 이하로 줄이세요.');return;}
-                const accepted=props.onApply({type:'insert_picture_caption',targetId:picture.id,expectedText:'',text});
+                const previous=picture.picture?.caption;
+                const accepted=props.onApply(previous
+                  ? {type:'edit_picture_caption',targetId:picture.id,expectedText:previous,text}
+                  : {type:'insert_picture_caption',targetId:picture.id,expectedText:'',text});
                 setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
               }}>
                 <label class="flex min-w-0 flex-col gap-1">그림 캡션
-                  <input name="caption" type="text" maxlength="1024" class="min-h-11 max-w-full rounded border border-slate-300 px-2" disabled={disabled()}/>
+                  <input name="caption" type="text" maxlength="1024" value={picture.picture?.caption??''} class="min-h-11 max-w-full rounded border border-slate-300 px-2" disabled={disabled()}/>
                 </label>
-                <button type="submit" class={buttonClass} disabled={disabled()}>그림 번호와 캡션 삽입</button>
+                <button type="submit" class={buttonClass} disabled={disabled()}>{picture.picture?.caption?'그림 캡션 변경':'그림 번호와 캡션 삽입'}</button>
               </form>
             </Show>
             <Show when={picture.picture?.rotationEditable}>

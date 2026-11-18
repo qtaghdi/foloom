@@ -387,6 +387,30 @@ func TestPictureCaptionRenumbersExistingFigureAndKeepsMedia(t *testing.T) {
 		!bytes.Equal(committed, fileBytes(t, filename)) {
 		t.Fatal("duplicate caption changed the document")
 	}
+	pictureRun := v.Blocks[2].Paragraph.Runs[1]
+	if pictureRun.Picture.Caption != "Second & image" {
+		t.Fatal("the picture did not expose its own caption text")
+	}
+	edit := Operation{Type: "edit_picture_caption", TargetID: pictureRun.ID, ExpectedText: "stale", Text: "새 설명"}
+	if _, err := save(v, edit); err == nil || !bytes.Equal(committed, fileBytes(t, filename)) {
+		t.Fatal("stale caption text was accepted")
+	}
+	originalXML := bytes.Clone(s.pkg.document)
+	edit.ExpectedText = "Second & image"
+	updated, err := save(v, edit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedXML := bytes.Replace(originalXML, []byte(". Second &amp; image"), []byte(". 새 설명"), 1)
+	if !bytes.Equal(s.pkg.document, expectedXML) ||
+		updated.Blocks[2].Paragraph.Runs[1].Picture.Caption != edit.Text ||
+		updated.Blocks[3].Paragraph.Runs[1].Text != "2" {
+		t.Fatal("editing a caption affected other XML or changed the number")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(committed, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the original caption")
+	}
 	historyRestore(t, reopened, "undo")
 	historyRestore(t, reopened, "undo")
 	if !bytes.Equal(original, fileBytes(t, filename)) {
