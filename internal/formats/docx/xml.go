@@ -454,7 +454,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			}
 			if editable {
 				textNode := r
-				if len(texts) == 1 && !r.has("br") || r.has("tab") {
+				if len(texts) == 1 && !r.has("br") && !r.has("tab") {
 					textNode = texts[0]
 				}
 				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r, trackable: run.Trackable, boldTrackable: run.BoldTrackable}
