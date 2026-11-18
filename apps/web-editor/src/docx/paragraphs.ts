@@ -20,7 +20,7 @@ export function restoreAnchoredPoint(previous: Snapshot, next: Snapshot, point: 
   const target=targets[0]!.paragraph;
   const index=source.runs.findIndex(run=>run.id===point.runId);
   const run=target.runs[Math.min(index,target.runs.length-1)];
-  if (!run?.editable || !target.structureEditable) return null;
+  if (!run?.editable) return null;
   return {runId:run.id,offset:Math.min(point.offset,run.text.length)};
 }
 

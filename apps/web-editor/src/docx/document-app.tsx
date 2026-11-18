@@ -11,7 +11,7 @@ import { DiagnosticDetails } from '../i18n/diagnostic-details';
 import { t, localizeMessage } from '../i18n';
 import { connectWorkspaceBridge, publishEditorState } from '../ui/workspace-bridge';
 import { DocumentSearch } from '../ui/document-search';
-import { readTextSelection, restoreTextSelection, revealTextSelection } from './selection';
+import { readTextFieldSelection, readTextSelection, restoreTextSelection, revealTextSelection } from './selection';
 import { searchDocument } from './search';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { DocumentController } from './controller';
@@ -245,13 +245,14 @@ export function DocumentApp() {
     const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
     const previousSnapshot = state().snapshot;
     const currentSelection = previousEditor && readTextSelection(previousEditor);
-    const richSelection = preserveRemoteSelection
-      ? active === previousEditor ? currentSelection : undefined
+    const activeField = active instanceof HTMLTextAreaElement && article?.contains(active) ? active : undefined;
+    const remoteSelection = activeField ? readTextFieldSelection(activeField)
+      : active === previousEditor ? currentSelection : undefined;
+    const richSelection = preserveRemoteSelection ? remoteSelection
       : currentSelection ?? (previousSnapshot?.id === snapshot.id ? formattingSelection() : undefined);
     const previousRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
     const fields = [...article?.querySelectorAll('textarea') ?? []];
-    const previousField = active instanceof HTMLTextAreaElement ? active
-      : state().saving ? fields.find(field => field.name === focusedRun()?.id) : undefined;
+    const previousField = activeField ?? (state().saving ? fields.find(field => field.name === focusedRun()?.id) : undefined);
     const index = previousField && state().snapshot?.id === snapshot.id ? fields.indexOf(previousField) : -1;
     const selection = index >= 0 && previousField ? [previousField.selectionStart, previousField.selectionEnd] as const : undefined;
     const restoringSave = state().saving;
@@ -282,8 +283,18 @@ export function DocumentApp() {
           return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
         };
         const anchor = remap(richSelection.anchor), focus = remap(richSelection.focus);
-        if (editor && anchor && focus) {setFormattingSelection({anchor,focus});restoreTextSelection(editor, { anchor, focus });}
-        else setFormattingSelection(undefined);
+        if (anchor && focus && anchor.runId === focus.runId) {
+          const field = [...article?.querySelectorAll('textarea') ?? []].find(candidate => candidate.name === anchor.runId);
+          if (field) {
+            field.focus({preventScroll:true});
+            field.setSelectionRange(Math.min(anchor.offset, focus.offset), Math.max(anchor.offset, focus.offset),
+              focus.offset < anchor.offset ? 'backward' : 'forward');
+            setFormattingSelection(undefined);
+            return;
+          }
+        }
+        setFormattingSelection(editor && anchor && focus && restoreTextSelection(editor, {anchor, focus})
+          ? {anchor, focus} : undefined);
       });
     } else if (selection && (restoringSave || document.activeElement === document.body)) {
       const field = article?.querySelectorAll('textarea')[index];

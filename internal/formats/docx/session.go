@@ -797,7 +797,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				if op.ChartInsert == nil || op.Text != "" {
 					return nil, fmt.Errorf("DOCX chart creation requires chartInsert")
 				}
-				edit, err := s.pkg.insertPieChart(t.paragraph, *op.ChartInsert, id, parts)
+				edit, err := s.pkg.insertChart(t.paragraph, *op.ChartInsert, id, parts)
 				if err != nil {
 					return nil, err
 				}
