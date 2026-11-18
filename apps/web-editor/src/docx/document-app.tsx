@@ -20,6 +20,7 @@ import { StatusPanel } from '../ui/status-panel';
 import type { ActivityEntry } from '../ui/activity';
 import { ActivityPanel } from '../ui/activity-panel';
 import { DocumentContent, previewPages } from './document-content';
+import { DocumentProofingToolbar } from './document-proofing-toolbar';
 import { DocumentToolbar } from './document-toolbar';
 import type { PasteMode } from './clipboard';
 import type { BoundaryMode, Run } from './contracts';
@@ -30,7 +31,7 @@ import { DocumentOutline } from './document-outline';
 import { DocumentBookmarkMoveToolbar } from './document-bookmark-move-toolbar';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
-import { DocumentMathToolbar } from './document-objects';
+import { DocumentMathToolbar, DocumentShapeToolbar } from './document-objects';
 import { DocumentObjectTextToolbar } from './document-object-text-toolbar';
 import { paragraphs, restoreAnchoredPoint } from './paragraphs';
 import { DocumentTableToolbar } from './document-table-toolbar';
@@ -393,6 +394,7 @@ export function DocumentApp() {
       }</For>
     </div>
     <div id="docx-tools-format" hidden={toolGroup()!=='format'}>
+    <DocumentProofingToolbar styles={selectedStyles()} disabled={!selectedStyles().length||state().composing||state().saving||state().loading||Boolean(state().error)} onFormat={applyFormat}/>
     <DocumentListToolbar paragraphs={(() => {draftVersion();state().snapshot;return formattingSelection()?controller.selectedParagraphs(formattingSelection()!):[];})()}
       lists={state().snapshot?.lists??[]} disabled={state().saving||state().loading||Boolean(state().error||state().composing)}
       onList={list=>{const selection=formattingSelection();if(selection&&controller.applyList(selection,list))setDraftVersion(v=>v+1);}}
@@ -407,6 +409,9 @@ export function DocumentApp() {
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}
+      disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
+      onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentShapeToolbar snapshot={state().snapshot} target={referenceParagraph()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <For each={['control','textbox','chart'] as const}>{kind=>
