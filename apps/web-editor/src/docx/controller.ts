@@ -265,11 +265,11 @@ export class DocumentController {
     let definition:ListDefinition|undefined;
     if ('sourceId' in list) {
       const selected=this.structureDraft.selectedParagraphs(selection);
-      if (!selected.length || selected.some(p=>p.list?.id!==list.sourceId || (p.list.level??0)!==0)) return false;
+      if (!selected.length || selected.some(p=>p.list?.id!==list.sourceId || (p.list.level??0)!==(list.level??0))) return false;
     }
     if ('kind' in list || 'sourceId' in list) {
       definition={...list,key:`list_${++this.activitySequence}`};
-      reference={key:definition.key,level:0};
+      reference={key:definition.key,level:'sourceId' in list?list.level??0:0};
     } else reference=list;
     const focus=this.structureDraft.formatParagraph(selection,{list:reference});
     if(!focus)return false;

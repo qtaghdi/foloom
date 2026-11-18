@@ -16,11 +16,16 @@ export function DocumentListToolbar(props:{
  const [restartStart,setRestartStart]=createSignal(1);
  const maxStart=()=>maxListStart(format());
  const restartSource=createMemo(()=>{
-  const id=props.paragraphs[0]?.list?.id;
-  if (!id || props.paragraphs.some(p=>p.list?.id!==id||(p.list.level??0)!==0)) return;
-  const top=props.lists.find(list=>list.id===id)?.levels.find(level=>level.level===0);
-  const limit=maxListStart(top?.kind);
-  if (top?.text.includes('%1') && limit) return {id,limit};
+  const selected=props.paragraphs[0]?.list;
+  const id=selected?.id,level=selected?.level??0;
+  if (!id || props.paragraphs.some(p=>p.list?.id!==id||(p.list.level??0)!==level)) return;
+  const levels=props.lists.find(list=>list.id===id)?.levels??[];
+  const source=levels.find(item=>item.level===level);
+  const limit=maxListStart(source?.kind),token=`%${level+1}`;
+  if (!limit || !source?.text.includes(token)) return;
+  if (level>0 && (/%[1-9]/.test(source.text.replaceAll(token,'')) ||
+    levels.some(child=>child.level>level&&child.text.includes(token)))) return;
+  return {id,level,limit};
  });
  const available=()=>!props.disabled&&props.paragraphs.length>0;
  const canLevel=(delta:number)=>available()&&props.paragraphs.every(p=>p.list&&(p.list.id||p.list.key)&&(p.list.level??0)+delta>=0&&(p.list.level??0)+delta<=8);
@@ -51,7 +56,7 @@ export function DocumentListToolbar(props:{
     </label>
     <button type="button" class={buttonClass}
      disabled={!available()||!Number.isInteger(restartStart())||restartStart()<1||restartStart()>source().limit}
-     onClick={()=>props.onList({sourceId:source().id,start:restartStart()})}>선택한 목록 번호 다시 시작</button>
+     onClick={()=>props.onList({sourceId:source().id,level:source().level,start:restartStart()})}>선택한 목록 번호 다시 시작</button>
   </div>}</Show>
   <button type="button" class={buttonClass} disabled={!canLevel(-1)} onClick={()=>props.onLevel(-1)}>목록 수준 올리기</button>
   <button type="button" class={buttonClass} disabled={!canLevel(1)} onClick={()=>props.onLevel(1)}>목록 수준 내리기</button>
