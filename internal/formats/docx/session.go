@@ -147,7 +147,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	}
 	numbering := s.pkg.projectNumbering(blocks)
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID, numbering)
-	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 떠 있는 그림과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일, 머리글·바닥글과 단순 위아래 그림 배치를 미리 봅니다. 자동 페이지 매김은 지원 범위에서 제외되며 복잡한 떠 있는 그림과 필드의 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
 		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
 	}
@@ -723,7 +723,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if imageCount >= 4 {
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
-			if op.Image.Action == "align" {
+			if op.Image.Action == "align" || op.Image.Action == "set_placement" {
 				if layoutTargets == nil {
 					_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
 					if err != nil {
@@ -733,7 +733,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				target = layoutTargets[op.TargetID]
 			}
 			var edit replacement
-			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" || op.Image.Action == "align" {
+			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" || op.Image.Action == "align" || op.Image.Action == "set_placement" {
 				edit, err = s.pkg.pictureUpdateReplacement(target, *op.Image, parts)
 			} else {
 				id, allocationErr := nextDrawingID()
