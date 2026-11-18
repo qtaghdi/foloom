@@ -171,9 +171,13 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
 	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
 	var parity *bool
+	var defaultTabStop *int
 	if settingsErr == nil {
 		value := headerParity(settings)
 		parity = &value
+		if sectionChildCount(settings, "defaultTabStop") == 1 {
+			defaultTabStop = previewNumber(attribute(settings.child("defaultTabStop"), wordNS, "val"), 1, 32767)
+		}
 	}
 	for index, target := range targets {
 		target.info.Gutter = sectionGutter(target.props, fixedLeft)
@@ -196,7 +200,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			}
 		}
 	}
-	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, DefaultTabStop: defaultTabStop, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -553,6 +557,22 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX revision review fields")
 			}
+			if t := targets[op.TargetID]; t.kind == "tracked_paragraph_break" {
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX paragraph break review must stand alone")
+				}
+				// Inherited page breaks are part of the real review boundary.
+				_, styledTargets, _, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+				if err != nil {
+					return nil, err
+				}
+				edit, err := paragraphBreakRevisionReplacement(s.pkg.document, styledTargets[op.TargetID], op.Type)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
+			}
 			if t := targets[op.TargetID]; t.kind == "tracked_alignment" {
 				changes, err := alignmentRevisionReplacement(s.pkg.document, t, op.Type)
 				if err != nil {
@@ -646,6 +666,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if !ok || op.Reference == nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX reference operation")
 			}
+			if op.Reference.Action != "insert_figure_ref" && op.Reference.FigureID != "" {
+				return nil, fmt.Errorf("unexpected DOCX figure reference target")
+			}
+			if op.Reference.Action == "insert_figure_ref" && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX figure reference must stand alone")
+			}
 			if (op.Reference.Action == "rename_bookmark" || op.Reference.Action == "delete_bookmark") && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark edit must stand alone")
 			}
@@ -662,7 +688,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				index := readBookmarks(root)
 				bookmarks = &index
 			}
-			replacements, err := s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			var replacements []replacement
+			if op.Reference.Action == "insert_figure_ref" {
+				replacements, err = s.pkg.insertFigureReference(t, targets[op.Reference.FigureID], *op.Reference, bookmarks)
+			} else {
+				replacements, err = s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			}
 			if err != nil {
 				return nil, err
 			}

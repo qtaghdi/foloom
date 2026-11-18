@@ -126,3 +126,36 @@ func TestImportedTabRunReplacesCompleteText(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultTabStopFromRelatedSettingsSurvivesTextSave(t *testing.T) {
+	ctx := context.Background()
+	_, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>first</w:t><w:tab/><w:t>next</w:t></w:r></w:p>`))
+	const settingsFile = "word/options.xml"
+	settings := []byte(`<w:settings xmlns:w="` + wordNS + `"><w:defaultTabStop w:val="360"/><!-- preserve --></w:settings>`)
+	relationships := []byte(`<Relationships xmlns="` + packageRelNS + `"><Relationship Id="options" Type="` + officeRelNS + `/settings" Target="options.xml"/></Relationships>`)
+	rewritePackage(t, filename, func(_ string, data []byte) []byte { return data }, map[string][]byte{
+		documentRelationships: relationships,
+		settingsFile:          settings,
+	})
+	s, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := mustSnapshot(t, s)
+	if before.DefaultTabStop == nil || *before.DefaultTabStop != 360 {
+		t.Fatalf("custom tab interval not loaded: %v", before.DefaultTabStop)
+	}
+	run := before.Blocks[0].Paragraph.Runs[0]
+	_, err = s.Apply(ctx, batch(before, "replace_run_text", run, "updated\tnext"), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := mustSnapshot(t, reopened)
+	if after.DefaultTabStop == nil || *after.DefaultTabStop != 360 || !bytes.Equal(settings, reopened.pkg.partData(settingsFile, nil)) {
+		t.Fatal("text save changed the default tab interval or its source")
+	}
+}

@@ -117,6 +117,7 @@ type ListLevelInfo struct {
 }
 type Paragraph struct {
 	CompoundRestart    *CompoundRestartInfo `json:"compoundRestart,omitempty"`
+	BreakRevision      *ObjectInfo          `json:"breakRevision,omitempty"`
 	MoveNoteUp         bool                 `json:"moveNoteUp,omitempty"`
 	MoveNoteDown       bool                 `json:"moveNoteDown,omitempty"`
 	AlignmentTrackable bool                 `json:"alignmentTrackable,omitempty"`
@@ -177,6 +178,7 @@ type Snapshot struct {
 	TrackedChanges    bool            `json:"trackedChanges,omitempty"`
 	Bookmarks         []BookmarkInfo  `json:"bookmarks,omitempty"`
 	EvenAndOddHeaders *bool           `json:"evenAndOddHeaders,omitempty"`
+	DefaultTabStop    *int            `json:"defaultTabStop,omitempty"`
 	Sections          []SectionInfo   `json:"sections"`
 	Styles            []StyleInfo     `json:"styles"`
 	History           HistoryState    `json:"history"`
@@ -212,6 +214,7 @@ type InlineStyle struct {
 	Italic         *bool   `json:"italic,omitempty"`
 	Color          string  `json:"color,omitempty"`
 	Font           string  `json:"font,omitempty"`
+	LatinFont      string  `json:"latinFont,omitempty" jsonschema:"Override only the ASCII and High ANSI typefaces; takes precedence over font for those slots"`
 	EastAsiaFont   string  `json:"eastAsiaFont,omitempty" jsonschema:"Override only the East Asian typeface; takes precedence over font for that slot"`
 	SizeHalfPoints *int    `json:"sizeHalfPoints,omitempty"`
 }

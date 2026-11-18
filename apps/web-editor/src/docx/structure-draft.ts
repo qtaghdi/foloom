@@ -1,3 +1,4 @@
+import { splitRunFonts } from './run-fonts';
 import { previewLists } from './lists';
 import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat, ListDefinition } from './contracts';
 import type { ClipboardParagraph } from './clipboard';
@@ -262,9 +263,12 @@ export class StructureDraft {
         ...(run.style?.eastAsiaProofingLanguage && {eastAsiaProofingLanguage:run.style.eastAsiaProofingLanguage}),
         ...style,
       }:{...run.style,...style};
-      if(style.font && style.eastAsiaFont===undefined)delete combined.eastAsiaFont;
+      if (style.font) {
+        if (style.latinFont === undefined) delete combined.latinFont;
+        if (style.eastAsiaFont === undefined) delete combined.eastAsiaFont;
+      }
       const baseline=combined.reset ? {bold:false,italic:false,underline:false,strike:false,color:undefined,font:undefined,eastAsiaFont:undefined,sizeHalfPoints:undefined,highlight:undefined,vertical:undefined,...run.baseStyle} : run;
-      const selected:DraftRun={...run,...baseline,...combined,...combined.font?{eastAsiaFont:combined.eastAsiaFont??combined.font}:{},...combined.styleId!==undefined?{characterStyleId:combined.styleId}:{},id:this.id(),text:run.text.slice(start,end),style:combined};
+      const selected:DraftRun={...run,...baseline,...combined,font:combined.latinFont??combined.font??baseline.font,...combined.font?{eastAsiaFont:combined.eastAsiaFont??combined.font}:{},...combined.styleId!==undefined?{characterStyleId:combined.styleId}:{},id:this.id(),text:run.text.slice(start,end),style:combined};
       const pieces:DraftRun[]=[];
       if(start) pieces.push({...run,text:run.text.slice(0,start)});
       pieces.push(selected);
@@ -292,7 +296,14 @@ export class StructureDraft {
     const result:ClipboardParagraph[]=[];let previous:string|undefined;
     for (const [index,{paragraph,run}] of range.runs.entries()) {
       if (previous!==paragraph.id) result.push([]);previous=paragraph.id;
-      result.at(-1)!.push({text:run.text.slice(index===0?range.start.offset:0,index===range.runs.length-1?range.end.offset:undefined),style:{bold:run.bold,italic:run.italic,underline:Boolean(run.underline),strike:Boolean(run.strike),highlight:run.highlight??'none',vertical:run.vertical??'baseline',...run.font?{font:run.font}:{},...run.color?{color:run.color}:{},...run.sizeHalfPoints?{sizeHalfPoints:run.sizeHalfPoints}:{}}});
+      const text = run.text.slice(index === 0 ? range.start.offset : 0, index === range.runs.length - 1 ? range.end.offset : undefined);
+      const style: InlineStyle = {
+        bold: run.bold, italic: run.italic, underline: Boolean(run.underline), strike: Boolean(run.strike),
+        highlight: run.highlight ?? 'none', vertical: run.vertical ?? 'baseline', color: run.color, sizeHalfPoints: run.sizeHalfPoints,
+      };
+      for (const segment of splitRunFonts(run, text)) {
+        result.at(-1)!.push({ text: segment.text, style: { ...style, font: segment.font } });
+      }
     }
     return result;
   }
