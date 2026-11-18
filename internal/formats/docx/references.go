@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_toc, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_toc, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -27,9 +27,10 @@ type BookmarkInfo struct {
 }
 
 type LinkInfo struct {
-	Field    bool   `json:"field,omitempty"`
-	URL      string `json:"url,omitempty"`
-	Bookmark string `json:"bookmark,omitempty"`
+	PageReference bool   `json:"pageReference,omitempty"`
+	Field         bool   `json:"field,omitempty"`
+	URL           string `json:"url,omitempty"`
+	Bookmark      string `json:"bookmark,omitempty"`
 }
 
 type bookmarkIndex struct {
@@ -156,11 +157,11 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 			return nil, fmt.Errorf("unexpected DOCX table of contents fields")
 		}
 		return p.insertTableOfContents(paragraph)
-	case "insert_bookmark_ref":
+	case "insert_bookmark_ref", "insert_bookmark_page_ref":
 		if edit.URL != "" || edit.Text != "" {
 			return nil, fmt.Errorf("unexpected DOCX bookmark field data")
 		}
-		field, err := bookmarkFieldXML(bookmarks, edit.Bookmark)
+		field, err := bookmarkFieldXML(bookmarks, edit.Bookmark, edit.Action == "insert_bookmark_page_ref")
 		if err != nil {
 			return nil, err
 		}
@@ -357,9 +358,12 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 				continue
 			}
 			if t.kind == "bookmark_ref" {
+				kind, _ := bookmarkFieldTarget(t.node)
 				key := strings.ToLower(t.text)
-				if text := referenceTexts[key]; text != "" {
-					run.Text, run.Link = text, &LinkInfo{Bookmark: names[key], Field: true}
+				if kind == "PAGEREF" && names[key] != "" {
+					run.Link = &LinkInfo{Bookmark: names[key], Field: true, PageReference: true}
+				} else if kind == "REF" && referenceTexts[key] != "" {
+					run.Text, run.Link = referenceTexts[key], &LinkInfo{Bookmark: names[key], Field: true}
 				}
 				continue
 			}

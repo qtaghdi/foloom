@@ -331,7 +331,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				}
 				if r.is("hyperlink") {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
-				} else if name := bookmarkFieldName(r); name != "" {
+				} else if _, name := bookmarkFieldTarget(r); name != "" {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
 				} else {
 					unsupported = true

@@ -25,28 +25,28 @@ func bookmarkedPlainText(index *bookmarkIndex, start *node) string {
 	return text
 }
 
-func bookmarkFieldName(field *node) string {
+func bookmarkFieldTarget(field *node) (kind, bookmark string) {
 	if !field.is("fldSimple") || len(field.children) != 1 || strings.TrimSpace(field.text.String()) != "" {
-		return ""
+		return "", ""
 	}
 	for _, attr := range field.attrs {
 		if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS || attr.Name.Local != "instr" && attr.Name.Local != "dirty") {
-			return ""
+			return "", ""
 		}
 	}
 	instruction := strings.Fields(field.attr("instr"))
-	if len(instruction) != 3 || !strings.EqualFold(instruction[0], "REF") ||
+	if len(instruction) != 3 || !strings.EqualFold(instruction[0], "REF") && !strings.EqualFold(instruction[0], "PAGEREF") ||
 		!bookmarkName.MatchString(instruction[1]) || !strings.EqualFold(instruction[2], `\h`) {
-		return ""
+		return "", ""
 	}
 	nodes, _ := plainTextRunNodes(field.children)
 	if len(nodes) != 1 {
-		return ""
+		return "", ""
 	}
-	return instruction[1]
+	return strings.ToUpper(instruction[0]), instruction[1]
 }
 
-func bookmarkFieldXML(index *bookmarkIndex, name string) (string, error) {
+func bookmarkFieldXML(index *bookmarkIndex, name string, page bool) (string, error) {
 	if !bookmarkName.MatchString(name) || index.names[strings.ToLower(name)] != 1 {
 		return "", fmt.Errorf("invalid or ambiguous DOCX bookmark")
 	}
@@ -58,7 +58,11 @@ func bookmarkFieldXML(index *bookmarkIndex, name string) (string, error) {
 		if text == "" {
 			break
 		}
-		return `<dwr:fldSimple xmlns:dwr="` + wordNS + `" dwr:instr="REF ` + name + ` \h" dwr:dirty="true"><dwr:r>` +
+		kind := "REF"
+		if page {
+			kind, text = "PAGEREF", "?"
+		}
+		return `<dwr:fldSimple xmlns:dwr="` + wordNS + `" dwr:instr="` + kind + ` ` + name + ` \h" dwr:dirty="true"><dwr:r>` +
 			inlineXML(text) + `</dwr:r></dwr:fldSimple>`, nil
 	}
 	return "", fmt.Errorf("DOCX bookmark requires a plain text range")
