@@ -579,3 +579,44 @@ func TestDOCXMCPDefinesCompoundNumbering(t *testing.T) {
 		t.Fatal("the shared DOCX session did not expose the compound list")
 	}
 }
+
+func TestDOCXMCPTracksAndRejectsParagraphAlignment(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "alignment.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Aligned paragraph"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	apply := func(snapshot docx.Snapshot, operation docx.Operation) {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+			SessionID: snapshot.ID, BaseRevision: snapshot.Revision, Operations: []docx.Operation{operation},
+		}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP %s: %v %+v", operation.Type, err, result)
+		}
+	}
+	apply(initial, docx.Operation{Type: "track_paragraph_alignment", TargetID: initial.Blocks[0].ID, Alignment: "center"})
+	pending, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paragraph := pending.Blocks[0].Paragraph
+	if paragraph.AlignmentRevision == nil || !paragraph.AlignmentRevision.Editable || paragraph.Layout.Align != "center" {
+		t.Fatal("shared DOCX session did not expose tracked alignment")
+	}
+	apply(pending, docx.Operation{Type: "reject_revision", TargetID: paragraph.ID})
+	final, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Revision != initial.Revision+2 || final.TrackedChanges || final.Blocks[0].Paragraph.Layout != nil {
+		t.Fatal("shared DOCX session did not restore the original alignment")
+	}
+}

@@ -39,25 +39,31 @@ func runFormatRevision(run *node, data []byte) (change, previous *node) {
 	props := run.child("rPr")
 	change = props.child("rPrChange")
 	if change == nil || len(run.children) != 2 || run.children[0] != props || !run.children[1].is("t") ||
-		!trackableRun(run, run.children[1:], data) || props.children[len(props.children)-1] != change ||
-		len(change.children) != 1 || strings.TrimSpace(change.text.String()) != "" {
+		!trackableRun(run, run.children[1:], data) || props.children[len(props.children)-1] != change {
 		return nil, nil
 	}
-	id, err := strconv.ParseInt(change.attr("id"), 10, 32)
-	if err != nil || id < 0 {
+	if !validFormatRevisionMetadata(change) {
 		return nil, nil
-	}
-	for _, attr := range change.attrs {
-		if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS ||
-			attr.Name.Local != "id" && attr.Name.Local != "author" && attr.Name.Local != "date") {
-			return nil, nil
-		}
 	}
 	previous = change.children[0]
 	if !previous.is("rPr") || !safeRunRevisionProperties(props, change) || !safeRunRevisionProperties(previous, nil) {
 		return nil, nil
 	}
 	return change, previous
+}
+
+func validFormatRevisionMetadata(change *node) bool {
+	id, err := strconv.ParseInt(change.attr("id"), 10, 32)
+	if err != nil || id < 0 || len(change.children) != 1 || strings.TrimSpace(change.text.String()) != "" {
+		return false
+	}
+	for _, attr := range change.attrs {
+		if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS ||
+			attr.Name.Local != "id" && attr.Name.Local != "author" && attr.Name.Local != "date") {
+			return false
+		}
+	}
+	return true
 }
 
 func formatRevisionReplacement(data []byte, t target, operation string) (replacement, error) {
@@ -108,16 +114,20 @@ func trackedBoldEdit(data []byte, t target, op Operation, author, date string, u
 		previous = open + content + close
 		start, end = props.start, props.end
 	}
-	for used[*nextID] {
-		(*nextID)++
-	}
-	id := *nextID
-	used[id] = true
-	revision := fmt.Sprintf(`<dwr:rPrChange xmlns:dwr="%s" dwr:id="%d" dwr:author="%s" dwr:date="%s">%s</dwr:rPrChange>`,
-		wordNS, id, author, date, previous)
+	revision := formatRevisionMarkup("rPrChange", previous, author, date, used, nextID)
 	raw, err := appendXMLChild([]byte(current), revision)
 	if err != nil {
 		return replacement{}, err
 	}
 	return replacement{start: start, end: end, data: raw}, nil
+}
+
+func formatRevisionMarkup(kind, previous, author, date string, used map[int64]bool, nextID *int64) string {
+	for used[*nextID] {
+		(*nextID)++
+	}
+	id := *nextID
+	used[id] = true
+	return fmt.Sprintf(`<dwr:%s xmlns:dwr="%s" dwr:id="%d" dwr:author="%s" dwr:date="%s">%s</dwr:%s>`,
+		kind, wordNS, id, author, date, previous, kind)
 }
