@@ -224,3 +224,81 @@ func TestTotalPageFieldKeepsPageNumberAndSectionLinks(t *testing.T) {
 		t.Fatal("undo did not restore the original document")
 	}
 }
+
+func TestCompactPageNumbersPersistAndInherit(t *testing.T) {
+	ctx := context.Background()
+	s, filename := headerDocument(t)
+	start := mustSnapshot(t, s)
+	original := fileBytes(t, filename)
+	yes, no := true, false
+	footer := HeaderFooterUpdate{Kind: "footer", Variant: "default"}
+	text := "Footer"
+	footer.Text, footer.CompactPageNumbers = &text, &yes
+	if _, err := s.Apply(ctx, headerBatch(start, 0, footer), "human"); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("combining missing fields changed the document")
+	}
+	footer.PageNumber, footer.TotalPages = &yes, &yes
+	compact, err := s.Apply(ctx, headerBatch(start, 0, footer), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range 2 {
+		slot := headerSlot(t, compact, index, "footer", "default")
+		if !slot.CompactPageNumbers || !slot.PageNumber || !slot.TotalPages || !slot.Editable || slot.Linked != (index > 0) {
+			t.Fatalf("unexpected compact footer for section %d: %+v", index, slot)
+		}
+	}
+	root, err := parseXML(s.pkg.document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	props := inspectSections(root, compact.ID, compact.Revision)[0].props
+	ref, err := headerReference(props, "footer", "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := s.pkg.relatedPart(attribute(ref, officeRelNS, "id"), "footer", nil)
+	foot, err := parseXML(s.pkg.partData(part, nil))
+	if err != nil || len(foot.children) != 2 || !compactHeaderFields(foot.children[1].children) {
+		t.Fatal("native fields are missing from the same footer paragraph", err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compact = mustSnapshot(t, reopened)
+	secondText := "Independent footer"
+	independent, err := reopened.Apply(ctx, headerBatch(compact, 1, HeaderFooterUpdate{Kind: "footer", Variant: "default", Text: &secondText}), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slot := headerSlot(t, independent, 1, "footer", "default"); slot.Linked || !slot.CompactPageNumbers || slot.Text != secondText {
+		t.Fatalf("breaking the link lost the inherited compact layout: %+v", slot)
+	}
+	separate, err := reopened.Apply(ctx, headerBatch(independent, 0, HeaderFooterUpdate{
+		Kind: "footer", Variant: "default", Text: &text, CompactPageNumbers: &no,
+	}), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slot := headerSlot(t, separate, 0, "footer", "default"); slot.CompactPageNumbers || !slot.PageNumber || !slot.TotalPages {
+		t.Fatalf("switching to separate lines removed a field: %+v", slot)
+	}
+	if slot := headerSlot(t, separate, 1, "footer", "default"); !slot.CompactPageNumbers {
+		t.Fatal("switching the first section changed the independent second section")
+	}
+	for range 3 {
+		historyRestore(t, reopened, "undo")
+	}
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the exact source file")
+	}
+}
+
+func TestCompactPageNumbersProtectOtherInlineFields(t *testing.T) {
+	raw := `<w:ftr xmlns:w="` + wordNS + `"><w:p>` + headerPageFieldXML("PAGE") +
+		`<w:r><w:t> of </w:t></w:r>` + headerPageFieldXML("NUMPAGES") + `</w:p></w:ftr>`
+	if content := plainHeader([]byte(raw), "footer"); content.editable || content.compactPageNumbers {
+		t.Fatal("a different inline layout should remain protected")
+	}
+}

@@ -381,6 +381,13 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
 					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "update_chart_title"}
 				}
+				if run.Object != nil && run.Object.Rectangle != nil && allowed && !protected[r] && p.parent == body &&
+					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) &&
+					!strings.Contains(string(root.source[r.start:r.end]), "<!--") {
+					run.Object.Editable = true
+					run.Object.RectangleResizeEditable = rectangleForRun(r).canResize(root.source)
+					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "inline_rectangle"}
+				}
 				if stories := textBoxStories(r); len(stories) != 0 {
 					run.Object = &ObjectInfo{Kind: "textbox", Text: reviewText(textContent(stories[0]), 1024)}
 					if allowed && !protected[r] && p.parent == body && !boxesLinked {
@@ -401,7 +408,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				styleRun(&run, characters[i].child("rPr"))
 			}
 			base := run
-			run.BaseStyle = &InlineStyle{Bold: &base.Bold, Italic: &base.Italic, Underline: &base.Underline, Strike: &base.Strike, Color: base.Color, Font: base.Font, Highlight: base.Highlight, Vertical: base.Vertical}
+			run.BaseStyle = &InlineStyle{Bold: &base.Bold, Italic: &base.Italic, Underline: &base.Underline, Strike: &base.Strike, Color: base.Color, Font: base.Font, EastAsiaFont: base.EastAsiaFont, Highlight: base.Highlight, Vertical: base.Vertical}
 			if base.SizeHalfPoints != 0 {
 				run.BaseStyle.SizeHalfPoints = &base.SizeHalfPoints
 			}

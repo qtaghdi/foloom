@@ -6,10 +6,18 @@ import (
 	"strings"
 )
 
+const (
+	defaultHeaderFooterDistance = 720
+	maxHeaderFooterDistance     = 31680
+)
+
 type SectionFormat struct {
 	// A start of -1 removes the explicit start so numbering continues.
 	PageNumberStart  *int                 `json:"pageNumberStart,omitempty"`
 	PageNumberFormat string               `json:"pageNumberFormat,omitempty"`
+	Gutter           *int                 `json:"gutter,omitempty" jsonschema:"Fixed left binding space in twips, separate from the left page margin"`
+	HeaderDistance   *int                 `json:"headerDistance,omitempty" jsonschema:"Distance from the top edge of the page to the header in twips"`
+	FooterDistance   *int                 `json:"footerDistance,omitempty" jsonschema:"Distance from the bottom edge of the page to the footer in twips"`
 	HeaderFooters    []HeaderFooterUpdate `json:"headerFooters,omitempty"`
 	FirstPage        *bool                `json:"firstPage,omitempty"`
 	Width            *int                 `json:"width,omitempty"`
@@ -26,6 +34,9 @@ type SectionFormat struct {
 type SectionInfo struct {
 	PageNumberStart  *int               `json:"pageNumberStart,omitempty"`
 	PageNumberFormat string             `json:"pageNumberFormat,omitempty"`
+	Gutter           *int               `json:"gutter,omitempty"`
+	HeaderDistance   *int               `json:"headerDistance,omitempty"`
+	FooterDistance   *int               `json:"footerDistance,omitempty"`
 	HeaderFooters    []HeaderFooterInfo `json:"headerFooters"`
 	FirstPage        bool               `json:"firstPage"`
 	ID               string             `json:"id"`
@@ -98,7 +109,22 @@ func inspectSections(root *node, session string, revision uint64) []sectionTarge
 				}
 			}
 		}
-		out = append(out, sectionTarget{SectionInfo{ID: fmt.Sprintf("section-%s-%d-%d", session, revision, len(out)), PageNumberStart: previewNumber(attribute(props.child("pgNumType"), wordNS, "start"), 0, 2147483647), PageNumberFormat: attribute(props.child("pgNumType"), wordNS, "fmt"), StartBlock: start, EndBlock: end, Page: sectionPage(props), Orientation: orientation, Columns: columns, ColumnSpace: space, BreakType: kind, Editable: editable}, props, body})
+		margins := props.child("pgMar")
+		out = append(out, sectionTarget{SectionInfo{
+			ID:               fmt.Sprintf("section-%s-%d-%d", session, revision, len(out)),
+			PageNumberStart:  previewNumber(attribute(props.child("pgNumType"), wordNS, "start"), 0, 2147483647),
+			PageNumberFormat: attribute(props.child("pgNumType"), wordNS, "fmt"),
+			HeaderDistance:   previewNumber(attribute(margins, wordNS, "header"), 0, maxHeaderFooterDistance),
+			FooterDistance:   previewNumber(attribute(margins, wordNS, "footer"), 0, maxHeaderFooterDistance),
+			StartBlock:       start,
+			EndBlock:         end,
+			Page:             sectionPage(props),
+			Orientation:      orientation,
+			Columns:          columns,
+			ColumnSpace:      space,
+			BreakType:        kind,
+			Editable:         editable,
+		}, props, body})
 		start = end + 1
 	}
 	for _, block := range body.children {
@@ -135,9 +161,10 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 		return replacement{}, fmt.Errorf("duplicate final DOCX section")
 	}
 	f := op.Section
-	scalar := *f
-	scalar.HeaderFooters = nil
-	if scalar.Width == nil && scalar.Height == nil && scalar.Top == nil && scalar.Right == nil && scalar.Bottom == nil && scalar.Left == nil && scalar.Columns == nil && scalar.ColumnSpace == nil && scalar.Orientation == "" && scalar.BreakType == "" && scalar.FirstPage == nil && scalar.PageNumberStart == nil && scalar.PageNumberFormat == "" && len(f.HeaderFooters) == 0 {
+	if f.Width == nil && f.Height == nil && f.Top == nil && f.Right == nil && f.Bottom == nil && f.Left == nil &&
+		f.Gutter == nil && f.HeaderDistance == nil && f.FooterDistance == nil && f.Columns == nil && f.ColumnSpace == nil &&
+		f.Orientation == "" && f.BreakType == "" && f.FirstPage == nil && f.PageNumberStart == nil &&
+		f.PageNumberFormat == "" && len(f.HeaderFooters) == 0 {
 		return replacement{}, fmt.Errorf("DOCX section update requires a property")
 	}
 	page := target.info.Page
@@ -153,7 +180,22 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 			*pair.dest = *pair.value
 		}
 	}
-	if page.Width-page.Left-page.Right < 1200 || page.Height-page.Top-page.Bottom < 1200 {
+	props := target.props
+	bodyWidth := page.Width - page.Left - page.Right
+	if f.Gutter != nil || f.Width != nil || f.Left != nil || f.Right != nil || f.Columns != nil || f.ColumnSpace != nil {
+		_, _, settings, err := p.pageSettings(changes)
+		gutter := sectionGutter(props, err == nil && fixedLeftGutters(settings))
+		if f.Gutter != nil {
+			if gutter == nil || *f.Gutter < 0 || *f.Gutter > maxSectionGutter {
+				return replacement{}, fmt.Errorf("invalid or protected DOCX binding gutter")
+			}
+			gutter = f.Gutter
+		}
+		if gutter != nil {
+			bodyWidth -= *gutter
+		}
+	}
+	if bodyWidth < 1200 || page.Height-page.Top-page.Bottom < 1200 {
 		return replacement{}, fmt.Errorf("DOCX section margins leave insufficient content space")
 	}
 	if f.Orientation != "" && f.Orientation != "portrait" && f.Orientation != "landscape" {
@@ -165,7 +207,6 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 	if f.BreakType != "" && !strings.Contains(" nextPage continuous evenPage oddPage nextColumn ", " "+f.BreakType+" ") {
 		return replacement{}, fmt.Errorf("invalid DOCX section break")
 	}
-	props := target.props
 	updates := map[string]string{}
 	set := func(name string, values map[string]string) error {
 		if sectionChildCount(props, name) > 1 {
@@ -192,21 +233,37 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 			return replacement{}, err
 		}
 	}
+	for _, distance := range []*int{f.HeaderDistance, f.FooterDistance} {
+		if distance != nil && (*distance < 0 || *distance > maxHeaderFooterDistance) {
+			return replacement{}, fmt.Errorf("DOCX header or footer distance exceeds bounds")
+		}
+	}
 	margins := map[string]string{}
 	for _, pair := range []struct {
 		name  string
 		value *int
-	}{{"top", f.Top}, {"right", f.Right}, {"bottom", f.Bottom}, {"left", f.Left}} {
+	}{{"top", f.Top}, {"right", f.Right}, {"bottom", f.Bottom}, {"left", f.Left}, {"gutter", f.Gutter}, {"header", f.HeaderDistance}, {"footer", f.FooterDistance}} {
 		if pair.value != nil {
 			margins[pair.name] = strconv.Itoa(*pair.value)
 		}
 	}
 	if len(margins) > 0 {
+		if props.child("pgMar") == nil {
+			// A newly authored pgMar must contain all seven required attributes.
+			for name, fallback := range map[string]int{
+				"top": page.Top, "right": page.Right, "bottom": page.Bottom, "left": page.Left,
+				"header": defaultHeaderFooterDistance, "footer": defaultHeaderFooterDistance, "gutter": 0,
+			} {
+				if _, changed := margins[name]; !changed {
+					margins[name] = strconv.Itoa(fallback)
+				}
+			}
+		}
 		if err := set("pgMar", margins); err != nil {
 			return replacement{}, err
 		}
 	}
-	if f.Columns != nil || f.ColumnSpace != nil {
+	if f.Columns != nil || f.ColumnSpace != nil || f.Gutter != nil {
 		if cols := props.child("cols"); cols != nil && len(cols.children) > 0 {
 			return replacement{}, fmt.Errorf("custom unequal DOCX columns are protected")
 		}
@@ -217,11 +274,13 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 		if f.ColumnSpace != nil {
 			space = *f.ColumnSpace
 		}
-		if (page.Width-page.Left-page.Right)-(count-1)*space < count*240 {
+		if bodyWidth-(count-1)*space < count*240 {
 			return replacement{}, fmt.Errorf("DOCX column spacing leaves insufficient width")
 		}
-		if err := set("cols", map[string]string{"num": strconv.Itoa(count), "space": strconv.Itoa(space), "equalWidth": "1"}); err != nil {
-			return replacement{}, err
+		if f.Columns != nil || f.ColumnSpace != nil {
+			if err := set("cols", map[string]string{"num": strconv.Itoa(count), "space": strconv.Itoa(space), "equalWidth": "1"}); err != nil {
+				return replacement{}, err
+			}
 		}
 	}
 	if f.BreakType != "" {
@@ -289,7 +348,7 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 			}
 		}
 		var err error
-		raw, err = p.patchHeaderFooters(raw, f.HeaderFooters, index, changes)
+		raw, err = p.patchHeaderFooters(raw, f.HeaderFooters, index, headers, changes)
 		if err != nil {
 			return replacement{}, err
 		}

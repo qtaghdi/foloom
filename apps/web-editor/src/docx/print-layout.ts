@@ -1,3 +1,4 @@
+import { sectionPaper } from './sections';
 import type { SectionInfo, Snapshot } from './contracts';
 
 type Paper = NonNullable<Snapshot['page']>;
@@ -10,14 +11,17 @@ export function printPaperName(paper: Paper): string {
 export function printPaperRules(snapshot: Snapshot): string {
   const defaultLayout = snapshot.page ?? defaultPaper;
   const layouts = new Map([[printPaperName(defaultLayout),defaultLayout]]);
-  for (const section of snapshot.sections??[]) layouts.set(printPaperName(section.page),section.page);
+  for (const section of snapshot.sections??[]) {
+    const paper=sectionPaper(section);
+    layouts.set(printPaperName(paper),paper);
+  }
   const points = (twips: number) => `${twips/20}pt`;
   return [...layouts].map(([name,paper]) =>
     `@page ${name} { size: ${points(paper.width)} ${points(paper.height)}; margin: ${[paper.top,paper.right,paper.bottom,paper.left].map(points).join(' ')}; }`
   ).join('\n');
 }
 export function printPaperFor(snapshot: Snapshot, section?: SectionInfo): string {
-  return printPaperName(section?.page??snapshot.page??defaultPaper);
+  return printPaperName(section?sectionPaper(section):snapshot.page??defaultPaper);
 }
 
 export async function printDocument(article: HTMLElement, current: () => boolean): Promise<boolean> {

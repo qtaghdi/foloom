@@ -1,7 +1,7 @@
 import { render } from 'solid-js/web';
 import { expect,it,vi } from 'vitest';
 import { DocumentHeaderFooter,resolveHeaderText } from '../src/docx/document-header-footer';
-import { previewSections } from '../src/docx/sections';
+import { previewHeaderVariants, previewSections } from '../src/docx/sections';
 import type { SectionInfo } from '../src/docx/contracts';
 
 const first:SectionInfo={id:'a',startBlock:0,endBlock:0,page:{width:11906,height:16838,top:1440,right:1440,bottom:1440,left:1440},orientation:'portrait',columns:1,columnSpace:720,breakType:'nextPage',editable:true,headerFooters:[{kind:'header',variant:'default',sourceSectionId:'a',text:'original',linked:false,editable:true}]};
@@ -28,4 +28,20 @@ it('changes first-page mode without flattening a protected header',async()=>{
  const checkbox=host.querySelector<HTMLInputElement>('input[type=checkbox]')!;checkbox.checked=true;checkbox.dispatchEvent(new Event('change',{bubbles:true}));
  [...host.querySelectorAll('button')].find(button=>button.textContent==='첫 페이지 구분 적용')!.click();
  expect(apply).toHaveBeenCalledWith('a',{firstPage:true});dispose();host.remove();
+});
+
+it('follows continued and restarted page numbers while giving a section first page precedence',()=>{
+ const third={...second,id:'c',pageNumberStart:8};
+ expect(previewHeaderVariants([first,second,second,third,third],true)).toEqual(['default','even','default','even','default']);
+ expect(previewHeaderVariants([first,{...third,firstPage:true},third],true)).toEqual(['default','first','default']);
+ expect(previewHeaderVariants([first,second,third,third],false)).toEqual(['default','default','default','default']);
+ expect(previewHeaderVariants([{...first,pageNumberStart:0},first],true)).toEqual(['even','default']);
+});
+
+it('resumes known parity at a restart after a boundary the preview does not paginate',()=>{
+ const continuous={...second,breakType:'continuous'};
+ const third={...second,id:'c'};
+ const restarted={...second,id:'d',pageNumberStart:6};
+ expect(previewHeaderVariants([first,continuous,continuous,third,restarted,restarted],true))
+  .toEqual(['default','default','even','default','even','default']);
 });
