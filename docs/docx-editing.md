@@ -127,9 +127,11 @@ native 선택과 범위 교체를 제공합니다. 같은 본문 구간 안의 �
 연결 중단이나 외부 변경 및 리비전 충돌 시 미저장 입력을 유지하고 저장을
 차단합니다. 필요한 입력을 복사한 뒤 **다시 불러오기**를 누릅니다. 미저장 입력이 있으면 자체
 확인 UI의 **입력 버리고 불러오기**를 선택해야 복구합니다. **취소**는 초안을
-유지합니다. 화면은 Solid 컴포넌트로 구성하며 controller가 저장과 draft를 소유합니다. 저장 결과를
-받지 못한 요청은 자동 재시도하지 않습니다. 이 DOCX 기능에는 서버 undo/redo가
-없습니다.
+유지합니다. 저장 결과를 받지 못한 요청은 자동 재시도하지 않습니다. 서버 재시작 뒤에는
+새 인증 링크에서 같은 원본 경로를 다시 열어 [확정된 DOCX 이력](#확정된-docx-이력)을
+복구할 수 있습니다. 기존 탭의 미저장 텍스트가 필요하면 탭을 새로고침하기 전에
+복사하세요. 실행 취소는 같은 탭의 미저장 변경을 먼저 되돌린 뒤 확정 이력을 사용합니다.
+다시 실행도 현재 초안과 확정 이력에 맞춰 동작합니다.
 
 ## MCP 작업
 
@@ -142,6 +144,7 @@ XLSX 도구와 계약은 유지하며 DOCX 활성 문서는 별도로 관리합�
 | `open_docx` | 기존 절대 `.docx` 경로. 검사 후 활성화하고 snapshot과 `browserUrl` 반환 |
 | `get_docx` | 세션 ID, 리비전, 본문·표, run ID, 편집 가능 여부, 호환성 안내 반환 |
 | `apply_docx_operations` | 현재 `sessionId`, `baseRevision`, typed operation batch. 원자적 저장 뒤 snapshot 반환 |
+| `restore_docx_history` | 현재 `sessionId`, `baseRevision`, `direction: undo 또는 redo`. 확정 batch 한 개를 복원한 뒤 새 revision과 snapshot 반환 |
 
 생성 예시:
 
@@ -400,6 +403,14 @@ eastAsia·cs 글꼴을 같은 이름으로 지정합니다. 설치되지 않은 
 Word가 서로 다른 대체 글꼴로 표시할 수 있습니다. 브라우저가 선택한 글꼴을
 로컬 이름으로 확인하지 못하면 글꼴 도구에 대체 글꼴 가능성을 표시하며
 설치 여부나 native 조판 일치를 보장하지 않습니다.
+
+글자 서식의 **동아시아 글꼴**은 선택한 범위의 `w:eastAsia`만 바꿉니다.
+해당 범위의 동아시아 테마 지정은 입력한 글꼴 이름으로 대체되고 Latin·복합
+문자 글꼴과 해당 테마, 언어와 스타일은 유지됩니다. HTTP·MCP의
+`replace_paragraphs`에서 대상 run에 `style: { eastAsiaFont: "글꼴 이름" }`을
+보낼 수 있습니다. `font`와 함께 보내면 동아시아에는 `eastAsiaFont`가 우선합니다.
+브라우저는 한글·한자·가나·주음으로 된 run에서 동아시아 글꼴을 먼저 적용합니다.
+혼합 run의 문자별 글꼴 배정과 테마 해석은 Word의 조판을 따릅니다.
 
 직접 서식 지우기는 지원하는 글자 속성만 제거합니다. 문단·글자 스타일 참조와
 언어·알려지지 않은 나머지 속성은 남기며 원본 스타일의 상속값을 미리 봅니다.
@@ -889,7 +900,11 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 선택한 전체 run에 주석을 연결합니다.
 
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
-보호합니다. 새 답글 작성은 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+보호합니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+
+기존 주석이 없는 문서에서 새로 주석을 작성하면 Word 확장 메타데이터가 함께
+저장돼 작성 직후 답글과 해결 상태를 사용할 수 있습니다. 확장 정보가 없는
+기존 주석과 Word의 별도 확장 형식은 그대로 보존합니다.
 
 Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 `주석 해결`과
 `주석 다시 열기`를 적용할 수 있습니다. HTTP·MCP는 기존 주석 ID를
@@ -897,6 +912,11 @@ Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 
 주석 본문·작성자·연결 범위·답글은 유지합니다. 확장 정보가 없는 주석에서는
 본문과 위치를 확인할 수 있습니다.
 [Word 확장 주석 상태](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/9660dacc-2ceb-4352-87d2-42ba1184f522)를 사용합니다.
+
+같은 최상위 주석의 `답글 쓰기`에서 한 단계의 답글을 추가하고 검토 패널에서
+상위 주석과 함께 봅니다. HTTP·MCP는 상위 주석 ID에 `reply_comment`와
+`comment: { text }`를 보냅니다. 원래 주석의 범위와 해결 상태를 유지합니다.
+확장 메타데이터가 없는 주석이나 이미 다른 주석에 달린 답글은 작성 대상에서 제외합니다.
 
 검토의 `텍스트 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존

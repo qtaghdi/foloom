@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const proofingLanguageSchema = z.string().min(1).max(35).regex(/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/).optional();
-const baseStyleSchema = z.object({proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
+const baseStyleSchema = z.object({proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),eastAsiaFont:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
 const bookmarkName=z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
 const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.string().max(1027)});
 
@@ -16,6 +16,7 @@ const runSchema = z.object({
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:z.literal(180).optional(),rotationEditable:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
+  eastAsiaFont: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
   sizeHalfPoints: z.number().int().min(8).max(288).optional(),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
   font: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
@@ -59,7 +60,7 @@ const styleInfoSchema=z.object({outlineLevel,id:z.string().max(120),name:z.strin
 export const snapshotSchema = z.object({
   lists:z.array(listInfoSchema).max(500).optional(),
   trackedChanges:z.boolean().optional(),
-  comments:z.array(z.object({id:z.string(),author:z.string(),date:z.string().optional(),text:z.string(),paragraphId:z.string().optional(),resolved:z.boolean().optional(),resolutionEditable:z.boolean().optional()})).max(100).optional(),
+  comments:z.array(z.object({id:z.string(),author:z.string(),date:z.string().optional(),text:z.string(),paragraphId:z.string().optional(),parentId:z.string().optional(),resolved:z.boolean().optional(),resolutionEditable:z.boolean().optional()})).max(100).optional(),
   bookmarks:z.array(z.object({name:bookmarkName,paragraphId:z.string(),renameEditable:z.boolean().optional(),textReference:z.boolean().optional()})).max(500).optional(),
   evenAndOddHeaders: z.boolean().optional(),
  sections:z.array(sectionSchema).max(128).optional(),
@@ -88,7 +89,7 @@ export type TextOperation = {
 
 export type StyleInfo=z.infer<typeof styleInfoSchema>;
 export type StyleDefinition={id:string;name?:string;kind:'paragraph'|'character';basedOn?:string;run?:InlineStyle;paragraph?:ParagraphFormat};
-export type InlineStyle = {proofingLanguage?:string; eastAsiaProofingLanguage?:string; styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; sizeHalfPoints?: number };
+export type InlineStyle = {proofingLanguage?:string; eastAsiaProofingLanguage?:string; styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; eastAsiaFont?: string; sizeHalfPoints?: number };
 export type ParagraphFormat = z.infer<typeof paragraphFormatSchema>;
 export type ParagraphOperation = {
  type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';
@@ -108,7 +109,7 @@ export type ReferenceEdit = {action:'insert_bookmark'|'insert_bookmark_ref';book
   {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'unlink'};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};
-export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
+export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'reply_comment';targetId:string;comment:{text:string}} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
 export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}};
 export type BookmarkMoveOperation = {type:'move_bookmark_up';targetId:string}|{type:'move_bookmark_down';targetId:string};
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};

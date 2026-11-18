@@ -170,7 +170,7 @@ func applyRunPreview(run *Run, props *node) {
 		}
 	}
 	fonts := props.child("rFonts")
-	for _, key := range []string{"ascii", "hAnsi", "eastAsia"} {
+	for _, key := range []string{"ascii", "hAnsi"} {
 		font := strings.TrimSpace(fonts.attr(key))
 		if font != "" && len(font) <= 120 && strings.IndexFunc(font, func(r rune) bool {
 			return unicode.IsControl(r) || strings.ContainsRune("\"\\", r)
@@ -178,6 +178,12 @@ func applyRunPreview(run *Run, props *node) {
 			run.Font = font
 			break
 		}
+	}
+	if fonts.attr("eastAsiaTheme") != "" {
+		run.EastAsiaFont = ""
+	} else if font := strings.TrimSpace(fonts.attr("eastAsia")); font != "" && len(font) <= 120 &&
+		strings.IndexFunc(font, func(r rune) bool { return unicode.IsControl(r) || strings.ContainsRune("\"\\", r) }) == -1 {
+		run.EastAsiaFont = font
 	}
 }
 

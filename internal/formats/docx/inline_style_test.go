@@ -46,7 +46,7 @@ func TestClipboardInlineStylePreservesOtherProperties(t *testing.T) {
 }
 func TestInvalidClipboardStyleRejectsWholePlan(t *testing.T) {
 	size := 500
-	for _, style := range []*InlineStyle{{Color: "url(bad)"}, {Font: "bad\nfont"}, {Font: strings.Repeat("x", 121)}, {SizeHalfPoints: &size}} {
+	for _, style := range []*InlineStyle{{Color: "url(bad)"}, {Font: "bad\nfont"}, {EastAsiaFont: "bad\nfont"}, {EastAsiaFont: strings.Repeat("한", 41)}, {Font: strings.Repeat("x", 121)}, {SizeHalfPoints: &size}} {
 		s, path := createTest(t)
 		snap := mustSnapshot(t, s)
 		p := snap.Blocks[0].Paragraph
@@ -134,5 +134,52 @@ func TestStrikeStyleToggleAndDirectOverride(t *testing.T) {
 	directRun(&r, root)
 	if !r.Strike {
 		t.Fatal("direct strike did not override style")
+	}
+}
+
+func TestEastAsianFontChangesOnlySelectedSlot(t *testing.T) {
+	ctx := context.Background()
+	source := bodyXML(`<w:p><w:r><w:rPr><w:rFonts w:ascii="Latin" w:hAnsiTheme="minorHAnsi" w:eastAsia="원본" w:eastAsiaTheme="majorEastAsia" w:cs="Arabic" w:hint="eastAsia"/><w:lang w:val="en-US" w:eastAsia="ko-KR"/><w:i/></w:rPr><w:t>Latin 한글</w:t></w:r></w:p>`)
+	s, path := withDocument(t, source)
+	before := fileBytes(t, path)
+	snapshot := mustSnapshot(t, s)
+	p := snapshot.Blocks[0].Paragraph
+	input := paragraphPlan(snapshot, ParagraphContent{SourceID: p.ID, Runs: []RunContent{
+		{SourceID: p.Runs[0].ID, Text: "Latin "},
+		{SourceID: p.Runs[0].ID, Text: "한글", Style: &InlineStyle{EastAsiaFont: "새 글꼴 & 것"}},
+	}})
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs
+	if len(runs) != 2 || runs[0].Font != "Latin" || runs[0].EastAsiaFont != "" ||
+		runs[1].Font != "Latin" || runs[1].EastAsiaFont != "새 글꼴 & 것" || !runs[1].Italic {
+		t.Fatalf("unexpected reopened format: %+v", runs)
+	}
+	root, err := parseXML(reopened.pkg.document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xmlRuns := root.child("body").child("p").children
+	oldFonts := xmlRuns[0].child("rPr").child("rFonts")
+	newProps := xmlRuns[1].child("rPr")
+	newFonts := newProps.child("rFonts")
+	for _, name := range []string{"ascii", "hAnsiTheme", "cs", "hint"} {
+		if oldFonts.attr(name) == "" || newFonts.attr(name) != oldFonts.attr(name) {
+			t.Fatalf("unexpected change to %s", name)
+		}
+	}
+	if oldFonts.attr("eastAsia") != "원본" || oldFonts.attr("eastAsiaTheme") != "majorEastAsia" ||
+		newFonts.attr("eastAsia") != "새 글꼴 & 것" || newFonts.attr("eastAsiaTheme") != "" ||
+		newProps.child("lang").attr("eastAsia") != "ko-KR" {
+		t.Fatal("selective East Asian font override did not preserve the source and language")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, path)) {
+		t.Fatal("undo failed to restore source bytes")
 	}
 }
