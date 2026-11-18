@@ -9,15 +9,16 @@ export function resolveHeaderText(sections:SectionInfo[],slot:HeaderFooterInfo|u
 }
 export function DocumentHeaderFooter(props:{evenAndOddHeaders?:boolean;onParityChange?:(enabled:boolean)=>boolean;sections:SectionInfo[];disabled:boolean;onApply:(id:string,format:SectionFormat)=>boolean}) {
  const [id,setId]=createSignal(''),[kind,setKind]=createSignal<'header'|'footer'>('header'),[variant,setVariant]=createSignal<'default'|'first'|'even'>('default'),[text,setText]=createSignal(''),[firstPage,setFirstPage]=createSignal(false),[error,setError]=createSignal('');
- const [pageNumber,setPageNumber]=createSignal(false);
+ const [pageNumber,setPageNumber]=createSignal(false),[totalPages,setTotalPages]=createSignal(false);
  const selected=createMemo(()=>props.sections.find(section=>section.id===id())??props.sections[0]);
  const slot=createMemo(()=>selected()?.headerFooters?.find(info=>info.kind===kind()&&info.variant===variant()));
- createEffect(()=>{setText(resolveHeaderText(props.sections,slot()));setFirstPage(Boolean(selected()?.firstPage));setPageNumber(Boolean(slot()?.pageNumber));setError('');});
+ createEffect(()=>{setText(resolveHeaderText(props.sections,slot()));setFirstPage(Boolean(selected()?.firstPage));setPageNumber(Boolean(slot()?.pageNumber));setTotalPages(Boolean(slot()?.totalPages));setError('');});
  const disabled=()=>props.disabled||!selected()?.editable||!slot()?.editable;
  const apply=(linkPrevious=false)=>{
   const section=selected();if(!section)return;
   const changingField=pageNumber()!==Boolean(slot()?.pageNumber)||Boolean(slot()?.linked&&pageNumber());
-  const independent={text:text(),...(changingField?{pageNumber:pageNumber()}:{})};
+  const changingTotal=totalPages()!==Boolean(slot()?.totalPages)||Boolean(slot()?.linked&&totalPages());
+  const independent={text:text(),...(changingField?{pageNumber:pageNumber()}:{}),...(changingTotal?{totalPages:totalPages()}:{})};
   const update={kind:kind(),variant:variant(),...(linkPrevious?{linkPrevious:true}:independent)};
   const format:SectionFormat={headerFooters:[update]};if(firstPage()!==Boolean(section.firstPage))format.firstPage=firstPage();
   setError(props.onApply(section.id,format)?'':'내용 크기와 문서 연결 상태를 확인하세요.');
@@ -44,6 +45,10 @@ export function DocumentHeaderFooter(props:{evenAndOddHeaders?:boolean;onParityC
    <label class="flex min-h-11 cursor-pointer items-center gap-2">
     <input type="checkbox" checked={pageNumber()} disabled={disabled()} onChange={event=>setPageNumber(event.currentTarget.checked)}/>
     쪽 번호 필드
+   </label>
+   <label class="flex min-h-11 cursor-pointer items-center gap-2">
+    <input type="checkbox" checked={totalPages()} disabled={disabled()} onChange={event=>setTotalPages(event.currentTarget.checked)}/>
+    전체 쪽 수 필드
    </label>
    <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>apply()}>내용 적용</button>
    <button type="button" class={quietButtonClass} disabled={disabled()||props.sections[0]?.id===selected()?.id||Boolean(slot()?.linked)} onClick={()=>apply(true)}>이전 구역 연결</button>

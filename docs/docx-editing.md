@@ -524,9 +524,10 @@ numbering part와 사용자 정의 글머리를 보존합니다. 일부 고급 �
 따라 지정한 상위 단계에서 다시 시작하거나 번호를 계속 이어갑니다.
 [법률식 번호 지정](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.islegalnumberingstyle)이
 켜진 목록 단계는 해당 표시 문자열에 포함된 모든 번호를 십진수로 표시합니다.
-새 번호 목록을 만들기 전에 `목록 번호 형식`에서 일반 숫자 또는 대문자·소문자
-로마 숫자를 선택할 수 있습니다. `define_list`의 `kind`는 `decimal`,
-`upperRoman`, `lowerRoman` 또는 `bullet`을 사용합니다. 로마 숫자 목록은
+새 번호 목록을 만들기 전에 `목록 번호 형식`에서 일반 숫자, 대문자·소문자 로마 숫자 또는
+대문자·소문자 영문자를 선택할 수 있습니다. `define_list`의 `kind`는 `decimal`,
+`upperRoman`, `lowerRoman`, `upperLetter`, `lowerLetter` 또는 `bullet`을 사용합니다.
+영문자는 1~702 범위에서 Word의 반복 문자 번호를 표시합니다. Z 다음에는 AA와 BB가 이어집니다. 로마 숫자 목록은
 시작 값을 1~3,999 사이로 지정합니다.
 
 로마 숫자 목록은 1~3,999 범위의 대문자·소문자 번호를 표시합니다. 다른 미지원 형식은 형식 이름으로 표시합니다. 기존 공유 번호 정의 자체를
@@ -644,6 +645,12 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 계산합니다. [단일 Word 필드 구조](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.simplefield)를
 사용합니다.
 
+같은 도구의 `전체 쪽 수 필드`를 켜면 Word가 계산하는 NUMPAGES 필드를
+추가합니다. HTTP·MCP의 머리글·바닥글 설정은 `totalPages: true` 또는
+`totalPages: false`를 사용합니다. 쪽 번호 필드와 독립적으로 바뀌며, 브라우저는
+계산값 대신 필드 위치를 보여 줍니다.
+[Word 필드 코드 목록](https://support.microsoft.com/en-us/word/list-of-field-codes-in-word)에서 NUMPAGES를 확인할 수 있습니다.
+
 ### 문단 페이지 나눔과 구역 나눔
 
 `구역 나눔 제거`에서 경계를 선택하고 저장하면 앞뒤 구역을 합칩니다.
@@ -711,6 +718,13 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 0.001% 단위의 정수를 받습니다. 네 값을 모두 0으로 보내면 자르기를 해제합니다.
 표시 영역의 바깥 크기와 그림 파일·관계·설명은 유지합니다.
 [DrawingML 원본 자르기](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.sourcerectangle)를 사용합니다.
+
+기본 인라인 PNG·JPEG는 `그림 180도 회전`으로 방향을 바꾸고
+`그림 방향 되돌리기`로 복원할 수 있습니다. 크기, 원본 파일과 자르기 범위는 유지합니다.
+HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rotation: 180 }`을
+보냅니다. `rotation: 0`은 기본 방향으로 되돌립니다. 회전 뒤 자르기 비율은 원본
+이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
+
 
 ### 인쇄와 PDF 저장
 
@@ -801,6 +815,14 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 클릭 동작만 사라집니다. HTTP·MCP는 링크 run ID에 `reference: { action: "unlink" }`를
 사용합니다. 복잡한 구조는 보호하고 공유 관계는 남겨 둡니다.
 
+다른 본문 문단의 `텍스트 상호 참조 삽입`에서 한 문단의 평문을 포함한 북마크를
+선택하면 Word REF 필드가 추가됩니다. HTTP·MCP는 문단 ID에
+`reference: { action: "insert_bookmark_ref", bookmark }`를 적용합니다.
+브라우저에서 참조의 텍스트를 확인하고 대상 문단으로 이동할 수 있습니다.
+북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
+참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
+[Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
+
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 각주의 번호와
@@ -814,7 +836,10 @@ HTTP·MCP는 문단 ID에 `reference: { action: "insert_endnote", text }`를 적
 `기존 각주·미주`에서 기본 번호와 한 문단의 평문을 포함한 미주를 골라 수정합니다.
 HTTP·MCP는 미주 run ID에 `reference: { action: "set_endnote_text", text }`를 적용합니다.
 미주 번호와 본문 참조, 다른 각주, 변경하지 않은 텍스트의 서식은 유지합니다.
-미주 삭제와 복합 미주 편집은 Word에서 할 수 있습니다.
+`미주 삭제`는 한 곳에서 참조하는 평문 미주의 본문 마커와 해당 항목을
+삭제합니다. HTTP·MCP는 미주 run ID에 `reference: { action: "delete_endnote" }`를
+적용합니다. 다른 미주·각주·구분선, 공유 참조와 북마크 범위는 보호합니다.
+복합 미주 편집은 Word에서 할 수 있습니다.
 [Word 미주 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.endnotes?view=openxml-3.0.1)을 사용합니다.
 
 `기존 각주·미주`에서 편집 가능한 각주를 고르면 한 줄 텍스트를 수정할 수 있습니다.
@@ -854,7 +879,14 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 선택한 전체 run에 주석을 연결합니다.
 
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
-보호합니다. 주석 답글과 해결은 현재 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+보호합니다. 새 답글 작성은 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+
+Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 `주석 해결`과
+`주석 다시 열기`를 적용할 수 있습니다. HTTP·MCP는 기존 주석 ID를
+`targetId`로 보내고 `resolve_comment` 또는 `reopen_comment`를 사용합니다.
+주석 본문·작성자·연결 범위·답글은 유지합니다. 확장 정보가 없는 주석에서는
+본문과 위치를 확인할 수 있습니다.
+[Word 확장 주석 상태](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/9660dacc-2ceb-4352-87d2-42ba1184f522)를 사용합니다.
 
 검토의 `텍스트 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존

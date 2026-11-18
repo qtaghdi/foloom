@@ -212,3 +212,64 @@ func TestDOCXInlinePictureKeepsExistingPackagePartsAndUndo(t *testing.T) {
 		t.Fatal("undo changed original bytes")
 	}
 }
+
+func TestDOCXInlinePictureHalfTurnKeepsCropAndMedia(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>image</w:t></w:r></w:p>`))
+	var pngBytes bytes.Buffer
+	if err := png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 4, 2))); err != nil {
+		t.Fatal(err)
+	}
+	apply := func(v Snapshot, target string, edit *ImageEdit) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+			{Type: "update_image", TargetID: target, Image: edit},
+		}}, "human")
+	}
+	v := mustSnapshot(t, s)
+	v, err := apply(v, v.Blocks[0].ID, &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pngBytes.Bytes()), Alt: "original", WidthEMU: 400000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err = apply(v, v.Blocks[0].Paragraph.Runs[1].ID, &ImageEdit{Action: "crop", Crop: &ImageCrop{Left: 10000}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := fileBytes(t, filename)
+	angle := 90
+	run := v.Blocks[0].Paragraph.Runs[1]
+	if _, err := apply(v, run.ID, &ImageEdit{Action: "rotate", Rotation: &angle}); err == nil ||
+		!bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("unsupported rotation changed the package")
+	}
+	angle = 180
+	if _, err := apply(v, run.ID, &ImageEdit{Action: "rotate", Rotation: &angle}); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, reopened)
+	rotated := v.Blocks[0].Paragraph.Runs[1]
+	p := rotated.Picture
+	if p == nil || !p.RotationEditable || p.Rotation != 180 || p.Crop == nil || p.Crop.Left != 10000 ||
+		p.WidthEMU != 400000 || p.HeightEMU != 200000 || p.Alt != "original" ||
+		!strings.Contains(string(reopened.pkg.document), `rot="10800000"`) {
+		t.Fatalf("rotated picture lost metadata after reopen: %+v", p)
+	}
+	media, _, err := reopened.Picture(ctx, rotated.ID)
+	if err != nil || !bytes.Equal(media, pngBytes.Bytes()) {
+		t.Fatal("rotation changed media bytes")
+	}
+	s = reopened
+	angle = 0
+	cleared, err := apply(v, rotated.ID, &ImageEdit{Action: "rotate", Rotation: &angle})
+	if err != nil || cleared.Blocks[0].Paragraph.Runs[1].Picture.Rotation != 0 {
+		t.Fatal("picture could not return to its original direction", err)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the original picture XML")
+	}
+}

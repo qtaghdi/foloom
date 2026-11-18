@@ -140,7 +140,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	s.addPicturePreviews(blocks, targetsByID)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
-			s.pkg.projectNotes(kind, blocks, targetsByID)
+			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
 		}
 	}
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID)
@@ -365,6 +365,21 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			referenceCount++
 			continue
 		}
+		if op.Type == "resolve_comment" || op.Type == "reopen_comment" {
+			key := "comment:" + op.TargetID
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" ||
+				seen[key] || referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX comment state fields")
+			}
+			if err := s.pkg.setCommentDone(op.TargetID, op.Type == "resolve_comment", parts); err != nil {
+				return nil, err
+			}
+			seen[key] = true
+			referenceCount++
+			continue
+		}
 		if op.Type == "accept_revision" || op.Type == "reject_revision" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
@@ -482,7 +497,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
 			var edit replacement
-			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" {
+			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" {
 				edit, err = s.pkg.pictureUpdateReplacement(target, *op.Image, parts)
 			} else {
 				id, allocationErr := nextDrawingID()
