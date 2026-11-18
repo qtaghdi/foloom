@@ -184,9 +184,13 @@ func TestImportedListRestartsOnlyAtConfiguredLevels(t *testing.T) {
 	}
 }
 
-func TestCreateRomanListFormats(t *testing.T) {
-	for _, tc := range []struct{ kind, first, second string }{
-		{"upperRoman", "IV.", "V."}, {"lowerRoman", "iv.", "v."},
+func TestCreateRomanAndLetterListFormats(t *testing.T) {
+	for _, tc := range []struct {
+		kind, first, second string
+		start, invalid      int
+	}{
+		{"upperRoman", "IV.", "V.", 4, 4000}, {"lowerRoman", "iv.", "v.", 4, 4000},
+		{"upperLetter", "AA.", "BB.", 27, 703}, {"lowerLetter", "aa.", "bb.", 27, 703},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>second</w:t></w:r></w:p>`))
@@ -195,16 +199,16 @@ func TestCreateRomanListFormats(t *testing.T) {
 			var contents []ParagraphContent
 			for _, block := range v.Blocks {
 				p := block.Paragraph
-				contents = append(contents, ParagraphContent{SourceID: p.ID, Format: &ParagraphFormat{List: &ParagraphList{Key: "roman"}},
+				contents = append(contents, ParagraphContent{SourceID: p.ID, Format: &ParagraphFormat{List: &ParagraphList{Key: "letters"}},
 					Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: p.Runs[0].Text}}})
 			}
 			batch := paragraphPlan(v, contents...)
-			list := &ListDefinition{Key: "roman", Kind: tc.kind, Start: 4000}
+			list := &ListDefinition{Key: "letters", Kind: tc.kind, Start: tc.invalid}
 			batch.Operations = append([]Operation{{Type: "define_list", ListDefinition: list}}, batch.Operations...)
 			if _, err := s.Apply(context.Background(), batch, "human"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
-				t.Fatal("out-of-range Roman start was committed")
+				t.Fatal("out-of-range list start was committed")
 			}
-			list.Start = 4
+			list.Start = tc.start
 			if _, err := s.Apply(context.Background(), batch, "human"); err != nil {
 				t.Fatal(err)
 			}
