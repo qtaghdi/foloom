@@ -12,13 +12,16 @@ function safeWebAddress(address:string):boolean {
 }
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;links:Run[];notes:Run[];referenceLists:Run[];dateFields:Run[];pendingReferences:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;figures:Run[];links:Run[];notes:Run[];referenceLists:Run[];dateFields:Run[];pendingReferences:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
-  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'figureList'|'tableList'|'dateField'|'footnote'|'endnote'>('bookmark');
+  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'figureReference'|'contents'|'figureList'|'tableList'|'dateField'|'footnote'|'endnote'>('bookmark');
   const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
   const crossReference=()=>mode()==='reference'||mode()==='pageReference'||mode()==='numberReference';
-  const bookmarkChoices=()=>crossReference()?props.bookmarks.filter(item=>mode()==='numberReference'?item.numberReference:item.textReference):props.bookmarks;
+  const regularBookmarks=()=>props.bookmarks.filter(item=>!item.figure);
+  const bookmarkChoices=()=>crossReference()?regularBookmarks().filter(item=>mode()==='numberReference'?item.numberReference:item.textReference):regularBookmarks();
+  const [figureId,setFigureId]=createSignal('');
+  const figureTarget=()=>props.figures.find(figure=>figure.id===figureId())??props.figures[0];
   const targetBookmark=()=>bookmarkChoices().find(item=>item.name===anchor())?.name??bookmarkChoices()[0]?.name;
   const [linkId,setLinkId]=createSignal('');
   const selectedLink = () => props.links.find(link=>link.id===linkId());
@@ -30,7 +33,7 @@ export function DocumentReferenceToolbar(props:{
   const [dateFieldID,setDateFieldID]=createSignal('');
   const selectedDateField=()=>props.dateFields.find(field=>field.id===dateFieldID());
   const [editBookmark,setEditBookmark]=createSignal('');
-  const renameableBookmarks=()=>props.bookmarks.filter(item=>item.renameEditable);
+  const renameableBookmarks=()=>regularBookmarks().filter(item=>item.renameEditable);
   const bookmarkToRename=()=>renameableBookmarks().find(item=>item.name===editBookmark());
   const [error,setError]=createSignal('');
   const disabled=()=>props.disabled||props.pending;
@@ -49,6 +52,10 @@ export function DocumentReferenceToolbar(props:{
       reference={action:mode()==='figureList'?'insert_figure_list':'insert_table_list'};
     }else if(mode()==='dateField'){
       reference={action:'insert_date_field'};
+    }else if(mode()==='figureReference'){
+      const figure=figureTarget();
+      if(!figure){setError('번호 캡션이 있는 그림을 선택하세요.');return;}
+      reference={action:'insert_figure_ref',figureId:figure.id};
     }else if(crossReference()){
       const name=targetBookmark();
       if(!name){setError('평문 북마크를 선택하세요.');return;}
@@ -77,10 +84,10 @@ export function DocumentReferenceToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="참조 작업" class="editor-select min-h-11" disabled={disabled()} value={mode()}
         onChange={event=>{setMode(event.currentTarget.value as ReturnType<typeof mode>);setError('');}}>
-        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="pageReference">쪽 번호 상호 참조 삽입</option><option value="numberReference">목록 번호 상호 참조 삽입</option><option value="contents">자동 목차 삽입</option><option value="figureList">그림 목록 삽입</option><option value="tableList">표 목록 삽입</option><option value="dateField">날짜 필드 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
+        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="pageReference">쪽 번호 상호 참조 삽입</option><option value="numberReference">목록 번호 상호 참조 삽입</option><option value="figureReference">그림 번호 상호 참조 삽입</option><option value="contents">자동 목차 삽입</option><option value="figureList">그림 목록 삽입</option><option value="tableList">표 목록 삽입</option><option value="dateField">날짜 필드 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
       </select>
-      <Show when={mode()!=='contents'&&mode()!=='figureList'&&mode()!=='tableList'&&mode()!=='dateField'} fallback={<span class="text-slate-600">
-        {mode()==='contents'?'선택한 문단 앞에 제목 1~3 수준의 목차를 넣습니다.':mode()==='dateField'?'선택한 문단 끝에 UTC 기준 날짜를 넣습니다.':'선택한 문단 앞에 본문의 번호 캡션을 모읍니다.'}
+      <Show when={mode()!=='contents'&&mode()!=='figureList'&&mode()!=='tableList'&&mode()!=='dateField'&&mode()!=='figureReference'} fallback={<span class="text-slate-600">
+        {mode()==='contents'?'선택한 문단 앞에 제목 1~3 수준의 목차를 넣습니다.':mode()==='dateField'?'선택한 문단 끝에 UTC 기준 날짜를 넣습니다.':mode()==='figureReference'?'선택한 문단 끝에 그림 번호를 넣습니다.':'선택한 문단 앞에 본문의 번호 캡션을 모읍니다.'}
       </span>}>
       <Show when={addingNote()} fallback={<Show when={mode()==='bookmark'} fallback={<>
         <Show when={!crossReference()}><input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
@@ -102,7 +109,16 @@ export function DocumentReferenceToolbar(props:{
           disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/>
       </Show>
       </Show>
-      <button type="button" class={buttonClass} disabled={disabled()||!props.target?.structureEditable} onClick={apply}>참조 적용</button>
+      <Show when={mode()==='figureReference'}>
+        <label class="flex min-w-0 flex-col gap-1">참조할 그림 캡션
+          <select class="editor-select min-h-11 max-w-64" disabled={disabled()} value={figureTarget()?.id??''}
+            onChange={event=>{setFigureId(event.currentTarget.value);setError('');}}>
+            <Show when={!props.figures.length}><option value="">지원되는 그림 캡션 없음</option></Show>
+            <For each={props.figures}>{figure=><option value={figure.id}>{figure.picture?.caption?.slice(0,64)}</option>}</For>
+          </select>
+        </label>
+      </Show>
+      <button type="button" class={buttonClass} disabled={disabled()||!props.target?.structureEditable||mode()==='figureReference'&&!figureTarget()} onClick={apply}>참조 적용</button>
       <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':props.target?.structureEditable
         ? `대상 문단: ${props.target.runs.map(run=>run.text).join('').trim().slice(0,80)||'빈 문단'}`
         : '편집 가능한 본문 문단에 커서를 놓으세요.'}</p>

@@ -65,24 +65,60 @@ func editablePictureCaption(t target, data []byte) (*node, string) {
 	return editableCaptionParagraph(next, data)
 }
 
-func editableCaptionParagraph(next *node, data []byte) (*node, string) {
-	if next == nil || !next.is("p") || next.has("sectPr") ||
-		strings.Contains(string(data[next.start:next.end]), "<!--") {
-		return nil, ""
+func editableCaptionParagraph(paragraph *node, data []byte) (*node, string) {
+	caption := readFigureCaption(paragraph, data)
+	return caption.label, caption.text
+}
+
+type figureCaption struct {
+	number, label, bookmark *node
+	text                    string
+}
+
+func readFigureCaption(p *node, data []byte) figureCaption {
+	if p == nil || !p.is("p") || !p.parent.is("body") || p.has("sectPr") ||
+		bytes.Contains(data[p.start:p.end], []byte("<!--")) {
+		return figureCaption{}
 	}
-	children := next.children
+	children := p.children
 	if len(children) > 0 && children[0].is("pPr") {
 		children = children[1:]
 	}
-	if len(children) != 3 || !children[1].is("fldSimple") || !supportedFigureSequence(children[1].attr("instr")) {
-		return nil, ""
+	var field, bookmark *node
+	switch {
+	case len(children) == 3:
+		field = children[1]
+	case len(children) == 5 && isFigureBookmarkPair(children[1], children[3]):
+		bookmark, field = children[1], children[2]
+	default:
+		return figureCaption{}
 	}
+	number := captionSequenceValue(field, data, supportedFigureSequence)
 	_, prefix := plainTextRunNodes(children[:1])
-	nodes, label := plainTextRunNodes(children[2:])
-	if len(nodes) != 1 || prefix != "그림 " || !strings.HasPrefix(label, ". ") || len(label) <= 2 || len(label) > 1026 || !validText(label) {
-		return nil, ""
+	labels, text := plainTextRunNodes(children[len(children)-1:])
+	if number == nil || len(labels) != 1 || prefix != "그림 " || !strings.HasPrefix(text, ". ") ||
+		len(text) <= 2 || len(text) > 1026 || !validText(text) {
+		return figureCaption{}
 	}
-	return nodes[0], strings.TrimPrefix(label, ". ")
+	return figureCaption{number: number, label: labels[0], bookmark: bookmark, text: strings.TrimPrefix(text, ". ")}
+}
+
+func captionSequenceValue(field *node, data []byte, supported func(string) bool) *node {
+	if !field.is("fldSimple") || !supported(field.attr("instr")) || len(field.children) != 1 ||
+		!field.parent.is("p") || !field.parent.parent.is("body") || bytes.Contains(data[field.start:field.end], []byte("<!--")) {
+		return nil
+	}
+	for _, attr := range field.attrs {
+		if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS || attr.Name.Local != "instr" && attr.Name.Local != "dirty") {
+			return nil
+		}
+	}
+	nodes, text := plainTextRunNodes(field.children)
+	number, err := strconv.ParseInt(text, 10, 32)
+	if len(nodes) != 1 || err != nil || number < 1 {
+		return nil
+	}
+	return nodes[0]
 }
 
 func documentFigureFields(body *node) ([]*node, error) {
@@ -97,21 +133,11 @@ func documentCaptionFields(body *node, label string, isSequence, supported func(
 			return fmt.Errorf("DOCX %s numbering cannot be derived with complex body fields", label)
 		}
 		if n.is("fldSimple") && isSequence(n.attr("instr")) {
-			if !supported(n.attr("instr")) || len(n.children) != 1 || !n.children[0].is("r") || !n.parent.is("p") || !n.parent.parent.is("body") ||
-				strings.Contains(string(body.parent.source[n.start:n.end]), "<!--") {
-				return fmt.Errorf("protected DOCX %s sequence", label)
+			value := captionSequenceValue(n, body.parent.source, supported)
+			if value == nil {
+				return fmt.Errorf("protected or invalid DOCX %s sequence", label)
 			}
-			for _, attr := range n.attrs {
-				if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS || attr.Name.Local != "instr" && attr.Name.Local != "dirty") {
-					return fmt.Errorf("protected DOCX %s sequence", label)
-				}
-			}
-			nodes, label := plainTextRunNodes(n.children)
-			number, err := strconv.ParseInt(label, 10, 32)
-			if len(nodes) != 1 || err != nil || number < 1 {
-				return fmt.Errorf("invalid DOCX %s sequence result", label)
-			}
-			values = append(values, nodes[0])
+			values = append(values, value)
 		}
 		for _, child := range n.children {
 			if err := walk(child); err != nil {
@@ -139,7 +165,15 @@ func (p *documentPackage) pictureCaption(t target, text string) ([]replacement, 
 	if err != nil {
 		return nil, err
 	}
-	return numberedCaptionEdits(p.document, values, t.paragraph.end, figureSequence, "그림 ", text, false)
+	edits, err := numberedCaptionEdits(p.document, values, t.paragraph.end, figureSequence, "그림 ", text, false)
+	if err != nil {
+		return nil, err
+	}
+	refs, err := figureReferenceNumberEdits(t.paragraph.parent, p.document, values, t.paragraph.end)
+	if err != nil {
+		return nil, err
+	}
+	return append(edits, refs...), nil
 }
 
 func numberedCaptionEdits(data []byte, values []*node, at int, instruction, prefix, text string, keepNext bool) ([]replacement, error) {
@@ -183,7 +217,7 @@ func markCaptionedPictureMoves(root *node, paragraphs map[*node]*Paragraph, prot
 	if !body.has("fldSimple") || !body.has("drawing") {
 		return
 	}
-	ranged, valid := bodyRangeBlocks(body)
+	ranged, valid := bodyRangeBlocksExcept(body, figureBookmarkMarkers(root))
 	if !valid {
 		return
 	}

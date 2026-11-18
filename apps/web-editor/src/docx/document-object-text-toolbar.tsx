@@ -1,7 +1,8 @@
 import { createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
 import type { ObjectTextOperation, Paragraph, Snapshot } from './contracts';
-import { utf8Length } from './validation';
+import { utf8Length, validChartValue } from './validation';
+import { DocumentPieChartForm } from './document-pie-chart-form';
 
 const objectLabels={
   control:{title:'콘텐츠 컨트롤 편집',select:'편집할 콘텐츠 컨트롤',name:'컨트롤',text:'콘텐츠 컨트롤 텍스트'},
@@ -19,6 +20,7 @@ export function DocumentObjectTextToolbar(props:{
 }) {
   const [id,setID]=createSignal(''),[error,setError]=createSignal('');
   const [point,setPoint]=createSignal(0);
+  const [chartFormOpened,setChartFormOpened]=createSignal(false);
   const labels=()=>objectLabels[props.kind];
   const objects=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ? block.paragraph.runs.filter(run=>run.object?.kind===props.kind&&
@@ -29,10 +31,14 @@ export function DocumentObjectTextToolbar(props:{
   const maxBytes=()=>props.kind==='chart'?256:1024;
   const insertable=()=>props.kind==='textbox'||props.kind==='control';
   const insertionLabel=()=>props.kind==='control'?'콘텐츠 컨트롤':'텍스트 상자';
-  return <Show when={objects().length||insertable()}>
-    <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
+  return <Show when={objects().length||insertable()||props.kind==='chart'}>
+    <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6"
+      onToggle={event=>{if(props.kind==='chart'&&event.currentTarget.open)setChartFormOpened(true);}}>
       <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">{labels().title}</summary>
       <div class="flex min-w-0 flex-wrap items-end gap-2 pb-2">
+        <Show when={props.kind==='chart'&&chartFormOpened()}>
+          <DocumentPieChartForm target={props.target} disabled={disabled()} onApply={props.onApply}/>
+        </Show>
         <Show when={insertable()}>
           <form class="flex basis-full flex-wrap items-end gap-2" onSubmit={event=>{
             event.preventDefault();
@@ -112,8 +118,7 @@ export function DocumentObjectTextToolbar(props:{
               const input=event.currentTarget.elements.namedItem('chartValue') as HTMLInputElement;
               const value=input.value.trim(),index=point(),expectedValue=values()[index];
               if(expectedValue===undefined||value===expectedValue)return;
-              if(value.length>64||!/^[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][-+]?[0-9]{1,3})?$/.test(value)||
-                Math.abs(Number(value))>1e15){
+              if(!validChartValue(value)){
                 setError('절댓값이 10¹⁵ 이하인 숫자를 입력하세요.');
                 return;
               }

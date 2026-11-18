@@ -20,28 +20,29 @@ const (
 )
 
 type Run struct {
-	BoldTrackable    bool         `json:"boldTrackable,omitempty"`
-	ProofingLang     string       `json:"proofingLanguage,omitempty"`
-	EastAsiaLang     string       `json:"eastAsiaProofingLanguage,omitempty"`
-	Trackable        bool         `json:"trackable,omitempty"`
-	Object           *ObjectInfo  `json:"object,omitempty"`
-	Link             *LinkInfo    `json:"link,omitempty"`
-	Picture          *PictureInfo `json:"picture,omitempty"`
-	CharacterStyleID string       `json:"characterStyleId,omitempty"`
-	BaseStyle        *InlineStyle `json:"baseStyle,omitempty"`
-	Underline        bool         `json:"underline,omitempty"`
-	Strike           bool         `json:"strike,omitempty"`
-	Highlight        string       `json:"highlight,omitempty"`
-	Vertical         string       `json:"vertical,omitempty"`
-	ID               string       `json:"id"`
-	Text             string       `json:"text"`
-	Editable         bool         `json:"editable"`
-	Bold             bool         `json:"bold"`
-	Italic           bool         `json:"italic"`
-	SizeHalfPoints   int          `json:"sizeHalfPoints,omitempty"`
-	Color            string       `json:"color,omitempty"`
-	Font             string       `json:"font,omitempty"`
-	EastAsiaFont     string       `json:"eastAsiaFont,omitempty"`
+	SplitNoteParagraph bool         `json:"splitNoteParagraph,omitempty"`
+	BoldTrackable      bool         `json:"boldTrackable,omitempty"`
+	ProofingLang       string       `json:"proofingLanguage,omitempty"`
+	EastAsiaLang       string       `json:"eastAsiaProofingLanguage,omitempty"`
+	Trackable          bool         `json:"trackable,omitempty"`
+	Object             *ObjectInfo  `json:"object,omitempty"`
+	Link               *LinkInfo    `json:"link,omitempty"`
+	Picture            *PictureInfo `json:"picture,omitempty"`
+	CharacterStyleID   string       `json:"characterStyleId,omitempty"`
+	BaseStyle          *InlineStyle `json:"baseStyle,omitempty"`
+	Underline          bool         `json:"underline,omitempty"`
+	Strike             bool         `json:"strike,omitempty"`
+	Highlight          string       `json:"highlight,omitempty"`
+	Vertical           string       `json:"vertical,omitempty"`
+	ID                 string       `json:"id"`
+	Text               string       `json:"text"`
+	Editable           bool         `json:"editable"`
+	Bold               bool         `json:"bold"`
+	Italic             bool         `json:"italic"`
+	SizeHalfPoints     int          `json:"sizeHalfPoints,omitempty"`
+	Color              string       `json:"color,omitempty"`
+	Font               string       `json:"font,omitempty"`
+	EastAsiaFont       string       `json:"eastAsiaFont,omitempty"`
 }
 
 // Layout fields are bounded preview hints. They never participate in writes.
@@ -236,6 +237,7 @@ type StyleInfo struct {
 	Paragraph    *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
+	ChartInsert       *ChartInsert        `json:"chartInsert,omitempty" jsonschema:"Title and literal points for insert_chart"`
 	ChartValue        *ChartValueEdit     `json:"chartValue,omitempty"`
 	Alignment         string              `json:"alignment,omitempty" jsonschema:"Set paragraph alignment with track_paragraph_alignment: start, center, end, or justify"`
 	Bold              *bool               `json:"bold,omitempty" jsonschema:"Set bold for track_run_bold"`
@@ -245,17 +247,17 @@ type Operation struct {
 	Comment           *CommentEdit        `json:"comment,omitempty"`
 	Reference         *ReferenceEdit      `json:"reference,omitempty"`
 	Image             *ImageEdit          `json:"image,omitempty"`
-	Boundary          string              `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, no_page_after, section_next_page, section_continuous, remove_section, move_section_earlier, or move_section_later"`
+	Boundary          string              `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, no_page_after, section_next_page, section_continuous, section_even_page, section_odd_page, remove_section, move_section_earlier, or move_section_later"`
 	EvenAndOddHeaders *bool               `json:"evenAndOddHeaders,omitempty" jsonschema:"Document-wide odd/even header and footer setting for update_header_parity"`
 	SectionID         string              `json:"sectionId,omitempty"`
 	Section           *SectionFormat      `json:"section,omitempty"`
 	StyleDefinition   *StyleDefinition    `json:"styleDefinition,omitempty"`
 	EndTargetID       string              `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
 	Paragraphs        []ParagraphContent  `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type              string              `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_alignment, insert_control_text, update_control_text, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, update_chart_title, resize_chart, update_chart_value, delete_chart, insert_rectangle, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
+	Type              string              `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, split_note_paragraph, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_alignment, insert_control_text, update_control_text, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, insert_chart, update_chart_title, resize_chart, update_chart_value, delete_chart, insert_rectangle, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
 	TargetID          string              `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
 	ExpectedText      string              `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
-	Text              string              `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`
+	Text              string              `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. For split_note_paragraph, send the exact text before the split"`
 	ChartWidthEMU     *int                `json:"chartWidthEmu,omitempty" jsonschema:"New inline chart width in EMUs for resize_chart"`
 	RectangleSize     *RectangleSizeEdit  `json:"rectangleSize,omitempty"`
 	RectangleColors   *RectangleColorEdit `json:"rectangleColors,omitempty"`
