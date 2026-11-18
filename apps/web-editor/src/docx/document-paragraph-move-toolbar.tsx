@@ -2,6 +2,20 @@ import { createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
 import type { ParagraphMoveOperation, Paragraph } from './contracts';
 
+export function DocumentBodyParagraphMoveToolbar(props:{
+  canMove:(direction:-1|1)=>boolean;
+  onMove:(direction:-1|1)=>void;
+}) {
+  return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
+    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">본문 문단 이동</summary>
+    <div class="flex flex-wrap gap-2 pb-2">
+      <button type="button" class={buttonClass} disabled={!props.canMove(-1)} onClick={()=>props.onMove(-1)}>문단 위로</button>
+      <button type="button" class={buttonClass} disabled={!props.canMove(1)} onClick={()=>props.onMove(1)}>문단 아래로</button>
+      <p class="basis-full text-slate-600">옮길 일반 본문 문단 안에 커서 또는 선택을 놓으세요.</p>
+    </div>
+  </details>;
+}
+
 export function DocumentParagraphMoveToolbar(props:{
   paragraphs: Paragraph[];
   kind: 'bookmark'|'hyperlink'|'note';

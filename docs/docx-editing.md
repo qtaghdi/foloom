@@ -283,6 +283,12 @@ LibreOffice가 편집한 파일을 다시 열 수 있도록 각 항목의 CRC와
 part는 유지합니다. 수정된 문단 안 XML의 byte 동일성은 보장하지 않습니다.
 `replace_run_text`와 `replace_cell_text`의 LF는 `w:br`이며 새 문단이 아닙니다.
 
+`페이지`의 `본문 문단 이동`에서 같은 본문 구역의 인접한 일반 문단으로
+`문단 위로` 또는 `문단 아래로`를 적용합니다. 문단의 서식과 문단 안 커서 또는
+선택을 유지합니다. 문단 이동은 먼저 초안에 반영하며, 저장과 실행 취소는 본문
+구조 변경과 같은 이력을 사용합니다. 이 도구는 표·목록·보호된 문단과 페이지·구역
+경계를 가로지르지 않습니다.
+
 ## 연속 선택과 문자 경계
 
 본문의 방향키·Home/End·단어 이동과 드래그 선택은 브라우저의 native 선택을
@@ -917,7 +923,12 @@ HTTP·MCP 값은 `square_left`와 `square_right`입니다. 기존 위아래 감�
 가로 거리를 맞춰 표시하고, 저장 파일은 지정한 거리를 유지합니다. 정렬
 프리셋이나 `인라인`을 선택해 배치를 다시 바꿀 수 있습니다. HTTP·MCP에서는
 `placement: "floating_offset"`과 함께 `horizontalOffsetEmu`를 보냅니다.
-1pt는 12700EMU입니다.
+1pt는 12700EMU입니다. 지원 그림은 `문단 아래로 거리 (pt)`에서 0~50pt를
+지정할 수 있습니다. 그림 높이와 거리가 본문 높이 안에 들어와야 합니다.
+저장할 때 문단 기준 세로 위치와 그림 위의 감싸기 간격에 같은 값을 써서
+뒤따르는 캡션과 본문이 그림 아래에 남도록 합니다. HTTP·MCP에서는
+`verticalOffsetEmu`를 함께 보냅니다. 생략하면 0입니다. 브라우저 편집 화면에서
+자동 페이지 나눔은 적용되지 않습니다.
 
 [Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
 
@@ -1213,6 +1224,13 @@ Word의 `w:pPrChange`에 남습니다. 검토에서 수락하면 새 정렬을 �
 `alignment: "start" | "center" | "end" | "justify"`를 보냅니다.
 `accept_revision`과 `reject_revision`도 이 문단 ID를 사용합니다.
 다른 문단 속성도 함께 달라지거나 보호 구조가 포함되면 읽기 전용으로 표시합니다.
+
+단일 텍스트 구간으로 된 일반 본문에서 글자 사이에 커서를 놓고 검토의
+`문단 나눔 기록`을 적용해 저장합니다. Word 문단 표시에 작성자·시각이
+남으며, 저장 후 커서는 뒤 문단의 시작으로 이동합니다. HTTP·MCP는
+현 리비전의 run ID와 전체 `expectedText`, 분리 앞부분의 정확한 `text`를
+`track_paragraph_break` 단독 작업으로 보냅니다. 일반 Enter와 기존 보호
+경계에서의 동작은 기존 편집 계약을 따릅니다.
 
 가져온 Word 문서에 `문단 나눔 삽입`이 있으면 검토에서 두 문단과 작성자·
 시각을 확인합니다. 수락하면 나뉜 문단을 유지하고, 거절하면 뒤 문단의 텍스트를

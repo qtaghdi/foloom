@@ -530,7 +530,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, edit)
 			continue
 		}
-		if op.Type == "track_run_text" || op.Type == "track_run_bold" || op.Type == "track_paragraph_alignment" {
+		if op.Type == "track_run_text" || op.Type == "track_run_bold" || op.Type == "track_paragraph_alignment" || op.Type == "track_paragraph_break" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || referenceCount >= 32 {
@@ -547,6 +547,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			var edit replacement
 			var err error
 			switch op.Type {
+			case "track_paragraph_break":
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX tracked paragraph split must stand alone")
+				}
+				_, styledTargets, _, inspectErr := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+				if inspectErr != nil {
+					return nil, inspectErr
+				}
+				edit, err = trackParagraphBreak(s.pkg.document, styledTargets[op.TargetID], op, usedParagraphIDs(root), author, revisionDate, revisionIDs, &nextRevisionID)
 			case "track_paragraph_alignment":
 				edit, err = trackedParagraphAlignment(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
 			case "track_run_bold":

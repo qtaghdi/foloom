@@ -7,7 +7,7 @@ const paragraphAlignments={start:'시작',center:'가운데',end:'끝',justify:'
 type ParagraphAlignment=keyof typeof paragraphAlignments;
 
 export function DocumentComments(props:{
-  snapshot?:Snapshot;target?:Paragraph;range?:CommentRange;disabled:boolean;pending:boolean;
+  snapshot?:Snapshot;target?:Paragraph;range?:CommentRange;disabled:boolean;pending:boolean;breakReady:boolean;onTrackBreak:()=>boolean;
   onApply:(operation:CommentOperation|RevisionReviewOperation|TrackTextOperation)=>boolean;onLocate:(id:string)=>void;
 }) {
   const [open,setOpen]=createSignal(false),[text,setText]=createSignal(''),[error,setError]=createSignal('');
@@ -81,6 +81,15 @@ export function DocumentComments(props:{
             </form>
           }</Show>
         </details>
+      </Show>
+      <Show when={props.target?.runs.some(run=>run.breakTrackable)}>
+        <div class="my-2 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+          <button type="button" class={buttonClass} disabled={disabled()||!props.breakReady} onClick={()=>{
+            if(props.onTrackBreak()){setError('');setOpen(false);}
+            else setError('현재 초안을 저장하거나 실행 취소한 뒤 다시 기록하세요.');
+          }}>문단 나눔 기록</button>
+          <Show when={!props.breakReady}><p class="text-xs text-slate-600">본문 글자 사이에 커서를 놓으세요.</p></Show>
+        </div>
       </Show>
       <Show when={props.target?.alignmentTrackable&&props.target} keyed>{paragraph=>
         <form class="my-2 flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2" onSubmit={event=>{

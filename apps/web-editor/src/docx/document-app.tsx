@@ -28,7 +28,7 @@ import { DocumentBoundaryToolbar } from './document-boundary-toolbar';
 import { DocumentImageToolbar } from './document-image-toolbar';
 import { printDocument, printPaperRules } from './print-layout';
 import { DocumentOutline } from './document-outline';
-import { DocumentParagraphMoveToolbar } from './document-paragraph-move-toolbar';
+import { DocumentBodyParagraphMoveToolbar, DocumentParagraphMoveToolbar } from './document-paragraph-move-toolbar';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
 import { DocumentMathToolbar, DocumentShapeToolbar } from './document-objects';
@@ -102,7 +102,7 @@ export function DocumentApp() {
       if(current)document.getElementById(`docx-paragraph-${current.documentChange!.key}`)?.focus();
     });
   };
-  const noteSplitPending = () => { state().snapshot; draftVersion(); return controller.pendingNoteSplit(); };
+  const paragraphSplitPending = () => { state().snapshot; draftVersion(); return controller.pendingParagraphSplit(); };
   const standalonePending = () => { state().snapshot; draftVersion(); return controller.pendingStandalone(); };
   const documentLinks = createMemo(() => {
     const snapshot = state().snapshot;
@@ -122,6 +122,13 @@ export function DocumentApp() {
     ? block.paragraph.runs.filter(run=>run.link && 'refreshNeeded' in run.link && run.link.refreshNeeded) : [])??[]);
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
+  const trackedBreakPoint = () => {
+    const selection = formattingSelection();
+    if (!selection || selection.anchor.runId!==selection.focus.runId || selection.anchor.offset!==selection.focus.offset) return;
+    const run = referenceParagraph()?.runs.find(item=>item.id===selection.focus.runId&&item.breakTrackable);
+    const offset = selection.focus.offset;
+    if (run && offset>0 && offset<run.text.length) return {run,offset};
+  };
   const commentRange = () => {
     const target = referenceParagraph();
     const selection = formattingSelection();
@@ -398,7 +405,13 @@ export function DocumentApp() {
       const changed=controller.replaceSearchMatches(ranges,text);
       if(changed)setDraftVersion(version=>version+1);
       return changed;
-    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentComments snapshot={state().snapshot} target={referenceParagraph()} range={commentRange()} pending={standalonePending()}
+    })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentComments snapshot={state().snapshot} target={referenceParagraph()} range={commentRange()} pending={standalonePending()} breakReady={Boolean(trackedBreakPoint())}
+      onTrackBreak={()=>{
+        const point=trackedBreakPoint();
+        if(!point||!controller.trackParagraphBreak(point.run,point.offset))return false;
+        setDraftVersion(v=>v+1);
+        return true;
+      }}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}
       onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading} pageCount={pageLayout().at(-1)?.number??1} onLocatePage={locatePage}/></>}
@@ -456,6 +469,16 @@ export function DocumentApp() {
     <div id="docx-tools-layout" hidden={toolGroup()!=='layout'}>
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentBodyParagraphMoveToolbar
+      canMove={direction=>{
+        draftVersion();
+        const selection=formattingSelection();
+        return Boolean(state().snapshot&&!state().saving&&!state().loading&&selection&&controller.canMoveBodyParagraph(direction,selection));
+      }}
+      onMove={direction=>{
+        const selection=formattingSelection();
+        if(selection&&controller.moveBodyParagraph(direction,selection))setDraftVersion(v=>v+1);
+      }}/>
     <DocumentParagraphMoveToolbar kind="bookmark" paragraphs={state().snapshot?.blocks.flatMap(block=>
       block.type==='paragraph'&&(block.paragraph.moveBookmarkUp||block.paragraph.moveBookmarkDown)?[block.paragraph]:[])??[]}
       pending={standalonePending()} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
@@ -489,7 +512,7 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} layout={pageLayout()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving||noteSplitPending()} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} layout={pageLayout()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving||paragraphSplitPending()} changes={changes()}
           selected={resolvedEntry(selectedChange())}
           onListLevel={(selection,delta)=>{const changed=controller.changeListLevel(selection,delta);if(changed)setDraftVersion(v=>v+1);return changed;}}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}

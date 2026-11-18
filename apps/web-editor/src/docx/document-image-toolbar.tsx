@@ -150,10 +150,14 @@ export function DocumentImageToolbar(props: {
                 const value=input.valueAsNumber;
                 const horizontalOffsetEmu=Math.round(value*12700);
                 const limit=picture.picture?.offsetLimitEmu;
+                const verticalInput=event.currentTarget.elements.namedItem('verticalOffset') as HTMLInputElement|null;
+                const verticalValue=verticalInput?.valueAsNumber??0;
+                const verticalOffsetEmu=Math.round(verticalValue*12700);
                 if(!Number.isFinite(value)||value<0||limit===undefined||horizontalOffsetEmu>limit||
-                  horizontalOffsetEmu===picture.picture?.horizontalOffsetEmu)return;
+                  !Number.isFinite(verticalValue)||verticalValue<0||verticalOffsetEmu>(picture.picture?.verticalOffsetLimitEmu??0)||
+                  horizontalOffsetEmu===picture.picture?.horizontalOffsetEmu&&verticalOffsetEmu===(picture.picture?.verticalOffsetEmu??0))return;
                 const accepted=props.onApply({type:'update_image',targetId:picture.id,
-                  image:{action:'set_placement',placement:'floating_offset',horizontalOffsetEmu}});
+                  image:{action:'set_placement',placement:'floating_offset',horizontalOffsetEmu,verticalOffsetEmu:verticalOffsetEmu||undefined}});
                 setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
               }}>
                 <label class="flex min-w-0 flex-col gap-1">단 왼쪽에서 거리 (pt)
@@ -162,7 +166,15 @@ export function DocumentImageToolbar(props: {
                     value={((picture.picture?.horizontalOffsetEmu??0)/12700).toFixed(2)}
                     class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
                 </label>
-                <button type="submit" class={buttonClass} disabled={disabled()}>그림 가로 위치 적용</button>
+                <Show when={picture.picture?.verticalOffsetLimitEmu!==undefined}>
+                  <label class="flex min-w-0 flex-col gap-1">문단 아래로 거리 (pt)
+                    <input name="verticalOffset" type="number" min="0" step="any" required disabled={disabled()}
+                      max={Math.floor((picture.picture?.verticalOffsetLimitEmu??0)/127)/100}
+                      value={((picture.picture?.verticalOffsetEmu??0)/12700).toFixed(2)}
+                      class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+                  </label>
+                </Show>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 위치 적용</button>
               </form>
             </Show>
             <Show when={picture.picture?.captionEditable || picture.picture?.caption}>
