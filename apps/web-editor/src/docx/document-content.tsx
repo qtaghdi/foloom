@@ -166,10 +166,14 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
   </div>}</For></div></>;
 }
 
+const eastAsianLetter=/^[\p{Script_Extensions=Han}\p{Script_Extensions=Hangul}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}\p{Script_Extensions=Bopomofo}]+$/u;
+
 function runStyle(run: Run) {
+  const letters=run.eastAsiaFont?run.text.replace(/[\p{P}\p{Z}\p{N}\s]/gu,''):'';
+  const font=letters && eastAsianLetter.test(letters)?run.eastAsiaFont:run.font;
   return {
     'font-size': run.sizeHalfPoints === undefined ? undefined : `${run.sizeHalfPoints / 2}pt`,
-    'font-family': run.font ? `${JSON.stringify(run.font)}, system-ui, sans-serif` : undefined,
+    'font-family': font ? `${JSON.stringify(font)}, system-ui, sans-serif` : undefined,
     color: run.color,
     'text-decoration': [run.underline?'underline':'',run.strike?'line-through':''].filter(Boolean).join(' ') || undefined,
     'background-color': ({yellow:'#ffff00',green:'#00ff00',cyan:'#00ffff',magenta:'#ff00ff',blue:'#0000ff',red:'#ff0000',darkBlue:'#000080',darkCyan:'#008080',darkGreen:'#008000',darkMagenta:'#800080',darkRed:'#800000',darkYellow:'#808000',darkGray:'#808080',lightGray:'#c0c0c0',black:'#000000',white:'#ffffff'} as Record<string,string>)[run.highlight??''],
