@@ -815,6 +815,14 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 클릭 동작만 사라집니다. HTTP·MCP는 링크 run ID에 `reference: { action: "unlink" }`를
 사용합니다. 복잡한 구조는 보호하고 공유 관계는 남겨 둡니다.
 
+다른 본문 문단의 `텍스트 상호 참조 삽입`에서 한 문단의 평문을 포함한 북마크를
+선택하면 Word REF 필드가 추가됩니다. HTTP·MCP는 문단 ID에
+`reference: { action: "insert_bookmark_ref", bookmark }`를 적용합니다.
+브라우저에서 참조의 텍스트를 확인하고 대상 문단으로 이동할 수 있습니다.
+북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
+참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
+[Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
+
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 각주의 번호와
