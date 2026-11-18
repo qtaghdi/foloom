@@ -320,11 +320,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var nextRevisionID int64
 	var revisionDate string
 	for _, op := range input.Operations {
-		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" {
+		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
-				return nil, fmt.Errorf("invalid DOCX bookmark move fields")
+				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
 			if moveTargets == nil {
 				_, moveTargets, _, err = inspectDocument(root, s.id, s.revision, s.pkg.styles)
@@ -332,7 +332,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 					return nil, err
 				}
 			}
-			edit, err := moveBookmarkedParagraph(s.pkg.document, moveTargets[op.TargetID], op.Type)
+			edit, err := movePreservedParagraph(s.pkg.document, moveTargets[op.TargetID], op.Type)
 			if err != nil {
 				return nil, err
 			}
