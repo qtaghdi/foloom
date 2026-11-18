@@ -350,6 +350,21 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			referenceCount++
 			continue
 		}
+		if op.Type == "resolve_comment" || op.Type == "reopen_comment" {
+			key := "comment:" + op.TargetID
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" ||
+				seen[key] || referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX comment state fields")
+			}
+			if err := s.pkg.setCommentDone(op.TargetID, op.Type == "resolve_comment", parts); err != nil {
+				return nil, err
+			}
+			seen[key] = true
+			referenceCount++
+			continue
+		}
 		if op.Type == "accept_revision" || op.Type == "reject_revision" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
