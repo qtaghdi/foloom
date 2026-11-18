@@ -125,7 +125,7 @@ func (p *documentPackage) tocHeadingText(root *node) (string, error) {
 }
 
 func tocCacheRun(field *node, data []byte) *node {
-	if tocObjectKind(field) != "toc" || field.parent == nil || !field.parent.is("p") ||
+	if tocObjectKind(field) == "" || field.parent == nil || !field.parent.is("p") ||
 		field.parent.parent == nil || !field.parent.parent.is("body") || len(field.parent.children) != 1 ||
 		!onOff(field.attr("dirty"), false) || strings.Contains(string(data[field.start:field.end]), "<!--") {
 		return nil
@@ -159,8 +159,12 @@ func (p *documentPackage) updateTableOfContents(t target) ([]replacement, error)
 	if err != nil {
 		return nil, err
 	}
+	return replaceTOCCache(run, content), nil
+}
+
+func replaceTOCCache(run *node, content string) []replacement {
 	if content == textContent(run) {
-		return nil, nil
+		return nil
 	}
-	return []replacement{{start: run.inner, end: run.endStart, data: []byte(inlineXML(content))}}, nil
+	return []replacement{{start: run.inner, end: run.endStart, data: []byte(inlineXML(content))}}
 }

@@ -962,6 +962,10 @@ Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
 목록을 갱신하면 페이지 번호와 링크를 계산합니다. HTTP·MCP는 대상 문단 ID에
 `reference: { action: "insert_figure_list" }` 또는
 `reference: { action: "insert_table_list" }`를 단독 작업으로 적용합니다.
+캡션이 바뀌면 `그림 목록 업데이트` 또는 `표 목록 업데이트`를 적용하고
+저장해 현재 캡션을 다시 모읍니다. HTTP·MCP는 목록 run ID에
+`reference: { action: "update_caption_list" }`를 단독 작업으로 적용합니다.
+잠겼거나 복합 형태인 목록, 복합 캡션은 원본을 보호합니다.
 [Word의 그림 및 표 목록](https://support.microsoft.com/en-gb/word/insert-a-table-of-figures)을 참고하세요.
 
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.

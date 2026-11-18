@@ -86,3 +86,70 @@ func TestInsertCaptionListRejectsUnsupportedCaptionsAndDuplicates(t *testing.T) 
 		})
 	}
 }
+
+func TestUpdateCaptionListPreservesSourceAndIndependentLists(t *testing.T) {
+	ctx := context.Background()
+	toc := func(code, text string) string {
+		return `<w:p><w:fldSimple w:dirty="true" w:instr="` + escapeText(code) + `"><w:r><w:t xml:space="preserve">` + text + `</w:t></w:r></w:fldSimple></w:p>`
+	}
+	body := bodyXML(toc(figureListInstruction, "Old figure") + toc(tableListInstruction, "Old table") +
+		captionFixture("Figure", figureSequence, "1", "New figure") +
+		captionFixture("Table", "SEQ Table", "1", "New table"))
+	session, filename := withDocument(t, body)
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, session)
+	apply := func(v Snapshot, index int, revision uint64, edit ReferenceEdit) (Snapshot, error) {
+		return session.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: revision, Operations: []Operation{
+			{Type: "update_reference", TargetID: v.Blocks[index].Paragraph.Runs[0].ID, Reference: &edit},
+		}}, "human")
+	}
+	if _, err := apply(v, 0, v.Revision+1, ReferenceEdit{Action: "update_caption_list"}); err == nil {
+		t.Fatal("stale caption list update was accepted")
+	}
+	if _, err := apply(v, 0, v.Revision, ReferenceEdit{Action: "update_caption_list", Text: "external field"}); err == nil {
+		t.Fatal("unexpected field data was accepted")
+	}
+	v, err := apply(v, 0, v.Revision, ReferenceEdit{Action: "update_caption_list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Blocks[0].Paragraph.Runs[0].Object.Text != "Figure 1. New figure" || v.Blocks[1].Paragraph.Runs[0].Object.Text != "Old table" {
+		t.Fatal("updating the figure list changed the table list")
+	}
+	v, err = apply(v, 1, v.Revision, ReferenceEdit{Action: "update_caption_list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := strings.NewReplacer(
+		`<w:t xml:space="preserve">Old figure</w:t>`, inlineXML("Figure 1. New figure"),
+		`<w:t xml:space="preserve">Old table</w:t>`, inlineXML("Table 1. New table"),
+	).Replace(body)
+	if string(reopened.pkg.document) != expected {
+		t.Fatal("update changed the caption list field instructions or surrounding content")
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the original document")
+	}
+}
+
+func TestUpdateCaptionListProtectsLockedField(t *testing.T) {
+	session, filename := withDocument(t, bodyXML(captionFixture("Figure", figureSequence, "1", "Revised")+
+		`<w:p><w:fldSimple w:dirty="true" w:fldLock="true" w:instr="`+escapeText(figureListInstruction)+`"><w:r><w:t>Locked</w:t></w:r></w:fldSimple></w:p>`))
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, session)
+	run := v.Blocks[1].Paragraph.Runs[0]
+	if run.Object == nil || run.Object.Editable {
+		t.Fatal("locked list was exposed as editable")
+	}
+	if _, err := session.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: run.ID, Reference: &ReferenceEdit{Action: "update_caption_list"}},
+	}}, "human"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("locked list update changed the file")
+	}
+}

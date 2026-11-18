@@ -112,11 +112,9 @@ export function DocumentApp() {
     return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) =>
       paragraph.runs.filter(run => (run.object?.kind==='footnote'||run.object?.kind==='endnote')&&run.object.editable)) : [];
   });
-  const documentTableOfContents = createMemo(() => {
-    const snapshot = state().snapshot;
-    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs)
-      .find(run => run.object?.kind==='toc' && run.object.editable) : undefined;
-  });
+  const documentReferenceLists = createMemo(() => state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ? block.paragraph.runs.filter(run=>run.object?.editable && ['toc','figure_list','table_list'].includes(run.object.kind))
+    : [])??[]);
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
   const commentRange = () => {
@@ -410,7 +408,7 @@ export function DocumentApp() {
     <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} toc={documentTableOfContents()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
+    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} referenceLists={documentReferenceLists()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}

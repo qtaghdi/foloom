@@ -126,3 +126,24 @@ func captionLabel(paragraph, field *node) (string, error) {
 	}
 	return strings.Join(strings.Fields(label.String()), " "), nil
 }
+
+func (p *documentPackage) updateCaptionList(t target) ([]replacement, error) {
+	var sequence string
+	switch t.kind {
+	case "figure_list":
+		sequence = "Figure"
+	case "table_list":
+		sequence = "Table"
+	default:
+		return nil, fmt.Errorf("protected DOCX caption list")
+	}
+	run := tocCacheRun(t.node, p.document)
+	if run == nil {
+		return nil, fmt.Errorf("protected DOCX caption list")
+	}
+	content, err := captionListText(t.paragraph.parent, sequence)
+	if err != nil {
+		return nil, err
+	}
+	return replaceTOCCache(run, content), nil
+}
