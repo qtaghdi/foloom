@@ -38,6 +38,7 @@ type Run struct {
 	SizeHalfPoints   int          `json:"sizeHalfPoints,omitempty"`
 	Color            string       `json:"color,omitempty"`
 	Font             string       `json:"font,omitempty"`
+	EastAsiaFont     string       `json:"eastAsiaFont,omitempty"`
 }
 
 // Layout fields are bounded preview hints. They never participate in writes.
@@ -191,6 +192,7 @@ type InlineStyle struct {
 	Italic         *bool   `json:"italic,omitempty"`
 	Color          string  `json:"color,omitempty"`
 	Font           string  `json:"font,omitempty"`
+	EastAsiaFont   string  `json:"eastAsiaFont,omitempty" jsonschema:"Override only the East Asian typeface; takes precedence over font for that slot"`
 	SizeHalfPoints *int    `json:"sizeHalfPoints,omitempty"`
 }
 type RunContent struct {
