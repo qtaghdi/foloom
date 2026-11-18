@@ -64,14 +64,17 @@ func markBookmarkParagraphs(root *node, paragraphs map[*node]*Paragraph, protect
 
 func movePreservedParagraph(data []byte, target target, operation string) (replacement, error) {
 	requiredKind := "bookmark_paragraph"
-	if operation == "move_hyperlink_up" || operation == "move_hyperlink_down" {
+	switch operation {
+	case "move_hyperlink_up", "move_hyperlink_down":
 		requiredKind = "hyperlink_paragraph"
+	case "move_note_up", "move_note_down":
+		requiredKind = "note_paragraph"
 	}
 	if target.kind != requiredKind {
 		return replacement{}, fmt.Errorf("DOCX movement requires a supported body paragraph")
 	}
 	first, second := target.paragraph, target.moveDown
-	if operation == "move_bookmark_up" || operation == "move_hyperlink_up" {
+	if operation == "move_bookmark_up" || operation == "move_hyperlink_up" || operation == "move_note_up" {
 		first, second = target.moveUp, target.paragraph
 	}
 	if first == nil || second == nil || first.end > second.start {

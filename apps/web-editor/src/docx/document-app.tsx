@@ -443,6 +443,10 @@ export function DocumentApp() {
       block.type==='paragraph'&&(block.paragraph.moveHyperlinkUp||block.paragraph.moveHyperlinkDown)?[block.paragraph]:[])??[]}
       pending={standalonePending()} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentParagraphMoveToolbar kind="note" paragraphs={state().snapshot?.blocks.flatMap(block=>
+      block.type==='paragraph'&&(block.paragraph.moveNoteUp||block.paragraph.moveNoteDown)?[block.paragraph]:[])??[]}
+      pending={standalonePending()} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
+      onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentBoundaryToolbar sectionBreaks={sectionBreaks()} target={boundaryParagraph()} trailingBreaks={state().snapshot?.blocks.flatMap(block=>block.type==='paragraph' && block.paragraph.pageBreakAfter ? [block.paragraph] : []) ?? []} pending={boundaryPending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
     </div>

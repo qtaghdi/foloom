@@ -75,7 +75,14 @@ func structuralParagraphContents(p *node, data []byte, allowedChild string, igno
 		if props := run.child("rPr"); props != nil && !safeProperties(props) {
 			return false
 		}
+		var noteRef *node
+		if allowedChild == "note" {
+			noteRef = plainBodyNoteReference(run)
+		}
 		for _, part := range run.children {
+			if part == noteRef {
+				continue
+			}
 			if !part.is("t") && !part.is("rPr") && !plainLineBreak(part) && !plainTab(part) {
 				return false
 			}

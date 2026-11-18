@@ -133,7 +133,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	blocks, targetsByID, unsupported, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+	blocks, targetsByID, unsupported, err := s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -401,14 +401,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, updated...)
 			continue
 		}
-		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" {
+		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" ||
+			op.Type == "move_note_up" || op.Type == "move_note_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
 			if moveTargets == nil {
-				_, moveTargets, _, err = inspectDocument(root, s.id, s.revision, s.pkg.styles)
+				_, moveTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
 				if err != nil {
 					return nil, err
 				}
