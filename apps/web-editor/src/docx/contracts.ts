@@ -110,7 +110,8 @@ export type ParagraphOperation = {
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
 export type ListSetup =
-  | {kind:'bullet'|'decimal'|'upperRoman'|'lowerRoman'|'upperLetter'|'lowerLetter';start?:number}
+  | {kind:'bullet';start?:number}
+  | {kind:'decimal'|'upperRoman'|'lowerRoman'|'upperLetter'|'lowerLetter';start?:number;compound?:boolean}
   | {sourceId:number;level?:number;start:number};
 export type ListDefinition=ListSetup & {key:string};
 export type ListOperation={type:'define_list';listDefinition:ListDefinition};

@@ -535,3 +535,40 @@ func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
 		t.Fatal("shared DOCX session did not expose the inserted control")
 	}
 }
+
+func TestDOCXMCPDefinesCompoundNumbering(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "outline.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Parent"}, {Type: "paragraph", Text: "Child"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, q := initial.Blocks[0].Paragraph, initial.Blocks[1].Paragraph
+	result, err := docxClient(t, api).CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+		SessionID: initial.ID, BaseRevision: initial.Revision,
+		Operations: []docx.Operation{
+			{Type: "define_list", ListDefinition: &docx.ListDefinition{Key: "outline", Kind: "decimal", Start: 3, Compound: true}},
+			{Type: "replace_paragraphs", TargetID: p.ID, EndTargetID: q.ID, ExpectedText: "Parent\nChild",
+				Paragraphs: []docx.ParagraphContent{
+					{SourceID: p.ID, Format: &docx.ParagraphFormat{List: &docx.ParagraphList{Key: "outline"}}, Runs: []docx.RunContent{{SourceID: p.Runs[0].ID, Text: "Parent"}}},
+					{SourceID: q.ID, Format: &docx.ParagraphFormat{List: &docx.ParagraphList{Key: "outline", Level: 1}}, Runs: []docx.RunContent{{SourceID: q.Runs[0].ID, Text: "Child"}}},
+				}},
+		},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP compound list: %v %+v", err, result)
+	}
+	after, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != initial.Revision+1 ||
+		after.Blocks[0].Paragraph.ListLabel != "3." || after.Blocks[1].Paragraph.ListLabel != "3.1." {
+		t.Fatal("the shared DOCX session did not expose the compound list")
+	}
+}
