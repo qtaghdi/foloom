@@ -26,9 +26,13 @@ func plainControlText(control *node, data []byte) ([]*node, string) {
 			return nil, ""
 		}
 	}
+	return plainTextRunNodes(content.children)
+}
+
+func plainTextRunNodes(runs []*node) ([]*node, string) {
 	var texts []*node
 	var value strings.Builder
-	for _, run := range content.children {
+	for _, run := range runs {
 		if !run.is("r") || strings.TrimSpace(run.text.String()) != "" || run.has("rPrChange") {
 			return nil, ""
 		}
@@ -52,8 +56,8 @@ func plainControlText(control *node, data []byte) ([]*node, string) {
 
 // Retain the common prefix and suffix in their original runs. Changed text
 // inherits the run at the start of the edit or the last run when appending.
-func controlTextEdits(data []byte, t target, next string) ([]replacement, error) {
-	before, after := []rune(t.text), []rune(next)
+func plainRunTextEdits(data []byte, nodes []*node, oldText, newText string) ([]replacement, error) {
+	before, after := []rune(oldText), []rune(newText)
 	first := 0
 	for first < len(before) && first < len(after) && before[first] == after[first] {
 		first++
@@ -66,13 +70,13 @@ func controlTextEdits(data []byte, t target, next string) ([]replacement, error)
 	var edits []replacement
 	offset := 0
 	inserted := false
-	for i, n := range t.controlTexts {
+	for i, n := range nodes {
 		old := []rune(n.text.String())
 		end := offset + len(old)
 		prefixEnd := min(end, max(offset, first))
 		suffixStart := max(offset, min(end, oldEnd))
 		value := string(before[offset:prefixEnd])
-		if !inserted && (first < end || i == len(t.controlTexts)-1) {
+		if !inserted && (first < end || i == len(nodes)-1) {
 			value += string(after[first:newEnd])
 			inserted = true
 		}

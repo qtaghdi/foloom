@@ -616,7 +616,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 		}
 		if op.Type == "update_control_text" {
-			changes, err := controlTextEdits(s.pkg.document, t, op.Text)
+			changes, err := plainRunTextEdits(s.pkg.document, t.controlTexts, t.text, op.Text)
 			if err != nil {
 				return nil, err
 			}
