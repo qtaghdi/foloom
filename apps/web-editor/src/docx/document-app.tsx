@@ -31,7 +31,7 @@ import { DocumentBookmarkMoveToolbar } from './document-bookmark-move-toolbar';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
 import { DocumentMathToolbar } from './document-objects';
-import { DocumentContentControlToolbar } from './document-content-control-toolbar';
+import { DocumentObjectTextToolbar } from './document-object-text-toolbar';
 import { paragraphs, restoreAnchoredPoint } from './paragraphs';
 import { DocumentTableToolbar } from './document-table-toolbar';
 import { EditorHeader, buttonClass, primaryButtonClass } from '../ui/editor-chrome';
@@ -409,9 +409,11 @@ export function DocumentApp() {
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentContentControlToolbar snapshot={state().snapshot} pending={standalonePending()}
+    <For each={['control','textbox'] as const}>{kind=>
+      <DocumentObjectTextToolbar kind={kind} snapshot={state().snapshot} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    }</For>
     <DocumentTableToolbar blocks={state().snapshot?.blocks??[]} insertAfter={insertTableAfter()} pending={tablePending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const applied=controller.editTable(operation);if(applied)setDraftVersion(v=>v+1);return applied;}}/>

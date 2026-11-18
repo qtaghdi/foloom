@@ -168,55 +168,71 @@ func (p *documentPackage) changeFootnote(t target, edit ReferenceEdit, changes m
 	return nil
 }
 
-func (p *documentPackage) deleteFootnote(t target, edit ReferenceEdit, changes map[string][]byte) ([]replacement, error) {
-	if t.kind != "footnote" || edit.Text != "" || edit.URL != "" || edit.Bookmark != "" ||
+func (p *documentPackage) deleteNote(kind string, t target, edit ReferenceEdit, changes map[string][]byte) ([]replacement, error) {
+	if t.kind != kind || edit.Text != "" || edit.URL != "" || edit.Bookmark != "" ||
 		!onlyNamespaceAttributes(t.node) || strings.Contains(string(p.document[t.node.start:t.node.end]), "<!--") {
-		return nil, fmt.Errorf("invalid DOCX footnote removal")
+		return nil, fmt.Errorf("invalid DOCX %s removal", kind)
 	}
-	id, err := strconv.ParseInt(t.node.child("footnoteReference").attr("id"), 10, 32)
+	id, err := strconv.ParseInt(t.node.child(kind+"Reference").attr("id"), 10, 32)
 	if err != nil || id < 1 {
-		return nil, fmt.Errorf("invalid DOCX footnote identifier")
+		return nil, fmt.Errorf("invalid DOCX %s identifier", kind)
 	}
 	matches := func(n *node) bool {
 		found, err := strconv.ParseInt(n.attr("id"), 10, 32)
 		return err == nil && found == id
 	}
-	found := 0
-	var findReferences func(n *node)
-	findReferences = func(n *node) {
-		if n.is("footnoteReference") && matches(n) {
-			found++
-		}
-		for _, child := range n.children {
-			findReferences(child)
-		}
+	body := t.paragraph.parent
+	if noteReferenceCounts(body, kind)[id] != 1 {
+		return nil, fmt.Errorf("shared DOCX %s cannot be removed", kind)
 	}
-	findReferences(t.paragraph.parent)
-	if found != 1 {
-		return nil, fmt.Errorf("shared DOCX footnote cannot be removed")
-	}
-	filename, root, err := p.notesPart("footnote", changes)
+	filename, root, err := p.notesPart(kind, changes)
 	if err != nil || root == nil {
-		return nil, fmt.Errorf("DOCX footnotes part unavailable")
+		return nil, fmt.Errorf("DOCX %ss part unavailable", kind)
 	}
 	var note *node
 	for _, child := range root.children {
-		if child.is("footnote") && matches(child) {
+		if child.is(kind) && matches(child) {
 			if note != nil {
-				return nil, fmt.Errorf("ambiguous DOCX footnote")
+				return nil, fmt.Errorf("ambiguous DOCX %s", kind)
 			}
 			note = child
 		}
 	}
-	if note == nil || footnoteTextTarget(note, root.source) == nil {
-		return nil, fmt.Errorf("protected DOCX footnote cannot be removed")
+	if note == nil || !editableNote(kind, note, root.source) ||
+		kind == "endnote" && !endnoteDeletionAllowed(t, endnoteBookmarkSpans(body)) {
+		return nil, fmt.Errorf("protected DOCX %s cannot be removed", kind)
 	}
 	raw := append([]byte(nil), root.source[:note.start]...)
 	changes[filename] = append(raw, root.source[note.end:]...)
 	return []replacement{{start: t.node.start, end: t.node.end}}, nil
 }
 
-func (p *documentPackage) projectNotes(kind string, blocks []Block, targets map[string]target) {
+func noteReferenceCounts(body *node, kind string) map[int64]int {
+	counts := map[int64]int{}
+	var visit func(*node)
+	visit = func(n *node) {
+		if n.is(kind + "Reference") {
+			if id, err := strconv.ParseInt(n.attr("id"), 10, 32); err == nil {
+				counts[id]++
+			}
+		}
+		for _, child := range n.children {
+			visit(child)
+		}
+	}
+	visit(body)
+	return counts
+}
+
+func editableNote(kind string, note *node, source []byte) bool {
+	if kind == "endnote" {
+		nodes, _ := plainEndnoteText(note, source)
+		return len(nodes) != 0
+	}
+	return footnoteTextTarget(note, source) != nil
+}
+
+func (p *documentPackage) projectNotes(kind string, body *node, blocks []Block, targets map[string]target) {
 	_, notes, err := p.notesPart(kind, nil)
 	if err != nil || notes == nil {
 		return
@@ -244,12 +260,13 @@ func (p *documentPackage) projectNotes(kind string, blocks []Block, targets map[
 			}
 		}
 		textByID[id] = reviewText(strings.Join(lines, "\n"), 1024)
-		if kind == "endnote" {
-			nodes, _ := plainEndnoteText(note, notes.source)
-			editableByID[id] = len(nodes) != 0
-		} else {
-			editableByID[id] = footnoteTextTarget(note, notes.source) != nil
-		}
+		editableByID[id] = editableNote(kind, note, notes.source)
+	}
+	var incoming map[int64]int
+	var bookmarks []endnoteBookmarkSpan
+	if kind == "endnote" {
+		incoming = noteReferenceCounts(body, kind)
+		bookmarks = endnoteBookmarkSpans(body)
 	}
 	for _, block := range blocks {
 		if block.Paragraph == nil {
@@ -258,7 +275,13 @@ func (p *documentPackage) projectNotes(kind string, blocks []Block, targets map[
 		for _, run := range block.Paragraph.Runs {
 			if run.Object != nil && run.Object.Kind == kind {
 				run.Object.Text = textByID[run.Object.noteID]
-				run.Object.Editable = targets[run.ID].kind == kind && editableByID[run.Object.noteID]
+				t := targets[run.ID]
+				run.Object.Editable = t.kind == kind && editableByID[run.Object.noteID]
+				if kind == "endnote" && run.Object.Editable {
+					id, err := strconv.ParseInt(run.Object.noteID, 10, 32)
+					run.Object.DeleteEditable = err == nil && id > 0 && incoming[id] == 1 && endnoteDeletionAllowed(t, bookmarks) &&
+						onlyNamespaceAttributes(t.node) && !strings.Contains(string(p.document[t.node.start:t.node.end]), "<!--")
+				}
 			}
 		}
 	}

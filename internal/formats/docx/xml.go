@@ -160,7 +160,7 @@ func escapeText(s string) string {
 
 type target struct {
 	trackable        bool
-	controlTexts     []*node
+	textStories      [][]*node
 	moveUp, moveDown *node
 	paragraph, run   *node
 	node             *node
@@ -180,6 +180,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		return nil, nil, false, fmt.Errorf("DOCX requires a transitional Word document body")
 	}
 	body := root.child("body")
+	boxesLinked := bytes.Contains(root.source, []byte("linkedTxbx")) && hasLinkedTextBox(root)
 	protected := map[*node]bool{}
 	fieldDepth := 0
 	var markFields func(*node)
@@ -325,7 +326,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					!p.has("fldSimple") && !p.has("fldChar") && !p.has("moveFrom") && !p.has("moveTo") {
 					if texts, value := plainControlText(r, root.source); len(texts) != 0 {
 						run.Object = &ObjectInfo{Kind: "control", Text: value, Label: reviewText(r.child("sdtPr").child("alias").attr("val"), 160), Editable: true}
-						targets[run.ID] = target{node: r, text: value, paragraph: p, kind: "update_control_text", controlTexts: texts}
+						targets[run.ID] = target{node: r, text: value, paragraph: p, kind: "update_control_text", textStories: [][]*node{texts}}
 					}
 				}
 				if r.is("hyperlink") {
@@ -376,6 +377,15 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			run.ID, run.Text, run.Editable = id(), text, editable
 			if !editable {
 				run.Object = objectPreview(r)
+				if stories := textBoxStories(r); len(stories) != 0 {
+					run.Object = &ObjectInfo{Kind: "textbox", Text: reviewText(textContent(stories[0]), 1024)}
+					if allowed && !protected[r] && p.parent == body && !boxesLinked {
+						if nodes, text := plainTextBoxStories(stories, root.source); len(nodes) != 0 {
+							run.Object.Text, run.Object.Editable = text, true
+							targets[run.ID] = target{node: r, paragraph: p, text: text, kind: "update_textbox_text", textStories: nodes}
+						}
+					}
+				}
 			}
 			if len(texts) == 0 && r.child("br") == trailingBreak && trailingBreak != nil &&
 				(len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
@@ -400,7 +410,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			if allowed && !protected[r] && p.parent == body && run.Object != nil && (run.Object.Kind == "footnote" || run.Object.Kind == "endnote") && run.Object.noteID != "" {
 				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: run.Object.Kind}
 			}
-			if !editable && r.child("drawing") != nil {
+			if !editable && r.child("drawing") != nil && targets[run.ID].kind == "" {
 				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "picture"}
 			}
 			if editable {
