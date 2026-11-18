@@ -40,6 +40,8 @@ const paragraphSchema = z.object({
 });
 const paperSize = z.number().int().min(2000).max(50000);
 const paperMargin = z.number().int().min(0).max(50000);
+export const maxHeaderFooterDistance = 31680;
+const headerFooterDistance = z.number().int().min(0).max(maxHeaderFooterDistance).optional();
 const pageSchema = z.object({
   width: paperSize, height: paperSize,
   top: paperMargin, right: paperMargin, bottom: paperMargin, left: paperMargin,
@@ -48,8 +50,8 @@ const headerFooterUpdateSchema=z.object({kind:z.enum(['header','footer']),varian
 const headerFooterInfoSchema=z.object({kind:z.enum(['header','footer']),variant:z.enum(['default','first','even']),linked:z.boolean(),sourceSectionId:z.string().optional(),pageNumber:z.boolean().optional(),totalPages:z.boolean().optional(),text:z.string().max(65536),editable:z.boolean(),truncated:z.boolean().optional()});
 export type HeaderFooterInfo=z.infer<typeof headerFooterInfoSchema>;
 const pageNumberFormatSchema=z.enum(['decimal','upperRoman','lowerRoman','upperLetter','lowerLetter']);
-export const sectionFormatSchema=z.object({pageNumberStart:z.number().int().min(-1).max(2147483647).optional(),pageNumberFormat:pageNumberFormatSchema.optional(),headerFooters:z.array(headerFooterUpdateSchema).max(6).optional(),firstPage:z.boolean().optional(),width:paperSize.optional(),height:paperSize.optional(),top:paperMargin.optional(),right:paperMargin.optional(),bottom:paperMargin.optional(),left:paperMargin.optional(),orientation:z.enum(['portrait','landscape']).optional(),columns:z.number().int().min(1).max(12).optional(),columnSpace:z.number().int().min(0).max(14400).optional(),breakType:z.enum(['nextPage','continuous','evenPage','oddPage','nextColumn']).optional()});
-const sectionSchema=z.object({pageNumberStart:z.number().int().min(0).max(2147483647).optional(),pageNumberFormat:z.string().optional(),headerFooters:z.array(headerFooterInfoSchema).max(6).optional(),firstPage:z.boolean().optional(),id:z.string(),startBlock:z.number().int().nonnegative(),endBlock:z.number().int().min(-1),page:pageSchema,orientation:z.enum(['portrait','landscape']),columns:z.number().int().min(1).max(12),columnSpace:z.number().int().min(0).max(14400),breakType:z.string().max(40),editable:z.boolean()});
+export const sectionFormatSchema=z.object({headerDistance:headerFooterDistance,footerDistance:headerFooterDistance,pageNumberStart:z.number().int().min(-1).max(2147483647).optional(),pageNumberFormat:pageNumberFormatSchema.optional(),headerFooters:z.array(headerFooterUpdateSchema).max(6).optional(),firstPage:z.boolean().optional(),width:paperSize.optional(),height:paperSize.optional(),top:paperMargin.optional(),right:paperMargin.optional(),bottom:paperMargin.optional(),left:paperMargin.optional(),orientation:z.enum(['portrait','landscape']).optional(),columns:z.number().int().min(1).max(12).optional(),columnSpace:z.number().int().min(0).max(14400).optional(),breakType:z.enum(['nextPage','continuous','evenPage','oddPage','nextColumn']).optional()});
+const sectionSchema=z.object({headerDistance:headerFooterDistance,footerDistance:headerFooterDistance,pageNumberStart:z.number().int().min(0).max(2147483647).optional(),pageNumberFormat:z.string().optional(),headerFooters:z.array(headerFooterInfoSchema).max(6).optional(),firstPage:z.boolean().optional(),id:z.string(),startBlock:z.number().int().nonnegative(),endBlock:z.number().int().min(-1),page:pageSchema,orientation:z.enum(['portrait','landscape']),columns:z.number().int().min(1).max(12),columnSpace:z.number().int().min(0).max(14400),breakType:z.string().max(40),editable:z.boolean()});
 export type SectionFormat=z.infer<typeof sectionFormatSchema>;
 export type SectionInfo=z.infer<typeof sectionSchema>;
 export type SectionOperation={type:'update_section';sectionId:string;section:SectionFormat};

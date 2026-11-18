@@ -135,3 +135,94 @@ func TestPageNumberingContinuesWithoutLosingChapterProperties(t *testing.T) {
 		t.Fatal("undo changed original bytes")
 	}
 }
+
+func TestHeaderFooterDistancesPreserveSectionContentsAndUndo(t *testing.T) {
+	ctx := context.Background()
+	s, path := withDocument(t, bodyXML(`<w:p><w:pPr><w:sectPr><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="540" w:gutter="0"/></w:sectPr></w:pPr><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>second</w:t></w:r></w:p><w:sectPr xmlns:c="urn:custom"><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="1080" w:footer="720" w:gutter="144" c:keep="yes"/></w:sectPr>`))
+	v := mustSnapshot(t, s)
+	header, footer := "Shared header", "Shared footer"
+	v, err := s.Apply(ctx, headerBatch(v, 0, HeaderFooterUpdate{Kind: "header", Variant: "default", Text: &header}, HeaderFooterUpdate{Kind: "footer", Variant: "default", Text: &footer}), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preserved := map[string][]byte{}
+	for _, part := range s.pkg.parts {
+		if part.header.Name != "word/document.xml" {
+			preserved[part.header.Name] = append([]byte(nil), part.data...)
+		}
+	}
+	baseline := fileBytes(t, path)
+	if v.Sections[1].HeaderDistance == nil || *v.Sections[1].HeaderDistance != 1080 {
+		t.Fatal("missing imported distance")
+	}
+	apply := func(header, footer *int) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{
+			Type: "update_section", SectionID: v.Sections[1].ID, Section: &SectionFormat{HeaderDistance: header, FooterDistance: footer},
+		}}}, "human")
+	}
+	zero, tooFar, negative := 0, 31681, -1
+	if _, err := apply(&tooFar, &zero); err == nil {
+		t.Fatal("out-of-range header distance accepted")
+	}
+	if _, err := apply(&zero, &negative); err == nil || !bytes.Equal(baseline, fileBytes(t, path)) {
+		t.Fatal("invalid distance changed the source")
+	}
+	if _, err := apply(&zero, nil); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := mustSnapshot(t, reopened)
+	first, second := next.Sections[0], next.Sections[1]
+	if first.HeaderDistance == nil || *first.HeaderDistance != 720 || first.FooterDistance == nil || *first.FooterDistance != 540 ||
+		second.HeaderDistance == nil || *second.HeaderDistance != 0 || second.FooterDistance == nil || *second.FooterDistance != 720 {
+		t.Fatalf("distance changes crossed section boundaries or lost explicit zero: %+v", next.Sections)
+	}
+	for _, kind := range []string{"header", "footer"} {
+		slot := headerSlot(t, next, 1, kind, "default")
+		if !slot.Linked || slot.SourceSectionID != first.ID {
+			t.Fatalf("%s inheritance changed after position edit: %+v", kind, slot)
+		}
+	}
+	for _, raw := range []string{`w:gutter="144"`, `c:keep="yes"`, `w:top="1440"`} {
+		if !strings.Contains(string(reopened.pkg.document), raw) {
+			t.Fatalf("lost %s", raw)
+		}
+	}
+	for name, data := range preserved {
+		if !bytes.Equal(data, reopened.pkg.partData(name, nil)) {
+			t.Fatalf("distance edit changed %s", name)
+		}
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(baseline, fileBytes(t, path)) {
+		t.Fatal("undo did not restore the exact package")
+	}
+}
+
+func TestHeaderDistanceCreatesCompletePageMarginWhenMissing(t *testing.T) {
+	s, _ := withDocument(t, bodyXML(`<w:p><w:r><w:t>body</w:t></w:r></w:p>`))
+	v := mustSnapshot(t, s)
+	if v.Sections[0].HeaderDistance != nil || v.Sections[0].FooterDistance != nil {
+		t.Fatal("missing distances projected as explicit")
+	}
+	header := 360
+	_, err := s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{
+		Type: "update_section", SectionID: v.Sections[0].ID, Section: &SectionFormat{HeaderDistance: &header},
+	}}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := parseXML(s.pkg.document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	margins := root.child("body").child("sectPr").child("pgMar")
+	for key, value := range map[string]string{"top": "1440", "right": "1440", "bottom": "1440", "left": "1440", "header": "360", "footer": "720", "gutter": "0"} {
+		if got := margins.attr(key); got != value {
+			t.Fatalf("margin %s = %q; want %q", key, got, value)
+		}
+	}
+}
