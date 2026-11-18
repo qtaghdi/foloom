@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
-import type { MathOperation, Paragraph, Run, Snapshot } from './contracts';
+import type { InsertRectangleOperation, MathOperation, Paragraph, Run, Snapshot } from './contracts';
 
 const labels:Record<NonNullable<Run['object']>['kind'],string> = {
   math:'수식',shape:'도형',textbox:'텍스트 상자',chart:'차트',smartart:'SmartArt',
@@ -8,7 +8,7 @@ const labels:Record<NonNullable<Run['object']>['kind'],string> = {
 };
 
 export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
-  return <span data-docx-opaque contentEditable={false} aria-label={labels[props.object.kind]}
+  return <Show when={props.object.rectangle} fallback={<span data-docx-opaque contentEditable={false} aria-label={labels[props.object.kind]}
     class="inline-block max-w-full break-words rounded border border-slate-300 bg-stone-50 px-1.5 align-middle text-sm">
     <span class="mr-1 text-xs text-slate-600">{labels[props.object.kind]}{props.object.editable?'':' · 읽기 전용'}</span>
     <Show when={props.object.fraction}>{fraction=>
@@ -24,7 +24,33 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
       </span>
     }</Show>
     <Show when={props.object.text}>{text=><span classList={{'font-serif':props.object.kind==='math'}}>{text()}</span>}</Show>
-  </span>;
+  </span>}>{rectangle=>
+    <span data-docx-rectangle data-docx-opaque contentEditable={false} role="img" aria-label="인라인 사각형"
+      class="inline-block max-w-full align-middle" style={{
+        width:`${rectangle().widthEmu/9525}px`,'aspect-ratio':`${rectangle().widthEmu}/${rectangle().heightEmu}`,
+        'background-color':`#${rectangle().fill}`,border:`1pt solid #${rectangle().stroke}`,
+      }}/>
+  }</Show>;
+}
+
+export function DocumentShapeToolbar(props:{
+  target?:Paragraph;pending:boolean;disabled:boolean;onApply:(operation:InsertRectangleOperation)=>boolean;
+}) {
+  const [error,setError]=createSignal('');
+  return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
+    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">도형</summary>
+    <div class="flex min-w-0 flex-wrap items-center gap-2 pb-2">
+      <button type="button" class={buttonClass} disabled={props.disabled||props.pending||!props.target?.structureEditable}
+        onClick={()=>{
+          const target=props.target;
+          if(!target?.structureEditable)return;
+          const accepted=props.onApply({type:'insert_rectangle',targetId:target.id});
+          setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+        }}>인라인 사각형 삽입</button>
+      <Show when={props.pending}><p class="basis-full text-slate-600">저장하거나 실행 취소하세요.</p></Show>
+      <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
+    </div>
+  </details>;
 }
 
 export function DocumentMathToolbar(props:{
