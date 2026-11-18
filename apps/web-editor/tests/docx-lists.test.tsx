@@ -93,3 +93,16 @@ it('keeps continuous levels and resets configured levels in draft list labels', 
   expect(preview.blocks.map(block=>block.type==='paragraph'&&block.paragraph.listLabel))
     .toEqual(['1.','2.','IV.','3.','V.','2.','4.','IV.']);
 });
+
+
+it('repeats the same letter after each group of 26 in imported and new lists', () => {
+  const numbered=structuredClone(base);
+  const p=numbered.blocks.find(block=>block.type==='paragraph');
+  if(p?.type!=='paragraph')throw new Error('paragraph fixture missing');
+  numbered.blocks=['first','second','third'].map(id=>({type:'paragraph',id,paragraph:{...p.paragraph,id,list:{id:7}}}));
+  numbered.lists=[{id:7,levels:[{level:0,kind:'upperLetter',text:'%1.',start:26}]}];
+  const labels=(snapshot:typeof numbered)=>snapshot.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph.listLabel]:[]);
+  expect(labels(previewLists(numbered))).toEqual(['Z.','AA.','BB.']);
+  for(const block of numbered.blocks)if(block.type==='paragraph')block.paragraph.list={key:'letters'};
+  expect(labels(previewLists(numbered,[{key:'letters',kind:'lowerLetter',start:26}]))).toEqual(['z.','aa.','bb.']);
+});

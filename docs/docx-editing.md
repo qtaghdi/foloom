@@ -524,9 +524,10 @@ numbering part와 사용자 정의 글머리를 보존합니다. 일부 고급 �
 따라 지정한 상위 단계에서 다시 시작하거나 번호를 계속 이어갑니다.
 [법률식 번호 지정](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.islegalnumberingstyle)이
 켜진 목록 단계는 해당 표시 문자열에 포함된 모든 번호를 십진수로 표시합니다.
-새 번호 목록을 만들기 전에 `목록 번호 형식`에서 일반 숫자 또는 대문자·소문자
-로마 숫자를 선택할 수 있습니다. `define_list`의 `kind`는 `decimal`,
-`upperRoman`, `lowerRoman` 또는 `bullet`을 사용합니다. 로마 숫자 목록은
+새 번호 목록을 만들기 전에 `목록 번호 형식`에서 일반 숫자, 대문자·소문자 로마 숫자 또는
+대문자·소문자 영문자를 선택할 수 있습니다. `define_list`의 `kind`는 `decimal`,
+`upperRoman`, `lowerRoman`, `upperLetter`, `lowerLetter` 또는 `bullet`을 사용합니다.
+영문자는 1~702 범위에서 Word의 반복 문자 번호를 표시합니다. Z 다음에는 AA와 BB가 이어집니다. 로마 숫자 목록은
 시작 값을 1~3,999 사이로 지정합니다.
 
 로마 숫자 목록은 1~3,999 범위의 대문자·소문자 번호를 표시합니다. 다른 미지원 형식은 형식 이름으로 표시합니다. 기존 공유 번호 정의 자체를
@@ -818,10 +819,13 @@ HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 편집 가능한 본문 문단에서 `미주 삽입`을 선택하면 문단 끝에 미주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_endnote", text }`를 적용합니다.
 미주 내용은 참조 옆에 표시하며, Word 미주 part와 번호 ID는 각주와 별도로 관리합니다.
-미주 본문 수정과 삭제는 Word에서 할 수 있습니다.
+`기존 각주·미주`에서 기본 번호와 한 문단의 평문을 포함한 미주를 골라 수정합니다.
+HTTP·MCP는 미주 run ID에 `reference: { action: "set_endnote_text", text }`를 적용합니다.
+미주 번호와 본문 참조, 다른 각주, 변경하지 않은 텍스트의 서식은 유지합니다.
+미주 삭제와 복합 미주 편집은 Word에서 할 수 있습니다.
 [Word 미주 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.endnotes?view=openxml-3.0.1)을 사용합니다.
 
-`기존 각주`에서 편집 가능한 각주를 고르면 한 줄 텍스트를 수정할 수 있습니다.
+`기존 각주·미주`에서 편집 가능한 각주를 고르면 한 줄 텍스트를 수정할 수 있습니다.
 HTTP·MCP는 본문의 각주 run ID에 `reference: { action: "set_footnote_text", text }`를
 적용합니다. 각주 ID와 본문 참조 및 다른 각주의 내용은 유지합니다.
 복합 각주는 내용을 미리 볼 수 있습니다.
@@ -858,7 +862,14 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 선택한 전체 run에 주석을 연결합니다.
 
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
-보호합니다. 답글·해결과 변경 추적 작성은 현재 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+보호합니다. 주석 답글과 해결은 현재 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+
+검토의 `텍스트 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
+교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존
+텍스트는 삭제 변경으로, 교체 텍스트는 삽입 변경으로 기록되며 두 변경에 원래
+서식과 작성자·시각이 유지됩니다. HTTP·MCP는 `track_run_text`에 현재 run ID,
+정확한 `expectedText`와 새 `text`를 보냅니다. 서식 자체의 추적 변경이나
+필드·북마크·주석을 포함한 보호 범위에서는 이 도구를 사용할 수 없습니다.
 
 검토의 변경 추적 목록에서 기존 본문 텍스트 삽입·삭제를 하나씩
 수락하거나 거절하고 저장합니다. HTTP·MCP는 현재 변경 run ID에

@@ -129,6 +129,8 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 			maxStart = 9999
 		case "upperRoman", "lowerRoman":
 			maxStart = 3999
+		case "upperLetter", "lowerLetter":
+			maxStart = 702
 		default:
 			return nil, numberingCatalog{}, fmt.Errorf("unsupported DOCX list format")
 		}
@@ -327,6 +329,16 @@ func formatListNumber(value int, format string) string {
 	switch format {
 	case "decimal", "bullet":
 		return strconv.Itoa(value)
+	case "upperLetter", "lowerLetter":
+		if value < 1 || value > 702 {
+			return ""
+		}
+		// Word repeats letters at each block of 26: Y, Z, AA, BB.
+		base := 'A'
+		if format == "lowerLetter" {
+			base = 'a'
+		}
+		return strings.Repeat(string(base+rune((value-1)%26)), (value-1)/26+1)
 	case "upperRoman", "lowerRoman":
 		if value < 1 || value > 3999 {
 			return ""
