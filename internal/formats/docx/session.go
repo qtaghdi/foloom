@@ -295,6 +295,21 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var edits []replacement
 	headerCount := 0
 	var drawingID uint64
+	nextDrawingID := func() (uint32, error) {
+		if drawingID == 0 {
+			next, err := s.pkg.availableDrawingID()
+			if err != nil {
+				return 0, err
+			}
+			drawingID = uint64(next)
+		}
+		if drawingID > 1<<32-1 {
+			return 0, fmt.Errorf("DOCX drawing IDs exhausted")
+		}
+		id := uint32(drawingID)
+		drawingID++
+		return id, nil
+	}
 	imageCount := 0
 	textBytes := 0
 	structuralBytes := 0
@@ -347,6 +362,21 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, err
 			}
 			edits = append(edits, edit)
+			referenceCount++
+			continue
+		}
+		if op.Type == "resolve_comment" || op.Type == "reopen_comment" {
+			key := "comment:" + op.TargetID
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" ||
+				seen[key] || referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX comment state fields")
+			}
+			if err := s.pkg.setCommentDone(op.TargetID, op.Type == "resolve_comment", parts); err != nil {
+				return nil, err
+			}
+			seen[key] = true
 			referenceCount++
 			continue
 		}
@@ -442,6 +472,22 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
 		}
+		if op.Type == "insert_textbox" {
+			t := targets[op.TargetID]
+			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
+				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" ||
+				len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "" {
+				return nil, fmt.Errorf("DOCX text box requires plain text and an editable body paragraph")
+			}
+			id, err := nextDrawingID()
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, appendDrawingRun(s.pkg.document, t.paragraph, inlineTextBox(id, op.Text)))
+			continue
+		}
 		if op.Type == "update_image" {
 			target, ok := targets[op.TargetID]
 			if !ok || op.Image == nil || op.ListDefinition != nil || op.Table != nil || op.Math != nil || op.Comment != nil || op.Reference != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
@@ -454,18 +500,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" {
 				edit, err = s.pkg.pictureUpdateReplacement(target, *op.Image, parts)
 			} else {
-				if drawingID == 0 {
-					next, err := s.pkg.availableDrawingID()
-					if err != nil {
-						return nil, err
-					}
-					drawingID = uint64(next)
+				id, allocationErr := nextDrawingID()
+				if allocationErr != nil {
+					return nil, allocationErr
 				}
-				if drawingID > 1<<32-1 {
-					return nil, fmt.Errorf("DOCX drawing IDs exhausted")
-				}
-				edit, err = s.pkg.imageInsertion(s.pkg.document, target, *op.Image, uint32(drawingID), parts)
-				drawingID++
+				edit, err = s.pkg.imageInsertion(s.pkg.document, target, *op.Image, id, parts)
 			}
 			if err != nil {
 				return nil, err
@@ -593,8 +632,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			return nil, fmt.Errorf("unsupported, duplicate or stale DOCX target")
 		}
 		seen[op.TargetID] = true
-		if op.Type == "update_control_text" && (len(op.Text) > 1024 || !validText(op.Text) || op.SectionID != "") {
-			return nil, fmt.Errorf("DOCX control requires plain text of up to 1024 bytes")
+		editingObjectText := op.Type == "update_control_text" || op.Type == "update_textbox_text"
+		if editingObjectText && (len(op.Text) > 1024 || !validText(op.Text) || op.SectionID != "") {
+			return nil, fmt.Errorf("DOCX object requires plain text of up to 1024 bytes")
 		}
 		if op.ExpectedText != t.text {
 			return nil, fmt.Errorf("DOCX expected text mismatch")
@@ -615,12 +655,14 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
 			}
 		}
-		if op.Type == "update_control_text" {
-			changes, err := plainRunTextEdits(s.pkg.document, t.controlTexts, t.text, op.Text)
-			if err != nil {
-				return nil, err
+		if editingObjectText {
+			for _, story := range t.textStories {
+				changes, err := plainRunTextEdits(s.pkg.document, story, t.text, op.Text)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, changes...)
 			}
-			edits = append(edits, changes...)
 			continue
 		}
 		opening := string(s.pkg.document[n.start:n.inner])

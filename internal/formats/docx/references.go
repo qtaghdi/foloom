@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -20,12 +20,14 @@ type ReferenceEdit struct {
 }
 
 type BookmarkInfo struct {
+	TextReference  bool   `json:"textReference,omitempty"`
 	Name           string `json:"name"`
 	ParagraphID    string `json:"paragraphId"`
 	RenameEditable bool   `json:"renameEditable,omitempty"`
 }
 
 type LinkInfo struct {
+	Field    bool   `json:"field,omitempty"`
 	URL      string `json:"url,omitempty"`
 	Bookmark string `json:"bookmark,omitempty"`
 }
@@ -149,6 +151,15 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 			return nil, err
 		}
 		return appendRun(marker), nil
+	case "insert_bookmark_ref":
+		if edit.URL != "" || edit.Text != "" {
+			return nil, fmt.Errorf("unexpected DOCX bookmark field data")
+		}
+		field, err := bookmarkFieldXML(bookmarks, edit.Bookmark)
+		if err != nil {
+			return nil, err
+		}
+		return appendRun(field), nil
 	case "insert_bookmark":
 		key := strings.ToLower(edit.Bookmark)
 		if edit.Text != "" || edit.URL != "" || !bookmarkName.MatchString(edit.Bookmark) || bookmarks.names[key] != 0 || bookmarks.highest >= 2147483647 {
@@ -288,7 +299,8 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 		return bookmarks
 	}
 	index := readBookmarks(root)
-	names := map[string]bool{}
+	names := map[string]string{}
+	referenceTexts := map[string]string{}
 	blockIndex := 0
 	for _, child := range root.child("body").children {
 		if !child.is("p") && !child.is("tbl") {
@@ -305,8 +317,14 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 			}
 			if marker.is("bookmarkStart") && index.safeStart(marker) {
 				name := attribute(marker, wordNS, "name")
-				names[name] = true
-				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID, RenameEditable: targets[block.Paragraph.ID].kind == "bookmark_paragraph"})
+				key := strings.ToLower(name)
+				names[key] = name
+				text := bookmarkedPlainText(&index, marker)
+				if text != "" {
+					referenceTexts[key] = text
+				}
+				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID,
+					RenameEditable: targets[block.Paragraph.ID].kind == "bookmark_paragraph", TextReference: text != ""})
 			}
 		}
 	}
@@ -330,7 +348,17 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 		for i := range paragraph.Runs {
 			run := &paragraph.Runs[i]
 			t, ok := targets[run.ID]
-			if !ok || t.kind != "hyperlink" || strings.TrimSpace(run.Text) == "" {
+			if !ok {
+				continue
+			}
+			if t.kind == "bookmark_ref" {
+				key := strings.ToLower(t.text)
+				if text := referenceTexts[key]; text != "" {
+					run.Text, run.Link = text, &LinkInfo{Bookmark: names[key], Field: true}
+				}
+				continue
+			}
+			if t.kind != "hyperlink" || strings.TrimSpace(run.Text) == "" {
 				continue
 			}
 			id, anchor := attribute(t.node, officeRelNS, "id"), attribute(t.node, wordNS, "anchor")
@@ -341,8 +369,8 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 				if raw := external[id]; raw != "" {
 					run.Link = &LinkInfo{URL: raw}
 				}
-			} else if id == "" && names[anchor] {
-				run.Link = &LinkInfo{Bookmark: anchor}
+			} else if id == "" && names[strings.ToLower(anchor)] != "" {
+				run.Link = &LinkInfo{Bookmark: names[strings.ToLower(anchor)]}
 			}
 		}
 	}
