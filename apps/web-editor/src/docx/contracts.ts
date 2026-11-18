@@ -93,7 +93,10 @@ export type ParagraphOperation = {
  paragraphs: Array<{ sourceId: string; format?: ParagraphFormat; runs: Array<{ sourceId: string; text: string; style?: InlineStyle }> }>;
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
-export type ListDefinition={key:string;kind:'bullet'|'decimal'|'upperRoman'|'lowerRoman'|'upperLetter'|'lowerLetter';start?:number};
+export type ListSetup =
+  | {kind:'bullet'|'decimal'|'upperRoman'|'lowerRoman'|'upperLetter'|'lowerLetter';start?:number}
+  | {sourceId:number;start:number};
+export type ListDefinition=ListSetup & {key:string};
 export type ListOperation={type:'define_list';listDefinition:ListDefinition};
 export type ParagraphList=z.infer<typeof paragraphListSchema>;
 export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column' | 'set_row_height';

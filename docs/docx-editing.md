@@ -534,6 +534,18 @@ numbering part와 사용자 정의 글머리를 보존합니다. 일부 고급 �
 다른 내용으로 덮어쓰는 UI는 제공하지 않습니다.
 
 
+같은 기존 번호 목록의 최상위 문단을 선택하고 `다시 시작할 목록 번호`를
+입력한 뒤 `선택한 목록 번호 다시 시작`을 누르면 선택한 항목에 새 번호
+인스턴스가 적용됩니다. 원래 접두어·접미어, 들여쓰기와 하위 단계 정의가
+유지됩니다. 선택 밖 문단은 기존 목록에서 남은 항목 순서에 따라 이어집니다.
+가져온 글머리·미지원 형식과 서로 다른 목록 또는 수준을 섞은 선택은 제외합니다.
+
+HTTP·MCP에서 `define_list`의 `listDefinition: { key, sourceId, start }`를
+사용하고 같은 batch의 문단 변경에 `list: { key, level: 0 }`을 지정합니다.
+`sourceId`는 snapshot의 기존 목록 ID입니다. 새 인스턴스는 복제한 `abstractNum`으로
+다른 목록과 카운터를 분리하고 첫 단계에만 [Word의 시작값 재정의](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.startoverridenumberingvalue)를 씁니다.
+
+
 ## 문단 탭 위치와 문자
 
 본문 선택 뒤 `탭 위치·정렬`을 열어 위치(pt), 왼쪽·가운데·오른쪽·소수점·세로선
