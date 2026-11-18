@@ -289,7 +289,7 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 			}
 		}
 		var err error
-		raw, err = p.patchHeaderFooters(raw, f.HeaderFooters, index, changes)
+		raw, err = p.patchHeaderFooters(raw, f.HeaderFooters, index, headers, changes)
 		if err != nil {
 			return replacement{}, err
 		}

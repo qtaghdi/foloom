@@ -651,6 +651,18 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 계산값 대신 필드 위치를 보여 줍니다.
 [Word 필드 코드 목록](https://support.microsoft.com/en-us/word/list-of-field-codes-in-word)에서 NUMPAGES를 확인할 수 있습니다.
 
+두 필드를 모두 켜면 `한 줄에 쪽 번호 / 전체 쪽 수`를 선택할 수 있습니다.
+선택한 구역과 페이지 종류에 `PAGE / NUMPAGES`를 한 문단으로 저장하며
+끄면 두 필드를 각각 이전과 같이 한 줄씩 표시합니다. 다른 구역에 연결된
+머리글·바닥글에도 해당 배치가 상속됩니다. 브라우저는 필드 자리와 배치를
+미리 보여 주며 실제 번호는 문서를 여는 편집기가 계산합니다.
+
+HTTP·MCP는 `update_section.section.headerFooters`에서 두 필드와
+`compactPageNumbers: true`를 사용합니다. 기존에 두 필드를 사용 중이면
+배치만 바꿀 수도 있습니다. `compactPageNumbers: false`는 두 줄 배치로
+돌리며, 필드 하나를 해제하면 남은 필드만 표시합니다. 임의 문구나 여러 필드를
+조합한 원본 머리글·바닥글은 그대로 보존합니다.
+
 ### 문단 페이지 나눔과 구역 나눔
 
 `구역 나눔 제거`에서 경계를 선택하고 저장하면 앞뒤 구역을 합칩니다.
