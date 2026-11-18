@@ -719,11 +719,14 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 표시 영역의 바깥 크기와 그림 파일·관계·설명은 유지합니다.
 [DrawingML 원본 자르기](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.sourcerectangle)를 사용합니다.
 
-기본 인라인 PNG·JPEG는 `그림 180도 회전`으로 방향을 바꾸고
-`그림 방향 되돌리기`로 복원할 수 있습니다. 크기, 원본 파일과 자르기 범위는 유지합니다.
-HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rotation: 180 }`을
-보냅니다. `rotation: 0`은 기본 방향으로 되돌립니다. 회전 뒤 자르기 비율은 원본
-이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
+기본 인라인 PNG·JPEG의 `그림 방향`에서 시계 방향 90도, 180도, 270도 또는
+`기본 방향`을 고른 뒤 `그림 방향 적용`을 누릅니다. 90도와 270도에서는
+브라우저 미리보기가 회전된 폭과 높이로 문단 공간을 확보합니다. 그림 크기 속성,
+원본 파일, 관계와 자르기 범위는 저장 후에도 유지합니다. HTTP·MCP에서는
+`update_image`에 그림 run ID와 `image: { action: "rotate", rotation: 90 }`을 보냅니다.
+`rotation: 0`은 기본 방향을 복원합니다. 회전 뒤에는 원본 이미지에서 자를 변을
+기준으로 비율을 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
+[Word 인라인 그림 배치](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.inline)를 참고하세요.
 
 
 ### 인쇄와 PDF 저장

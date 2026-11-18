@@ -2,11 +2,12 @@ package docx
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
 // DrawingML stores each degree as 60,000 units.
-const halfTurnDrawingAngle = "10800000"
+const drawingUnitsPerDegree = 60_000
 
 func basicPictureAngle(transform *node) int {
 	rotation := 0
@@ -17,13 +18,12 @@ func basicPictureAngle(transform *node) int {
 		if attr.Name.Space != "" || attr.Name.Local != "rot" {
 			return -1
 		}
-		switch attr.Value {
-		case "0":
-		case halfTurnDrawingAngle, "-" + halfTurnDrawingAngle:
-			rotation = 180
-		default:
+		units, err := strconv.Atoi(attr.Value)
+		if err != nil || units <= -360*drawingUnitsPerDegree || units >= 360*drawingUnitsPerDegree ||
+			units%(90*drawingUnitsPerDegree) != 0 {
 			return -1
 		}
+		rotation = (units/drawingUnitsPerDegree + 360) % 360
 	}
 	return rotation
 }
@@ -55,7 +55,7 @@ func supportedPictureRotation(inline *node, data []byte) (*node, int, bool) {
 
 func rotateInlinePicture(data []byte, inline *node, rotation int) (replacement, error) {
 	transform, current, ok := supportedPictureRotation(inline, data)
-	if !ok || (rotation != 0 && rotation != 180) || rotation == current ||
+	if !ok || (rotation < 0 || rotation >= 360 || rotation%90 != 0) || rotation == current ||
 		strings.Contains(string(data[transform.start:transform.end]), "<!--") {
 		return replacement{}, fmt.Errorf("unsupported DOCX picture rotation")
 	}
@@ -64,7 +64,7 @@ func rotateInlinePicture(data []byte, inline *node, rotation int) (replacement, 
 	if rotation == 0 {
 		remove = []string{"rot"}
 	} else {
-		values["rot"] = halfTurnDrawingAngle
+		values["rot"] = strconv.Itoa(rotation * drawingUnitsPerDegree)
 	}
 	open, _ := scopedOpening(transform, data, false)
 	open, err := patchOpeningAttributes(open, "", values, remove)

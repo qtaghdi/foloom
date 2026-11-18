@@ -107,11 +107,26 @@ export function DocumentImageToolbar(props: {
               <button type="submit" class={buttonClass} disabled={disabled()}>비율 유지 크기 변경</button>
             </form>
             <Show when={picture.picture?.rotationEditable}>
-              <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
-                const rotation=picture.picture?.rotation===180?0:180;
+              <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if (disabled()) return;
+                const select=event.currentTarget.elements.namedItem('rotation') as HTMLSelectElement;
+                const rotation=Number(select.value);
+                if ((rotation!==0&&rotation!==90&&rotation!==180&&rotation!==270) ||
+                    rotation===(picture.picture?.rotation??0)) return;
                 const changed=props.onApply({type:'update_image',targetId:picture.id,image:{action:'rotate',rotation}});
                 setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
-              }}>{picture.picture?.rotation===180?'그림 방향 되돌리기':'그림 180도 회전'}</button>
+              }}>
+                <label class="flex flex-col gap-1">그림 방향
+                  <select name="rotation" aria-label="그림 방향" class="editor-select min-h-11" value={picture.picture?.rotation??0} disabled={disabled()}>
+                    <option value={0}>기본 방향</option>
+                    <option value={90}>90도</option>
+                    <option value={180}>180도</option>
+                    <option value={270}>270도</option>
+                  </select>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 방향 적용</button>
+              </form>
             </Show>
             <Show when={picture.picture?.cropEditable}>
               <form class="flex basis-full flex-wrap items-end gap-2" onSubmit={event=>{
@@ -129,7 +144,7 @@ export function DocumentImageToolbar(props: {
                 setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
               }}>
                 <For each={sides}>{side=>
-                  <label class="flex flex-col gap-1">{picture.picture?.rotation===180?'원본 ':''}{cropSides[side]} 자르기 (%)
+                  <label class="flex flex-col gap-1">{picture.picture?.rotation?'원본 ':''}{cropSides[side]} 자르기 (%)
                     <input name={side} type="number" min="0" max="99" step=".001" required disabled={disabled()}
                       value={(picture.picture?.crop?.[side]??0)/1000} class="min-h-11 w-20 rounded border border-slate-300 px-2"/>
                   </label>

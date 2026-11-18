@@ -235,7 +235,7 @@ func TestDOCXInlinePictureHalfTurnKeepsCropAndMedia(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := fileBytes(t, filename)
-	angle := 90
+	angle := 45
 	run := v.Blocks[0].Paragraph.Runs[1]
 	if _, err := apply(v, run.ID, &ImageEdit{Action: "rotate", Rotation: &angle}); err == nil ||
 		!bytes.Equal(before, fileBytes(t, filename)) {
@@ -271,5 +271,68 @@ func TestDOCXInlinePictureHalfTurnKeepsCropAndMedia(t *testing.T) {
 	historyRestore(t, reopened, "undo")
 	if !bytes.Equal(before, fileBytes(t, filename)) {
 		t.Fatal("undo did not restore the original picture XML")
+	}
+}
+
+func TestDOCXInlinePictureQuarterTurnsKeepIntrinsicSize(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>image</w:t></w:r></w:p>`))
+	var pngBytes bytes.Buffer
+	if err := png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 4, 2))); err != nil {
+		t.Fatal(err)
+	}
+	apply := func(s *Session, id string, edit ImageEdit) (Snapshot, error) {
+		v := mustSnapshot(t, s)
+		return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+			{Type: "update_image", TargetID: id, Image: &edit},
+		}}, "human")
+	}
+	v := mustSnapshot(t, s)
+	v, err := apply(s, v.Blocks[0].ID, ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pngBytes.Bytes()), Alt: "quarter turns", WidthEMU: 400000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err = apply(s, v.Blocks[0].Paragraph.Runs[1].ID, ImageEdit{Action: "crop", Crop: &ImageCrop{Left: 12000, Bottom: 5000}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline := fileBytes(t, filename)
+	before := s.pkg.document
+	for _, tc := range []struct {
+		angle int
+		units string
+	}{{90, "5400000"}, {270, "16200000"}, {0, ""}} {
+		run := v.Blocks[0].Paragraph.Runs[1]
+		if _, err := apply(s, run.ID, ImageEdit{Action: "rotate", Rotation: &tc.angle}); err != nil {
+			t.Fatal(err)
+		}
+		s, err = Open(ctx, filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v = mustSnapshot(t, s)
+		run = v.Blocks[0].Paragraph.Runs[1]
+		picture := run.Picture
+		if picture == nil || picture.Rotation != tc.angle || !picture.RotationEditable ||
+			picture.WidthEMU != 400000 || picture.HeightEMU != 200000 || picture.Alt != "quarter turns" ||
+			picture.Crop == nil || *picture.Crop != (ImageCrop{Left: 12000, Bottom: 5000}) {
+			t.Fatalf("angle %d reopens as %+v", tc.angle, picture)
+		}
+		if tc.units != "" && !strings.Contains(string(s.pkg.document), `rot="`+tc.units+`"`) {
+			t.Fatalf("direction %d was not saved in the native transform", tc.angle)
+		}
+		if tc.angle == 0 && strings.Contains(string(s.pkg.document), ` rot="`) {
+			t.Fatal("restoring the default direction must remove the rotation")
+		}
+		media, _, err := s.Picture(ctx, run.ID)
+		if err != nil || !bytes.Equal(media, pngBytes.Bytes()) {
+			t.Fatal("rotation changed media bytes")
+		}
+	}
+	for range 3 {
+		historyRestore(t, s, "undo")
+	}
+	if !bytes.Equal(before, s.pkg.document) || !bytes.Equal(baseline, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover the exact original document")
 	}
 }
