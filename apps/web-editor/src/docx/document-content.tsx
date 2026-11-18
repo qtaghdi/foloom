@@ -1,5 +1,6 @@
 import { TabText, layoutTabCharacters } from './tab-layout';
 import { resolveHeaderText } from './document-header-footer';
+import { previewHeaderVariants } from './sections';
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import type { PasteMode, ClipboardParagraph } from './clipboard';
@@ -62,18 +63,9 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
    const p=info.page,width=`min(100cqi, ${p.width/15}px)`;
    return {'--docx-print-paper':printPaperFor(props.snapshot,info),width:`${p.width/15}px`,'max-width':'100%','min-block-size':`calc(${width} * ${p.height/p.width})`,'--paper-insets':[p.top,p.right,p.bottom,p.left].map(value=>`calc(${width} * ${value/p.width})`).join(' ')};
   };
-  const pageOrdinals=createMemo(()=>{
-   let previous:string|undefined, ordinal=0;
-   return props.pages.map(page=>{
-    const section=pageSection(page)?.id;
-    ordinal=section===previous?ordinal+1:1;
-    previous=section;
-    return ordinal;
-   });
-  });
+  const headerVariants=createMemo(()=>previewHeaderVariants(props.pages.map(pageSection),props.snapshot.evenAndOddHeaders));
   const headerText=(page:PreviewPage,index:number,kind:'header'|'footer')=>{
-   const section=pageSection(page),ordinal=pageOrdinals()[index]??1;
-   const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
+   const section=pageSection(page),variant=headerVariants()[index]??'default';
    const slot=section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant);
    const text=resolveHeaderText(props.snapshot.sections??[],slot);
    return [text,slot?.pageNumber?'쪽 번호 필드':'',slot?.totalPages?'전체 쪽 수 필드':''].filter(Boolean).join('\n');

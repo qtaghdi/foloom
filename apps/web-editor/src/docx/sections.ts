@@ -13,6 +13,31 @@ export function validateSection(section:SectionInfo):string {
 }
 
 
+// Only explicit page groups and ordinary next-page section breaks contribute
+// to a continued page number. The browser does not lay out implicit pages.
+export function previewHeaderVariants(
+ pages: readonly (SectionInfo|undefined)[],
+ evenAndOddHeaders?: boolean,
+): HeaderFooterInfo['variant'][] {
+ let previous: string|undefined;
+ let ordinal=0;
+ let nextNumber: number|undefined=1;
+ return pages.map((section,index)=>{
+  const first=index===0||section?.id!==previous;
+  if(first){
+   ordinal=0;
+   if(section?.pageNumberStart!==undefined)nextNumber=section.pageNumberStart;
+   else if(index>0&&section?.breakType!=='nextPage')nextNumber=undefined;
+  }
+  previous=section?.id;
+  ordinal++;
+  const pageNumber=nextNumber??ordinal;
+  if(nextNumber!==undefined)nextNumber++;
+  if(first&&section?.firstPage)return 'first';
+  return evenAndOddHeaders&&pageNumber%2===0?'even':'default';
+ });
+}
+
 export function previewSections(original:SectionInfo[],updates:Map<string,SectionFormat>):SectionInfo[] {
  const previous=new Map<string,HeaderFooterInfo>();
  return original.map(section=>{
