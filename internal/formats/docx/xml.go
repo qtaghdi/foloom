@@ -159,6 +159,7 @@ func escapeText(s string) string {
 }
 
 type target struct {
+	squareWrap             bool
 	splitNoteParagraph     bool
 	picturePlacement       string
 	tableCaptionInsertable bool
@@ -228,6 +229,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		counter++
 		return sessionID + ":" + strconv.FormatUint(revision, 10) + ":" + strconv.Itoa(counter)
 	}
+	squareWrapChecked := false
 	var paragraph func(*node, bool, string) Paragraph
 	paragraph = func(p *node, allowed bool, kind string) Paragraph {
 		allowed = allowed && !protected[p]
@@ -463,6 +465,10 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				if allowed && !protected[r] && p.parent == body && out.List == nil && !out.PageBreakBefore && !out.PageBreakAfter {
 					picture.pictureAlign = pictureParagraphAlignment(picture, root.source, layout)
 					picture.picturePlacement = supportedPicturePlacement(picture, root.source, layout)
+					if picture.picturePlacement != "" && !squareWrapChecked {
+						squareWrapChecked = true
+						picture.squareWrap = canSquareWrapPicture(picture, root.source)
+					}
 				}
 				targets[run.ID] = picture
 			}
@@ -584,6 +590,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			return nil, nil, false, fmt.Errorf("DOCX inspection structure limit exceeded")
 		}
 	}
+	markParagraphBreakRevisions(root, bodyParagraphs, protected, targets)
 	markBookmarkParagraphs(root, bodyParagraphs, protected, targets)
 	markHyperlinkParagraphs(root, bodyParagraphs, protected, targets)
 	markNoteParagraphs(root, bodyParagraphs, protected, targets)

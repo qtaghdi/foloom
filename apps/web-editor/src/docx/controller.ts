@@ -12,11 +12,11 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type SplitNoteParagraphOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type Run, type ListDefinition, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction, type DocumentEvent } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type SplitNoteParagraphOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type Run, type ListDefinition, type CompoundListRestartOperation, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction, type DocumentEvent } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
 const historyTitle = {undo: '실행 취소', redo: '다시 실행'} as const;
-type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation|CompoundListRestartOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   recovery?(status: RecoveryStatus): void;
   composition?(active: boolean): void;
@@ -45,7 +45,7 @@ export class DocumentController {
   private disposed = false;
   private loading = false;
   private listDrafts=new Map<string,ListDefinition>();
-  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation;
+  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation|CompoundListRestartOperation;
   private imageDraft?:ImageOperation;
   private boundaryDraft?: BoundaryOperation;
   private headerParityDraft?: boolean;
@@ -217,7 +217,7 @@ export class DocumentController {
       !Array.from(new Intl.Segmenter().segment(run.text)).some(segment=>segment.index===offset)) return false;
     return this.editStandalone({type:'split_note_paragraph',targetId:run.id,expectedText:run.text,text:run.text.slice(0,offset)});
   }
-  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation): boolean {
+  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation|CompoundListRestartOperation): boolean {
     if(this.blocked||this.loading||this.disposed||!this.structureDraft||this.hasDrafts())return false;
     this.remember(this.checkpoint());
     this.standaloneDraft=operation;

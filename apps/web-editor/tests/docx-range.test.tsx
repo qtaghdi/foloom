@@ -102,3 +102,17 @@ it('keeps East Asian font overrides separate and lets a later all-script choice 
  const reset=draft.format(all!.selection!,{reset:true});
  expect(draft.selectedRuns(reset!.selection!)[0]!.eastAsiaFont).toBe('상속');
 });
+
+it('applies Latin-only and all-script font drafts in user order', () => {
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
+  {id:'r',text:'Latin 한글',editable:true,bold:false,italic:false,font:'Latin',eastAsiaFont:'East'},
+ ]}}]};
+ const draft=new StructureDraft(initial);
+ const latin=draft.format(selection('r',0,'r',8),{latinFont:'Latin only'})!;
+ expect(draft.selectedRuns(latin.selection!)[0]).toMatchObject({font:'Latin only',eastAsiaFont:'East'});
+ const all=draft.format(latin.selection!,{font:'All scripts'})!;
+ expect(draft.operations()[0]!.paragraphs[0]!.runs[0]!.style).toEqual({font:'All scripts'});
+ const override=draft.format(all.selection!,{latinFont:'Second Latin'})!;
+ expect(draft.selectedRuns(override.selection!)[0]).toMatchObject({font:'Second Latin',eastAsiaFont:'All scripts'});
+ expect(draft.operations()[0]!.paragraphs[0]!.runs[0]!.style).toEqual({font:'All scripts',latinFont:'Second Latin'});
+});

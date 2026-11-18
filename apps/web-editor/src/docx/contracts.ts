@@ -9,7 +9,7 @@ export const cropInset=z.number().int().min(0).max(99000);
 const cropSchema=z.object({left:cropInset,top:cropInset,right:cropInset,bottom:cropInset})
   .refine(crop=>crop.left+crop.right<=99000&&crop.top+crop.bottom<=99000);
 const pictureAlignmentSchema=z.enum(['start','center','end']);
-const picturePlacementSchema=z.enum(['inline','floating_left','floating_center','floating_right']);
+const picturePlacementSchema=z.enum(['inline','floating_left','floating_center','floating_right','square_left','square_right']);
 const pictureRotationSchema=z.union([z.literal(0),z.literal(90),z.literal(180),z.literal(270)]);
 const chartFrameSchema=z.object({
   widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),
@@ -23,7 +23,7 @@ const runSchema = z.object({
   object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete','tracked_format','toc','figure_list','table_list','date_field']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional(),squareRoot:z.string().max(1024).optional(),smartArt:z.object({items:z.array(z.string().max(259)).min(1).max(32),truncated:z.boolean().optional()}).optional(),chartFrame:chartFrameSchema.optional(),chartValues:z.array(z.string().min(1).max(64)).min(1).max(32).optional(),rectangle:rectangleSchema.optional(),rectangleResizeEditable:z.boolean().optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional(),bookmarkEditable:z.boolean().optional(),refreshNeeded:z.boolean().optional()})]).optional(),
-  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),placement:picturePlacementSchema.optional(),align:pictureAlignmentSchema.optional(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),captionReference:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
+  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),placement:picturePlacementSchema.optional(),squareWrap:z.boolean().optional(),align:pictureAlignmentSchema.optional(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),captionReference:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   splitNoteParagraph:z.boolean().optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), boldTrackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
@@ -45,7 +45,10 @@ const paragraphFormatSchema = z.object({tabs:z.array(tabStopSchema).max(32).opti
 });
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
+  compoundRestart:z.object({parentNumber:z.number().int().min(1).max(9999),terminal:z.boolean().optional()}).optional(),
   alignmentTrackable:z.boolean().optional(),
+  breakRevision:z.object({kind:z.literal('tracked_insert'),text:z.string().max(1027).optional(),
+    author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
   alignmentRevision:z.object({kind:z.literal('tracked_format'),text:z.string().max(1027).optional(),
     author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
   list:paragraphListSchema.optional(),listLabel:z.string().max(240).optional(),
@@ -113,7 +116,7 @@ export type TextOperation = {
 
 export type StyleInfo=z.infer<typeof styleInfoSchema>;
 export type StyleDefinition={id:string;name?:string;kind:'paragraph'|'character';basedOn?:string;run?:InlineStyle;paragraph?:ParagraphFormat};
-export type InlineStyle = {proofingLanguage?:string; eastAsiaProofingLanguage?:string; styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; eastAsiaFont?: string; sizeHalfPoints?: number };
+export type InlineStyle = {proofingLanguage?:string; eastAsiaProofingLanguage?:string; styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; latinFont?: string; eastAsiaFont?: string; sizeHalfPoints?: number };
 export type ParagraphFormat = z.infer<typeof paragraphFormatSchema>;
 export type ParagraphOperation = {
  type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';
@@ -126,6 +129,7 @@ export type ListSetup =
   | {sourceId:number;level?:number;start:number};
 export type ListDefinition=ListSetup & {key:string};
 export type ListOperation={type:'define_list';listDefinition:ListDefinition};
+export type CompoundListRestartOperation={type:'restart_compound_sublevel';targetId:string;endTargetId:string;listStart:number};
 export type ParagraphList=z.infer<typeof paragraphListSchema>;
 export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column' | 'set_row_height';
 export type TableEdit = {action:'insert_body_paragraph_before'} | {action:'insert_caption';caption:string} | {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number;height?:number};
@@ -154,6 +158,6 @@ export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {ty
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};
 export type SplitNoteParagraphOperation = {type:'split_note_paragraph';targetId:string;expectedText:string;text:string};
-export type Operation = SplitNoteParagraphOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
+export type Operation = CompoundListRestartOperation | SplitNoteParagraphOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

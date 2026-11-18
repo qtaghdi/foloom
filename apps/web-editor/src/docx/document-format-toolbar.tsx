@@ -1,5 +1,5 @@
 import { utf8Length } from './validation';
-import { createResource, createUniqueId, For, Show } from 'solid-js';
+import { createResource, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { quietButtonClass } from '../ui/editor-chrome';
 import type { InlineStyle } from './contracts';
 
@@ -22,6 +22,7 @@ export function DocumentFormatToolbar(props: { styleDefinition?:boolean; styles:
     const first=props.styles[0]?.[key];
     return props.styles.some(style=>style[key]!==first)?'mixed':first;
   };
+  const [fontScope, setFontScope] = createSignal<'all' | 'latin'>('all');
   const fontHintId=createUniqueId();
   const eastAsiaFontHintId=createUniqueId();
   const fontToCheck=(key:'font'|'eastAsiaFont')=>{
@@ -41,7 +42,9 @@ export function DocumentFormatToolbar(props: { styleDefinition?:boolean; styles:
     onChange={event=>{
       const font=event.currentTarget.value.trim();
       event.currentTarget.setCustomValidity('');
-      if(font && validFontName(font))props.onFormat({[key]:font});
+      if(font && validFontName(font)) {
+        props.onFormat(key === 'font' && !props.styleDefinition && fontScope() === 'latin' ? {latinFont:font} : {[key]:font});
+      }
       else if(font){
         event.currentTarget.setCustomValidity('글꼴 이름을 줄이거나 지원하지 않는 문자를 제거하세요.');
         event.currentTarget.reportValidity();
@@ -53,7 +56,14 @@ export function DocumentFormatToolbar(props: { styleDefinition?:boolean; styles:
       aria-pressed={common(item.key)==='mixed'?'mixed':Boolean(common(item.key))} disabled={props.disabled}
       classList={{'bg-teal-100 text-teal-900':common(item.key)===true,'bg-amber-100 text-amber-900':common(item.key)==='mixed'}}
       onClick={()=>props.onFormat({[item.key]:common(item.key)!==true})}>{item.text}{common(item.key)==='mixed'?'·':''}</button>}</For>
-    {fontControl('font','글꼴','모든 문자권에 적용합니다. 설치되지 않은 글꼴은 대체 글꼴로 표시됩니다.')}
+    <Show when={!props.styleDefinition}>
+      <select aria-label="글꼴 적용 범위" class="editor-select min-h-11 shrink-0 rounded px-2 text-sm"
+        disabled={props.disabled} value={fontScope()} onChange={event => setFontScope(event.currentTarget.value === 'latin' ? 'latin' : 'all')}>
+        <option value="all">모든 문자 글꼴</option>
+        <option value="latin">라틴 글꼴만</option>
+      </select>
+    </Show>
+    {fontControl('font','글꼴','선택한 범위에 글꼴을 적용합니다. 설치되지 않은 글꼴은 대체 글꼴로 표시됩니다.')}
     <Show when={!props.styleDefinition}>
       {fontControl('eastAsiaFont','동아시아 글꼴','선택 범위의 동아시아 글꼴만 바꿉니다. 설치되지 않은 글꼴은 대체 글꼴로 표시됩니다.')}
     </Show>

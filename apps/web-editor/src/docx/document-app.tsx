@@ -422,6 +422,9 @@ export function DocumentApp() {
     <DocumentListToolbar paragraphs={(() => {draftVersion();state().snapshot;return formattingSelection()?controller.selectedParagraphs(formattingSelection()!):[];})()}
       lists={state().snapshot?.lists??[]} disabled={state().saving||state().loading||Boolean(state().error||state().composing)}
       onList={list=>{const selection=formattingSelection();if(selection&&controller.applyList(selection,list))setDraftVersion(v=>v+1);}}
+      onCompoundRestart={(targetId,endTargetId,listStart)=>{
+        if(controller.editStandalone({type:'restart_compound_sublevel',targetId,endTargetId,listStart}))setDraftVersion(v=>v+1);
+      }}
       onLevel={delta=>{const selection=formattingSelection();if(selection&&controller.changeListLevel(selection,delta))setDraftVersion(v=>v+1);}}/>
     <DocumentTabsToolbar formats={selectedParagraphFormats()} disabled={!selectedStyles().length||state().composing||state().saving||state().loading||Boolean(state().error)} onFormat={applyParagraphFormat} onInsert={()=>{const selection=formattingSelection();if(selection&&controller.replaceSelection(selection,'\t',true))setDraftVersion(v=>v+1);}}/>
     </div>
