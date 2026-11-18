@@ -73,6 +73,10 @@ export function DocumentShapeToolbar(props:{
                 class="min-h-11 w-14 rounded border border-slate-300"/>
             </label>
             <button type="submit" class={buttonClass} disabled={disabled()}>사각형 색 적용</button>
+            <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+              const accepted=props.onApply({type:'delete_rectangle',targetId:run.id});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>사각형 삭제</button>
           </form>
         }</Show>
       </Show>

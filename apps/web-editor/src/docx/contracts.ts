@@ -116,7 +116,7 @@ export type BookmarkMoveOperation = {type:'move_bookmark_up';targetId:string}|{t
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};
 export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string};
 export type ObjectTextOperation = {type:'update_control_text'|'update_textbox_text'|'insert_textbox';targetId:string;expectedText:string;text:string};
-export type RectangleOperation = {type:'insert_rectangle';targetId:string} |
+export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}};
 export type Operation = RectangleOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | BookmarkMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };

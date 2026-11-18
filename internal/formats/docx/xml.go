@@ -381,7 +381,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) &&
 					!strings.Contains(string(root.source[r.start:r.end]), "<!--") {
 					run.Object.Editable = true
-					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "update_rectangle_colors"}
+					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "inline_rectangle"}
 				}
 				if stories := textBoxStories(r); len(stories) != 0 {
 					run.Object = &ObjectInfo{Kind: "textbox", Text: reviewText(textContent(stories[0]), 1024)}

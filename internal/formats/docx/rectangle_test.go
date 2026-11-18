@@ -101,3 +101,41 @@ func TestRectangleColorsPreserveGeometryAndOriginalNeighbors(t *testing.T) {
 		t.Fatal("undo did not restore the original package")
 	}
 }
+
+func TestDeleteRectangleRemovesOnlySelectedShape(t *testing.T) {
+	ctx := context.Background()
+	const bodyBefore = `<w:p><w:r><w:t>before</w:t></w:r><!--annotate-->`
+	const bodyMiddle = `<w:r><w:t>between</w:t></w:r>`
+	const bodyTail = `<w:r><w:t>after</w:t></w:r></w:p>`
+	s, filename := withDocument(t, bodyXML(bodyBefore+inlineRectangle(10)+bodyMiddle+inlineRectangle(11)+bodyTail))
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	runID := v.Blocks[0].Paragraph.Runs[1].ID
+	edit := Operation{Type: "delete_rectangle", TargetID: runID}
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		edit,
+		{Type: "update_rectangle_colors", TargetID: runID, RectangleColors: &RectangleColorEdit{Fill: "A12B3C", Stroke: "1F4F32"}},
+	}}
+	if _, err := s.Apply(ctx, input, "human"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("deleting and editing the same rectangle must reject the entire batch")
+	}
+	input.Operations = []Operation{edit}
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(reopened.pkg.document); got != bodyXML(bodyBefore+bodyMiddle+inlineRectangle(11)+bodyTail) {
+		t.Fatal("deleting one rectangle changed remaining shapes or nearby body XML")
+	}
+	v = mustSnapshot(t, reopened)
+	if runs := v.Blocks[0].Paragraph.Runs; len(runs) != 4 || runs[2].Object == nil || !runs[2].Object.Editable {
+		t.Fatalf("expected the other rectangle and three surrounding runs, got %v", runs)
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover the exact original DOCX")
+	}
+}
