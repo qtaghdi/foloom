@@ -17,7 +17,7 @@ func supportedTableSequence(instruction string) bool {
 }
 
 func documentTableCaptionFields(body *node) ([]*node, error) {
-	values, err := documentCaptionFields(body, "table", isTableSequence, supportedTableSequence)
+	values, err := documentCaptionFields(body, "table", isTableSequence, supportedTableSequence, false)
 	if err != nil {
 		return nil, err
 	}

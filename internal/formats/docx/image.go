@@ -225,6 +225,11 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 			strings.Contains(string(p.document[t.run.start:t.run.end]), "<!--") {
 			return replacement{}, fmt.Errorf("protected DOCX picture cannot be deleted")
 		}
+		if t.pictureCellCaption {
+			if caption, _ := editablePictureCaption(t, p.document); caption != nil {
+				return replacement{}, fmt.Errorf("DOCX picture with a table cell caption is protected")
+			}
+		}
 		// Keep package relationships and media because another drawing can share them.
 		return replacement{start: t.run.start, end: t.run.end}, nil
 	}
@@ -258,8 +263,12 @@ func dedicatedPictureParagraph(t target, data []byte) bool {
 }
 
 func dedicatedDrawingParagraph(t target, data []byte) bool {
+	return t.paragraph.parent.is("body") && singleDrawingParagraph(t, data)
+}
+
+func singleDrawingParagraph(t target, data []byte) bool {
 	p := t.paragraph
-	if !t.run.parent.is("p") || !t.run.parent.parent.is("body") || p != t.run.parent ||
+	if !t.run.parent.is("p") || p != t.run.parent ||
 		strings.TrimSpace(p.text.String()) != "" || bytes.Contains(data[p.start:p.end], []byte("<!--")) ||
 		p.has("rPrChange") || countChild(t.run, "drawing") != 1 ||
 		(len(t.run.children) != 1 && (len(t.run.children) != 2 || t.run.child("rPr") == nil)) {
@@ -370,6 +379,7 @@ type PictureInfo struct {
 	Align            string     `json:"align,omitempty"`
 	Caption          string     `json:"caption,omitempty"`
 	CaptionEditable  bool       `json:"captionEditable,omitempty"`
+	DeleteProtected  bool       `json:"deleteProtected,omitempty"`
 	MoveCaptionUp    bool       `json:"moveCaptionUp,omitempty"`
 	MoveCaptionDown  bool       `json:"moveCaptionDown,omitempty"`
 	Rotation         int        `json:"rotation,omitempty"`
@@ -505,14 +515,15 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 				}
 				info.MoveCaptionUp, info.MoveCaptionDown = source.moveUp != nil, source.moveDown != nil
 				_, info.Caption = editablePictureCaption(source, s.pkg.document)
+				info.DeleteProtected = source.pictureCellCaption && info.Caption != ""
 				insertCaption := captionParagraph(source)
 				if insertCaption || info.Caption != "" {
 					if !captionFieldsChecked {
-						_, err := documentFigureFields(source.paragraph.parent)
+						_, err := documentFigureFields(pictureCaptionBody(source.paragraph))
 						captionFieldsChecked, captionFieldsValid = true, err == nil
 					}
 					info.CaptionEditable = captionFieldsValid && insertCaption
-					info.CaptionReference = captionFieldsValid && info.Caption != ""
+					info.CaptionReference = captionFieldsValid && info.Caption != "" && !source.pictureCellCaption
 				}
 				_, info.Rotation, info.RotationEditable = supportedPictureRotation(inline, s.pkg.document)
 				if crop, _, _ := supportedPictureCrop(inline, s.pkg.document); crop != nil {

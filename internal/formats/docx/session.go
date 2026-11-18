@@ -773,6 +773,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			seen[op.Type] = true
 			t := targets[op.TargetID]
+			if t.pictureCellCaption && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX table cell picture caption must stand alone")
+			}
 			if op.Type == "edit_picture_caption" {
 				edit, err := s.pkg.editPictureCaption(t, op.ExpectedText, op.Text)
 				if err != nil {

@@ -64,7 +64,7 @@ func (p *documentPackage) insertFigureReference(destination, picture target, edi
 		edit.FigureID == "" || edit.NewBookmark != "" || edit.Bookmark != "" || edit.Text != "" || edit.URL != "" {
 		return nil, fmt.Errorf("DOCX figure reference requires an editable body paragraph and a current picture")
 	}
-	if picture.kind != "picture" || picture.run == nil {
+	if picture.kind != "picture" || picture.run == nil || !picture.paragraph.parent.is("body") {
 		return nil, fmt.Errorf("DOCX figure reference requires an inline picture")
 	}
 	info, relation := inlinePictureInfo(picture.run)

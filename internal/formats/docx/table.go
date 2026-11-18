@@ -108,6 +108,10 @@ func leadingBodyTable(n *node) bool {
 		tableChildCount(n, "tblGrid") == 1 && n.child("tblGrid").child("gridCol") != nil && n.child("tr") != nil
 }
 
+func tableHasFigureCaptions(table *node) bool {
+	return anyWordField(table, func(_ *node, code string) bool { return isFigureSequence(code) })
+}
+
 func tableReplacement(data []byte, target target, op TableEdit) (replacement, error) {
 	if op.Caption != "" {
 		return replacement{}, fmt.Errorf("unexpected DOCX table caption")
@@ -143,6 +147,11 @@ func tableReplacement(data []byte, target target, op TableEdit) (replacement, er
 	grid, allowed := simpleTable(table)
 	if !allowed {
 		return replacement{}, fmt.Errorf("complex DOCX table structure is protected")
+	}
+	// Removing or reordering cell figures would invalidate the document-wide sequence.
+	if (op.Action == "delete" || strings.HasPrefix(op.Action, "delete_") || strings.HasPrefix(op.Action, "move_")) &&
+		tableHasFigureCaptions(table) {
+		return replacement{}, fmt.Errorf("DOCX table figure numbering is protected")
 	}
 	if op.Action == "set_row_height" {
 		if op.Index == nil || *op.Index < 0 || *op.Index >= len(grid.rows) || op.Destination != nil ||
