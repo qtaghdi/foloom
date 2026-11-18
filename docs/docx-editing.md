@@ -127,9 +127,11 @@ native 선택과 범위 교체를 제공합니다. 같은 본문 구간 안의 �
 연결 중단이나 외부 변경 및 리비전 충돌 시 미저장 입력을 유지하고 저장을
 차단합니다. 필요한 입력을 복사한 뒤 **다시 불러오기**를 누릅니다. 미저장 입력이 있으면 자체
 확인 UI의 **입력 버리고 불러오기**를 선택해야 복구합니다. **취소**는 초안을
-유지합니다. 화면은 Solid 컴포넌트로 구성하며 controller가 저장과 draft를 소유합니다. 저장 결과를
-받지 못한 요청은 자동 재시도하지 않습니다. 이 DOCX 기능에는 서버 undo/redo가
-없습니다.
+유지합니다. 저장 결과를 받지 못한 요청은 자동 재시도하지 않습니다. 서버 재시작 뒤에는
+새 인증 링크에서 같은 원본 경로를 다시 열어 [확정된 DOCX 이력](#확정된-docx-이력)을
+복구할 수 있습니다. 기존 탭의 미저장 텍스트가 필요하면 탭을 새로고침하기 전에
+복사하세요. 실행 취소는 같은 탭의 미저장 변경을 먼저 되돌린 뒤 확정 이력을 사용합니다.
+다시 실행도 현재 초안과 확정 이력에 맞춰 동작합니다.
 
 ## MCP 작업
 
@@ -142,6 +144,7 @@ XLSX 도구와 계약은 유지하며 DOCX 활성 문서는 별도로 관리합�
 | `open_docx` | 기존 절대 `.docx` 경로. 검사 후 활성화하고 snapshot과 `browserUrl` 반환 |
 | `get_docx` | 세션 ID, 리비전, 본문·표, run ID, 편집 가능 여부, 호환성 안내 반환 |
 | `apply_docx_operations` | 현재 `sessionId`, `baseRevision`, typed operation batch. 원자적 저장 뒤 snapshot 반환 |
+| `restore_docx_history` | 현재 `sessionId`, `baseRevision`, `direction: undo 또는 redo`. 확정 batch 한 개를 복원한 뒤 새 revision과 snapshot 반환 |
 
 생성 예시:
 
@@ -401,11 +404,29 @@ Word가 서로 다른 대체 글꼴로 표시할 수 있습니다. 브라우저�
 로컬 이름으로 확인하지 못하면 글꼴 도구에 대체 글꼴 가능성을 표시하며
 설치 여부나 native 조판 일치를 보장하지 않습니다.
 
+글자 서식의 **동아시아 글꼴**은 선택한 범위의 `w:eastAsia`만 바꿉니다.
+해당 범위의 동아시아 테마 지정은 입력한 글꼴 이름으로 대체되고 Latin·복합
+문자 글꼴과 해당 테마, 언어와 스타일은 유지됩니다. HTTP·MCP의
+`replace_paragraphs`에서 대상 run에 `style: { eastAsiaFont: "글꼴 이름" }`을
+보낼 수 있습니다. `font`와 함께 보내면 동아시아에는 `eastAsiaFont`가 우선합니다.
+브라우저는 한글·한자·가나·주음으로 된 run에서 동아시아 글꼴을 먼저 적용합니다.
+혼합 run의 문자별 글꼴 배정과 테마 해석은 Word의 조판을 따릅니다.
+
 직접 서식 지우기는 지원하는 글자 속성만 제거합니다. 문단·글자 스타일 참조와
 언어·알려지지 않은 나머지 속성은 남기며 원본 스타일의 상속값을 미리 봅니다.
 문서 전체 스타일을 삭제하거나 모든 OOXML 서식을 정규화하는 동작이 아닙니다.
 미리 보기는 단일 밑줄·취소선·일부 강조색·첨자 위치를 표현하며 Word의 정밀
 조판이나 복합 밑줄 모양까지 일치한다고 주장하지 않습니다.
+
+**서식**의 **맞춤법 검사 언어**에서 선택한 글자의 라틴 문자와 동아시아 문자에
+사용할 언어 태그를 지정할 수 있습니다. 예를 들어 `en-GB` 또는 `ko-KR`를
+입력합니다. 지정한 영역의 기존 글꼴, 복합 문자 언어, 선택 밖 언어가 유지됩니다.
+선택한 run이 언어를 스타일에서 상속받았다면 처음 직접 지정할 때 나머지 문자권의
+기존 언어도 해당 run에 함께 기록합니다. 직접 서식을 지워도 언어는 유지됩니다.
+HTTP·MCP는 `replace_paragraphs`의
+run 서식에 `proofingLanguage` 또는 `eastAsiaProofingLanguage`를 보냅니다.
+맞춤법 검사는 문서를 연 Word의 교정 언어 사전을 사용합니다.
+[Word run의 언어 속성](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.languages?view=openxml-3.0.1)을 따릅니다.
 
 ### 문단 서식
 
@@ -580,6 +601,18 @@ nextColumn을 사용합니다. 생략한 속성, 머리글·바닥글 참조, �
 페이지 나눔이나 실제 쪽 수로 간주하지 않습니다.
 
 
+### 구역별 왼쪽 제본 여백
+
+`구역·용지 설정`에서 왼쪽 제본 여백을 pt 단위로 입력합니다. 미리보기와 인쇄에서는
+이 값을 본문 왼쪽 여백에 더합니다. 설정을 저장하면 구역의 `w:pgMar/@w:gutter`만
+별도로 기록해 기존 왼쪽 여백과 머리글·바닥글 연결을 유지합니다.
+
+HTTP·MCP는 snapshot의 `sections[].gutter`와 `update_section.section.gutter`에
+twip 단위의 0~31680 정수를 사용합니다. 용지 안에 본문과 단을 배치할 공간이
+남아야 합니다. 미러 여백, 오른쪽·위쪽 제본, 책 접기, 두 쪽 모아 찍기 및
+사용자 지정 열을 사용하는 원본은 제본 여백을 그대로 보존합니다.
+[Word 제본 여백 속성](https://learn.microsoft.com/en-us/office/vba/api/Word.pagesetup.gutter)을 따릅니다.
+
 ### 머리글·바닥글의 구역 계약
 
 `update_section.section.headerFooters`는 최대 여섯 가지 `kind: header|footer`,
@@ -616,6 +649,22 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 쪽 수·페이지별 반복은 아직 검증하지 않습니다. 새 홀짝 구분 활성화는 후속입니다.
 
 보호된 머리글 내용도 `첫 페이지 구분 적용`으로 구분 설정만 바꿀 수 있습니다. 이 동작은 내용이나 참조를 평탄화하지 않습니다.
+
+### 구역별 머리글·바닥글 위치
+
+`구역·용지 설정`에서 위쪽 모서리에서 머리글까지, 아래쪽 모서리에서 바닥글까지
+거리를 pt 단위로 바꿉니다. 선택 구역에 적용하면 명시적 페이지 단위의 위치를
+미리 볼 수 있고 저장은 본문과 같은 리비전과 이력을 사용합니다. 머리글과
+바닥글 내용은 해당 구역의 첫 페이지·홀짝·이전 구역 연결 규칙을 따릅니다.
+
+`update_section`과 snapshot의 `sections`는 `headerDistance`, `footerDistance`를
+twip 단위로 사용합니다. 0은 용지 모서리이며 각 값은 0~31680 twip입니다.
+기존 원본에 값이 생략된 경우 화면은 720 twip을 사용합니다. 변경 시
+`w:pgMar`의 선택한 `w:header` 또는 `w:footer`를 저장하고 기존 본문 여백,
+내용 및 관계를 유지합니다. 브라우저 미리보기는 머리글·바닥글이 본문을
+덮지 않도록 긴 내용을 배치합니다. 실제 자동 페이지 배치는 Word 계열
+편집기에서 확인할 수 있습니다.
+[Word Open XML 페이지 여백](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/5a1cdacc-ee75-4453-8118-de48e5e370d6)을 따릅니다.
 
 ### 문서 전체의 홀수·짝수 구분
 
@@ -737,6 +786,14 @@ HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rota
 보냅니다. `rotation: 0`은 기본 방향으로 되돌립니다. 회전 뒤 자르기 비율은 원본
 이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
 
+
+일반 본문의 인라인 그림을 선택하고 `그림 번호와 캡션 삽입`을 적용하면 바로
+다음 문단에 캡션을 넣습니다. Word는 SEQ 필드로 그림 번호를 계산합니다. 앞에
+캡션을 추가하면 뒤따르는 지원 그림 번호를 다시 계산하고 그림 파일과 대체
+텍스트는 유지합니다. HTTP·MCP는 그림 run ID와 캡션 텍스트를
+`insert_picture_caption`에 보냅니다. 여러 그림이 한 문단에 있거나 복합 필드 및
+기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
+[Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
 
 ### 인쇄와 PDF 저장
 
@@ -891,7 +948,11 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 선택한 전체 run에 주석을 연결합니다.
 
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
-보호합니다. 새 답글 작성은 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+보호합니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+
+기존 주석이 없는 문서에서 새로 주석을 작성하면 Word 확장 메타데이터가 함께
+저장돼 작성 직후 답글과 해결 상태를 사용할 수 있습니다. 확장 정보가 없는
+기존 주석과 Word의 별도 확장 형식은 그대로 보존합니다.
 
 Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 `주석 해결`과
 `주석 다시 열기`를 적용할 수 있습니다. HTTP·MCP는 기존 주석 ID를
@@ -899,6 +960,11 @@ Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 
 주석 본문·작성자·연결 범위·답글은 유지합니다. 확장 정보가 없는 주석에서는
 본문과 위치를 확인할 수 있습니다.
 [Word 확장 주석 상태](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/9660dacc-2ceb-4352-87d2-42ba1184f522)를 사용합니다.
+
+같은 최상위 주석의 `답글 쓰기`에서 한 단계의 답글을 추가하고 검토 패널에서
+상위 주석과 함께 봅니다. HTTP·MCP는 상위 주석 ID에 `reply_comment`와
+`comment: { text }`를 보냅니다. 원래 주석의 범위와 해결 상태를 유지합니다.
+확장 메타데이터가 없는 주석이나 이미 다른 주석에 달린 답글은 작성 대상에서 제외합니다.
 
 검토의 `텍스트 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존
@@ -931,6 +997,12 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
+
+수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
+`제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을
+유지합니다. HTTP·MCP는 `update_math`의 `math: { action: "insert_root", expression }` 또는
+`math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
+[Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
 
 삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
 기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
