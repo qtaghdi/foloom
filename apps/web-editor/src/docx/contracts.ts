@@ -34,13 +34,17 @@ const paragraphListSchema=z.object({id:z.number().int().min(0).max(2147483647).o
 const listInfoSchema=z.object({id:z.number().int().positive().max(2147483647),levels:z.array(z.object({level:z.number().int().min(0).max(8),kind:z.string(),text:z.string(),start:z.number().int().nonnegative(),legal:z.boolean().optional(),restart:z.number().int().min(0).max(7).optional()})).max(9)});
 const tabStopSchema=z.object({position:z.number().int().min(0).max(28800),align:z.enum(['left','center','right','decimal','bar','clear']),leader:z.enum(['none','dot','hyphen','underscore','heavy','middleDot']).optional()});
 export type TabStop=z.infer<typeof tabStopSchema>;
+const paragraphAlignmentSchema=z.enum(['start','center','end','justify']);
 const paragraphFormatSchema = z.object({tabs:z.array(tabStopSchema).max(32).optional(),list:paragraphListSchema.optional(),styleId:z.string().max(120).optional(),
- align:z.enum(['start','center','end','justify']).optional(),before:spacing,after:spacing,
+ align:paragraphAlignmentSchema.optional(),before:spacing,after:spacing,
  left:z.number().int().min(-14400).max(14400).optional(),right:z.number().int().min(-14400).max(14400).optional(),firstLine:z.number().int().min(0).max(14400).optional(),hanging:z.number().int().min(0).max(14400).optional(),
  line:z.number().int().min(20).max(2880).optional(),lineRule:z.enum(['auto','exact','atLeast']).optional(),bidi:z.boolean().optional(),textDirection:z.string().max(20).optional(),
 });
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
+  alignmentTrackable:z.boolean().optional(),
+  alignmentRevision:z.object({kind:z.literal('tracked_format'),text:z.string().max(1027).optional(),
+    author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
   list:paragraphListSchema.optional(),listLabel:z.string().max(240).optional(),
   anchor:z.string().regex(/^[0-7][0-9A-F]{7}$/).optional(),
   outlineLevel,outlineOverride:outlineLevel,
@@ -132,7 +136,9 @@ export type MathOperation = {type:'update_math';targetId:string;math:{action:'in
 export type ParagraphMoveOperation = {type:'move_bookmark_up';targetId:string} | {type:'move_bookmark_down';targetId:string} |
   {type:'move_hyperlink_up';targetId:string} | {type:'move_hyperlink_down';targetId:string};
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};
-export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} | {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean};
+export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} |
+  {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean} |
+  {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number};
 export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |

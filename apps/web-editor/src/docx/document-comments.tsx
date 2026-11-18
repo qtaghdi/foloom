@@ -3,6 +3,9 @@ import { buttonClass, quietButtonClass } from '../ui/editor-chrome';
 import type { CommentOperation, CommentRange, Paragraph, RevisionReviewOperation, Snapshot, TrackTextOperation } from './contracts';
 import { utf8Length } from './validation';
 
+const paragraphAlignments={start:'시작',center:'가운데',end:'끝',justify:'양쪽'} as const;
+type ParagraphAlignment=keyof typeof paragraphAlignments;
+
 export function DocumentComments(props:{
   snapshot?:Snapshot;target?:Paragraph;range?:CommentRange;disabled:boolean;pending:boolean;
   onApply:(operation:CommentOperation|RevisionReviewOperation|TrackTextOperation)=>boolean;onLocate:(id:string)=>void;
@@ -11,9 +14,14 @@ export function DocumentComments(props:{
   const [useRange,setUseRange]=createSignal(false);
   const targetText=()=>props.target?.structureEditable?props.target.runs.map(run=>run.text).join('').trim():'';
   const disabled=()=>props.disabled||props.pending;
-  const changes=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
-    ? block.paragraph.runs.filter(run=>run.object?.kind==='tracked_insert'||run.object?.kind==='tracked_delete'||run.object?.kind==='tracked_format')
-    : []).slice(0,100)??[];
+  const changes=()=>props.snapshot?.blocks.flatMap(block=>{
+    if(block.type!=='paragraph')return [];
+    const paragraph=block.paragraph;
+    const runs=paragraph.runs.filter(run=>run.object?.kind==='tracked_insert'||run.object?.kind==='tracked_delete'||run.object?.kind==='tracked_format');
+    return [...(paragraph.alignmentRevision?[{id:paragraph.id,object:paragraph.alignmentRevision}]:[]),...runs];
+  }).slice(0,100)??[];
+  const [alignment,setAlignment]=createSignal<ParagraphAlignment>('center');
+  const currentAlignment=()=>props.target?.layout?.align??'start';
   const [replyTo,setReplyTo]=createSignal('');
   const comments=()=>props.snapshot?.comments??[];
   const threads=()=>comments().filter(comment=>!comment.parentId||!comments().some(parent=>parent.id===comment.parentId));
@@ -73,6 +81,22 @@ export function DocumentComments(props:{
           }</Show>
         </details>
       </Show>
+      <Show when={props.target?.alignmentTrackable&&props.target} keyed>{paragraph=>
+        <form class="my-2 flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2" onSubmit={event=>{
+          event.preventDefault();
+          if(alignment()!==currentAlignment()){
+            applyReview({type:'track_paragraph_alignment',targetId:paragraph.id,alignment:alignment()});
+          }
+        }}>
+          <label class="grid gap-1 text-sm">추적할 문단 정렬
+            <select class="editor-select min-h-11" value={alignment()} disabled={disabled()}
+              onChange={event=>setAlignment(event.currentTarget.value as ParagraphAlignment)}>
+              <For each={Object.entries(paragraphAlignments)}>{([value,name])=><option value={value}>{name}</option>}</For>
+            </select>
+          </label>
+          <button type="submit" class={buttonClass} disabled={disabled()||alignment()===currentAlignment()}>문단 정렬 변경 기록</button>
+        </form>
+      }</Show>
       <Show when={props.snapshot?.trackedChanges}>
         <section aria-label="변경 추적" class="my-2 border-b border-slate-200 pb-2">
           <h3 class="text-sm font-semibold">변경 추적</h3>
@@ -80,7 +104,7 @@ export function DocumentComments(props:{
             <ul class="space-y-2">
               <For each={changes()}>{change=><li class="rounded border border-slate-200 p-2">
                 <p class="text-xs font-semibold">
-                  {change.object?.kind==='tracked_format'?'서식 변경':change.object?.kind==='tracked_insert'?'삽입':'삭제'}
+                  {change.object?.label??(change.object?.kind==='tracked_format'?'서식 변경':change.object?.kind==='tracked_insert'?'삽입':'삭제')}
                   {change.object?.author?` · ${change.object.author}`:''}
                   <Show when={change.object?.date}>{date=><time dateTime={date()}> · {new Date(date()).toLocaleString()}</time>}</Show>
                 </p>
