@@ -792,11 +792,14 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 표시 영역의 바깥 크기와 그림 파일·관계·설명은 유지합니다.
 [DrawingML 원본 자르기](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.sourcerectangle)를 사용합니다.
 
-기본 인라인 PNG·JPEG는 `그림 180도 회전`으로 방향을 바꾸고
-`그림 방향 되돌리기`로 복원할 수 있습니다. 크기, 원본 파일과 자르기 범위는 유지합니다.
-HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rotation: 180 }`을
-보냅니다. `rotation: 0`은 기본 방향으로 되돌립니다. 회전 뒤 자르기 비율은 원본
-이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
+기본 인라인 PNG·JPEG의 `그림 방향`에서 시계 방향 90도, 180도, 270도 또는
+`기본 방향`을 고른 뒤 `그림 방향 적용`을 누릅니다. 90도와 270도에서는
+브라우저 미리보기가 회전된 폭과 높이로 문단 공간을 확보합니다. 그림 크기 속성,
+원본 파일, 관계와 자르기 범위는 저장 후에도 유지합니다. HTTP·MCP에서는
+`update_image`에 그림 run ID와 `image: { action: "rotate", rotation: 90 }`을 보냅니다.
+`rotation: 0`은 기본 방향을 복원합니다. 회전 뒤에는 원본 이미지에서 자를 변을
+기준으로 비율을 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
+[Word 인라인 그림 배치](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.inline)를 참고하세요.
 
 
 일반 본문의 인라인 그림을 선택하고 `그림 번호와 캡션 삽입`을 적용하면 바로
@@ -806,6 +809,11 @@ HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rota
 `insert_picture_caption`에 보냅니다. 여러 그림이 한 문단에 있거나 복합 필드 및
 기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
 [Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
+
+같은 그림을 다시 고른 뒤 `그림 캡션 변경`으로 기존 설명을 바꿀 수 있습니다.
+Word 번호 필드와 그림은 유지됩니다. HTTP·MCP에서는 그림 run ID,
+현재 설명의 `expectedText`, 새 `text`를 `edit_picture_caption`에 보냅니다.
+복합 캡션과 해당 구조 밖의 캡션은 이 도구의 편집 대상에서 제외됩니다.
 
 ### 인쇄와 PDF 저장
 
@@ -854,7 +862,7 @@ PNG가 들어갔고 편집 도구 문구는 추출 텍스트에 없었습니다.
 
 ### 링크·북마크·각주
 
-`링크·북마크·각주·미주`에서 기존 웹 링크를 고르고 새 HTTP(S) 주소를 적용한 뒤 저장합니다.
+`링크·북마크·각주·미주·목차`에서 기존 웹 링크를 고르고 새 HTTP(S) 주소를 적용한 뒤 저장합니다.
 HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url }`을
 사용합니다. 링크의 표시 문구와 서식, 다른 링크가 공유하는 관계를 유지합니다.
 
@@ -875,7 +883,7 @@ HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url
 `move_bookmark_up` 또는 `move_bookmark_down`을 적용합니다. 표·페이지·구역
 경계와 문단에 걸쳐 있는 북마크는 보호합니다.
 
-편집기의 `링크·북마크·각주·미주`에서 편집 가능한 본문 문단을 골라 북마크, 웹 링크,
+편집기의 `링크·북마크·각주·미주·목차`에서 편집 가능한 본문 문단을 골라 북마크, 웹 링크,
 북마크 링크를 추가합니다. 적용하고 저장한 뒤 내부 링크를 누르면 해당 본문
 문단으로 이동합니다. 웹 링크는 사용자가 선택할 때 별도 탭에서 열립니다.
 표시 가능한 북마크는 최대 500개이며 중복되거나 쌍이 끊어진 북마크와 안전하지
@@ -903,6 +911,31 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
 참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
 [Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
+
+같은 메뉴의 `쪽 번호 상호 참조 삽입`에서 평문 북마크를 선택하면 Word PAGEREF
+필드를 추가합니다. HTTP·MCP는 문단 ID에
+`reference: { action: "insert_bookmark_page_ref", bookmark }`를 적용합니다.
+브라우저에서 미계산 상태를 확인하고 대상 문단으로 이동할 수 있습니다. Word에서
+필드를 업데이트하면 조판된 쪽 번호가 표시됩니다. 북마크 이름을 바꾸면
+참조 대상도 바뀌고, 북마크를 지우면 마지막으로 저장된 표시 값을 남깁니다.
+
+같은 메뉴의 `목록 번호 상호 참조 삽입`은 최상위 번호 목록에 붙인 평문
+북마크를 가리킵니다. 브라우저는 대상 목록 번호를 표시하고 클릭하면 해당
+문단으로 이동합니다. HTTP·MCP는 본문 문단 ID와
+`reference: { action: "insert_bookmark_number_ref", bookmark }`를
+별도 작업으로 보냅니다. 글머리표와 상위 번호 문맥을 포함하는 복합 참조는
+보호합니다. [Word REF 번호 스위치](https://support.microsoft.com/en-us/word/field-codes-ref-field)를 사용합니다.
+
+삽입의 `자동 목차 삽입`을 적용하면 선택한 본문 문단 앞에 제목 수준 1~3을 모아
+Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
+`reference: { action: "insert_toc" }`를 별도 작업으로 보냅니다.
+브라우저에서 제목을 고친 뒤 `목차 제목 업데이트`를 적용하고 저장하면
+현재 제목을 목차에 다시 모읍니다. HTTP·MCP는 목차 run ID와 별도 작업
+`reference: { action: "update_toc" }`를 보냅니다. Word의 잠긴 목차와 복합
+목차는 원본을 보존합니다. Word에서 목차 전체를 업데이트하면 페이지
+번호와 링크도 다시 계산할 수 있습니다.
+문서에 이미 목차가 있으면 새 목차 삽입을 막습니다.
+[Word 목차 삽입과 업데이트](https://support.microsoft.com/en-us/word/training/insert-a-table-of-contents)를 참고하세요.
 
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
