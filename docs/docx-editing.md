@@ -900,10 +900,17 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 단순 인라인 수식 | 수식 텍스트 | 삽입·교체·삭제 | Word 수식 개체 |
 | 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
-| 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 일부 | 미지원 | Word |
+| 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
+
+삽입의 `텍스트 상자 편집`에서 일반 본문의 독립 텍스트 상자에 있는 한 문단의
+평문을 수정합니다. HTTP·MCP는 `update_textbox_text`에 상자 run ID, 현재
+`expectedText`와 새 `text`를 보냅니다. 위치·크기·기존 서식을 유지하며 수정을
+적용할 때 같은 내용의 DrawingML과 VML 호환 표현을 함께 편집합니다.
+상자가 연결돼 있거나 호환 표현의 텍스트가 서로 다르면 읽기 전용으로 표시합니다.
+[Word 텍스트 상자 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/9ef316cc-3b39-4765-89ac-f8524fab383b)를 사용합니다.
 
 삽입의 `콘텐츠 컨트롤 편집`에서 일반 본문 평문 컨트롤을 골라 텍스트를
 바꿉니다. HTTP·MCP는 `update_control_text`에 컨트롤 run ID, 현재 문자열
