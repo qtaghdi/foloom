@@ -110,3 +110,40 @@ func patchBookmarkField(data []byte, field *node, deleting bool, newName, displa
 	}
 	return replacement{start: field.start, end: field.inner, data: []byte(open)}, nil
 }
+
+func canRefreshBookmarkReference(field *node, data []byte) bool {
+	paragraph := field.parent
+	if !paragraph.is("p") || !paragraph.parent.is("body") ||
+		strings.Contains(string(data[field.start:field.end]), "<!--") {
+		return false
+	}
+	for _, name := range []string{"fldChar", "instrText", "delInstrText", "ins", "del", "moveFrom", "moveTo", "pPrChange", "rPrChange"} {
+		if paragraph.has(name) {
+			return false
+		}
+	}
+	return true
+}
+
+func refreshBookmarkReference(data []byte, t target, bookmarks *bookmarkIndex) ([]replacement, error) {
+	if !t.refreshableBookmarkRef {
+		return nil, fmt.Errorf("protected DOCX bookmark field")
+	}
+	start := bookmarks.bodyBookmark(t.text)
+	if start == nil {
+		return nil, fmt.Errorf("DOCX bookmark field target does not exist")
+	}
+	value := bookmarkedPlainText(bookmarks, start)
+	if value == "" {
+		return nil, fmt.Errorf("DOCX bookmark field requires a plain text range")
+	}
+	cache := t.node.children[0].child("t")
+	if cache.text.String() == value {
+		return nil, nil
+	}
+	edit, err := replaceTextNode(data, cache, value)
+	if err != nil {
+		return nil, err
+	}
+	return []replacement{edit}, nil
+}

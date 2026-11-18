@@ -13,7 +13,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_date_field, refresh_date_field, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, set_link_bookmark, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, refresh_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_date_field, refresh_date_field, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, set_link_bookmark, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -29,6 +29,7 @@ type BookmarkInfo struct {
 }
 
 type LinkInfo struct {
+	RefreshNeeded    bool   `json:"refreshNeeded,omitempty"`
 	BookmarkEditable bool   `json:"bookmarkEditable,omitempty"`
 	PageReference    bool   `json:"pageReference,omitempty"`
 	Field            bool   `json:"field,omitempty"`
@@ -136,6 +137,12 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 	}
 	if edit.Action == "delete_footnote" || edit.Action == "delete_endnote" {
 		return p.deleteNote(strings.TrimPrefix(edit.Action, "delete_"), t, edit, changes)
+	}
+	if edit.Action == "refresh_bookmark_ref" {
+		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
+			return nil, fmt.Errorf("unexpected DOCX bookmark field data")
+		}
+		return refreshBookmarkReference(data, t, bookmarks)
 	}
 	if edit.Action == "update_caption_list" {
 		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
@@ -413,7 +420,9 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 					}
 					run.Link = &LinkInfo{Bookmark: names[key], Field: true}
 				} else if kind == "REF" && referenceTexts[key] != "" {
-					run.Text, run.Link = referenceTexts[key], &LinkInfo{Bookmark: names[key], Field: true}
+					text := referenceTexts[key]
+					run.Link = &LinkInfo{Bookmark: names[key], Field: true, RefreshNeeded: t.refreshableBookmarkRef && run.Text != text}
+					run.Text = text
 				}
 				continue
 			}

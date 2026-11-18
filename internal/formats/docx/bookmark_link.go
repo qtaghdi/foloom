@@ -23,16 +23,16 @@ func changeBookmarkLink(data []byte, target target, edit ReferenceEdit, bookmark
 		return nil, fmt.Errorf("invalid DOCX bookmark link update")
 	}
 	link := target.node
-	original := bookmarks.bodyBookmarkName(link.attr("anchor"))
-	replacementName := bookmarks.bodyBookmarkName(edit.Bookmark)
-	if original == "" || replacementName == "" {
+	original := bookmarks.bodyBookmark(link.attr("anchor"))
+	updated := bookmarks.bodyBookmark(edit.Bookmark)
+	if original == nil || updated == nil {
 		return nil, fmt.Errorf("DOCX bookmark link target does not exist")
 	}
-	if original == replacementName {
+	if original == updated {
 		return nil, nil
 	}
 	opening, _ := scopedOpening(link, data, false)
-	opening, err := patchOpeningAttributes(opening, wordNS, map[string]string{"anchor": replacementName}, nil)
+	opening, err := patchOpeningAttributes(opening, wordNS, map[string]string{"anchor": updated.attr("name")}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -41,10 +41,10 @@ func changeBookmarkLink(data []byte, target target, edit ReferenceEdit, bookmark
 	return []replacement{{start: link.start, end: link.inner, data: []byte(opening)}}, nil
 }
 
-func (index bookmarkIndex) bodyBookmarkName(name string) string {
+func (index bookmarkIndex) bodyBookmark(name string) *node {
 	key := strings.ToLower(name)
 	if index.names[key] != 1 {
-		return ""
+		return nil
 	}
 	for _, starts := range index.starts {
 		if len(starts) != 1 {
@@ -53,8 +53,8 @@ func (index bookmarkIndex) bodyBookmarkName(name string) string {
 		start := starts[0]
 		bookmarked := start.attr("name")
 		if strings.EqualFold(bookmarked, name) && start.parent.is("p") && start.parent.parent.is("body") && index.safeStart(start) {
-			return bookmarked
+			return start
 		}
 	}
-	return ""
+	return nil
 }
