@@ -18,11 +18,13 @@ type CommentEdit struct {
 }
 
 type ReviewComment struct {
-	ID          string `json:"id"`
-	Author      string `json:"author"`
-	Date        string `json:"date,omitempty"`
-	Text        string `json:"text"`
-	ParagraphID string `json:"paragraphId,omitempty"`
+	Resolved           bool   `json:"resolved,omitempty"`
+	ResolutionEditable bool   `json:"resolutionEditable,omitempty"`
+	ID                 string `json:"id"`
+	Author             string `json:"author"`
+	Date               string `json:"date,omitempty"`
+	Text               string `json:"text"`
+	ParagraphID        string `json:"paragraphId,omitempty"`
 }
 
 func (p *documentPackage) commentsPart(changes map[string][]byte) (string, []byte, *node, error) {
@@ -76,6 +78,10 @@ func (p *documentPackage) projectComments(root *node, blocks []Block) []ReviewCo
 	if err != nil || comments == nil {
 		return nil
 	}
+	var resolutions map[string]*node
+	if _, extended, err := p.commentExtensions(nil); err == nil && extended != nil {
+		resolutions = commentResolutionNodes(comments, extended)
+	}
 	locations := map[string]string{}
 	blockIndex := 0
 	for _, block := range root.child("body").children {
@@ -120,8 +126,12 @@ func (p *documentPackage) projectComments(root *node, blocks []Block) []ReviewCo
 		if _, err := time.Parse(time.RFC3339, date); err != nil {
 			date = ""
 		}
+		resolved, resolutionEditable := false, false
+		if entry := resolutions[id]; entry != nil {
+			resolved, resolutionEditable = commentDone(entry)
+		}
 		out = append(out, ReviewComment{ID: reviewText(id, 40), Author: reviewText(attribute(comment, wordNS, "author"), 256), Date: date,
-			Text: reviewText(strings.Join(lines, "\n"), 4000), ParagraphID: locations[id]})
+			Text: reviewText(strings.Join(lines, "\n"), 4000), ParagraphID: locations[id], Resolved: resolved, ResolutionEditable: resolutionEditable})
 		if len(out) == 100 {
 			break
 		}

@@ -17,7 +17,7 @@ export function DocumentComments(props:{
   const [trackId,setTrackId]=createSignal('');
   const availableRuns=()=>props.target?.runs.filter(run=>run.trackable).slice(0,200)??[];
   const trackRun=()=>availableRuns().find(run=>run.id===trackId());
-  const applyReview=(operation:RevisionReviewOperation|TrackTextOperation)=>{
+  const applyReview=(operation:CommentOperation|RevisionReviewOperation|TrackTextOperation)=>{
     if(disabled())return;
     const accepted=props.onApply(operation);
     setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
@@ -101,6 +101,13 @@ export function DocumentComments(props:{
         <For each={props.snapshot?.comments??[]}>{comment=><li class="rounded border border-slate-200 p-2">
           <p class="text-xs font-semibold">{comment.author||'작성자 미상'} <Show when={comment.date}>{date=><time dateTime={date()}>{date()}</time>}</Show></p>
           <p class="whitespace-pre-wrap break-words text-sm">{comment.text}</p>
+          <Show when={comment.resolutionEditable}>
+            <p class="text-xs text-slate-600">{comment.resolved?'해결됨':'열려 있음'}</p>
+            <button type="button" class={quietButtonClass} disabled={disabled()} onClick={()=>
+              applyReview({type:comment.resolved?'reopen_comment':'resolve_comment',targetId:comment.id})}>
+              {comment.resolved?'주석 다시 열기':'주석 해결'}
+            </button>
+          </Show>
           <Show when={comment.paragraphId}>{id=><button type="button" class={quietButtonClass} onClick={()=>props.onLocate(id())}>주석 위치로 이동</button>}</Show>
         </li>}</For>
       </ul>
