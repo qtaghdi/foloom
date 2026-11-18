@@ -833,8 +833,11 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 삽입의 `자동 목차 삽입`을 적용하면 선택한 본문 문단 앞에 제목 수준 1~3을 모아
 Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
 `reference: { action: "insert_toc" }`를 별도 작업으로 보냅니다.
-브라우저는 삽입할 때 수집한 제목을 표시합니다. 제목을 수정한 뒤 Word에서
-목차 전체를 업데이트하면 제목과 페이지 번호를 다시 계산할 수 있습니다.
+브라우저에서 제목을 고친 뒤 `목차 제목 업데이트`를 적용하고 저장하면
+현재 제목을 목차에 다시 모읍니다. HTTP·MCP는 목차 run ID와 별도 작업
+`reference: { action: "update_toc" }`를 보냅니다. Word의 잠긴 목차와 복합
+목차는 원본을 보존합니다. Word에서 목차 전체를 업데이트하면 페이지
+번호와 링크도 다시 계산할 수 있습니다.
 문서에 이미 목차가 있으면 새 목차 삽입을 막습니다.
 [Word 목차 삽입과 업데이트](https://support.microsoft.com/en-us/word/training/insert-a-table-of-contents)를 참고하세요.
 

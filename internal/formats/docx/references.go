@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_toc, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_toc, update_toc, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -130,6 +130,12 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 	}
 	if edit.Action == "delete_footnote" || edit.Action == "delete_endnote" {
 		return p.deleteNote(strings.TrimPrefix(edit.Action, "delete_"), t, edit, changes)
+	}
+	if edit.Action == "update_toc" {
+		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
+			return nil, fmt.Errorf("unexpected DOCX table of contents fields")
+		}
+		return p.updateTableOfContents(t)
 	}
 	paragraph := t.paragraph
 	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") {
