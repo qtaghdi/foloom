@@ -8,9 +8,11 @@ import (
 const mathNS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 type MathEdit struct {
-	Action     string        `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, or delete"`
-	Expression string        `json:"expression,omitempty"`
-	Fraction   *MathFraction `json:"fraction,omitempty"`
+	Action     string              `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, insert_matrix, edit_matrix_cell, or delete"`
+	Matrix     [][]string          `json:"matrix,omitempty" jsonschema:"Exactly two rows of two plain-text matrix entries"`
+	MatrixCell *MathMatrixCellEdit `json:"matrixCell,omitempty"`
+	Expression string              `json:"expression,omitempty"`
+	Fraction   *MathFraction       `json:"fraction,omitempty"`
 }
 
 type MathFraction struct {
@@ -37,6 +39,7 @@ type ObjectInfo struct {
 	RectangleResizeEditable bool              `json:"rectangleResizeEditable,omitempty"`
 	Rectangle               *RectanglePreview `json:"rectangle,omitempty"`
 	Line                    *LinePreview      `json:"line,omitempty"`
+	Matrix                  *[2][2]string     `json:"matrix,omitempty"`
 	SquareRoot              string            `json:"squareRoot,omitempty"`
 }
 
@@ -119,7 +122,10 @@ func objectPreview(n *node) *ObjectInfo {
 		if text := squareRootText(n); text != nil {
 			out.SquareRoot, out.Editable = text.text.String(), true
 		}
-		if out.Editable && out.Fraction == nil && out.SquareRoot == "" {
+		if out.Matrix = matrixPreview(n); out.Matrix != nil {
+			out.Editable = true
+		}
+		if out.Editable && out.Fraction == nil && out.SquareRoot == "" && out.Matrix == nil {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
@@ -180,10 +186,21 @@ func validMathText(text string) bool {
 	return validText(text) && len(text) <= 1024 && strings.TrimSpace(text) != ""
 }
 
+func mathTextRun(text string) string {
+	return `<dwm:r><dwm:t xml:space="preserve">` + escapeText(text) + `</dwm:t></dwm:r>`
+}
+
 func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) {
 	fractionEdit := edit.Action == "insert_fraction" || edit.Action == "replace_fraction"
 	if !fractionEdit && edit.Fraction != nil {
 		return replacement{}, fmt.Errorf("unexpected DOCX fraction fields")
+	}
+	if (edit.Action != "insert_matrix" && edit.Matrix != nil) || (edit.Action != "edit_matrix_cell" && edit.MatrixCell != nil) ||
+		((edit.Action == "insert_matrix" || edit.Action == "edit_matrix_cell") && edit.Expression != "") {
+		return replacement{}, fmt.Errorf("unexpected DOCX matrix fields")
+	}
+	if edit.Action == "edit_matrix_cell" {
+		return matrixCellReplacement(data, t, edit.MatrixCell)
 	}
 	if edit.Action == "delete" {
 		if t.kind != "math_object" || !editableMath(t.node) || strings.Contains(string(data[t.node.start:t.node.end]), "<!--") || edit.Expression != "" {
@@ -199,21 +216,25 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 		}
 		return replaceTextNode(data, text, edit.Expression)
 	}
-	mathRun := func(text string) string {
-		return `<dwm:r><dwm:t xml:space="preserve">` + escapeText(text) + `</dwm:t></dwm:r>`
-	}
 	var contents string
-	if fractionEdit {
+	switch {
+	case edit.Action == "insert_matrix":
+		var err error
+		contents, err = matrixContents(edit.Matrix)
+		if err != nil {
+			return replacement{}, err
+		}
+	case fractionEdit:
 		fraction := edit.Fraction
 		if edit.Expression != "" || fraction == nil || !validMathText(fraction.Numerator) || !validMathText(fraction.Denominator) {
 			return replacement{}, fmt.Errorf("invalid DOCX fraction")
 		}
-		contents = `<dwm:f><dwm:num>` + mathRun(fraction.Numerator) + `</dwm:num><dwm:den>` + mathRun(fraction.Denominator) + `</dwm:den></dwm:f>`
-	} else {
+		contents = `<dwm:f><dwm:num>` + mathTextRun(fraction.Numerator) + `</dwm:num><dwm:den>` + mathTextRun(fraction.Denominator) + `</dwm:den></dwm:f>`
+	default:
 		if !validMathText(edit.Expression) {
 			return replacement{}, fmt.Errorf("invalid DOCX equation text")
 		}
-		contents = mathRun(edit.Expression)
+		contents = mathTextRun(edit.Expression)
 		if edit.Action == "insert_root" {
 			contents = `<dwm:rad><dwm:radPr><dwm:degHide dwm:val="1"/></dwm:radPr><dwm:deg/><dwm:e>` +
 				contents + `</dwm:e></dwm:rad>`
@@ -232,7 +253,7 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 			return replacement{}, fmt.Errorf("protected DOCX fraction")
 		}
 		return replacement{t.node.start, t.node.end, []byte(raw)}, nil
-	case "insert", "insert_fraction", "insert_root":
+	case "insert", "insert_fraction", "insert_root", "insert_matrix":
 		p := t.paragraph
 		if t.kind != "replace_paragraphs" || p == nil {
 			return replacement{}, fmt.Errorf("DOCX equation requires an editable paragraph")
