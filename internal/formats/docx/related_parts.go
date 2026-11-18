@@ -33,7 +33,7 @@ func appendXMLChild(data []byte, child string) ([]byte, error) {
 // normalizing other entries, including changes staged by the same batch.
 func (p *documentPackage) addWordPart(changes map[string][]byte, kind, relationshipID string) (string, error) {
 	filename := p.availablePart(changes, "word/"+kind, ".xml")
-	_, err := p.addRelatedPart(changes, filename, kind, "application/vnd.openxmlformats-officedocument.wordprocessingml."+kind+"+xml", relationshipID)
+	_, err := p.addRelatedPart(changes, filename, officeRelNS+"/"+kind, "application/vnd.openxmlformats-officedocument.wordprocessingml."+kind+"+xml", relationshipID)
 	return filename, err
 }
 
@@ -51,7 +51,7 @@ func (p *documentPackage) availablePart(changes map[string][]byte, stem, extensi
 	return filename
 }
 
-func (p *documentPackage) addRelatedPart(changes map[string][]byte, filename, kind, contentType, relationshipID string) (string, error) {
+func (p *documentPackage) addRelatedPart(changes map[string][]byte, filename, relationshipType, contentType, relationshipID string) (string, error) {
 	// LibreOffice requires unprefixed OPC elements when reading package metadata.
 	const ctPath = "[Content_Types].xml"
 	ct, err := appendXMLChild(p.partData(ctPath, changes), `<Override xmlns="http://schemas.openxmlformats.org/package/2006/content-types" PartName="/`+filename+`" ContentType="`+contentType+`"/>`)
@@ -78,7 +78,7 @@ func (p *documentPackage) addRelatedPart(changes map[string][]byte, filename, ki
 	for ids[relationshipID] {
 		relationshipID += "X"
 	}
-	rels, err = appendXMLChild(rels, `<Relationship xmlns="http://schemas.openxmlformats.org/package/2006/relationships" Id="`+relationshipID+`" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/`+kind+`" Target="`+strings.TrimPrefix(filename, "word/")+`"/>`)
+	rels, err = appendXMLChild(rels, `<Relationship xmlns="http://schemas.openxmlformats.org/package/2006/relationships" Id="`+relationshipID+`" Type="`+relationshipType+`" Target="`+strings.TrimPrefix(filename, "word/")+`"/>`)
 	if err != nil {
 		return "", err
 	}
