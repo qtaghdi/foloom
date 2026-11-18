@@ -786,12 +786,14 @@ HTTP·MCP에서는 경계 문단 ID로 `update_boundary`의 `remove_section`을 
 
 
 본문 문단에 커서를 놓고 `페이지·구역 나눔`을 열어 문단 앞 페이지 나눔을
-설정·해제하거나 문단 뒤에 다음 페이지 또는 연속 구역 나눔을 삽입합니다.
+설정·해제하거나 문단 뒤에 다음 페이지, 홀수·짝수 페이지 또는 연속 구역 나눔을
+삽입합니다.
 다른 초안은 먼저 저장하거나 실행 취소합니다. 새 경계는 저장 후 미리보기에
 반영되며 실행 취소할 수 있습니다.
 
 `update_boundary`는 현 리비전의 본문 문단 ID와 `boundary` 값
-`page_before`, `no_page_before`, `section_next_page`, `section_continuous`를
+`page_before`, `no_page_before`, `section_next_page`, `section_continuous`,
+`section_even_page`, `section_odd_page`를
 받습니다. 문단 앞 나눔은 `pageBreakBefore`만 수정합니다. 구역 나눔은 양쪽에
 본문이 있고 기존 구역 속성을 안전하게 복제할 수 있을 때만 삽입합니다. 새
 구역은 번호를 이어가며 기존 머리글·바닥글 part를 공유합니다. 기존 구역 경계의
