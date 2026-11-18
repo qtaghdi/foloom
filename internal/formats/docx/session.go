@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Session owns a single DOCX. mu protects content, revisions and retained events.
@@ -300,6 +301,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var bookmarks *bookmarkIndex
 	var moveTargets map[string]target
 	referenceCount := 0
+	var revisionIDs map[int64]bool
+	var nextRevisionID int64
+	var revisionDate string
 	for _, op := range input.Operations {
 		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -322,6 +326,28 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("DOCX batch replacement XML exceeds 16 MiB limit")
 			}
 			edits = append(edits, edit)
+			continue
+		}
+		if op.Type == "track_run_text" {
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX tracked text fields")
+			}
+			if revisionIDs == nil {
+				revisionIDs = s.pkg.revisionIDs(root)
+				revisionDate = time.Now().UTC().Format(time.RFC3339)
+			}
+			author := "사용자"
+			if actor == "ai" {
+				author = "AI"
+			}
+			edit, err := trackedTextEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			referenceCount++
 			continue
 		}
 		if op.Type == "accept_revision" || op.Type == "reject_revision" {
@@ -590,7 +616,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 		}
 		if op.Type == "update_control_text" {
-			changes, err := controlTextEdits(s.pkg.document, t, op.Text)
+			changes, err := plainRunTextEdits(s.pkg.document, t.controlTexts, t.text, op.Text)
 			if err != nil {
 				return nil, err
 			}

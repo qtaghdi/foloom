@@ -75,3 +75,53 @@ func TestDOCXReviewProtectsComplexTrackedRuns(t *testing.T) {
 		t.Fatal("nested tracked content could be silently removed")
 	}
 }
+
+func TestDOCXTrackedRunPersistsAsNativeInsertAndDelete(t *testing.T) {
+	ctx := context.Background()
+	raw := `<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>팀 🙂</w:t></w:r><w:r><w:t> suffix</w:t></w:r></w:p>` +
+		`<w:p><w:ins w:id="0" w:author="Reviewer"><w:r><w:t>existing</w:t></w:r></w:ins></w:p>`
+	s, filename := withDocument(t, bodyXML(raw))
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	run := v.Blocks[0].Paragraph.Runs[0]
+	if !run.Trackable {
+		t.Fatal("plain formatted run cannot be selected")
+	}
+	op := Operation{Type: "track_run_text", TargetID: run.ID, ExpectedText: "stale", Text: "연구팀 & 협력"}
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}
+	if _, err := s.Apply(ctx, input, "ai"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("stale tracked text committed")
+	}
+	input.Operations[0].ExpectedText = run.Text
+	if _, err := s.Apply(ctx, input, "ai"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := mustSnapshot(t, reopened)
+	runs := view.Blocks[0].Paragraph.Runs
+	if !view.TrackedChanges || len(runs) != 3 || runs[0].Object == nil || runs[1].Object == nil ||
+		runs[0].Object.Kind != "tracked_delete" || runs[0].Object.Text != run.Text ||
+		runs[1].Object.Kind != "tracked_insert" || runs[1].Object.Text != op.Text ||
+		runs[0].Object.Author != "AI" || runs[0].Object.Date == "" || runs[2].Text != " suffix" {
+		t.Fatalf("tracked replacement after reopen: %+v", runs)
+	}
+	doc := string(reopened.pkg.document)
+	if !strings.Contains(doc, `dwr:id="1"`) || !strings.Contains(doc, `dwr:id="2"`) ||
+		!strings.Contains(doc, `<w:ins w:id="0" w:author="Reviewer">`) {
+		t.Fatal("the new annotation IDs collide with existing revisions")
+	}
+	accepted, err := reopened.Apply(ctx, ApplyInput{SessionID: view.ID, BaseRevision: view.Revision, Operations: []Operation{
+		{Type: "accept_revision", TargetID: runs[0].ID}, {Type: "accept_revision", TargetID: runs[1].ID},
+	}}, "human")
+	if err != nil || accepted.Blocks[0].Paragraph.Runs[0].Text != op.Text || !accepted.Blocks[0].Paragraph.Runs[0].Bold {
+		t.Fatalf("accept changed the inserted text or its formatting: %v", err)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore original package bytes")
+	}
+}

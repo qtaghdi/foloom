@@ -159,6 +159,7 @@ func escapeText(s string) string {
 }
 
 type target struct {
+	trackable        bool
 	controlTexts     []*node
 	moveUp, moveDown *node
 	paragraph, run   *node
@@ -289,6 +290,13 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				reviewable = false
 			}
 		}
+		trackableParagraph := allowed && reviewable
+		for _, name := range []string{"commentRangeStart", "commentRangeEnd", "commentReference", "bookmarkStart", "bookmarkEnd"} {
+			if p.has(name) {
+				trackableParagraph = false
+				break
+			}
+		}
 		for _, r := range p.children {
 			if r.is("pPr") {
 				continue
@@ -385,10 +393,10 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				run.CharacterStyleID = id
 			}
 			directRun(&run, runProps)
+			run.Trackable = trackableParagraph && editable && trackableRun(r, texts, root.source)
 			out.Runs = append(out.Runs, run)
-			if allowed && !protected[r] && p.parent == body && run.Object != nil && run.Object.Kind == "footnote" &&
-				run.Object.noteID != "" {
-				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "footnote"}
+			if allowed && !protected[r] && p.parent == body && run.Object != nil && (run.Object.Kind == "footnote" || run.Object.Kind == "endnote") && run.Object.noteID != "" {
+				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: run.Object.Kind}
 			}
 			if !editable && r.child("drawing") != nil {
 				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "picture"}
@@ -398,7 +406,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				if len(texts) == 1 && !r.has("br") || r.has("tab") {
 					textNode = texts[0]
 				}
-				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r}
+				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r, trackable: run.Trackable}
 			} else {
 				unsupported = true
 			}

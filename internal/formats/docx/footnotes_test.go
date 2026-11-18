@@ -167,8 +167,33 @@ func TestDOCXEndnotePersistsIndependentlyOfFootnote(t *testing.T) {
 			t.Fatalf("native %s part missing or malformed: %v", kind, err)
 		}
 	}
-	if snapshot.Blocks[1].Paragraph.Runs[1].Object.Editable {
-		t.Fatal("endnote exposed unsupported edit")
+	run := snapshot.Blocks[1].Paragraph.Runs[1]
+	if !run.Object.Editable {
+		t.Fatal("plain endnote not available for editing")
+	}
+	beforeEndnoteEdit := fileBytes(t, filename)
+	bodyBefore := bytes.Clone(reopened.pkg.document)
+	footnoteBefore := bytes.Clone(reopened.pkg.partData("word/footnotes.xml", nil))
+	updated, err := reopened.Apply(ctx, ApplyInput{SessionID: snapshot.ID, BaseRevision: snapshot.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: run.ID, Reference: &ReferenceEdit{Action: "set_endnote_text", Text: "새 미주 & 근거"}},
+	}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Blocks[1].Paragraph.Runs[1].Object.Text != "새 미주 & 근거" ||
+		!bytes.Equal(bodyBefore, reopened.pkg.document) || !bytes.Equal(footnoteBefore, reopened.pkg.partData("word/footnotes.xml", nil)) {
+		t.Fatal("editing the endnote modified the body or footnote")
+	}
+	reopened, err = Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mustSnapshot(t, reopened).Blocks[1].Paragraph.Runs[1].Object.Text != "새 미주 & 근거" {
+		t.Fatal("the edited endnote did not persist")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(beforeEndnoteEdit, fileBytes(t, filename)) {
+		t.Fatal("undo changed the original endnote")
 	}
 	historyRestore(t, reopened, "undo")
 	if !bytes.Equal(original, fileBytes(t, filename)) {

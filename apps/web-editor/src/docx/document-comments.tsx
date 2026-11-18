@@ -1,10 +1,11 @@
 import { createSignal, For, Show } from 'solid-js';
 import { buttonClass, quietButtonClass } from '../ui/editor-chrome';
-import type { CommentOperation, CommentRange, Paragraph, RevisionReviewOperation, Snapshot } from './contracts';
+import type { CommentOperation, CommentRange, Paragraph, RevisionReviewOperation, Snapshot, TrackTextOperation } from './contracts';
+import { utf8Length } from './validation';
 
 export function DocumentComments(props:{
   snapshot?:Snapshot;target?:Paragraph;range?:CommentRange;disabled:boolean;pending:boolean;
-  onApply:(operation:CommentOperation|RevisionReviewOperation)=>boolean;onLocate:(id:string)=>void;
+  onApply:(operation:CommentOperation|RevisionReviewOperation|TrackTextOperation)=>boolean;onLocate:(id:string)=>void;
 }) {
   const [open,setOpen]=createSignal(false),[text,setText]=createSignal(''),[error,setError]=createSignal('');
   const [useRange,setUseRange]=createSignal(false);
@@ -13,9 +14,14 @@ export function DocumentComments(props:{
   const changes=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ? block.paragraph.runs.filter(run=>run.object?.kind==='tracked_insert'||run.object?.kind==='tracked_delete')
     : []).slice(0,100)??[];
-  const review=(type:RevisionReviewOperation['type'],targetId:string)=>{
+  const [trackId,setTrackId]=createSignal('');
+  const availableRuns=()=>props.target?.runs.filter(run=>run.trackable).slice(0,200)??[];
+  const trackRun=()=>availableRuns().find(run=>run.id===trackId());
+  const applyReview=(operation:RevisionReviewOperation|TrackTextOperation)=>{
     if(disabled())return;
-    setError(props.onApply({type,targetId})?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+    const accepted=props.onApply(operation);
+    setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+    if(accepted)setOpen(false);
   };
   const add=()=>{
     if(!props.target||!targetText()||!text().trim()||disabled()||useRange()&&!props.range)return;
@@ -29,6 +35,34 @@ export function DocumentComments(props:{
     <Show when={open()}><section id="docx-comments" aria-label="문서 주석"
       class="fixed right-3 top-16 z-50 max-h-[min(70dvh,34rem)] w-[min(24rem,calc(100vw-1.5rem))] overflow-y-auto rounded-lg border border-slate-300 bg-white p-3 text-slate-900 shadow-lg">
       <div class="flex items-center justify-between"><strong>문서 주석</strong><button type="button" class={quietButtonClass} onClick={()=>setOpen(false)}>닫기</button></div>
+      <Show when={availableRuns().length}>
+        <details class="my-2 border-b border-slate-200 pb-2">
+          <summary class="min-h-11 cursor-pointer content-center text-sm font-semibold focus-visible:outline-2 focus-visible:outline-teal-700">텍스트 변경 추적</summary>
+          <select aria-label="추적할 텍스트" value={trackRun()?.id??''} disabled={disabled()}
+            class="editor-select min-h-11 max-w-full" onChange={event=>{setTrackId(event.currentTarget.value);setError('');}}>
+            <option value="">텍스트 선택</option>
+            <For each={availableRuns()}>{run=><option value={run.id}>{run.text.slice(0,80)}</option>}</For>
+          </select>
+          <Show when={trackRun()} keyed>{run=>
+            <form class="my-2 grid gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const field=event.currentTarget.elements.namedItem('replacement') as HTMLInputElement;
+              const replacement=field.value;
+              if(replacement===run.text)return;
+              if(utf8Length(replacement)>1024){setError('텍스트를 UTF-8 1 KiB 이하로 줄이세요.');return;}
+              applyReview({type:'track_run_text',targetId:run.id,expectedText:run.text,text:replacement});
+            }}>
+              <label class="grid gap-1 text-sm">새 텍스트
+                <input type="text" name="replacement" maxlength="1024" value={run.text} disabled={disabled()}
+                  class="min-h-11 rounded border border-slate-300 px-2"/>
+              </label>
+              <p class="text-xs text-slate-600">텍스트를 비우면 삭제로 기록합니다.</p>
+              <button type="submit" class={buttonClass} disabled={disabled()}>변경 추적 적용</button>
+            </form>
+          }</Show>
+        </details>
+      </Show>
       <Show when={props.snapshot?.trackedChanges}>
         <section aria-label="변경 추적" class="my-2 border-b border-slate-200 pb-2">
           <h3 class="text-sm font-semibold">변경 추적</h3>
@@ -38,12 +72,13 @@ export function DocumentComments(props:{
                 <p class="text-xs font-semibold">
                   {change.object?.kind==='tracked_insert'?'삽입':'삭제'}
                   {change.object?.author?` · ${change.object.author}`:''}
+                  <Show when={change.object?.date}>{date=><time dateTime={date()}> · {new Date(date()).toLocaleString()}</time>}</Show>
                 </p>
                 <p class="whitespace-pre-wrap break-words text-sm">{change.object?.text}</p>
                 <Show when={change.object?.editable} fallback={<p class="text-xs text-slate-600">읽기 전용</p>}>
                   <div class="mt-1 flex flex-wrap gap-2">
-                    <button type="button" class={quietButtonClass} disabled={disabled()} onClick={()=>review('accept_revision',change.id)}>수락</button>
-                    <button type="button" class={quietButtonClass} disabled={disabled()} onClick={()=>review('reject_revision',change.id)}>거절</button>
+                    <button type="button" class={quietButtonClass} disabled={disabled()} onClick={()=>applyReview({type:'accept_revision',targetId:change.id})}>수락</button>
+                    <button type="button" class={quietButtonClass} disabled={disabled()} onClick={()=>applyReview({type:'reject_revision',targetId:change.id})}>거절</button>
                   </div>
                 </Show>
               </li>}</For>
