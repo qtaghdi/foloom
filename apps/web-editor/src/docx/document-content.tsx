@@ -76,7 +76,7 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
    const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
    const slot=section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant);
    const text=resolveHeaderText(props.snapshot.sections??[],slot);
-   return [text,slot?.pageNumber?'쪽 번호 필드':''].filter(Boolean).join('\n');
+   return [text,slot?.pageNumber?'쪽 번호 필드':'',slot?.totalPages?'전체 쪽 수 필드':''].filter(Boolean).join('\n');
   };
   const goToBookmark=(name:string)=>{
     const id=props.snapshot.bookmarks?.find(bookmark=>bookmark.name===name)?.paragraphId;
@@ -110,11 +110,11 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
           <Show when={run.picture?.crop} fallback={<img loading="lazy" class="inline-block max-w-full align-middle" contentEditable={false}
             src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}
             width={Math.max(1,Math.round(run.picture!.widthEmu/9525))} height={Math.max(1,Math.round(run.picture!.heightEmu/9525))}
-            style={{height:'auto'}}/>}>{crop=>{
+            style={{height:'auto',transform:run.picture?.rotation?'rotate(180deg)':undefined}}/>}>{crop=>{
             const wide=()=>100000-crop().left-crop().right;
             const high=()=>100000-crop().top-crop().bottom;
             return <span data-docx-crop contentEditable={false} class="relative inline-block max-w-full overflow-hidden align-middle"
-              style={{width:`${Math.max(1,Math.round(run.picture!.widthEmu/9525))}px`,'aspect-ratio':`${run.picture!.widthEmu}/${run.picture!.heightEmu}`}}>
+              style={{width:`${Math.max(1,Math.round(run.picture!.widthEmu/9525))}px`,'aspect-ratio':`${run.picture!.widthEmu}/${run.picture!.heightEmu}`,transform:run.picture?.rotation?'rotate(180deg)':undefined}}>
               <img loading="lazy" class="absolute" style={{'max-width':'none',
                 width:`${10000000/wide()}%`,height:`${10000000/high()}%`,left:`${-100*crop().left/wide()}%`,top:`${-100*crop().top/high()}%`}}
                 src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}/>
