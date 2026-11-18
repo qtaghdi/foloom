@@ -51,7 +51,7 @@ const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
   compoundRestart:z.object({parentNumber:z.number().int().min(1).max(9999),terminal:z.boolean().optional()}).optional(),
   alignmentTrackable:z.boolean().optional(),
-  breakRevision:z.object({kind:z.literal('tracked_insert'),text:z.string().max(1027).optional(),
+  breakRevision:z.object({kind:z.enum(['tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),
     author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
   alignmentRevision:z.object({kind:z.literal('tracked_format'),text:z.string().max(1027).optional(),
     author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
