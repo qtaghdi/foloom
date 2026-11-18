@@ -43,9 +43,17 @@ export function previewLists(snapshot: Snapshot, drafts: ListDefinition[] = []):
       if (source) catalog.set(d.key,source.levels.map(level=>level.level===(d.level??0)?{...level,start:d.start}:level));
       continue;
     }
-    catalog.set(d.key, Array.from({length:9}, (_,level)=>({
-      level,kind:d.kind,text:d.kind==='bullet'?['•','◦','▪'][level%3]!:`%${level+1}.`,start:level===0?d.start??1:1,
-    })));
+    let hierarchy='';
+    catalog.set(d.key, Array.from({length:9}, (_,level)=>{
+      let text=`%${level+1}.`;
+      if (d.kind==='bullet') {
+        text=['•','◦','▪'][level%3]!;
+      } else if(d.compound) {
+        hierarchy+=text;
+        text=hierarchy;
+      }
+      return {level,kind:d.kind,text,start:level===0?d.start??1:1};
+    }));
   }
   const counters = new Map<string, Array<number | undefined>>();
   const paragraph = (p: Paragraph): Paragraph => {
