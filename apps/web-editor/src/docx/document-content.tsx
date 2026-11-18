@@ -1,3 +1,4 @@
+import { runFont, splitRunFonts } from './run-fonts';
 import { TabText, layoutTabCharacters } from './tab-layout';
 import { resolveHeaderText } from './document-header-footer';
 import { defaultHeaderFooterDistance, previewPageLayout, sectionPaper, type PreviewPageLayout } from './sections';
@@ -39,7 +40,7 @@ export function layoutPreviewPages(pages:PageGroup[], sections:SectionInfo[]|und
   return previewPageLayout(pages.map(page=>page.sectionId===undefined?undefined:byId.get(page.sectionId)),evenAndOddHeaders);
 }
 
-export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPageLayout[]; onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPageLayout[]; onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onSplitNote: (run:Run, offset:number) => boolean; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
   let frame=0;
@@ -127,6 +128,7 @@ export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPage
           <Show when={p.structureEditable} fallback={<><span aria-hidden="true" data-docx-print-text class="hidden whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text}</span><RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
             onFocus={() => props.onFocusRun(run)} onComposition={props.onComposition} onHistory={props.onHistory}
+            onSplitNote={run.splitNoteParagraph ? offset => props.onSplitNote(run,offset) : undefined}
             onStructure={p.structureEditable ? (action, start, end, insertion) => props.onStructure(action, run.id, start, end, insertion) : undefined}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/></> }>
             <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text ? <RunText run={run}/> : (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
@@ -216,18 +218,13 @@ function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
   </span>;
 }
 
-const eastAsianScripts = '[\\p{Script_Extensions=Han}\\p{Script_Extensions=Hangul}\\p{Script_Extensions=Hiragana}\\p{Script_Extensions=Katakana}\\p{Script_Extensions=Bopomofo}]';
-const eastAsianLetter = new RegExp(`^${eastAsianScripts}+$`, 'u');
-const eastAsianSegments = new RegExp(`((?:${eastAsianScripts}\\p{M}*)+)`, 'u');
-
 function RunText(props: {run: Run}) {
-  const eastAsiaFont = props.run.eastAsiaFont;
-  if (!eastAsiaFont || eastAsiaFont === props.run.font) return <TabText text={props.run.text}/>;
-  // Font segments are presentation only. Selection and clipboard offsets
-  // continue to use the complete text of the enclosing DOCX run.
-  return <For each={props.run.text.split(eastAsianSegments)}>{(segment, index) => index() % 2 === 1
-    ? <span style={{'font-family': fontFamily(eastAsiaFont, props.run.font)}}>{segment}</span>
-    : <TabText text={segment}/>}</For>;
+  if (!props.run.eastAsiaFont || props.run.eastAsiaFont === props.run.font) return <TabText text={props.run.text}/>;
+  // Display segments share the enclosing run's text offsets.
+  const base = runFont(props.run);
+  return <For each={splitRunFonts(props.run)}>{segment => segment.font && segment.font !== base
+    ? <span style={{'font-family': fontFamily(segment.font, base)}}>{segment.text}</span>
+    : <TabText text={segment.text}/>}</For>;
 }
 
 function fontFamily(font: string, fallback?: string): string {
@@ -235,8 +232,7 @@ function fontFamily(font: string, fallback?: string): string {
 }
 
 function runStyle(run: Run) {
-  const letters=run.eastAsiaFont?run.text.replace(/[\p{P}\p{Z}\p{N}\s]/gu,''):'';
-  const font=letters && eastAsianLetter.test(letters)?run.eastAsiaFont:run.font;
+  const font = runFont(run);
   return {
     'font-size': run.sizeHalfPoints === undefined ? undefined : `${run.sizeHalfPoints / 2}pt`,
     'font-family': font ? fontFamily(font) : undefined,
@@ -249,15 +245,24 @@ function runStyle(run: Run) {
   };
 }
 
-function RunField(props: { onComposition: (active: boolean) => void; onHistory: (direction: 'undo' | 'redo') => void; run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onStructure?: (action: StructureAction, start: number, end: number, insertion?: string) => boolean; onEdit: (text: string) => void }) {
+function RunField(props: { onComposition: (active: boolean) => void; onHistory: (direction: 'undo' | 'redo') => void; run: Run; fullWidth: boolean; align?: 'start' | 'center' | 'end' | 'justify'; label: string; saving: boolean; onFocus: () => void; onSplitNote?: (offset:number) => boolean; onStructure?: (action: StructureAction, start: number, end: number, insertion?: string) => boolean; onEdit: (text: string) => void }) {
   const [error, setError] = createSignal('');
   const [hint, setHint] = createSignal('');
   const [composing, setComposing] = createSignal(false);
   let softBreak = false;
+  const splitNote = (field:HTMLTextAreaElement) => {
+    const start=field.selectionStart;
+    if (start!==field.selectionEnd||start===0||start===field.value.length) {
+      setHint('각주·미주가 붙은 문단을 나누려면 글자 사이에 커서를 놓으세요.');
+      return;
+    }
+    if (props.onSplitNote?.(start)) setHint('');
+    else setHint('현재 초안을 저장하거나 실행 취소한 뒤 다시 나누세요.');
+  };
   const descriptionId = `input-error-${props.run.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   return <>
     <textarea value={props.run.text} rows={Math.max(1, Math.ceil(props.run.text.length / 72))} readOnly={props.saving}
-      title={props.onStructure ? undefined : t('paragraphStructureUnavailable')} placeholder={props.run.text ? undefined : t('typeHere')} name={props.run.id} autocomplete="off" aria-label={props.label} aria-invalid={Boolean(error())} aria-describedby={error() || hint() ? descriptionId : undefined}
+      title={props.onSplitNote ? '글자 사이에서 Enter를 눌러 나누고 저장하세요.' : props.onStructure ? undefined : t('paragraphStructureUnavailable')} placeholder={props.run.text ? undefined : t('typeHere')} name={props.run.id} autocomplete="off" aria-label={props.label} aria-invalid={Boolean(error())} aria-describedby={error() || hint() ? descriptionId : undefined}
       class="docx-run cursor-text min-w-0 resize-none bg-transparent leading-[inherit]"
       style={{ ...runStyle(props.run), 'text-align': props.align }}
       classList={{ 'docx-run-wide': props.fullWidth }}
@@ -271,6 +276,7 @@ function RunField(props: { onComposition: (active: boolean) => void; onHistory: 
           ? (event.key === 'ArrowUp' ? 'moveUp' : event.key === 'ArrowDown' ? 'moveDown' : undefined)
           : !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
             ? event.key === 'Enter' ? 'split' : event.key === 'Backspace' ? 'mergeBackward' : event.key === 'Delete' ? 'mergeForward' : undefined : undefined;
+        if (action==='split' && props.onSplitNote) { event.preventDefault(); splitNote(field); return; }
         if (action && props.onStructure?.(action, field.selectionStart, field.selectionEnd)) { event.preventDefault(); return; }
         if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); setHint(source('paragraphStructureUnavailable')); return; }
         if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
@@ -292,6 +298,7 @@ function RunField(props: { onComposition: (active: boolean) => void; onHistory: 
         softBreak = false;
         if (!lineBreak) return;
         const field = event.currentTarget;
+        if (props.onSplitNote) { event.preventDefault(); splitNote(field); return; }
         if (props.onStructure?.('split', field.selectionStart, field.selectionEnd)) event.preventDefault();
         else { event.preventDefault(); setHint(source('paragraphStructureUnavailable')); }
       }}

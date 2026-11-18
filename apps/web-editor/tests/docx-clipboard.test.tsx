@@ -29,6 +29,24 @@ it('keeps literal tabs, repeated spaces and line breaks in copied basic formatti
  expect(parseClipboardHTML('<p>left\t two  words</p>',document)?.text).toBe('left two words');
 });
 
+it('copies the displayed fonts for a backward selection inside a mixed-script run', () => {
+ const snapshot: Snapshot = {
+  id:'s', name:'mixed.docx', revision:1, sequence:0, warnings:[],
+  blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
+   {id:'r',text:'Latin 한글\tテスト end',editable:true,bold:true,italic:false,font:'Courier New',eastAsiaFont:'Hiragino Sans'},
+  ]}}],
+ };
+ const draft=new StructureDraft(snapshot);
+ const selection={anchor:{runId:'r',offset:14},focus:{runId:'r',offset:2}};
+ const rich=draft.selectedRich(selection)!;
+ const copied=parseClipboardHTML(clipboardHTML(rich),document)!;
+ expect(copied.text).toBe(draft.selectedText(selection));
+ expect(copied.paragraphs[0].map(({text,style})=>[text,style?.font,style?.bold])).toEqual([
+  ['tin ','Courier New',true], ['한글','Hiragino Sans',true], ['\t','Courier New',true],
+  ['テスト','Hiragino Sans',true], [' e','Courier New',true],
+ ]);
+});
+
 it('round-trips inherited underline and strike while normalizing unsupported decoration', () => {
  const source='<p><u>하나 <s>둘</s><span style="text-decoration:none"> 셋</span></u><span style="text-decoration-line:line-through overline"> 넷</span></p>';
  const result=parseClipboardHTML(source,document)!;

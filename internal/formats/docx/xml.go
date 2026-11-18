@@ -159,6 +159,7 @@ func escapeText(s string) string {
 }
 
 type target struct {
+	splitNoteParagraph     bool
 	picturePlacement       string
 	tableCaptionInsertable bool
 	refreshableBookmarkRef bool

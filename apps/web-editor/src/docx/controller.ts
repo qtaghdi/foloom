@@ -12,11 +12,11 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type ListDefinition, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction, type DocumentEvent } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type SplitNoteParagraphOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type Run, type ListDefinition, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction, type DocumentEvent } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
 const historyTitle = {undo: '실행 취소', redo: '다시 실행'} as const;
-type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
+type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   recovery?(status: RecoveryStatus): void;
   composition?(active: boolean): void;
@@ -45,7 +45,7 @@ export class DocumentController {
   private disposed = false;
   private loading = false;
   private listDrafts=new Map<string,ListDefinition>();
-  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation;
+  private standaloneDraft?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation;
   private imageDraft?:ImageOperation;
   private boundaryDraft?: BoundaryOperation;
   private headerParityDraft?: boolean;
@@ -210,7 +210,14 @@ export class DocumentController {
   pendingTable(): boolean { return this.standaloneDraft?.type === 'update_table'; }
   editTable(operation: TableOperation): boolean { return this.editStandalone(operation); }
   pendingStandalone(): boolean { return Boolean(this.standaloneDraft); }
-  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation): boolean {
+  pendingNoteSplit(): boolean { return this.standaloneDraft?.type === 'split_note_paragraph'; }
+  splitNoteParagraph(run:Run, offset:number): boolean {
+    if (!run.splitNoteParagraph || offset<=0 || offset>=run.text.length) return false;
+    if (typeof Intl.Segmenter==='function' &&
+      !Array.from(new Intl.Segmenter().segment(run.text)).some(segment=>segment.index===offset)) return false;
+    return this.editStandalone({type:'split_note_paragraph',targetId:run.id,expectedText:run.text,text:run.text.slice(0,offset)});
+  }
+  editStandalone(operation:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation): boolean {
     if(this.blocked||this.loading||this.disposed||!this.structureDraft||this.hasDrafts())return false;
     this.remember(this.checkpoint());
     this.standaloneDraft=operation;
@@ -404,6 +411,8 @@ export class DocumentController {
     if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.pendingOperations().length}개 수정` });
     try {
       let snapshot = this.snapshot;
+      const splitId = this.standaloneDraft?.type==='split_note_paragraph' ? this.standaloneDraft.targetId : undefined;
+      const splitIndex = splitId ? snapshot.blocks.findIndex(block=>block.type==='paragraph'&&block.paragraph.runs.some(run=>run.id===splitId)) : -1;
       if (hasChanges) {
         if (this.recovery) {
           await this.recovery.flush();
@@ -419,7 +428,8 @@ export class DocumentController {
       if (hasChanges) {
         this.view.activity?.({ id: activityId, actor: 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: snapshot.revision });
         const first=snapshot.blocks[0];
-        const newRun=this.standaloneDraft?.type==='update_table' &&
+        const right = splitIndex>=0 ? snapshot.blocks[splitIndex+1] : undefined;
+        const newRun=right?.type==='paragraph' ? right.paragraph.runs[0] : this.standaloneDraft?.type==='update_table' &&
           this.standaloneDraft.table.action==='insert_body_paragraph_before' && first?.type==='paragraph'
           ? first.paragraph.runs[0] : undefined;
         this.resetDraft(snapshot);

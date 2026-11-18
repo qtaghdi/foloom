@@ -9,6 +9,9 @@ func markHyperlinkParagraphs(root *node, paragraphs map[*node]*Paragraph, protec
 	markBodyParagraphMoves(root, paragraphs, protected, func(p *node) bool {
 		return p.child("hyperlink") != nil && structuralParagraphContents(p, root.source, "hyperlink", nil)
 	}, func(p, before, after *node) {
+		if before == nil && after == nil {
+			return
+		}
 		paragraph := paragraphs[p]
 		paragraph.MoveHyperlinkUp, paragraph.MoveHyperlinkDown = before != nil, after != nil
 		targets[paragraph.ID] = target{kind: "hyperlink_paragraph", paragraph: p, moveUp: before, moveDown: after}
@@ -43,9 +46,7 @@ func markBodyParagraphMoves(root *node, paragraphs map[*node]*Paragraph, protect
 				after = next
 			}
 		}
-		if before != nil || after != nil {
-			mark(p, before, after)
-		}
+		mark(p, before, after)
 	}
 }
 
@@ -79,13 +80,17 @@ func allowPlainHyperlink(link *node, validRun func(*node) bool) bool {
 // A range can begin and end in other blocks, leaving no visible marker on a
 // paragraph it covers. Keep such blocks stationary even if both look ordinary.
 func bodyRangeBlocks(body *node) (map[*node]bool, bool) {
+	return bodyRangeBlocksExcept(body, nil)
+}
+
+func bodyRangeBlocksExcept(body *node, ignored map[*node]bool) (map[*node]bool, bool) {
 	type rangeID struct{ kind, id string }
 	active := map[rangeID]bool{}
 	ranged := map[*node]bool{}
 	valid := true
 	var visit func(*node, *node)
 	visit = func(n, block *node) {
-		if n.name.Space == wordNS {
+		if n.name.Space == wordNS && !ignored[n] {
 			kind, start := strings.CutSuffix(n.name.Local, "Start")
 			if !start {
 				kind, _ = strings.CutSuffix(n.name.Local, "End")

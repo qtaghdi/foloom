@@ -133,7 +133,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	blocks, targetsByID, unsupported, err := s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+	blocks, targetsByID, unsupported, err := s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -348,6 +348,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.RectangleSize != nil && op.Type != "resize_rectangle" {
 			return nil, fmt.Errorf("unexpected DOCX rectangle size")
 		}
+		if op.ChartInsert != nil && op.Type != "insert_chart" {
+			return nil, fmt.Errorf("unexpected DOCX chart insertion fields")
+		}
 		if op.ChartWidthEMU != nil && op.Type != "resize_chart" {
 			return nil, fmt.Errorf("unexpected DOCX chart width")
 		}
@@ -429,6 +432,23 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, updated...)
 			continue
 		}
+		if op.Type == "split_note_paragraph" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
+				return nil, fmt.Errorf("invalid DOCX note paragraph split fields")
+			}
+			_, noteTargets, _, err := s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
+			if err != nil {
+				return nil, err
+			}
+			edit, err := splitNoteParagraph(s.pkg.document, noteTargets[op.TargetID], op, usedParagraphIDs(root))
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
 		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" ||
 			op.Type == "move_note_up" || op.Type == "move_note_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -437,7 +457,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
 			if layoutTargets == nil {
-				_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+				_, layoutTargets, _, err = s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
 				if err != nil {
 					return nil, err
 				}
@@ -611,6 +631,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if !ok || op.Reference == nil || op.Image != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX reference operation")
 			}
+			if op.Reference.Action != "insert_figure_ref" && op.Reference.FigureID != "" {
+				return nil, fmt.Errorf("unexpected DOCX figure reference target")
+			}
+			if op.Reference.Action == "insert_figure_ref" && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX figure reference must stand alone")
+			}
 			if (op.Reference.Action == "rename_bookmark" || op.Reference.Action == "delete_bookmark") && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark edit must stand alone")
 			}
@@ -627,7 +653,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				index := readBookmarks(root)
 				bookmarks = &index
 			}
-			replacements, err := s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			var replacements []replacement
+			if op.Reference.Action == "insert_figure_ref" {
+				replacements, err = s.pkg.insertFigureReference(t, targets[op.Reference.FigureID], *op.Reference, bookmarks)
+			} else {
+				replacements, err = s.pkg.referenceEdits(s.pkg.document, t, *op.Reference, bookmarks, parts)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -675,7 +706,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, added...)
 			continue
 		}
-		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" || op.Type == "insert_chart" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -710,6 +741,17 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if err != nil {
 				return nil, err
 			}
+			if op.Type == "insert_chart" {
+				if op.ChartInsert == nil || op.Text != "" {
+					return nil, fmt.Errorf("DOCX chart creation requires chartInsert")
+				}
+				edit, err := s.pkg.insertPieChart(t.paragraph, *op.ChartInsert, id, parts)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
+			}
 			var drawing string
 			if op.Type == "insert_rectangle" {
 				drawing = inlineRectangle(id)
@@ -729,7 +771,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			if op.Image.Action == "align" || op.Image.Action == "set_placement" {
 				if layoutTargets == nil {
-					_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+					_, layoutTargets, _, err = s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)
 					if err != nil {
 						return nil, err
 					}
