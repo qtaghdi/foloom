@@ -146,7 +146,8 @@ export type TrackTextOperation = {type:'track_run_text';targetId:string;expected
   {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
   {type:'update_chart_value';targetId:string;chartValue:{point:number;expectedValue:string;value:string}} |
-  {type:'delete_chart';targetId:string};
+  {type:'delete_chart';targetId:string} |
+  {type:'insert_chart';targetId:string;chartInsert:{title:string;points:{label:string;value:string}[]}};
 export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};
