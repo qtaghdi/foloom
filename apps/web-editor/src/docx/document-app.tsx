@@ -409,7 +409,7 @@ export function DocumentApp() {
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentShapeToolbar target={referenceParagraph()} pending={standalonePending()}
+    <DocumentShapeToolbar snapshot={state().snapshot} target={referenceParagraph()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <For each={['control','textbox'] as const}>{kind=>

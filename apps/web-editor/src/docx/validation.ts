@@ -19,7 +19,7 @@ export function validateDrafts(sessionId: string, revision: number, operations: 
   let textBytes = 0;
   for (const operation of operations) {
     if(operation.type==='update_table'||operation.type==='move_bookmark_up'||operation.type==='move_bookmark_down'||
-      operation.type==='accept_revision'||operation.type==='reject_revision'||operation.type==='insert_rectangle')continue;
+      operation.type==='accept_revision'||operation.type==='reject_revision'||operation.type==='insert_rectangle'||operation.type==='update_rectangle_colors')continue;
     if(operation.type==='define_list'||operation.type==='update_image'||operation.type==='update_reference'||operation.type==='add_comment'||operation.type==='resolve_comment'||operation.type==='reopen_comment'||operation.type==='update_math')continue;
     const texts = operation.type==='update_section' ? (operation.section.headerFooters??[]).flatMap(slot=>slot.text===undefined?[]:[slot.text]) : operation.type === 'define_style' || operation.type === 'update_header_parity' || operation.type === 'update_boundary' ? [] : operation.type === 'replace_paragraphs' ? operation.paragraphs.flatMap(p => p.runs.map(r => r.text)) : [operation.text];
     for (const text of texts) { const error = validateRunText(text); if (error) return error; textBytes += utf8Length(text); }
