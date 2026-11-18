@@ -10,6 +10,7 @@ export function DocumentListToolbar(props:{
   paragraphs:Paragraph[]; lists:NonNullable<Snapshot['lists']>; disabled:boolean;
   onList:(list:ParagraphList|ListSetup)=>void;
   onLevel:(delta:number)=>void;
+  onCompoundRestart:(first:string,last:string,start:number)=>void;
 }) {
  const [start,setStart]=createSignal(1);
  const [format,setFormat]=createSignal<NumberFormat>('decimal');
@@ -20,6 +21,12 @@ export function DocumentListToolbar(props:{
   const selected=props.paragraphs[0]?.list;
   const id=selected?.id,level=selected?.level??0;
   if (!id || props.paragraphs.some(p=>p.list?.id!==id||(p.list.level??0)!==level)) return;
+  const first=props.paragraphs[0],last=props.paragraphs.at(-1);
+  const parent=first?.compoundRestart?.parentNumber;
+  if (parent && first && last?.compoundRestart?.terminal &&
+    props.paragraphs.every(p=>p.compoundRestart?.parentNumber===parent)) {
+    return {id,level,limit:9999,compound:{first:first.id,last:last.id,parent}};
+  }
   const levels=props.lists.find(list=>list.id===id)?.levels??[];
   const source=levels.find(item=>item.level===level);
   const limit=maxListStart(source?.kind),token=`%${level+1}`;
@@ -60,9 +67,16 @@ export function DocumentListToolbar(props:{
        type="number" min="1" max={source().limit} value={Number.isFinite(restartStart())?restartStart():''}
        disabled={!available()} onInput={event=>setRestartStart(event.currentTarget.valueAsNumber)}/>
     </label>
+    <Show when={source().compound}>{compoundSource=>
+      <span class="text-slate-600">상위 번호 {compoundSource().parent} 유지</span>
+    }</Show>
     <button type="button" class={buttonClass}
      disabled={!available()||!Number.isInteger(restartStart())||restartStart()<1||restartStart()>source().limit}
-     onClick={()=>props.onList({sourceId:source().id,level:source().level,start:restartStart()})}>선택한 목록 번호 다시 시작</button>
+     onClick={()=>{
+       const compoundSource=source().compound;
+       if(compoundSource)props.onCompoundRestart(compoundSource.first,compoundSource.last,restartStart());
+       else props.onList({sourceId:source().id,level:source().level,start:restartStart()});
+     }}>선택한 목록 번호 다시 시작</button>
   </div>}</Show>
   <button type="button" class={buttonClass} disabled={!canLevel(-1)} onClick={()=>props.onLevel(-1)}>목록 수준 올리기</button>
   <button type="button" class={buttonClass} disabled={!canLevel(1)} onClick={()=>props.onLevel(1)}>목록 수준 내리기</button>

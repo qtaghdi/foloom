@@ -22,6 +22,7 @@ type listLevel struct {
 }
 
 type numberingCatalog struct {
+	compoundSources    map[int]bool
 	levels             map[int]map[int]listLevel
 	maxID, maxAbstract int
 }
@@ -47,11 +48,12 @@ func readListLevel(n *node) listLevel {
 }
 
 func readNumbering(root *node) numberingCatalog {
-	c := numberingCatalog{levels: map[int]map[int]listLevel{}, maxAbstract: -1}
+	c := numberingCatalog{levels: map[int]map[int]listLevel{}, compoundSources: map[int]bool{}, maxAbstract: -1}
 	if root == nil || !root.is("numbering") {
 		return c
 	}
 	abstracts := map[int]map[int]listLevel{}
+	compoundAbstracts := map[int]bool{}
 	for _, n := range root.children {
 		if !n.is("abstractNum") {
 			continue
@@ -69,6 +71,29 @@ func readNumbering(root *node) numberingCatalog {
 			}
 		}
 		abstracts[id] = levels
+		var top, child int
+		validCompoundProperties := true
+		for _, level := range n.children {
+			if !level.is("lvl") {
+				continue
+			}
+			index := listInt(level.attr("ilvl"), -1)
+			switch index {
+			case 0:
+				top++
+			case 1:
+				child++
+			default:
+				continue
+			}
+			start := listInt(level.child("start").attr("val"), -1)
+			validCompoundProperties = validCompoundProperties && level.child("pStyle") == nil &&
+				countChild(level, "start") == 1 && start >= 1 && start <= 9999 &&
+				countChild(level, "numFmt") == 1 && countChild(level, "lvlText") == 1
+		}
+		compoundAbstracts[id] = top == 1 && child == 1 && validCompoundProperties && levels[0].kind == "decimal" && levels[0].text == "%1." &&
+			levels[1].kind == "decimal" && levels[1].text == "%1.%2." && !levels[0].legal && !levels[1].legal &&
+			levels[1].restart == nil && n.child("numStyleLink") == nil && n.child("styleLink") == nil
 	}
 	for _, n := range root.children {
 		if !n.is("num") {
@@ -103,6 +128,9 @@ func readNumbering(root *node) numberingCatalog {
 			}
 		}
 		c.levels[id] = levels
+		if compoundAbstracts[abstract] && countChild(n, "lvlOverride") == 0 {
+			c.compoundSources[id] = true
+		}
 	}
 	return c
 }
@@ -231,7 +259,8 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 		keys[d.Key] = id
 		if d.SourceID != 0 {
 			source := catalog.levels[d.SourceID]
-			if !restartableListLevel(source, d.Level, d.Start) {
+			if d.parentNumber == 0 && !restartableListLevel(source, d.Level, d.Start) ||
+				d.parentNumber > 0 && (!catalog.compoundSources[d.SourceID] || d.Level != 1) {
 				return nil, numberingCatalog{}, fmt.Errorf("unsupported DOCX list for restart or invalid starting number")
 			}
 			copiedAbstract, instance, err := copyListWithStart(root, data, d, id, abstract)
@@ -241,6 +270,11 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 			levels := make(map[int]listLevel, len(source))
 			for index, original := range source {
 				levels[index] = original
+			}
+			if d.parentNumber > 0 {
+				parent := levels[0]
+				parent.start = d.parentNumber
+				levels[0] = parent
 			}
 			level := source[d.Level]
 			level.start = d.Start
