@@ -1,8 +1,10 @@
 # DOCX 생성과 텍스트 편집
 
-상태: 비공개 로컬 실험 기능. 새 문서 생성, 본문 일반 run과 단순 표 cell의 text
-run 교체를 제공합니다. Word 전체 편집기나 정확한 페이지 미리보기가 아닙니다.
-Microsoft Word와 LibreOffice native reopen 및 시각 증거는 아직 없습니다.
+상태는 비공개 로컬 실험 기능입니다. DOCX 문서를 만들고, 지원하는 본문·
+표·그림·목록·참조를 브라우저에서 편집한 뒤 저장하거나 내려받을 수 있습니다.
+기능별 지원과 검증 범위는 [DOCX 품질 검증](docx-quality.md)에 기록합니다.
+합성 문서는 Microsoft Word에서 읽고 LibreOffice에서 재저장한 증거가 있습니다.
+Microsoft Word에서 직접 편집·저장한 파일의 검증은 남아 있습니다.
 실제 문서는 복사본으로 작업하세요.
 
 ## 새 DOCX 문서
@@ -190,19 +192,18 @@ operation이 하나라도 있으면 전체 batch를 거부합니다. 내용이 �
 
 ## 지원과 보존 범위
 
-- 생성: 문단, 직사각형 단순 표, 한글·Latin text, 공백과 XML 특수 문자
-- 편집: 본문의 일반 text run, 병합되지 않은 단순 표의 일반 text run
-- 보존: 대상 text element 이외 XML byte와 다른 ZIP part의 압축 해제 payload
-- 읽기 전용 또는 생략: 변경 추적, field, hyperlink, content control, 병합·중첩 표,
-  그림, 머리글·바닥글, note, comment와 알 수 없는 구조
-- 미지원: run을 가로지르는 교체, 문단·행·열 추가 및 삭제, 새 서식 적용, 표 구조
-  편집, 탭·줄바꿈 입력, 정확한 pagination, PDF 변환, DOC·DOCM·암호화·서명 문서,
-  strict OOXML과 비표준 main document mapping
+- 일반 본문의 문단·run과 지원하는 단순 표 구조를 편집합니다. 서식, 목록,
+  탭 정지점, 인라인 그림, 구역 및 일부 참조·검토·개체 작업은 아래 항목을 따릅니다.
+- 작업마다 쓰기 가능한 구조와 관계 범위를 검사합니다. 보호된 영역은 읽기 전용으로
+  남거나 화면에서 생략될 수 있습니다. 관련 없는 part의 압축 해제 payload는 유지합니다.
+- 페이지 미리보기는 명시된 페이지·구역 경계와 지원하는 머리글·바닥글을 사용합니다.
+  브라우저의 인쇄·PDF 저장은 해당 표시를 사용하며 Word의 자동 조판은 별도 검증 범위입니다.
+- DOC·DOCM, 암호화·서명 파일, strict OOXML과 비표준 main document mapping은 지원하지 않습니다.
 
-원본 run의 서식과 주변 구조는 다시 만들지 않습니다. text element에는 필요한 경우
-`xml:space="preserve"`를 추가합니다. 기존 `xml:space="default"` 대상에 양끝 공백을
-새로 넣는 작업은 거부합니다. ZIP 압축 byte와 timestamp까지 동일하다는 계약은
-아닙니다. 전체 Word 호환성이나 모든 문서의 무손실 편집을 주장하지 않습니다.
+일반 텍스트 편집은 원본 run 서식과 주변 구조를 보존합니다. 필요한 경우 텍스트
+요소에 `xml:space="preserve"`를 추가합니다. 기존 `xml:space="default"` 대상에
+양끝 공백을 새로 넣는 작업은 거부합니다. 검증은 지원하는 구조의 의미와 패키지
+보존을 다루며 ZIP 압축 byte나 timestamp 동일성을 요구하지 않습니다.
 
 ## 안전 저장과 제한
 
@@ -253,9 +254,10 @@ make compatibility-test
 make package-test package-check
 ```
 
-Word와 LibreOffice 생산 fixture, native reopen, 시각 비교와 실제 호스트별 DOCX
-workflow 인증은 남은 검증입니다. 기존 XLSX 인증 결과를 DOCX 인증으로 재사용하지
-않습니다.
+일부 합성 샘플은 Word에서 읽고 LibreOffice에서 다시 저장했습니다. 지원표에
+연결한 PR에 기능별 화면·저장·재열기 결과와 남은 제약을 기록합니다. 대표 Word
+원본으로 직접 편집·저장·재열기, 최종 후보의 시각 비교와 실제 호스트별 검증은
+남아 있습니다. XLSX와 DOCX의 인증은 따로 수행합니다.
 
 ZIP에서 압축하지 않은 원본 항목은 저장한 뒤에도 같은 방식으로 유지합니다.
 LibreOffice가 편집한 파일을 다시 열 수 있도록 각 항목의 CRC와 크기를 ZIP
