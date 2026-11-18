@@ -20,6 +20,8 @@ const (
 )
 
 type Run struct {
+	ProofingLang     string       `json:"proofingLanguage,omitempty"`
+	EastAsiaLang     string       `json:"eastAsiaProofingLanguage,omitempty"`
 	Trackable        bool         `json:"trackable,omitempty"`
 	Object           *ObjectInfo  `json:"object,omitempty"`
 	Link             *LinkInfo    `json:"link,omitempty"`
@@ -38,6 +40,7 @@ type Run struct {
 	SizeHalfPoints   int          `json:"sizeHalfPoints,omitempty"`
 	Color            string       `json:"color,omitempty"`
 	Font             string       `json:"font,omitempty"`
+	EastAsiaFont     string       `json:"eastAsiaFont,omitempty"`
 }
 
 // Layout fields are bounded preview hints. They never participate in writes.
@@ -181,6 +184,8 @@ type ParagraphContent struct {
 // InlineStyle contains explicit, bounded clipboard formatting overrides. Source
 // run properties not named here remain unchanged.
 type InlineStyle struct {
+	ProofingLang   string  `json:"proofingLanguage,omitempty" jsonschema:"BCP 47 tag for Latin-script spelling and grammar"`
+	EastAsiaLang   string  `json:"eastAsiaProofingLanguage,omitempty" jsonschema:"BCP 47 tag for East Asian spelling and grammar"`
 	StyleID        *string `json:"styleId,omitempty"`
 	Reset          bool    `json:"reset,omitempty"`
 	Underline      *bool   `json:"underline,omitempty"`
@@ -191,6 +196,7 @@ type InlineStyle struct {
 	Italic         *bool   `json:"italic,omitempty"`
 	Color          string  `json:"color,omitempty"`
 	Font           string  `json:"font,omitempty"`
+	EastAsiaFont   string  `json:"eastAsiaFont,omitempty" jsonschema:"Override only the East Asian typeface; takes precedence over font for that slot"`
 	SizeHalfPoints *int    `json:"sizeHalfPoints,omitempty"`
 }
 type RunContent struct {
