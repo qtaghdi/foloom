@@ -28,7 +28,7 @@ import { DocumentBoundaryToolbar } from './document-boundary-toolbar';
 import { DocumentImageToolbar } from './document-image-toolbar';
 import { printDocument, printPaperRules } from './print-layout';
 import { DocumentOutline } from './document-outline';
-import { DocumentParagraphMoveToolbar } from './document-paragraph-move-toolbar';
+import { DocumentBodyParagraphMoveToolbar, DocumentParagraphMoveToolbar } from './document-paragraph-move-toolbar';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
 import { DocumentMathToolbar, DocumentShapeToolbar } from './document-objects';
@@ -469,6 +469,16 @@ export function DocumentApp() {
     <div id="docx-tools-layout" hidden={toolGroup()!=='layout'}>
     <DocumentHeaderFooter evenAndOddHeaders={state().snapshot?.evenAndOddHeaders} onParityChange={enabled=>{const changed=controller.editHeaderParity(enabled);if(changed)setDraftVersion(v=>v+1);return changed;}} sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentSectionToolbar sections={state().snapshot?.sections??[]} disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)} onApply={(id,format)=>{const changed=controller.editSection(id,format);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentBodyParagraphMoveToolbar
+      canMove={direction=>{
+        draftVersion();
+        const selection=formattingSelection();
+        return Boolean(state().snapshot&&!state().saving&&!state().loading&&selection&&controller.canMoveBodyParagraph(direction,selection));
+      }}
+      onMove={direction=>{
+        const selection=formattingSelection();
+        if(selection&&controller.moveBodyParagraph(direction,selection))setDraftVersion(v=>v+1);
+      }}/>
     <DocumentParagraphMoveToolbar kind="bookmark" paragraphs={state().snapshot?.blocks.flatMap(block=>
       block.type==='paragraph'&&(block.paragraph.moveBookmarkUp||block.paragraph.moveBookmarkDown)?[block.paragraph]:[])??[]}
       pending={standalonePending()} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
