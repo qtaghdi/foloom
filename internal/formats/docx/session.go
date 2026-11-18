@@ -485,6 +485,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if !ok || seen[key] || op.Table == nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid or duplicate DOCX table operation")
 			}
+			if op.Table.Action == "insert_body_paragraph_before" && (op.Image != nil || op.Reference != nil ||
+				op.Comment != nil || op.Math != nil || op.ListDefinition != nil || op.Boundary != "" ||
+				op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil) {
+				return nil, fmt.Errorf("unexpected DOCX leading paragraph operation fields")
+			}
 			seen[key] = true
 			edit, err := tableReplacement(s.pkg.document, t, *op.Table)
 			if err != nil {

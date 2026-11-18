@@ -387,8 +387,12 @@ export class DocumentController {
       this.snapshot = snapshot;
       if (hasChanges) {
         this.view.activity?.({ id: activityId, actor: 'human', state: 'committed', title: '본문·표 텍스트 저장', revision: snapshot.revision });
+        const first=snapshot.blocks[0];
+        const newRun=this.standaloneDraft?.type==='update_table' &&
+          this.standaloneDraft.table.action==='insert_body_paragraph_before' && first?.type==='paragraph'
+          ? first.paragraph.runs[0] : undefined;
         this.resetDraft(snapshot);
-        this.view.render(snapshot);
+        this.view.render(snapshot,newRun?{runId:newRun.id,start:0,end:0}:undefined);
       }
       this.view.status('저장됨', 'committed');
       this.connect(snapshot);

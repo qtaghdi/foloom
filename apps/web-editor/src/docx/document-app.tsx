@@ -234,7 +234,7 @@ export function DocumentApp() {
     return paragraphs.find(paragraph=>paragraph.runs.some(run=>run.id===runId))??paragraphs.at(-1);
   };
   const controller = new DocumentController({ ...view, recovery: setRecovery, render: (snapshot, focus) => {
-    setStructuralDraft(Boolean(focus) || controller.hasStructuralDraft());
+    setStructuralDraft(controller.hasStructuralDraft() || (Boolean(focus) && controller.hasDrafts()));
     if(focus)setFormattingSelection(focus.selection??{anchor:{runId:focus.runId,offset:focus.start},focus:{runId:focus.runId,offset:focus.end}});
     const article = document.getElementById('document-content');
     const active = document.activeElement;

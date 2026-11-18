@@ -141,11 +141,12 @@ type Row struct {
 }
 
 type Block struct {
-	TableEditable bool       `json:"tableEditable,omitempty"`
-	ID            string     `json:"id"`
-	Type          string     `json:"type"`
-	Paragraph     *Paragraph `json:"paragraph,omitempty"`
-	Rows          []Row      `json:"rows,omitempty"`
+	PrependParagraph bool       `json:"prependParagraph,omitempty"`
+	TableEditable    bool       `json:"tableEditable,omitempty"`
+	ID               string     `json:"id"`
+	Type             string     `json:"type"`
+	Paragraph        *Paragraph `json:"paragraph,omitempty"`
+	Rows             []Row      `json:"rows,omitempty"`
 }
 
 type HistoryState struct {
