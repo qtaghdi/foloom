@@ -240,7 +240,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 			break
 		}
 	}
-	return s.persistHistory(ctx, content, candidate, m, actor, textOnly)
+	return s.persistHistory(ctx, content, candidate, m, Event{Actor: actor, TextOnly: textOnly})
 }
 
 // RecoveryFile validates a draft against the exact in-memory base. It never
@@ -578,6 +578,20 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		}
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
+		}
+		if op.Type == "move_picture_caption_up" || op.Type == "move_picture_caption_down" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil ||
+				op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("DOCX picture caption movement must stand alone")
+			}
+			edit, err := s.pkg.movePictureCaption(targets[op.TargetID], op.Type)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
 		}
 		if op.Type == "insert_picture_caption" || op.Type == "edit_picture_caption" {
 			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||

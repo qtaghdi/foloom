@@ -230,7 +230,7 @@ func trimHistory(m *historyManifest) {
 		}
 	}
 }
-func (s *Session) persistHistory(ctx context.Context, content []byte, pkg *documentPackage, m historyManifest, actor string, textOnly bool) (Snapshot, error) {
+func (s *Session) persistHistory(ctx context.Context, content []byte, pkg *documentPackage, m historyManifest, event Event) (Snapshot, error) {
 	unlock, err := lockFile(s.path)
 	if err != nil {
 		return Snapshot{}, err
@@ -250,7 +250,8 @@ func (s *Session) persistHistory(ctx context.Context, content []byte, pkg *docum
 	s.revision++
 	s.sequence++
 	s.history.commit(m)
-	s.events = append(s.events, Event{Sequence: s.sequence, Revision: s.revision, Actor: actor, Type: "docx.committed", TextOnly: textOnly})
+	event.Sequence, event.Revision, event.Type = s.sequence, s.revision, "docx.committed"
+	s.events = append(s.events, event)
 	if len(s.events) > 128 {
 		s.events = s.events[len(s.events)-128:]
 	}
@@ -301,5 +302,5 @@ func (s *Session) RestoreHistory(ctx context.Context, input HistoryInput, actor 
 	m.Revision = s.revision + 1
 	m.Current = historyHash(content)
 	trimHistory(&m)
-	return s.persistHistory(ctx, content, pkg, m, actor, false)
+	return s.persistHistory(ctx, content, pkg, m, Event{Actor: actor, HistoryDirection: input.Direction})
 }
