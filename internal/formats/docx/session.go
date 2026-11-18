@@ -347,7 +347,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.ChartWidthEMU != nil && op.Type != "resize_chart" {
 			return nil, fmt.Errorf("unexpected DOCX chart width")
 		}
-		if op.Type == "update_chart_title" || op.Type == "resize_chart" {
+		if op.ChartValue != nil && op.Type != "update_chart_value" {
+			return nil, fmt.Errorf("unexpected DOCX chart value")
+		}
+		if op.Type == "update_chart_title" || op.Type == "resize_chart" || op.Type == "update_chart_value" {
 			t := targets[op.TargetID]
 			if t.kind != "chart" || seen[op.TargetID] ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -359,7 +362,8 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				chartCounts = s.pkg.chartUseCounts(root)
 			}
 			seen[op.TargetID] = true
-			if op.Type == "resize_chart" {
+			switch op.Type {
+			case "resize_chart":
 				if op.ChartWidthEMU == nil || op.Text != "" || op.ExpectedText != "" {
 					return nil, fmt.Errorf("invalid DOCX chart resize fields")
 				}
@@ -368,8 +372,17 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 					return nil, err
 				}
 				edits = append(edits, edit)
-			} else if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
-				return nil, err
+			case "update_chart_value":
+				if op.ChartValue == nil || op.Text != "" || op.ExpectedText != "" {
+					return nil, fmt.Errorf("invalid DOCX chart value fields")
+				}
+				if err := s.pkg.updateChartValue(t, chartCounts, *op.ChartValue, parts); err != nil {
+					return nil, err
+				}
+			default:
+				if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}

@@ -18,6 +18,7 @@ export function DocumentObjectTextToolbar(props:{
   onApply:(operation:ObjectTextOperation)=>boolean;
 }) {
   const [id,setID]=createSignal(''),[error,setError]=createSignal('');
+  const [point,setPoint]=createSignal(0);
   const labels=()=>objectLabels[props.kind];
   const objects=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ? block.paragraph.runs.filter(run=>run.object?.kind===props.kind&&run.object.editable)
@@ -54,7 +55,7 @@ export function DocumentObjectTextToolbar(props:{
         </Show>
         <Show when={objects().length}>
         <select aria-label={labels().select} class="editor-select min-h-11 max-w-56"
-          value={selected()?.id??''} disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setError('');}}>
+          value={selected()?.id??''} disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setPoint(0);setError('');}}>
           <option value="">{labels().name} 선택</option>
           <For each={objects()}>{(run,index)=>
             <option value={run.id}>{index()+1}. {run.object?.label||run.object?.text?.slice(0,60)||`빈 ${labels().name}`}</option>
@@ -99,6 +100,36 @@ export function DocumentObjectTextToolbar(props:{
               </label>
               <span class="self-center text-slate-600">현재 높이 {(frame().heightEmu/12700).toFixed(2)} pt</span>
               <button type="submit" class={buttonClass} disabled={disabled()}>차트 비율 유지 크기 변경</button>
+            </form>
+          }</Show>
+          <Show when={run.object?.chartValues}>{values=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const input=event.currentTarget.elements.namedItem('chartValue') as HTMLInputElement;
+              const value=input.value.trim(),index=point(),expectedValue=values()[index];
+              if(expectedValue===undefined||value===expectedValue)return;
+              if(value.length>64||!/^[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][-+]?[0-9]{1,3})?$/.test(value)||
+                Math.abs(Number(value))>1e15){
+                setError('절댓값이 10¹⁵ 이하인 숫자를 입력하세요.');
+                return;
+              }
+              const accepted=props.onApply({type:'update_chart_value',targetId:run.id,chartValue:{point:index,expectedValue,value}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">편집할 차트 데이터
+                <select aria-label="편집할 차트 데이터" class="editor-select min-h-11 max-w-56"
+                  value={point()} disabled={disabled()} onChange={event=>{setPoint(Number(event.currentTarget.value));setError('');}}>
+                  <For each={values()}>{(value,index)=><option value={index()}>값 {index()+1} · {value}</option>}</For>
+                </select>
+              </label>
+              <Show when={point()+1} keyed>{index=>
+                <label class="flex min-w-0 flex-col gap-1">새 차트 데이터 값
+                  <input name="chartValue" type="text" inputmode="decimal" maxlength="64" required
+                    value={values()[index-1]} disabled={disabled()} class="min-h-11 w-28 rounded border border-slate-300 px-2"/>
+                </label>
+              }</Show>
+              <button type="submit" class={buttonClass} disabled={disabled()}>차트 데이터 값 적용</button>
             </form>
           }</Show>
           </>
