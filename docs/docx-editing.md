@@ -747,6 +747,14 @@ HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rota
 이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
 
 
+일반 본문의 인라인 그림을 선택하고 `그림 번호와 캡션 삽입`을 적용하면 바로
+다음 문단에 캡션을 넣습니다. Word는 SEQ 필드로 그림 번호를 계산합니다. 앞에
+캡션을 추가하면 뒤따르는 지원 그림 번호를 다시 계산하고 그림 파일과 대체
+텍스트는 유지합니다. HTTP·MCP는 그림 run ID와 캡션 텍스트를
+`insert_picture_caption`에 보냅니다. 여러 그림이 한 문단에 있거나 복합 필드 및
+기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
+[Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
+
 ### 인쇄와 PDF 저장
 
 파일 작업의 `인쇄·PDF`는 저장된 문서를 브라우저 인쇄 창으로 보냅니다.
@@ -949,6 +957,12 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
+
+수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
+`제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을
+유지합니다. HTTP·MCP는 `update_math`의 `math: { action: "insert_root", expression }` 또는
+`math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
+[Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
 
 삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
 기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
