@@ -164,7 +164,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	targets := inspectSections(root, s.id, s.revision)
 	headers := s.pkg.headerFooterCatalog(targets)
 	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
-	projectControlUnwrap(root, blocks, targetsByID, settings, settingsErr)
+	projectRestrictedControlEdits(root, blocks, targetsByID, settings, settingsErr)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
 			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID, settings, settingsErr == nil && len(targets) == 1)
@@ -491,6 +491,19 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, err
 			}
 			edits = append(edits, edit)
+			continue
+		}
+		if op.Type == "update_control_date" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
+				return nil, fmt.Errorf("DOCX date control editing requires a single operation")
+			}
+			updates, err := s.pkg.updateControlDate(targets[op.TargetID], op.ExpectedText, op.Text)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, updates...)
 			continue
 		}
 		if op.Type == "unwrap_control" {

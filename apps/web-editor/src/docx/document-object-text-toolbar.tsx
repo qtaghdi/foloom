@@ -70,7 +70,23 @@ export function DocumentObjectTextToolbar(props:{
         </select>
         <Show when={selected()} keyed>{run=>
           <>
-          <Show when={run.object?.editable}>
+          <Show when={run.object?.dateControl}>{date=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const text=(event.currentTarget.elements.namedItem('controlDate') as HTMLInputElement).value;
+              if(!text||text===date().value)return;
+              const accepted=props.onApply({type:'update_control_date',targetId:run.id,expectedText:date().value,text});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">콘텐츠 컨트롤 날짜
+                <input name="controlDate" type="date" min="0001-01-01" max="9999-12-31" required
+                  value={date().value} disabled={disabled()} class="min-h-11 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>날짜 적용</button>
+            </form>
+          }</Show>
+          <Show when={run.object?.editable&&!run.object.dateControl}>
           <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
             event.preventDefault();
             if (disabled()) return;

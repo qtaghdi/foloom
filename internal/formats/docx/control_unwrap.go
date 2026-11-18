@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func allowControlUnwrapInSettings(settings *node, err error) bool {
+func allowControlEditsInSettings(settings *node, err error) bool {
 	if err != nil || countChild(settings, "documentProtection") > 1 || settings.child("writeProtection") != nil {
 		return false
 	}
@@ -22,7 +22,7 @@ func allowControlUnwrapInSettings(settings *node, err error) bool {
 	}
 }
 
-func controlUnwrapRanges(body *node) (map[*node]bool, bool) {
+func contentControlRanges(body *node) (map[*node]bool, bool) {
 	if body.has("permStart") || body.has("permEnd") {
 		return nil, false
 	}
@@ -51,12 +51,12 @@ func canUnwrapControl(t target, ranges map[*node]bool) bool {
 	return countChild(props, "rPr") <= 1
 }
 
-func projectControlUnwrap(root *node, blocks []Block, targets map[string]target, settings *node, settingsErr error) {
+func projectRestrictedControlEdits(root *node, blocks []Block, targets map[string]target, settings *node, settingsErr error) {
 	body := root.child("body")
-	if !body.has("sdt") || !allowControlUnwrapInSettings(settings, settingsErr) {
+	if !body.has("sdt") || !allowControlEditsInSettings(settings, settingsErr) {
 		return
 	}
-	ranges, valid := controlUnwrapRanges(body)
+	ranges, valid := contentControlRanges(body)
 	if !valid {
 		return
 	}
@@ -65,8 +65,14 @@ func projectControlUnwrap(root *node, blocks []Block, targets map[string]target,
 			continue
 		}
 		for _, run := range block.Paragraph.Runs {
-			if canUnwrapControl(targets[run.ID], ranges) {
+			t := targets[run.ID]
+			if canUnwrapControl(t, ranges) {
 				run.Object.UnwrapEditable = true
+			}
+			if t.kind == "update_control_date" && !ranges[t.paragraph] {
+				run.Object.Editable = true
+				run.Object.DateControl = &ControlDatePreview{Value: t.text, Format: controlDateFormat}
+				run.Object.Label = reviewText(t.node.child("sdtPr").child("alias").attr("val"), 160)
 			}
 		}
 	}
@@ -77,10 +83,10 @@ func (p *documentPackage) unwrapControl(t target) (replacement, error) {
 		return replacement{}, fmt.Errorf("protected or unsupported DOCX content control")
 	}
 	_, _, settings, err := p.pageSettings(nil)
-	if !allowControlUnwrapInSettings(settings, err) {
+	if !allowControlEditsInSettings(settings, err) {
 		return replacement{}, fmt.Errorf("protected or unsupported DOCX content control")
 	}
-	ranges, valid := controlUnwrapRanges(t.paragraph.parent)
+	ranges, valid := contentControlRanges(t.paragraph.parent)
 	if !valid || !canUnwrapControl(t, ranges) {
 		return replacement{}, fmt.Errorf("protected or unsupported DOCX content control")
 	}
