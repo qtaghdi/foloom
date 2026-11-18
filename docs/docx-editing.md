@@ -917,7 +917,12 @@ HTTP·MCP 값은 `square_left`와 `square_right`입니다. 기존 위아래 감�
 가로 거리를 맞춰 표시하고, 저장 파일은 지정한 거리를 유지합니다. 정렬
 프리셋이나 `인라인`을 선택해 배치를 다시 바꿀 수 있습니다. HTTP·MCP에서는
 `placement: "floating_offset"`과 함께 `horizontalOffsetEmu`를 보냅니다.
-1pt는 12700EMU입니다.
+1pt는 12700EMU입니다. 지원 그림은 `문단 아래로 거리 (pt)`에서 0~50pt를
+지정할 수 있습니다. 그림 높이와 거리가 본문 높이 안에 들어와야 합니다.
+저장할 때 문단 기준 세로 위치와 그림 위의 감싸기 간격에 같은 값을 써서
+뒤따르는 캡션과 본문이 그림 아래에 남도록 합니다. HTTP·MCP에서는
+`verticalOffsetEmu`를 함께 보냅니다. 생략하면 0입니다. 브라우저 편집 화면에서
+자동 페이지 나눔은 적용되지 않습니다.
 
 [Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
 

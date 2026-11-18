@@ -164,6 +164,7 @@ export class DocumentController {
       const image=draft.image;
       const settings=image.action==='align'?{align:image.align}:{
         placement:image.placement,horizontalOffsetEmu:image.placement==='floating_offset'?image.horizontalOffsetEmu:undefined,
+        verticalOffsetEmu:image.placement==='floating_offset'?image.verticalOffsetEmu:undefined,
       };
       blocks=blocks.map(block=>{
         if(block.type!=='paragraph'||!block.paragraph.runs.some(run=>run.id===draft.targetId))return block;
