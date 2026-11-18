@@ -129,7 +129,7 @@ export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPage
             onFocus={() => props.onFocusRun(run)} onComposition={props.onComposition} onHistory={props.onHistory}
             onStructure={p.structureEditable ? (action, start, end, insertion) => props.onStructure(action, run.id, start, end, insertion) : undefined}
             onEdit={(text) => props.onEdit({ type: kind, targetId: run.id, expectedText: run.text, text })}/></> }>
-            <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text ? <TabText text={run.text}/> : (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
+            <span data-docx-run={run.id} class="cursor-text whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text ? <RunText run={run}/> : (p.runs.every(r => !r.text) && p.runs[0] === run ? <br data-docx-empty/> : '')}</span>
           </Show>
         </Show>}</For>
       </Show>
@@ -206,14 +206,30 @@ function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
   </span>;
 }
 
-const eastAsianLetter=/^[\p{Script_Extensions=Han}\p{Script_Extensions=Hangul}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}\p{Script_Extensions=Bopomofo}]+$/u;
+const eastAsianScripts = '[\\p{Script_Extensions=Han}\\p{Script_Extensions=Hangul}\\p{Script_Extensions=Hiragana}\\p{Script_Extensions=Katakana}\\p{Script_Extensions=Bopomofo}]';
+const eastAsianLetter = new RegExp(`^${eastAsianScripts}+$`, 'u');
+const eastAsianSegments = new RegExp(`((?:${eastAsianScripts}\\p{M}*)+)`, 'u');
+
+function RunText(props: {run: Run}) {
+  const eastAsiaFont = props.run.eastAsiaFont;
+  if (!eastAsiaFont || eastAsiaFont === props.run.font) return <TabText text={props.run.text}/>;
+  // Font segments are presentation only. Selection and clipboard offsets
+  // continue to use the complete text of the enclosing DOCX run.
+  return <For each={props.run.text.split(eastAsianSegments)}>{(segment, index) => index() % 2 === 1
+    ? <span style={{'font-family': fontFamily(eastAsiaFont, props.run.font)}}>{segment}</span>
+    : <TabText text={segment}/>}</For>;
+}
+
+function fontFamily(font: string, fallback?: string): string {
+  return `${JSON.stringify(font)}${fallback ? `, ${JSON.stringify(fallback)}` : ''}, system-ui, sans-serif`;
+}
 
 function runStyle(run: Run) {
   const letters=run.eastAsiaFont?run.text.replace(/[\p{P}\p{Z}\p{N}\s]/gu,''):'';
   const font=letters && eastAsianLetter.test(letters)?run.eastAsiaFont:run.font;
   return {
     'font-size': run.sizeHalfPoints === undefined ? undefined : `${run.sizeHalfPoints / 2}pt`,
-    'font-family': font ? `${JSON.stringify(font)}, system-ui, sans-serif` : undefined,
+    'font-family': font ? fontFamily(font) : undefined,
     color: run.color,
     'text-decoration': [run.underline?'underline':'',run.strike?'line-through':''].filter(Boolean).join(' ') || undefined,
     'background-color': ({yellow:'#ffff00',green:'#00ff00',cyan:'#00ffff',magenta:'#ff00ff',blue:'#0000ff',red:'#ff0000',darkBlue:'#000080',darkCyan:'#008080',darkGreen:'#008000',darkMagenta:'#800080',darkRed:'#800000',darkYellow:'#808000',darkGray:'#808080',lightGray:'#c0c0c0',black:'#000000',white:'#ffffff'} as Record<string,string>)[run.highlight??''],

@@ -13,7 +13,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_date_field, refresh_date_field, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_date_field, refresh_date_field, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, set_link_bookmark, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -29,10 +29,11 @@ type BookmarkInfo struct {
 }
 
 type LinkInfo struct {
-	PageReference bool   `json:"pageReference,omitempty"`
-	Field         bool   `json:"field,omitempty"`
-	URL           string `json:"url,omitempty"`
-	Bookmark      string `json:"bookmark,omitempty"`
+	BookmarkEditable bool   `json:"bookmarkEditable,omitempty"`
+	PageReference    bool   `json:"pageReference,omitempty"`
+	Field            bool   `json:"field,omitempty"`
+	URL              string `json:"url,omitempty"`
+	Bookmark         string `json:"bookmark,omitempty"`
 }
 
 type bookmarkIndex struct {
@@ -120,6 +121,9 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 	}
 	if edit.Action == "set_link_url" {
 		return p.changeWebLink(data, t, edit, changes)
+	}
+	if edit.Action == "set_link_bookmark" {
+		return changeBookmarkLink(data, t, edit, bookmarks)
 	}
 	if edit.Action == "unlink" {
 		return unlinkReference(data, t, edit)
@@ -308,16 +312,8 @@ func unlinkReference(data []byte, target target, edit ReferenceEdit) ([]replacem
 	var out strings.Builder
 	start := link.inner
 	for _, run := range link.children {
-		if !run.is("r") || strings.HasSuffix(string(data[run.start:run.inner]), "/>") {
+		if !plainHyperlinkRun(run) || strings.HasSuffix(string(data[run.start:run.inner]), "/>") {
 			return nil, fmt.Errorf("DOCX link has protected content")
-		}
-		for _, child := range run.children {
-			if !child.is("rPr") && !child.is("t") && !plainLineBreak(child) && !plainTab(child) {
-				return nil, fmt.Errorf("DOCX link has protected content")
-			}
-		}
-		if run.has("rPrChange") {
-			return nil, fmt.Errorf("DOCX link has tracked formatting")
 		}
 		// Runs can inherit prefixes defined on the hyperlink being removed.
 		open, close := scopedOpening(run, data, false)
@@ -433,7 +429,7 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 					run.Link = &LinkInfo{URL: raw}
 				}
 			} else if id == "" && names[strings.ToLower(anchor)] != "" {
-				run.Link = &LinkInfo{Bookmark: names[strings.ToLower(anchor)]}
+				run.Link = &LinkInfo{Bookmark: names[strings.ToLower(anchor)], BookmarkEditable: t.linkAnchorEditable}
 			}
 		}
 	}
