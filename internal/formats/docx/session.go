@@ -328,6 +328,8 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var nextRevisionID int64
 	var revisionDate string
 	var chartCounts map[string]int
+	var controlIDs map[int64]bool
+	nextControlID := int64(1)
 	for _, op := range input.Operations {
 		if op.Bold != nil && op.Type != "track_run_bold" {
 			return nil, fmt.Errorf("unexpected DOCX tracked bold field")
@@ -577,6 +579,20 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
 		}
+		if op.Type == "move_picture_caption_up" || op.Type == "move_picture_caption_down" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil ||
+				op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("DOCX picture caption movement must stand alone")
+			}
+			edit, err := s.pkg.movePictureCaption(targets[op.TargetID], op.Type)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
 		if op.Type == "insert_picture_caption" || op.Type == "edit_picture_caption" {
 			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
 				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
@@ -600,19 +616,36 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, added...)
 			continue
 		}
-		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
-				return nil, fmt.Errorf("DOCX inline shape requires an editable body paragraph")
+				return nil, fmt.Errorf("DOCX inline object requires an editable body paragraph")
 			}
 			if op.Type == "insert_rectangle" && op.Text != "" {
 				return nil, fmt.Errorf("unexpected DOCX rectangle text")
 			}
 			if op.Type == "insert_textbox" && (len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "") {
 				return nil, fmt.Errorf("DOCX text box requires plain text")
+			}
+			if op.Type == "insert_control_text" {
+				if len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "" {
+					return nil, fmt.Errorf("DOCX content control requires non-empty plain text of up to 1024 bytes")
+				}
+				if controlIDs == nil {
+					controlIDs, err = s.pkg.contentControlIDs()
+					if err != nil {
+						return nil, err
+					}
+				}
+				for controlIDs[nextControlID] {
+					nextControlID++
+				}
+				edits = append(edits, appendParagraphContent(s.pkg.document, t.paragraph, inlinePlainControl(nextControlID, op.Text)))
+				nextControlID++
+				continue
 			}
 			id, err := nextDrawingID()
 			if err != nil {
@@ -624,7 +657,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			} else {
 				drawing = inlineTextBox(id, op.Text)
 			}
-			edits = append(edits, appendDrawingRun(s.pkg.document, t.paragraph, drawing))
+			edits = append(edits, appendParagraphContent(s.pkg.document, t.paragraph, drawing))
 			continue
 		}
 		if op.Type == "update_image" {
