@@ -291,6 +291,16 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				reviewable = false
 			}
 		}
+		formatReviewable := reviewable && p.has("rPrChange")
+		if formatReviewable {
+			for _, name := range []string{"fldChar", "instrText", "delInstrText", "fldSimple", "ins", "del", "moveFrom", "moveTo", "sdt",
+				"pPrChange", "sectPr", "commentRangeStart", "commentRangeEnd", "commentReference", "bookmarkStart", "bookmarkEnd", "drawing"} {
+				if p.has(name) {
+					formatReviewable = false
+					break
+				}
+			}
+		}
 		trackableParagraph := allowed && reviewable
 		for _, name := range []string{"commentRangeStart", "commentRangeEnd", "commentReference", "bookmarkStart", "bookmarkEnd"} {
 			if p.has(name) {
@@ -405,6 +415,15 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				run.CharacterStyleID = id
 			}
 			directRun(&run, runProps)
+			if !editable && runProps.child("rPrChange") != nil {
+				if change, _ := runFormatRevision(r, root.source); change != nil {
+					canReview := formatReviewable && !protected[r]
+					run.Object = formatRevisionPreview(change, text, canReview)
+					if canReview {
+						targets[run.ID] = target{node: change, run: r, paragraph: p, kind: "tracked_format"}
+					}
+				}
+			}
 			run.Trackable = trackableParagraph && editable && trackableRun(r, texts, root.source)
 			out.Runs = append(out.Runs, run)
 			if allowed && !protected[r] && p.parent == body && run.Object != nil && (run.Object.Kind == "footnote" || run.Object.Kind == "endnote") && run.Object.noteID != "" {

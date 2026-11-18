@@ -60,6 +60,9 @@ func reviewTextRevision(n *node, data []byte) *ObjectInfo {
 }
 
 func revisionReplacement(data []byte, t target, operation string) (replacement, error) {
+	if t.kind == "tracked_format" {
+		return formatRevisionReplacement(data, t, operation)
+	}
 	n := t.node
 	if t.kind != "tracked_text" || reviewTextRevision(n, data) == nil {
 		return replacement{}, fmt.Errorf("protected DOCX tracked revision")

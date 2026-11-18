@@ -101,7 +101,11 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
     <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
     <Show when={p.listLabel}><span data-docx-list-marker contentEditable={false} aria-label={`목록 ${p.listLabel}`} class="inline-block min-w-[18pt] select-none" style={{'text-indent':'0'}}>{p.listLabel}</span></Show>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
-        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<Show when={run.link} fallback={<Show when={run.object} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>{object=><ObjectPreview object={object()}/>}</Show>}>{link=>
+        <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<Show when={run.link} fallback={<Show when={run.object} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>{object=>
+          object().kind==='tracked_format'
+            ? <span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title="검토할 서식 변경">{run.text}</span>
+            : <ObjectPreview object={object()}/>
+        }</Show>}>{link=>
           <a data-docx-text contentEditable={false} class="whitespace-pre-wrap text-blue-800 underline focus-visible:outline-2 focus-visible:outline-teal-700"
             href={link().url??`#${link().bookmark}`} target={link().url?'_blank':undefined}
             rel={link().url?'noopener noreferrer':undefined}
