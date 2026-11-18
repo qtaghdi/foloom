@@ -421,7 +421,9 @@ Word가 서로 다른 대체 글꼴로 표시할 수 있습니다. 브라우저�
 `replace_paragraphs`에서 대상 run에 `style: { eastAsiaFont: "글꼴 이름" }`을
 보낼 수 있습니다. `font`와 함께 보내면 동아시아에는 `eastAsiaFont`가 우선합니다.
 브라우저는 한글·한자·가나·주음으로 된 run에서 동아시아 글꼴을 먼저 적용합니다.
-혼합 run의 문자별 글꼴 배정과 테마 해석은 Word의 조판을 따릅니다.
+편집 가능한 혼합 run의 본문에서도 해당 문자를 구분해 표시하며 Word run과
+선택 위치는 유지합니다. 중립 문자, 보호된 입력칸과 테마 글꼴의 배정은
+Word의 조판과 차이가 날 수 있습니다.
 
 직접 서식 지우기는 지원하는 글자 속성만 제거합니다. 문단·글자 스타일 참조와
 언어·알려지지 않은 나머지 속성은 남기며 원본 스타일의 상속값을 미리 봅니다.
@@ -1041,6 +1043,13 @@ HTTP·MCP는 본문의 각주 run ID에 `reference: { action: "set_footnote_text
 HTTP·MCP는 각주 run ID에 `reference: { action: "delete_footnote" }`를
 적용합니다. 다른 각주와 공유 참조, 구분선 및 관계는 보호합니다.
 
+`페이지` 도구의 `각주·미주가 있는 문단 이동`에서 일반 각주나 미주가 붙은
+문단을 골라 같은 구역의 인접 일반 문단 위나 아래로 옮기고 저장합니다.
+각주·미주의 원래 관계, ID, 내용과 본문 서식은 유지됩니다. 번호와 쪽 배치는
+Word 계열 편집기가 처리합니다. HTTP·MCP에서는 문단 ID와
+`move_note_up` 또는 `move_note_down`을 적용합니다. 다른 구조와 겹치는 범위,
+사용자 지정 번호, 공유 또는 손상된 참조를 포함한 문단은 보호합니다.
+
 ### AI 활동의 문단 위치
 
 원본의 고유한 `w14:paraId`를 세션 안의 문단 위치 식별자로 사용합니다.
@@ -1137,7 +1146,7 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
 | 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 및 크기 변경·삭제 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
-| 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기 | 제목 수정·크기 변경 | Word 차트 |
+| 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기, 단일 계열의 직접 수치 | 제목·수치 수정, 크기 변경 | Word 차트 |
 | 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | SmartArt | 내부 데이터에 있는 도형 문구 | 미지원 | Word |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 일반 본문에 평문 컨트롤 삽입 및 평문 수정 | Word |
@@ -1153,6 +1162,15 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 `chartWidthEmu`로 새 너비를 보냅니다. 문단의 크기 속성만 수정하며
 차트 도형과 데이터는 Word에서 확인할 수 있습니다.
 [Word DrawingML 차트 제목](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.charts.title)을 사용합니다.
+
+삽입의 `차트 편집`에서 단일 계열의 직접 수치를 저장하는 기본 차트는
+`편집할 차트 데이터` 목록을 표시합니다. 한 값을 선택해 숫자를 변경합니다.
+HTTP·MCP는 `update_chart_value`에 현재 차트의 run ID와
+`chartValue: { point, expectedValue, value }`를 보냅니다. `point`는 0부터
+시작하고 두 값은 십진 문자열입니다. 한 계열의 수치는 최대 32개, 수치의
+절댓값은 10¹⁵까지 지원합니다. 제목·범주·다른 값·차트 관계는 그대로
+유지됩니다. 수식·통합 문서·외부 참조·공유 chart part를 가진 차트의 데이터는
+보호합니다. [Office Open XML 직접 수치](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.charts.numberliteral)를 사용합니다.
 
 삽입의 `도형`에서 `인라인 사각형 삽입`을 누르고 저장하면 선택한 본문 문단의
 끝에 기본 사각형을 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
