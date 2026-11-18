@@ -404,11 +404,29 @@ Word가 서로 다른 대체 글꼴로 표시할 수 있습니다. 브라우저�
 로컬 이름으로 확인하지 못하면 글꼴 도구에 대체 글꼴 가능성을 표시하며
 설치 여부나 native 조판 일치를 보장하지 않습니다.
 
+글자 서식의 **동아시아 글꼴**은 선택한 범위의 `w:eastAsia`만 바꿉니다.
+해당 범위의 동아시아 테마 지정은 입력한 글꼴 이름으로 대체되고 Latin·복합
+문자 글꼴과 해당 테마, 언어와 스타일은 유지됩니다. HTTP·MCP의
+`replace_paragraphs`에서 대상 run에 `style: { eastAsiaFont: "글꼴 이름" }`을
+보낼 수 있습니다. `font`와 함께 보내면 동아시아에는 `eastAsiaFont`가 우선합니다.
+브라우저는 한글·한자·가나·주음으로 된 run에서 동아시아 글꼴을 먼저 적용합니다.
+혼합 run의 문자별 글꼴 배정과 테마 해석은 Word의 조판을 따릅니다.
+
 직접 서식 지우기는 지원하는 글자 속성만 제거합니다. 문단·글자 스타일 참조와
 언어·알려지지 않은 나머지 속성은 남기며 원본 스타일의 상속값을 미리 봅니다.
 문서 전체 스타일을 삭제하거나 모든 OOXML 서식을 정규화하는 동작이 아닙니다.
 미리 보기는 단일 밑줄·취소선·일부 강조색·첨자 위치를 표현하며 Word의 정밀
 조판이나 복합 밑줄 모양까지 일치한다고 주장하지 않습니다.
+
+**서식**의 **맞춤법 검사 언어**에서 선택한 글자의 라틴 문자와 동아시아 문자에
+사용할 언어 태그를 지정할 수 있습니다. 예를 들어 `en-GB` 또는 `ko-KR`를
+입력합니다. 지정한 영역의 기존 글꼴, 복합 문자 언어, 선택 밖 언어가 유지됩니다.
+선택한 run이 언어를 스타일에서 상속받았다면 처음 직접 지정할 때 나머지 문자권의
+기존 언어도 해당 run에 함께 기록합니다. 직접 서식을 지워도 언어는 유지됩니다.
+HTTP·MCP는 `replace_paragraphs`의
+run 서식에 `proofingLanguage` 또는 `eastAsiaProofingLanguage`를 보냅니다.
+맞춤법 검사는 문서를 연 Word의 교정 언어 사전을 사용합니다.
+[Word run의 언어 속성](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.languages?view=openxml-3.0.1)을 따릅니다.
 
 ### 문단 서식
 
@@ -745,6 +763,14 @@ HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rota
 이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
 
 
+일반 본문의 인라인 그림을 선택하고 `그림 번호와 캡션 삽입`을 적용하면 바로
+다음 문단에 캡션을 넣습니다. Word는 SEQ 필드로 그림 번호를 계산합니다. 앞에
+캡션을 추가하면 뒤따르는 지원 그림 번호를 다시 계산하고 그림 파일과 대체
+텍스트는 유지합니다. HTTP·MCP는 그림 run ID와 캡션 텍스트를
+`insert_picture_caption`에 보냅니다. 여러 그림이 한 문단에 있거나 복합 필드 및
+기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
+[Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
+
 ### 인쇄와 PDF 저장
 
 파일 작업의 `인쇄·PDF`는 저장된 문서를 브라우저 인쇄 창으로 보냅니다.
@@ -947,6 +973,12 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
+
+수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
+`제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을
+유지합니다. HTTP·MCP는 `update_math`의 `math: { action: "insert_root", expression }` 또는
+`math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
+[Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
 
 삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
 기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
