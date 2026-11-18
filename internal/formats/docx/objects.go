@@ -8,7 +8,7 @@ import (
 const mathNS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 type MathEdit struct {
-	Action     string        `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, or delete"`
+	Action     string        `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, or delete"`
 	Expression string        `json:"expression,omitempty"`
 	Fraction   *MathFraction `json:"fraction,omitempty"`
 }
@@ -19,6 +19,7 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
+	SquareRoot     string `json:"squareRoot,omitempty"`
 	DeleteEditable bool   `json:"deleteEditable,omitempty"`
 	Date           string `json:"date,omitempty"`
 	noteID         string
@@ -103,7 +104,10 @@ func objectPreview(n *node) *ObjectInfo {
 	switch {
 	case n.name.Space == mathNS && (n.name.Local == "oMath" || n.name.Local == "oMathPara"):
 		out := &ObjectInfo{Kind: "math", Editable: editableMath(n) || previewFraction(n, true) != nil, Fraction: previewFraction(n, false)}
-		if out.Editable && out.Fraction == nil {
+		if text := squareRootText(n); text != nil {
+			out.SquareRoot, out.Editable = text.text.String(), true
+		}
+		if out.Editable && out.Fraction == nil && out.SquareRoot == "" {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
@@ -167,6 +171,14 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 		}
 		return replacement{t.node.start, t.node.end, nil}, nil
 	}
+	if edit.Action == "replace_root" {
+		text := squareRootText(t.node)
+		if t.kind != "math_object" || text == nil || !validMathText(edit.Expression) ||
+			strings.Contains(string(data[t.node.start:t.node.end]), "<!--") {
+			return replacement{}, fmt.Errorf("protected or invalid DOCX square root")
+		}
+		return replaceTextNode(data, text, edit.Expression)
+	}
 	mathRun := func(text string) string {
 		return `<dwm:r><dwm:t xml:space="preserve">` + escapeText(text) + `</dwm:t></dwm:r>`
 	}
@@ -182,6 +194,10 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 			return replacement{}, fmt.Errorf("invalid DOCX equation text")
 		}
 		contents = mathRun(edit.Expression)
+		if edit.Action == "insert_root" {
+			contents = `<dwm:rad><dwm:radPr><dwm:degHide dwm:val="1"/></dwm:radPr><dwm:deg/><dwm:e>` +
+				contents + `</dwm:e></dwm:rad>`
+		}
 	}
 	raw := `<dwm:oMath xmlns:dwm="` + mathNS + `">` + contents + `</dwm:oMath>`
 	switch edit.Action {
@@ -196,7 +212,7 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 			return replacement{}, fmt.Errorf("protected DOCX fraction")
 		}
 		return replacement{t.node.start, t.node.end, []byte(raw)}, nil
-	case "insert", "insert_fraction":
+	case "insert", "insert_fraction", "insert_root":
 		p := t.paragraph
 		if t.kind != "replace_paragraphs" || p == nil {
 			return replacement{}, fmt.Errorf("DOCX equation requires an editable paragraph")
