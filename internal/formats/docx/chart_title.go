@@ -225,6 +225,7 @@ func (p *documentPackage) projectChartTitles(root *node, blocks []Block, targets
 			if preview.title != "" {
 				run.Object.Text = preview.title
 				run.Object.DeleteEditable = deletableInlineChart(t, p.document)
+				run.Object.MoveChartUp, run.Object.MoveChartDown = t.moveUp != nil, t.moveDown != nil
 				run.Object.Editable = editable
 				if editable {
 					run.Object.ChartFrame, _ = inlineChartFrame(t.run, p.document)

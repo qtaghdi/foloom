@@ -485,6 +485,24 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, edit)
 			continue
 		}
+		if op.Type == "move_chart_up" || op.Type == "move_chart_down" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" ||
+				op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("DOCX chart movement requires one operation with the chart run ID")
+			}
+			_, chartTargets, _, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+			if err != nil {
+				return nil, err
+			}
+			edit, err := s.pkg.moveInlineChart(chartTargets[op.TargetID], op.Type)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
 		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" ||
 			op.Type == "move_note_up" || op.Type == "move_note_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
