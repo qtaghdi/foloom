@@ -1,6 +1,47 @@
 package docx
 
-import "strings"
+import (
+	"bytes"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+func (p *documentPackage) contentControlIDs() (map[int64]bool, error) {
+	used := map[int64]bool{}
+	var visit func(*node)
+	visit = func(n *node) {
+		if n.is("sdtPr") && n.parent != nil && n.parent.is("sdt") {
+			for _, property := range n.children {
+				if property.is("id") {
+					if id, err := strconv.ParseInt(property.attr("val"), 10, 32); err == nil {
+						used[id] = true
+					}
+				}
+			}
+		}
+		for _, child := range n.children {
+			visit(child)
+		}
+	}
+	// Headers, footers, and notes can also contain saved content controls.
+	for _, item := range p.parts {
+		if !strings.HasSuffix(strings.ToLower(item.header.Name), ".xml") || !bytes.Contains(item.data, []byte("sdtPr")) {
+			continue
+		}
+		root, err := parseXML(item.data)
+		if err != nil {
+			return nil, err
+		}
+		visit(root)
+	}
+	return used, nil
+}
+
+func inlinePlainControl(id int64, text string) string {
+	return fmt.Sprintf(`<dws:sdt xmlns:dws="%s"><dws:sdtPr><dws:id dws:val="%d"/><dws:text/></dws:sdtPr><dws:sdtContent><dws:r><dws:t xml:space="preserve">%s</dws:t></dws:r></dws:sdtContent></dws:sdt>`,
+		wordNS, id, escapeText(text))
+}
 
 func plainControlText(control *node, data []byte) ([]*node, string) {
 	if !control.is("sdt") || strings.TrimSpace(control.text.String()) != "" ||

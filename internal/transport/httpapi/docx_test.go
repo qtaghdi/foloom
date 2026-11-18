@@ -504,3 +504,34 @@ func TestDOCXMCPListsSupportedOperationFamilies(t *testing.T) {
 	}
 	t.Fatal("DOCX operations tool is missing from the MCP list")
 }
+
+func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "controls.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+		SessionID: initial.ID, BaseRevision: initial.Revision,
+		Operations: []docx.Operation{{Type: "insert_control_text", TargetID: initial.Blocks[0].ID, Text: "Control value"}},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP content control insertion: %v %+v", err, result)
+	}
+	after, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := after.Blocks[0].Paragraph.Runs
+	if after.Revision != initial.Revision+1 || len(runs) != 2 || runs[0].Text != "Prefix" ||
+		runs[1].Object == nil || runs[1].Object.Kind != "control" || runs[1].Object.Text != "Control value" || !runs[1].Object.Editable {
+		t.Fatal("shared DOCX session did not expose the inserted control")
+	}
+}
