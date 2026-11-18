@@ -140,6 +140,12 @@ export function DocumentObjectTextToolbar(props:{
               <button type="submit" class={buttonClass} disabled={disabled()}>차트 데이터 값 적용</button>
             </form>
           }</Show>
+          <Show when={props.kind==='control'&&run.object?.unwrapEditable}>
+            <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+              const accepted=props.onApply({type:'unwrap_control',targetId:run.id});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>내용을 유지하고 컨트롤 제거</button>
+          </Show>
           <Show when={props.kind==='chart'&&(run.object?.moveChartUp||run.object?.moveChartDown)}>
             <For each={([
               {type:'move_chart_up',enabled:run.object?.moveChartUp,label:'차트 위로 이동'},
