@@ -26,6 +26,7 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 	}
 	var edits []replacement
 	display := ""
+	var number *string
 	if deleting {
 		display = bookmarkedPlainText(index, start)
 		end := index.ends[start.attr("id")][0]
@@ -54,6 +55,16 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 				cachedText := display
 				if kind == "PAGEREF" {
 					cachedText = ""
+				}
+				if kind == "number" && deleting {
+					if number == nil {
+						value, err := p.bookmarkNumberText(t.paragraph.parent.parent, index, edit.Bookmark)
+						if err != nil {
+							return err
+						}
+						number = &value
+					}
+					cachedText = *number
 				}
 				result, err := patchBookmarkField(data, n, deleting, edit.NewBookmark, cachedText)
 				if err != nil {

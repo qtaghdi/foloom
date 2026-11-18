@@ -830,6 +830,13 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 필드를 업데이트하면 조판된 쪽 번호가 표시됩니다. 북마크 이름을 바꾸면
 참조 대상도 바뀌고, 북마크를 지우면 마지막으로 저장된 표시 값을 남깁니다.
 
+같은 메뉴의 `목록 번호 상호 참조 삽입`은 최상위 번호 목록에 붙인 평문
+북마크를 가리킵니다. 브라우저는 대상 목록 번호를 표시하고 클릭하면 해당
+문단으로 이동합니다. HTTP·MCP는 본문 문단 ID와
+`reference: { action: "insert_bookmark_number_ref", bookmark }`를
+별도 작업으로 보냅니다. 글머리표와 상위 번호 문맥을 포함하는 복합 참조는
+보호합니다. [Word REF 번호 스위치](https://support.microsoft.com/en-us/word/field-codes-ref-field)를 사용합니다.
+
 삽입의 `자동 목차 삽입`을 적용하면 선택한 본문 문단 앞에 제목 수준 1~3을 모아
 Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
 `reference: { action: "insert_toc" }`를 별도 작업으로 보냅니다.

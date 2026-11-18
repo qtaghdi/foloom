@@ -35,18 +35,26 @@ func bookmarkFieldTarget(field *node) (kind, bookmark string) {
 		}
 	}
 	instruction := strings.Fields(field.attr("instr"))
-	if len(instruction) != 3 || !strings.EqualFold(instruction[0], "REF") && !strings.EqualFold(instruction[0], "PAGEREF") ||
-		!bookmarkName.MatchString(instruction[1]) || !strings.EqualFold(instruction[2], `\h`) {
+	if len(instruction) < 3 || !bookmarkName.MatchString(instruction[1]) {
+		return "", ""
+	}
+	kind = strings.ToUpper(instruction[0])
+	if kind == "REF" && len(instruction) == 4 &&
+		((strings.EqualFold(instruction[2], `\n`) && strings.EqualFold(instruction[3], `\h`)) ||
+			(strings.EqualFold(instruction[2], `\h`) && strings.EqualFold(instruction[3], `\n`))) {
+		kind = "number"
+	} else if len(instruction) != 3 || (kind != "REF" && kind != "PAGEREF") ||
+		!strings.EqualFold(instruction[2], `\h`) {
 		return "", ""
 	}
 	nodes, _ := plainTextRunNodes(field.children)
 	if len(nodes) != 1 {
 		return "", ""
 	}
-	return strings.ToUpper(instruction[0]), instruction[1]
+	return kind, instruction[1]
 }
 
-func bookmarkFieldXML(index *bookmarkIndex, name string, page bool) (string, error) {
+func bookmarkFieldXML(index *bookmarkIndex, name, action, number string) (string, error) {
 	if !bookmarkName.MatchString(name) || index.names[strings.ToLower(name)] != 1 {
 		return "", fmt.Errorf("invalid or ambiguous DOCX bookmark")
 	}
@@ -58,11 +66,17 @@ func bookmarkFieldXML(index *bookmarkIndex, name string, page bool) (string, err
 		if text == "" {
 			break
 		}
-		kind := "REF"
-		if page {
-			kind, text = "PAGEREF", "?"
+		instruction := "REF " + name + ` \h`
+		switch action {
+		case "insert_bookmark_page_ref":
+			instruction, text = "PAGEREF "+name+` \h`, "?"
+		case "insert_bookmark_number_ref":
+			if number == "" {
+				return "", fmt.Errorf("DOCX bookmark requires a supported top-level number")
+			}
+			instruction, text = "REF "+name+` \n \h`, number
 		}
-		return `<dwr:fldSimple xmlns:dwr="` + wordNS + `" dwr:instr="` + kind + ` ` + name + ` \h" dwr:dirty="true"><dwr:r>` +
+		return `<dwr:fldSimple xmlns:dwr="` + wordNS + `" dwr:instr="` + instruction + `" dwr:dirty="true"><dwr:r>` +
 			inlineXML(text) + `</dwr:r></dwr:fldSimple>`, nil
 	}
 	return "", fmt.Errorf("DOCX bookmark requires a plain text range")
