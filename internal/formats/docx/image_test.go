@@ -528,3 +528,173 @@ func TestCaptionMoveProtectsComplexBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestDOCXAlignsOnlyDedicatedInlinePictures(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(
+		`<w:p><w:pPr><w:spacing w:after="80"/></w:pPr></w:p>`+
+			`<w:p><w:r><w:t>Other text</w:t></w:r></w:p>`))
+	apply := func(session *Session, v Snapshot, ops ...Operation) (Snapshot, error) {
+		return session.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: ops}, "human")
+	}
+	var pixels bytes.Buffer
+	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	picture := &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pixels.Bytes()), Alt: "Image"}
+	v, err := apply(s, v, Operation{Type: "update_image", TargetID: v.Blocks[0].ID, Image: picture},
+		Operation{Type: "update_image", TargetID: v.Blocks[1].ID, Image: picture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dedicated := v.Blocks[0].Paragraph.Runs[0]
+	mixed := v.Blocks[1].Paragraph.Runs[1]
+	if dedicated.Picture.Align != "start" || mixed.Picture.Align != "" {
+		t.Fatal("unexpected alignment capability")
+	}
+	original := fileBytes(t, filename)
+	makeOperation := func(id, align string) Operation {
+		return Operation{Type: "update_image", TargetID: id, Image: &ImageEdit{Action: "align", Align: align}}
+	}
+	good := makeOperation(dedicated.ID, "center")
+	for _, operations := range [][]Operation{
+		{good, makeOperation(mixed.ID, "center")},
+		{makeOperation(dedicated.ID, "justify")},
+		{makeOperation(dedicated.ID, "start")},
+		{{Type: "update_image", TargetID: dedicated.ID, Image: &ImageEdit{Action: "set_alt", Align: "end", Alt: "Unwanted"}}},
+	} {
+		if _, err := apply(s, v, operations...); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+			t.Fatal("invalid alignment or mixed operation modified the package")
+		}
+	}
+	v, err = apply(s, v, good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	centered := fileBytes(t, filename)
+	if _, err := apply(s, v, good); err == nil || !bytes.Equal(centered, fileBytes(t, filename)) {
+		t.Fatal("alignment accepted an earlier revision's picture ID")
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, reopened)
+	p := v.Blocks[0].Paragraph
+	if p.Layout == nil || p.Layout.Align != "center" || p.Layout.After == nil || *p.Layout.After != 80 ||
+		p.Runs[0].Picture.Align != "center" || p.Runs[0].Picture.Alt != "Image" {
+		t.Fatal("reopened picture alignment did not preserve paragraph spacing or alternative text")
+	}
+	media, _, err := reopened.Picture(ctx, p.Runs[0].ID)
+	if err != nil || !bytes.Equal(media, pixels.Bytes()) {
+		t.Fatal("alignment changed image media", err)
+	}
+	end, err := apply(reopened, v, makeOperation(p.Runs[0].ID, "end"))
+	if err != nil || end.Blocks[0].Paragraph.Layout.Align != "end" {
+		t.Fatal("right alignment failed", err)
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(centered, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover centered package bytes")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover the original picture package")
+	}
+}
+
+func TestDOCXPicturePlacementPreservesNativeInlineFallback(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(
+		`<w:p><w:pPr><w:jc w:val="right"/></w:pPr></w:p>`+
+			`<w:p><w:r><w:t>Mixed text</w:t></w:r></w:p>`))
+	apply := func(session *Session, v Snapshot, ops ...Operation) (Snapshot, error) {
+		return session.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: ops}, "human")
+	}
+	var pixels bytes.Buffer
+	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	picture := &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pixels.Bytes()), Alt: "Illustration"}
+	v, err := apply(s, v, Operation{Type: "update_image", TargetID: v.Blocks[0].ID, Image: picture},
+		Operation{Type: "update_image", TargetID: v.Blocks[1].ID, Image: picture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := v.Blocks[0].Paragraph.Runs[0]
+	mixed := v.Blocks[1].Paragraph.Runs[1]
+	if run.Picture.Placement != "inline" || mixed.Picture.Placement != "" {
+		t.Fatal("only the dedicated image paragraph should permit placement")
+	}
+	original := fileBytes(t, filename)
+	originalXML := bytes.Clone(s.pkg.document)
+	change := func(id, placement string) Operation {
+		return Operation{Type: "update_image", TargetID: id, Image: &ImageEdit{Action: "set_placement", Placement: placement}}
+	}
+	center := change(run.ID, "floating_center")
+	for _, ops := range [][]Operation{
+		{center, change(mixed.ID, "floating_left")},
+		{change(run.ID, "inline")},
+		{change(run.ID, "square")},
+	} {
+		if _, err := apply(s, v, ops...); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+			t.Fatal("unsupported placement changed the package")
+		}
+	}
+	v, err = apply(s, v, center)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := v.Blocks[0].Paragraph; p.Layout == nil || p.Layout.Align != "end" ||
+		p.Runs[0].Picture.Placement != "floating_center" || p.Runs[0].Picture.Alt != "Illustration" ||
+		!bytes.Contains(s.pkg.document, []byte(`<wp:wrapTopAndBottom/>`)) {
+		t.Fatal("native anchor, paragraph alignment, or picture metadata were lost")
+	}
+	anchored := fileBytes(t, filename)
+	for _, changeXML := range [][2]string{
+		{"wrapTopAndBottom", "wrapSquare"},
+		{`relativeFrom="column"`, `relativeFrom="page"`},
+		{`allowOverlap="0"`, `allowOverlap="1"`},
+	} {
+		raw := bytes.Replace(s.pkg.document, []byte(changeXML[0]), []byte(changeXML[1]), 1)
+		if bytes.Equal(raw, s.pkg.document) {
+			t.Fatal("test did not change the native anchor")
+		}
+		_, targets, _, err := inspect(raw, v.ID, v.Revision)
+		if err != nil || targets[v.Blocks[0].Paragraph.Runs[0].ID].picturePlacement != "" {
+			t.Fatal("unsupported anchor geometry was offered for conversion", err)
+		}
+	}
+	if _, err := apply(s, v, center); err == nil || !bytes.Equal(anchored, fileBytes(t, filename)) {
+		t.Fatal("placement accepted an earlier revision's picture ID")
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, reopened)
+	run = v.Blocks[0].Paragraph.Runs[0]
+	if media, _, err := reopened.Picture(ctx, run.ID); err != nil || !bytes.Equal(media, pixels.Bytes()) {
+		t.Fatal("the anchored picture could not be reopened with identical media", err)
+	}
+	v, err = apply(reopened, v, change(run.ID, "floating_right"))
+	if err != nil || v.Blocks[0].Paragraph.Runs[0].Picture.Placement != "floating_right" {
+		t.Fatal("repositioning the anchored picture failed", err)
+	}
+	v, err = apply(reopened, v, change(v.Blocks[0].Paragraph.Runs[0].ID, "inline"))
+	if err != nil || !bytes.Equal(originalXML, reopened.pkg.document) ||
+		v.Blocks[0].Paragraph.Runs[0].Picture.Placement != "inline" {
+		t.Fatal("restoring the inline fallback did not restore the original XML", err)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(anchored, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover the original anchor package")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover the original inline package")
+	}
+}

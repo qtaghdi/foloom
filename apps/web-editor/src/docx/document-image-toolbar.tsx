@@ -19,6 +19,7 @@ export function DocumentImageToolbar(props: {
   const [reading,setReading]=createSignal(false),[error,setError]=createSignal('');
   const [pictureId,setPictureId] = createSignal('');
   const selectedPicture = () => props.pictures.find(picture => picture.id === pictureId());
+  const selectedIsFloating=()=>selectedPicture()?.picture?.placement?.startsWith('floating_')??false;
   const disabled=()=>props.disabled||props.pending||reading();
   let picker!:HTMLInputElement;
   const apply=async(replace:boolean)=>{
@@ -59,7 +60,7 @@ export function DocumentImageToolbar(props: {
           onInput={event=>setAlt(event.currentTarget.value)}/>
       </label>
       <button type="button" class={buttonClass} disabled={disabled()||!file()||!props.target} onClick={()=>void apply(false)}>그림 삽입</button>
-      <button type="button" class={buttonClass} disabled={disabled()||!file()||!selectedPicture()} onClick={()=>void apply(true)}>선택한 그림 교체</button>
+      <button type="button" class={buttonClass} disabled={disabled()||!file()||!selectedPicture()||selectedIsFloating()} onClick={()=>void apply(true)}>선택한 그림 교체</button>
       <p class="basis-full text-slate-600">{props.pending?'그림을 저장하거나 실행 취소하세요.':'512 KiB 이하 파일을 문단 끝에 삽입하거나 기존 그림과 교체합니다.'}</p>
       <Show when={props.pictures.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
@@ -74,6 +75,7 @@ export function DocumentImageToolbar(props: {
           </label>
           <Show when={selectedPicture()} keyed>{picture=>
             <>
+            <Show when={!selectedIsFloating()}>
             <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
               event.preventDefault();
               if (disabled()) return;
@@ -107,6 +109,29 @@ export function DocumentImageToolbar(props: {
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>비율 유지 크기 변경</button>
             </form>
+            </Show>
+            <Show when={picture.picture?.placement}>{current=>
+              <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(disabled())return;
+                const select=event.currentTarget.elements.namedItem('placement') as HTMLSelectElement;
+                const placement=select.value;
+                if((placement!=='inline'&&placement!=='floating_left'&&placement!=='floating_center'&&placement!=='floating_right')||
+                    placement===current())return;
+                const accepted=props.onApply({type:'update_image',targetId:picture.id,image:{action:'set_placement',placement}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <label class="flex min-w-0 flex-col gap-1">그림 배치
+                  <select name="placement" class="editor-select min-h-11" value={current()} disabled={disabled()}>
+                    <option value="inline">인라인</option>
+                    <option value="floating_left">위아래 감싸기 · 왼쪽</option>
+                    <option value="floating_center">위아래 감싸기 · 가운데</option>
+                    <option value="floating_right">위아래 감싸기 · 오른쪽</option>
+                  </select>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 배치 적용</button>
+              </form>
+            }</Show>
             <Show when={picture.picture?.captionEditable || picture.picture?.caption}>
               <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
                 event.preventDefault();
@@ -142,6 +167,26 @@ export function DocumentImageToolbar(props: {
                 }</For>
               </div>
             </Show>
+            <Show when={!selectedIsFloating()&&picture.picture?.align}>{current=>
+              <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(disabled())return;
+                const select=event.currentTarget.elements.namedItem('align') as HTMLSelectElement;
+                const align=select.value;
+                if((align!=='start'&&align!=='center'&&align!=='end')||align===current())return;
+                const accepted=props.onApply({type:'update_image',targetId:picture.id,image:{action:'align',align}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <label class="flex flex-col gap-1">그림 정렬
+                  <select name="align" class="editor-select min-h-11" value={current()} disabled={disabled()}>
+                    <option value="start">왼쪽</option>
+                    <option value="center">가운데</option>
+                    <option value="end">오른쪽</option>
+                  </select>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 정렬 적용</button>
+              </form>
+            }</Show>
             <Show when={picture.picture?.rotationEditable}>
               <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
                 event.preventDefault();

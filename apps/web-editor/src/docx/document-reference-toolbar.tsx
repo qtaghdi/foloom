@@ -12,7 +12,7 @@ function safeWebAddress(address:string):boolean {
 }
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;links:Run[];notes:Run[];referenceLists:Run[];dateFields:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;links:Run[];notes:Run[];referenceLists:Run[];dateFields:Run[];pendingReferences:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
   const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'figureList'|'tableList'|'dateField'|'footnote'|'endnote'>('bookmark');
@@ -25,6 +25,8 @@ export function DocumentReferenceToolbar(props:{
   const [noteId,setNoteId]=createSignal('');
   const selectedNote=()=>props.notes.find(note=>note.id===noteId());
   const existingNoteLabel=()=>selectedNote()?.object?.kind==='endnote'?'미주':'각주';
+  const [referenceID,setReferenceID]=createSignal('');
+  const selectedReference=()=>props.pendingReferences.find(field=>field.id===referenceID());
   const [dateFieldID,setDateFieldID]=createSignal('');
   const selectedDateField=()=>props.dateFields.find(field=>field.id===dateFieldID());
   const [editBookmark,setEditBookmark]=createSignal('');
@@ -111,6 +113,24 @@ export function DocumentReferenceToolbar(props:{
           setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
         }}>{list.object?.kind==='toc'?'목차 제목 업데이트':list.object?.kind==='figure_list'?'그림 목록 업데이트':'표 목록 업데이트'}</button>
       }</For>
+      <Show when={props.pendingReferences.length}>
+        <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
+          <label class="flex min-w-0 flex-col gap-1">갱신할 텍스트 상호 참조
+            <select aria-label="갱신할 텍스트 상호 참조" class="editor-select min-h-11 max-w-64"
+              value={selectedReference()?.id??''} disabled={disabled()}
+              onChange={event=>{setReferenceID(event.currentTarget.value);setError('');}}>
+              <option value="">상호 참조 선택</option>
+              <For each={props.pendingReferences}>{(field,index)=><option value={field.id}>{index()+1}. {field.link?.bookmark} · {field.text.slice(0,60)}</option>}</For>
+            </select>
+          </label>
+          <button type="button" class={buttonClass} disabled={disabled()||!selectedReference()} onClick={()=>{
+            const field=selectedReference();
+            if(!field)return;
+            const accepted=props.onApply({type:'update_reference',targetId:field.id,reference:{action:'refresh_bookmark_ref'}});
+            setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+          }}>참조 표시값 갱신</button>
+        </div>
+      </Show>
       <Show when={props.dateFields.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
           <label class="flex min-w-0 flex-col gap-1">기존 날짜 필드
@@ -154,6 +174,30 @@ export function DocumentReferenceToolbar(props:{
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>웹 주소 변경 적용</button>
             </form>
+            </Show>
+            <Show when={link.link&&'bookmarkEditable' in link.link&&link.link.bookmarkEditable&&props.bookmarks.length>1}>
+              <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(disabled())return;
+                const input=event.currentTarget.elements.namedItem('bookmark') as HTMLSelectElement;
+                const bookmark=input.value;
+                if(!bookmark||bookmark===link.link?.bookmark||!props.bookmarks.some(item=>item.name===bookmark)){
+                  setError('새 대상 북마크를 선택하세요.');
+                  return;
+                }
+                const accepted=props.onApply({type:'update_reference',targetId:link.id,reference:{action:'set_link_bookmark',bookmark}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <label class="flex min-w-0 flex-col gap-1">새 대상 북마크
+                  <select name="bookmark" aria-label="새 대상 북마크" class="editor-select min-h-11 max-w-56" required disabled={disabled()}>
+                    <option value="">북마크 선택</option>
+                    <For each={props.bookmarks.filter(item=>item.name!==link.link?.bookmark)}>
+                      {item=><option value={item.name}>{item.name}</option>}
+                    </For>
+                  </select>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>북마크 대상 변경 적용</button>
+              </form>
             </Show>
             <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
               const changed=props.onApply({type:'update_reference',targetId:link.id,reference:{action:'unlink'}});

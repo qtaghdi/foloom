@@ -24,12 +24,14 @@ const (
 )
 
 type ImageEdit struct {
-	Rotation *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
-	Crop     *ImageCrop `json:"crop,omitempty"`
-	Action   string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, or rotate"`
-	Base64   string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
-	Alt      string     `json:"alt,omitempty"`
-	WidthEMU int        `json:"widthEmu,omitempty"`
+	Placement string     `json:"placement,omitempty" jsonschema:"inline, floating_left, floating_center, or floating_right"`
+	Align     string     `json:"align,omitempty" jsonschema:"start, center, or end for a dedicated inline picture paragraph"`
+	Rotation  *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
+	Crop      *ImageCrop `json:"crop,omitempty"`
+	Action    string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, rotate, align, or set_placement"`
+	Base64    string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
+	Alt       string     `json:"alt,omitempty"`
+	WidthEMU  int        `json:"widthEmu,omitempty"`
 }
 
 func imageConfig(raw []byte, byteLimit int) (image.Config, string, error) {
@@ -77,7 +79,7 @@ func (p *documentPackage) availableDrawingID() (uint32, error) {
 
 func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageEdit, drawingID uint32, changes map[string][]byte) (replacement, error) {
 	paragraph := target.paragraph
-	if edit.Action != "insert" || edit.Rotation != nil || edit.Crop != nil || target.kind != "replace_paragraphs" || paragraph == nil ||
+	if edit.Action != "insert" || edit.Placement != "" || edit.Align != "" || edit.Rotation != nil || edit.Crop != nil || target.kind != "replace_paragraphs" || paragraph == nil ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture insertion")
 	}
@@ -130,6 +132,7 @@ func decodePicture(encoded string) ([]byte, image.Config, string, error) {
 func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, changes map[string][]byte) (replacement, error) {
 	if t.kind != "picture" || t.run == nil || edit.Action != "replace" && edit.Base64 != "" || edit.Action != "resize" && edit.WidthEMU != 0 ||
 		edit.Action != "crop" && edit.Crop != nil || edit.Action != "rotate" && edit.Rotation != nil ||
+		edit.Action != "align" && edit.Align != "" || edit.Action != "set_placement" && edit.Placement != "" ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture update")
 	}
@@ -137,6 +140,12 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 		if parent.is("ins") || parent.is("del") || parent.is("moveFrom") || parent.is("moveTo") {
 			return replacement{}, fmt.Errorf("tracked DOCX pictures are protected")
 		}
+	}
+	if edit.Action == "set_placement" {
+		if edit.Alt != "" {
+			return replacement{}, fmt.Errorf("unexpected DOCX picture description")
+		}
+		return p.setPicturePlacement(t, edit.Placement)
 	}
 	info, relationship := inlinePictureInfo(t.run)
 	inline := childNS(t.run.child("drawing"), drawingWordNS, "inline")
@@ -158,6 +167,12 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 	part := p.picturePartMap()[relationship]
 	if _, _, err := imageConfig(p.partData(part, nil), maxImageReadBytes); err != nil {
 		return replacement{}, err
+	}
+	if edit.Action == "align" {
+		if edit.Alt != "" {
+			return replacement{}, fmt.Errorf("unexpected DOCX picture description")
+		}
+		return alignPictureParagraph(t, p.document, edit.Align)
 	}
 	if edit.Action == "rotate" {
 		if edit.Alt != "" || edit.Rotation == nil {
@@ -218,6 +233,94 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 	return replacement{props.start, props.end, []byte(raw)}, nil
 }
 
+func plainVisualParagraphProperties(p *node) bool {
+	if countChild(p, "pPr") > 1 {
+		return false
+	}
+	if props := p.child("pPr"); props != nil {
+		if strings.TrimSpace(props.text.String()) != "" {
+			return false
+		}
+		for _, child := range props.children {
+			if child.name.Space != wordNS || len(child.children) != 0 || strings.TrimSpace(child.text.String()) != "" ||
+				!strings.Contains(" jc spacing ind widowControl keepLines ", " "+child.name.Local+" ") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func dedicatedPictureParagraph(t target, data []byte) bool {
+	return dedicatedDrawingParagraph(t, data) && sameDrawingName(t.run.child("drawing").children[0], "inline")
+}
+
+func dedicatedDrawingParagraph(t target, data []byte) bool {
+	p := t.paragraph
+	if !t.run.parent.is("p") || !t.run.parent.parent.is("body") || p != t.run.parent ||
+		strings.TrimSpace(p.text.String()) != "" || bytes.Contains(data[p.start:p.end], []byte("<!--")) ||
+		p.has("rPrChange") || countChild(t.run, "drawing") != 1 ||
+		(len(t.run.children) != 1 && (len(t.run.children) != 2 || t.run.child("rPr") == nil)) {
+		return false
+	}
+	drawing := t.run.child("drawing")
+	if len(drawing.children) != 1 {
+		return false
+	}
+	for _, child := range p.children {
+		if child == t.run || child.is("pPr") {
+			continue
+		}
+		if !child.is("r") || strings.TrimSpace(child.text.String()) != "" {
+			return false
+		}
+		if len(child.children) == 0 {
+			continue
+		}
+		text := child.children[0]
+		if len(child.children) != 1 || !text.is("t") || len(text.children) != 0 || text.text.Len() != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func pictureParagraphAlignment(t target, data []byte, layout ParagraphLayout) string {
+	if layout.Bidi || layout.TextDirection != "" || !plainVisualParagraphProperties(t.paragraph) ||
+		!dedicatedPictureParagraph(t, data) || countChild(t.paragraph.child("pPr"), "jc") > 1 {
+		return ""
+	}
+	if alignment := t.paragraph.child("pPr").child("jc"); alignment != nil {
+		switch alignment.attr("val") {
+		case "left", "start", "center", "right", "end":
+		default:
+			return ""
+		}
+	}
+	switch layout.Align {
+	case "":
+		return "start"
+	case "start", "center", "end":
+		return layout.Align
+	}
+	return ""
+}
+
+func alignPictureParagraph(t target, data []byte, align string) (replacement, error) {
+	if t.pictureAlign == "" || align == t.pictureAlign || (align != "start" && align != "center" && align != "end") {
+		return replacement{}, fmt.Errorf("DOCX picture alignment requires a dedicated picture paragraph and a new alignment")
+	}
+	props := t.paragraph.child("pPr")
+	xml, err := paragraphProperties(props, data, &ParagraphFormat{Align: align})
+	if err != nil {
+		return replacement{}, err
+	}
+	if props == nil {
+		return replacement{t.paragraph.inner, t.paragraph.inner, []byte(xml)}, nil
+	}
+	return replacement{props.start, props.end, []byte(xml)}, nil
+}
+
 func resizeInlinePicture(data []byte, inline *node, info *PictureInfo, width int) (replacement, error) {
 	if width < 9525 || width > maxImageExtent {
 		return replacement{}, fmt.Errorf("invalid DOCX picture width")
@@ -254,6 +357,8 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
+	Placement        string     `json:"placement,omitempty"`
+	Align            string     `json:"align,omitempty"`
 	Caption          string     `json:"caption,omitempty"`
 	CaptionEditable  bool       `json:"captionEditable,omitempty"`
 	MoveCaptionUp    bool       `json:"moveCaptionUp,omitempty"`
@@ -288,20 +393,23 @@ func inlinePictureInfo(run *node) (*PictureInfo, string) {
 	if sectionChildCount(run, "drawing") != 1 || len(run.children) > 2 || len(run.children) == 2 && run.child("rPr") == nil {
 		return nil, ""
 	}
-	inline := childNS(run.child("drawing"), drawingWordNS, "inline")
-	extent := childNS(inline, drawingWordNS, "extent")
+	return pictureFrameInfo(childNS(run.child("drawing"), drawingWordNS, "inline"))
+}
+
+func pictureFrameInfo(frame *node) (*PictureInfo, string) {
+	extent := childNS(frame, drawingWordNS, "extent")
 	width, height := previewNumber(attribute(extent, "", "cx"), 1, maxImageExtent), previewNumber(attribute(extent, "", "cy"), 1, maxImageExtent)
 	if width == nil || height == nil {
 		return nil, ""
 	}
-	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+	graphic := childNS(childNS(frame, drawingNS, "graphic"), drawingNS, "graphicData")
 	pic := childNS(graphic, pictureNS, "pic")
 	blip := childNS(childNS(pic, pictureNS, "blipFill"), drawingNS, "blip")
 	relationship := attribute(blip, officeRelNS, "embed")
 	if relationship == "" || attribute(blip, officeRelNS, "link") != "" {
 		return nil, ""
 	}
-	alt := attribute(childNS(inline, drawingWordNS, "docPr"), "", "descr")
+	alt := attribute(childNS(frame, drawingWordNS, "docPr"), "", "descr")
 	if len(alt) > 1024 {
 		alt = alt[:1024]
 		for !utf8.ValidString(alt) {
@@ -346,6 +454,12 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 				continue
 			}
 			info, relationship := inlinePictureInfo(source.run)
+			inline := childNS(source.run.child("drawing"), drawingWordNS, "inline")
+			frame := inline
+			if info == nil && source.picturePlacement != "" {
+				frame = childNS(source.run.child("drawing"), drawingWordNS, "anchor")
+				info, relationship = pictureFrameInfo(frame)
+			}
 			if info == nil {
 				continue
 			}
@@ -364,6 +478,15 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				info.Placement = source.picturePlacement
+				info.Align = source.pictureAlign
+				s.pictureAssets[run.ID] = asset
+				if inline == nil {
+					if crop, _, _ := supportedPictureCrop(frame, s.pkg.document); crop != nil && *crop != (ImageCrop{}) {
+						info.Crop = crop
+					}
+					continue
+				}
 				info.MoveCaptionUp, info.MoveCaptionDown = source.moveUp != nil, source.moveDown != nil
 				_, info.Caption = editablePictureCaption(source, s.pkg.document)
 				if captionParagraph(source) {
@@ -373,7 +496,6 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 					}
 					info.CaptionEditable = captionFieldsValid
 				}
-				inline := childNS(source.run.child("drawing"), drawingWordNS, "inline")
 				_, info.Rotation, info.RotationEditable = supportedPictureRotation(inline, s.pkg.document)
 				if crop, _, _ := supportedPictureCrop(inline, s.pkg.document); crop != nil {
 					info.CropEditable = true
@@ -381,7 +503,6 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 						info.Crop = crop
 					}
 				}
-				s.pictureAssets[run.ID] = asset
 			}
 		}
 	}

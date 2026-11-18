@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
 import type { Paragraph, Snapshot, TableAction, TableOperation } from './contracts';
+import { utf8Length } from './validation';
 
 const actions = {
   insert:'표 삽입',
@@ -23,12 +24,15 @@ export function DocumentTableToolbar(props: {
 }) {
   const [action,setAction] = createSignal<TableAction>('insert');
   const [tableId,setTableId] = createSignal('');
+  const [captionTableId,setCaptionTableId] = createSignal('');
   const [rows,setRows] = createSignal(2), [columns,setColumns] = createSignal(2);
   const [position,setPosition] = createSignal(1), [destination,setDestination] = createSignal(2);
   const [height,setHeight] = createSignal(24);
   const [error,setError] = createSignal('');
   const tables = createMemo(()=>props.blocks.filter(block=>block.type==='table'));
   const leading=()=>tables().find(table=>table.prependParagraph);
+  const captionTables=createMemo(()=>tables().filter(table=>table.tableCaptionInsertable));
+  const captionTable=()=>captionTables().find(table=>table.id===captionTableId())??captionTables()[0];
   const selected = createMemo(()=>tables().find(table=>table.id===tableId())??tables()[0]);
   const dimension = () => (action().endsWith('_row') || action()==='set_row_height') ? selected()?.rows.length??0 : selected()?.rows[0]?.cells.length??0;
   const disabled = () => props.disabled||props.pending;
@@ -105,6 +109,34 @@ export function DocumentTableToolbar(props: {
       </Show>
       <button type="button" class={buttonClass} disabled={disabled()||!(action()==='insert'?props.insertAfter:selected()?.tableEditable)}
         onClick={apply}>표 작업 적용</button>
+      <Show when={captionTables().length}>
+        <form class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2" onSubmit={event=>{
+          event.preventDefault();
+          const table=captionTable();
+          if(disabled()||!table)return;
+          const input=event.currentTarget.elements.namedItem('tableCaption') as HTMLInputElement;
+          const caption=input.value.trim();
+          if(!caption||utf8Length(caption)>1024){
+            setError('표 캡션을 UTF-8 1 KiB 이하로 입력하세요.');
+            return;
+          }
+          const accepted=props.onApply({type:'update_table',targetId:table.id,table:{action:'insert_caption',caption}});
+          setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+          if(accepted)input.value='';
+        }}>
+          <label class="grid gap-1">캡션을 붙일 표
+            <select aria-label="캡션을 붙일 표" class="editor-select min-h-11" value={captionTable()?.id??''} disabled={disabled()}
+              onChange={event=>{setCaptionTableId(event.currentTarget.value);setError('');}}>
+              <For each={captionTables()}>{table=><option value={table.id}>표 {tables().indexOf(table)+1}</option>}</For>
+            </select>
+          </label>
+          <label class="grid min-w-0 gap-1">표 캡션
+            <input name="tableCaption" type="text" maxlength="1024" required disabled={disabled()}
+              class="min-h-11 rounded border border-slate-300 px-2"/>
+          </label>
+          <button type="submit" class={buttonClass} disabled={disabled()}>표 번호 캡션 삽입</button>
+        </form>
+      </Show>
       <p class="basis-full text-slate-600">{props.pending?'표 작업을 저장하거나 실행 취소하세요.':action()==='insert'
         ? `삽입 위치: ${props.insertAfter?.runs.map(run=>run.text).join('').trim().slice(0,80)||'편집 가능한 본문 문단'} 뒤`
         : action()==='set_row_height' ? '내용이 많으면 행은 지정한 최소 높이보다 커질 수 있습니다. 적용 후 저장으로 확정합니다.' : '삭제는 선택한 표, 행 또는 열의 내용을 포함합니다. 적용 후 저장으로 확정합니다.'}</p>

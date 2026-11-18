@@ -306,7 +306,8 @@ part는 유지합니다. 수정된 문단 안 XML의 byte 동일성은 보장하
 지원하지 않는 항목은 안내하고 텍스트와 지원 글자 서식만 사용합니다. 이미지 alt는
 텍스트로 보존할 수 있지만 외부 그림을 내려받거나 임베디드 코드를 실행하지 않습니다.
 기본 서식은 일반 밑줄과 취소선도 유지합니다. 장식선의 별도 색이나 모양은
-기본 장식선으로 변환합니다.
+기본 장식선으로 변환합니다. Foloom에서 복사한 범위를 기본 서식으로 붙여넣으면
+탭, 연속 공백과 문단 안 줄바꿈이 유지됩니다.
 보호된 구조의 별도 입력칸에서는 기존 일반 텍스트 붙여넣기를 사용합니다.
 
 HTML은 live DOM에 붙이지 않고 inert template에서 제한된 텍스트·서식 값만 읽습니다.
@@ -544,6 +545,17 @@ HTTP·MCP는 첫 표 ID와 `update_table`의
 단순 표에서 커서가 한 곳에 있을 때 Tab과 Shift+Tab은 다음 또는 이전 편집
 가능한 셀로 이동합니다. 표의 양 끝에서는 기본 키보드 탐색으로 돌아갑니다.
 새 행은 표 도구에서 추가합니다.
+
+`표 편집`에서 캡션을 붙일 단순 본문 표와 한 줄 설명을 선택하고
+`표 번호 캡션 삽입`을 저장하면 바로 위에 `표 1. 설명` 형태의 Word
+`SEQ Table` 필드를 만듭니다. 캡션 문단은 표와 같은 페이지를 유지하도록
+다음 문단과 함께 배치됩니다. 앞에 새 캡션을 넣으면 뒤의 지원되는 표 번호를
+다시 매깁니다. 그림 번호와 표 속성은 그대로 유지됩니다. 기존 표 목록은
+`표 목록 업데이트`로 반영합니다. HTTP·MCP는 스냅샷에서
+`tableCaptionInsertable`이 참인 표 ID와
+`update_table`의 `table: { action: "insert_caption", caption }`을 사용합니다.
+캡션은 한 번에 하나씩, UTF-8 1 KiB까지 입력할 수 있습니다. 기존 복합 필드의
+번호 계산이나 떠 있는 표는 보호합니다.
 
 
 ## 목록 작성
@@ -846,6 +858,26 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
 [Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
 
+본문 전용 문단에 인라인 그림이 하나 있으면 `그림 정렬`에서 왼쪽·가운데·오른쪽을
+고른 뒤 `그림 정렬 적용`을 누릅니다. 그림 파일·크기·캡션은 그대로 유지하며
+문단의 정렬 속성만 바꿉니다. HTTP·MCP에서는 현재 그림 run ID를 대상으로
+`update_image`에 `image: { action: "align", align: "center" }`를 보냅니다.
+`start`는 왼쪽, `end`는 오른쪽입니다. 일반 문구·다른 개체·구역 설정이
+함께 있거나 표 안에 있는 문단은 보호합니다.
+
+본문 전용 문단의 지원 인라인 그림을 `그림 배치`에서 `위아래 감싸기`의
+왼쪽·가운데·오른쪽 중 하나로 변경할 수 있습니다. Word는 문단을 anchor로 삼고
+가로는 단, 세로는 문단 시작점을 기준으로 배치합니다. 주변 텍스트는 그림의
+위아래에 있고 기존 캡션·대체 텍스트·그림 크기·파일은 유지합니다. `인라인`을
+선택하면 원래 문단 서식으로 그림을 표시합니다. HTTP·MCP에서는 현재 그림
+run ID를 대상으로 `update_image`에
+`image: { action: "set_placement", placement: "floating_center" }`를 보냅니다.
+허용값은 `inline`, `floating_left`, `floating_center`, `floating_right`입니다.
+임의 위치·감싸기, 세로쓰기, 들여쓰기, 회전, 표와 여러 개체를 포함한 문단은
+보호됩니다. 화면은 지원되는 위아래 배치를 미리 보며 실제 자동 조판은
+Word 계열 편집기에서 확인합니다.
+[Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
+
 같은 그림을 다시 고른 뒤 `그림 캡션 변경`으로 기존 설명을 바꿀 수 있습니다.
 Word 번호 필드와 그림은 유지됩니다. HTTP·MCP에서는 그림 run ID,
 현재 설명의 `expectedText`, 새 `text`를 `edit_picture_caption`에 보냅니다.
@@ -949,6 +981,13 @@ HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url
 HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", bookmark }`를
 받습니다. 복합 필드와 다른 story의 참조는 보호합니다.
 
+`기존 링크`에서 일반 본문의 내부 링크를 고르고 `새 대상 북마크`를 선택한 뒤
+`북마크 대상 변경 적용`을 누르고 저장합니다. 링크 문구와 서식, 다른 링크와
+기존 관계는 유지됩니다. HTTP·MCP는 링크 run ID에
+`reference: { action: "set_link_bookmark", bookmark }`를 적용합니다.
+중복되거나 쌍이 끊어진 북마크와 보호된 링크는 대상 변경에서 제외합니다.
+[Word 내부 링크의 북마크 앵커](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/54a4ddbd-7262-47f3-8c94-56d2a7fd5e55)를 사용합니다.
+
 기존 링크에서 `링크 해제`를 적용하고 저장하면 표시된 글과 서식은 유지되고
 클릭 동작만 사라집니다. HTTP·MCP는 링크 run ID에 `reference: { action: "unlink" }`를
 사용합니다. 복잡한 구조는 보호하고 공유 관계는 남겨 둡니다.
@@ -958,7 +997,11 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 `reference: { action: "insert_bookmark_ref", bookmark }`를 적용합니다.
 브라우저에서 참조의 텍스트를 확인하고 대상 문단으로 이동할 수 있습니다.
 북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
-참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
+참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다. 북마크 문구가 바뀌면 브라우저는
+현재 문구를 보여 줍니다. `갱신할 텍스트 상호 참조`에서 변경된 필드를 고른 뒤
+`참조 표시값 갱신`을 적용하고 저장하면 Word 파일에 들어 있는 표시 문구도
+바뀝니다. HTTP·MCP는 해당 필드 run ID에
+`reference: { action: "refresh_bookmark_ref" }`를 단독 작업으로 보냅니다.
 [Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
 
 같은 메뉴의 `쪽 번호 상호 참조 삽입`에서 평문 북마크를 선택하면 Word PAGEREF
@@ -1141,7 +1184,7 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
 | 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 및 크기 변경·삭제 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
-| 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기, 단일 계열의 직접 수치 | 제목·수치 수정, 크기 변경 | Word 차트 |
+| 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기, 단일 계열의 직접 수치 | 제목·수치 수정, 크기 변경, 지원 인라인 배치 삭제 | Word 차트 |
 | 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | SmartArt | 내부 데이터에 있는 도형 문구 | 미지원 | Word |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 일반 본문에 평문 컨트롤 삽입 및 평문 수정 | Word |
@@ -1157,6 +1200,13 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 `chartWidthEmu`로 새 너비를 보냅니다. 문단의 크기 속성만 수정하며
 차트 도형과 데이터는 Word에서 확인할 수 있습니다.
 [Word DrawingML 차트 제목](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.charts.title)을 사용합니다.
+
+삽입의 `차트 편집`에서 지원되는 본문 인라인 차트를 선택하고
+`선택한 차트 제거`를 저장하면 해당 배치만 삭제됩니다. HTTP·MCP는
+`delete_chart`에 선택한 차트의 run ID를 보냅니다. 같은 차트 데이터를 공유하는
+다른 배치와 차트·내장 데이터·관계는 유지됩니다. 마지막 배치를 지워도 관련
+파일을 자동으로 정리하지 않습니다. 외부 링크, 떠 있는 차트, 보호된 문단과
+다른 내용과 섞인 run은 제거 대상에서 제외합니다.
 
 삽입의 `차트 편집`에서 단일 계열의 직접 수치를 저장하는 기본 차트는
 `편집할 차트 데이터` 목록을 표시합니다. 한 값을 선택해 숫자를 변경합니다.

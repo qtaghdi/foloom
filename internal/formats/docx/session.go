@@ -147,7 +147,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	}
 	numbering := s.pkg.projectNumbering(blocks)
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID, numbering)
-	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 떠 있는 그림과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
+	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일, 머리글·바닥글과 단순 위아래 그림 배치를 미리 봅니다. 자동 페이지 매김은 지원 범위에서 제외되며 복잡한 떠 있는 그림과 필드의 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
 		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
 	}
@@ -323,7 +323,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	textBytes := 0
 	structuralBytes := 0
 	var bookmarks *bookmarkIndex
-	var moveTargets map[string]target
+	var layoutTargets map[string]target
 	referenceCount := 0
 	var revisionIDs map[int64]bool
 	var nextRevisionID int64
@@ -350,7 +350,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.ChartValue != nil && op.Type != "update_chart_value" {
 			return nil, fmt.Errorf("unexpected DOCX chart value")
 		}
-		if op.Type == "update_chart_title" || op.Type == "resize_chart" || op.Type == "update_chart_value" {
+		if op.Type == "update_chart_title" || op.Type == "resize_chart" || op.Type == "update_chart_value" || op.Type == "delete_chart" {
 			t := targets[op.TargetID]
 			if t.kind != "chart" || seen[op.TargetID] ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -358,10 +358,21 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
 				return nil, fmt.Errorf("invalid DOCX chart operation")
 			}
+			seen[op.TargetID] = true
+			if op.Type == "delete_chart" {
+				if op.Text != "" || op.ExpectedText != "" {
+					return nil, fmt.Errorf("invalid DOCX chart deletion fields")
+				}
+				edit, err := s.pkg.deleteInlineChart(t)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
+			}
 			if chartCounts == nil {
 				chartCounts = s.pkg.chartUseCounts(root)
 			}
-			seen[op.TargetID] = true
 			switch op.Type {
 			case "resize_chart":
 				if op.ChartWidthEMU == nil || op.Text != "" || op.ExpectedText != "" {
@@ -421,13 +432,13 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
-			if moveTargets == nil {
-				_, moveTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+			if layoutTargets == nil {
+				_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
 				if err != nil {
 					return nil, err
 				}
 			}
-			edit, err := movePreservedParagraph(s.pkg.document, moveTargets[op.TargetID], op.Type)
+			edit, err := movePreservedParagraph(s.pkg.document, layoutTargets[op.TargetID], op.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -526,12 +537,23 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if !ok || seen[key] || op.Table == nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid or duplicate DOCX table operation")
 			}
-			if op.Table.Action == "insert_body_paragraph_before" && (op.Image != nil || op.Reference != nil ||
+			if (op.Table.Action == "insert_body_paragraph_before" || op.Table.Action == "insert_caption") && (op.Image != nil || op.Reference != nil ||
 				op.Comment != nil || op.Math != nil || op.ListDefinition != nil || op.Boundary != "" ||
 				op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil) {
-				return nil, fmt.Errorf("unexpected DOCX leading paragraph operation fields")
+				return nil, fmt.Errorf("unexpected DOCX table insertion operation fields")
 			}
 			seen[key] = true
+			if op.Table.Action == "insert_caption" {
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX numbered table caption must be added as a single operation")
+				}
+				changes, err := s.pkg.insertTableCaption(t, *op.Table)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, changes...)
+				continue
+			}
 			edit, err := tableReplacement(s.pkg.document, t, *op.Table)
 			if err != nil {
 				return nil, err
@@ -588,8 +610,8 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if (op.Reference.Action == "rename_bookmark" || op.Reference.Action == "delete_bookmark") && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark edit must stand alone")
 			}
-			if op.Reference.Action == "insert_bookmark_number_ref" && len(input.Operations) != 1 {
-				return nil, fmt.Errorf("DOCX bookmark number reference must stand alone")
+			if (op.Reference.Action == "insert_bookmark_number_ref" || op.Reference.Action == "refresh_bookmark_ref") && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX bookmark field edit must stand alone")
 			}
 			switch op.Reference.Action {
 			case "insert_toc", "update_toc", "insert_figure_list", "insert_table_list", "update_caption_list":
@@ -701,8 +723,17 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if imageCount >= 4 {
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
+			if op.Image.Action == "align" || op.Image.Action == "set_placement" {
+				if layoutTargets == nil {
+					_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+					if err != nil {
+						return nil, err
+					}
+				}
+				target = layoutTargets[op.TargetID]
+			}
 			var edit replacement
-			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" {
+			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" || op.Image.Action == "align" || op.Image.Action == "set_placement" {
 				edit, err = s.pkg.pictureUpdateReplacement(target, *op.Image, parts)
 			} else {
 				id, allocationErr := nextDrawingID()

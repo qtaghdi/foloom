@@ -104,7 +104,7 @@ export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPage
       'margin-block-end': p.layout?.after === undefined ? undefined : `${p.layout.after / 20}pt`,
     }}>
     <For each={(p.layout?.tabs??[]).filter(tab=>tab.align==='bar')}>{tab=><span contentEditable={false} aria-hidden="true" class="pointer-events-none absolute top-0 bottom-0 border-l border-slate-500" style={{left:`calc(${tab.position/20}pt - ${p.layout?.left===undefined?p.listLabel?36+(p.list?.level??0)*18:0:p.layout.left/20}pt)`}}/>}</For>
-    <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': p.layout?.align }}>
+    <div class="min-w-0" classList={{ 'pr-12': props.changes.has(key) }} style={{ 'text-align': paragraphAlignment(p) }}>
     <Show when={p.listLabel}><span data-docx-list-marker contentEditable={false} aria-label={`목록 ${p.listLabel}`} class="inline-block min-w-[18pt] select-none" style={{'text-indent':'0'}}>{p.listLabel}</span></Show>
       <Show when={p.runs.length} fallback={<span aria-hidden="true">&nbsp;</span>}>
         <For each={p.runs}>{(run) => <Show when={run.editable} fallback={<Show when={run.picture?.preview} fallback={<Show when={run.link} fallback={<Show when={run.object} fallback={<span data-docx-text class="whitespace-pre-wrap" style={runStyle(run)} title={t('readOnlyPreservingTheOriginalStructure')}>{run.text || t('unrenderedStructure')}</span>}>{object=>
@@ -184,6 +184,16 @@ export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPage
     </div>
     </div></>;
     }}</For></div></>;
+}
+
+function paragraphAlignment(paragraph:Paragraph) {
+  const placement=paragraph.runs.find(run=>run.picture?.placement?.startsWith('floating_'))?.picture?.placement;
+  switch(placement){
+    case 'floating_left':return 'start';
+    case 'floating_center':return 'center';
+    case 'floating_right':return 'end';
+    default:return paragraph.layout?.align;
+  }
 }
 
 function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
