@@ -331,8 +331,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				}
 				if r.is("hyperlink") {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
-				} else if name := bookmarkFieldName(r); name != "" {
+				} else if _, name := bookmarkFieldTarget(r); name != "" {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
+				} else if run.Object != nil && run.Object.Kind == "toc" && !protected[p] && tocCacheRun(r, root.source) != nil {
+					run.Object.Editable = true
+					targets[run.ID] = target{node: r, paragraph: p, kind: "toc"}
 				} else {
 					unsupported = true
 				}
@@ -466,8 +469,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		case child.is("tbl"):
 			block := Block{ID: id(), Type: "table", Rows: []Row{}}
 			_, block.TableEditable = simpleTable(child)
+			block.PrependParagraph = leadingBodyTable(child)
 			if block.TableEditable {
 				targets[block.ID] = target{node: child, kind: "update_table"}
+			} else if block.PrependParagraph {
+				targets[block.ID] = target{node: child, kind: "leading_body_table"}
 			}
 			// Merged, nested or revision-marked tables are inspection-only.
 			allowed := true
@@ -523,5 +529,6 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		}
 	}
 	markBookmarkParagraphs(root, bodyParagraphs, protected, targets)
+	markHyperlinkParagraphs(root, bodyParagraphs, protected, targets)
 	return blocks, targets, unsupported, nil
 }
