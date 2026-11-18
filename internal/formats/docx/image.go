@@ -105,11 +105,15 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 	}
 	changes[filename] = raw
 	drawing := inlinePicture(id, rel, edit.Alt, width, height)
+	return appendDrawingRun(data, paragraph, drawing), nil
+}
+
+func appendDrawingRun(data []byte, paragraph *node, drawing string) replacement {
 	if strings.HasSuffix(string(data[paragraph.start:paragraph.inner]), "/>") {
 		open, close := scopedOpening(paragraph, data, false)
-		return replacement{paragraph.start, paragraph.end, []byte(open + drawing + close)}, nil
+		return replacement{paragraph.start, paragraph.end, []byte(open + drawing + close)}
 	}
-	return replacement{paragraph.endStart, paragraph.endStart, []byte(drawing)}, nil
+	return replacement{paragraph.endStart, paragraph.endStart, []byte(drawing)}
 }
 
 func decodePicture(encoded string) ([]byte, image.Config, string, error) {

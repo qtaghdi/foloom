@@ -823,6 +823,14 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 클릭 동작만 사라집니다. HTTP·MCP는 링크 run ID에 `reference: { action: "unlink" }`를
 사용합니다. 복잡한 구조는 보호하고 공유 관계는 남겨 둡니다.
 
+다른 본문 문단의 `텍스트 상호 참조 삽입`에서 한 문단의 평문을 포함한 북마크를
+선택하면 Word REF 필드가 추가됩니다. HTTP·MCP는 문단 ID에
+`reference: { action: "insert_bookmark_ref", bookmark }`를 적용합니다.
+브라우저에서 참조의 텍스트를 확인하고 대상 문단으로 이동할 수 있습니다.
+북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
+참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
+[Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
+
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 각주의 번호와
@@ -920,8 +928,10 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
 
-삽입의 `텍스트 상자 편집`에서 일반 본문의 독립 텍스트 상자에 있는 한 문단의
-평문을 수정합니다. HTTP·MCP는 `update_textbox_text`에 상자 run ID, 현재
+삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
+기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
+일반 텍스트를 `insert_textbox`에 보냅니다. 저장한 상자를 같은 도구에서 선택해
+평문을 수정할 수 있습니다. HTTP·MCP는 `update_textbox_text`에 상자 run ID, 현재
 `expectedText`와 새 `text`를 보냅니다. 위치·크기·기존 서식을 유지하며 수정을
 적용할 때 같은 내용의 DrawingML과 VML 호환 표현을 함께 편집합니다.
 상자가 연결돼 있거나 호환 표현의 텍스트가 서로 다르면 읽기 전용으로 표시합니다.

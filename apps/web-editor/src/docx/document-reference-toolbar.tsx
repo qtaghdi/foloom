@@ -15,8 +15,10 @@ export function DocumentReferenceToolbar(props:{
   target?:Paragraph;links:Run[];notes:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
-  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'footnote'|'endnote'>('bookmark');
+  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'footnote'|'endnote'>('bookmark');
   const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
+  const bookmarkChoices=()=>mode()==='reference'?props.bookmarks.filter(item=>item.textReference):props.bookmarks;
+  const targetBookmark=()=>bookmarkChoices().find(item=>item.name===anchor())?.name??bookmarkChoices()[0]?.name;
   const [linkId,setLinkId]=createSignal('');
   const selectedLink = () => props.links.find(link=>link.id===linkId());
   const [noteId,setNoteId]=createSignal('');
@@ -36,6 +38,10 @@ export function DocumentReferenceToolbar(props:{
       if(!/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(bookmark())){setError('북마크 이름은 영문자로 시작하는 영문자·숫자·밑줄 1~40자를 사용하세요.');return;}
       if(props.bookmarks.some(item=>item.name.toLowerCase()===bookmark().toLowerCase())){setError('같은 이름의 북마크가 있습니다.');return;}
       reference={action:'insert_bookmark',bookmark:bookmark()};
+    }else if(mode()==='reference'){
+      const name=targetBookmark();
+      if(!name){setError('평문 북마크를 선택하세요.');return;}
+      reference={action:'insert_bookmark_ref',bookmark:name};
     }else if(addingNote()){
       if(!text().trim()){setError(`${noteLabel()} 내용을 입력하세요.`);return;}
       reference={action:mode()==='endnote'?'insert_endnote':'insert_footnote',text:text()};
@@ -46,7 +52,7 @@ export function DocumentReferenceToolbar(props:{
         if(!safeWebAddress(value)){setError('인증 정보가 없는 HTTP 또는 HTTPS 주소를 입력하세요.');return;}
         reference={action:'insert_link',text:text(),url:value};
       }else{
-        const name=anchor()||props.bookmarks[0]?.name;
+        const name=targetBookmark();
         if(!name||!props.bookmarks.some(item=>item.name===name)){setError('이동할 북마크를 먼저 선택하세요.');return;}
         reference={action:'insert_link',text:text(),bookmark:name};
       }
@@ -58,15 +64,15 @@ export function DocumentReferenceToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="참조 작업" class="editor-select min-h-11" disabled={disabled()} value={mode()}
         onChange={event=>{setMode(event.currentTarget.value as ReturnType<typeof mode>);setError('');}}>
-        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
+        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
       </select>
       <Show when={addingNote()} fallback={<Show when={mode()==='bookmark'} fallback={<>
-        <input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
-          disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/>
-        <Show when={mode()==='url'} fallback={<select aria-label="링크 대상 북마크" class="editor-select min-h-11" disabled={disabled()}
-          value={anchor()||props.bookmarks[0]?.name||''} onChange={event=>setAnchor(event.currentTarget.value)}>
-          <Show when={!props.bookmarks.length}><option value="">북마크 없음</option></Show>
-          <For each={props.bookmarks}>{item=><option value={item.name}>{item.name}</option>}</For>
+        <Show when={mode()!=='reference'}><input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
+          disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/></Show>
+        <Show when={mode()==='url'} fallback={<select aria-label={mode()==='reference'?'상호 참조할 북마크':'링크 대상 북마크'} class="editor-select min-h-11" disabled={disabled()}
+          value={targetBookmark()??''} onChange={event=>setAnchor(event.currentTarget.value)}>
+          <Show when={!bookmarkChoices().length}><option value="">북마크 없음</option></Show>
+          <For each={bookmarkChoices()}>{item=><option value={item.name}>{item.name}</option>}</For>
         </select>}>
           <input type="url" maxlength="2048" aria-label="웹 링크 주소" placeholder="https://" class="min-h-11 max-w-full rounded border border-slate-300 px-2"
             disabled={disabled()} value={url()} onInput={event=>setURL(event.currentTarget.value)}/>
