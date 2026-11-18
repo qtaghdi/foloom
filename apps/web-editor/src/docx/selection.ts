@@ -39,6 +39,11 @@ export function readTextSelection(root: HTMLElement): TextSelection | undefined 
   const focus = point(root, selection.focusNode, selection.focusOffset);
   return anchor && focus ? { anchor, focus } : undefined;
 }
+export function readTextFieldSelection(field: HTMLTextAreaElement): TextSelection {
+  const start = {runId:field.name, offset:field.selectionStart};
+  const end = {runId:field.name, offset:field.selectionEnd};
+  return field.selectionDirection === 'backward' ? {anchor:end, focus:start} : {anchor:start, focus:end};
+}
 export function restoreTextSelection(root: HTMLElement, value: TextSelection): boolean {
   const spans = [...root.querySelectorAll<HTMLElement>('[data-docx-run]')];
   const resolve = (point: TextPoint) => {
