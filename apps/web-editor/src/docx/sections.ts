@@ -20,9 +20,9 @@ export function previewSections(original:SectionInfo[],updates:Map<string,Sectio
   next.headerFooters=section.headerFooters?.map(slot=>{
    const key=slot.kind+':'+slot.variant,update=patch.headerFooters?.find(item=>item.kind===slot.kind&&item.variant===slot.variant);
    let info={...slot};
-   if(update&&!update.linkPrevious)info={...info,text:update.text??'',pageNumber:update.pageNumber??slot.pageNumber,linked:false,sourceSectionId:section.id,editable:true,truncated:false};
+   if(update&&!update.linkPrevious)info={...info,text:update.text??'',pageNumber:update.pageNumber??slot.pageNumber,totalPages:update.totalPages??slot.totalPages,linked:false,sourceSectionId:section.id,editable:true,truncated:false};
    else if(update?.linkPrevious||slot.linked) {
-    const inherited=previous.get(key);info={...info,text:'',linked:true,pageNumber:inherited?.pageNumber,sourceSectionId:inherited?.sourceSectionId,editable:inherited?.editable??true,truncated:inherited?.truncated};
+    const inherited=previous.get(key);info={...info,text:'',linked:true,pageNumber:inherited?.pageNumber,totalPages:inherited?.totalPages,sourceSectionId:inherited?.sourceSectionId,editable:inherited?.editable??true,truncated:inherited?.truncated};
    }
    previous.set(key,info);return info;
   });

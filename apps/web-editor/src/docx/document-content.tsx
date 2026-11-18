@@ -76,7 +76,7 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
    const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
    const slot=section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant);
    const text=resolveHeaderText(props.snapshot.sections??[],slot);
-   return [text,slot?.pageNumber?'쪽 번호 필드':''].filter(Boolean).join('\n');
+   return [text,slot?.pageNumber?'쪽 번호 필드':'',slot?.totalPages?'전체 쪽 수 필드':''].filter(Boolean).join('\n');
   };
   const goToBookmark=(name:string)=>{
     const id=props.snapshot.bookmarks?.find(bookmark=>bookmark.name===name)?.paragraphId;

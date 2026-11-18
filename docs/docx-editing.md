@@ -644,6 +644,12 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 계산합니다. [단일 Word 필드 구조](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.simplefield)를
 사용합니다.
 
+같은 도구의 `전체 쪽 수 필드`를 켜면 Word가 계산하는 NUMPAGES 필드를
+추가합니다. HTTP·MCP의 머리글·바닥글 설정은 `totalPages: true` 또는
+`totalPages: false`를 사용합니다. 쪽 번호 필드와 독립적으로 바뀌며, 브라우저는
+계산값 대신 필드 위치를 보여 줍니다.
+[Word 필드 코드 목록](https://support.microsoft.com/en-us/word/list-of-field-codes-in-word)에서 NUMPAGES를 확인할 수 있습니다.
+
 ### 문단 페이지 나눔과 구역 나눔
 
 `구역 나눔 제거`에서 경계를 선택하고 저장하면 앞뒤 구역을 합칩니다.

@@ -181,3 +181,46 @@ func TestPageNumberFieldPersistsAndRespectsSectionLinks(t *testing.T) {
 		t.Fatal("undo changed original file")
 	}
 }
+
+func TestTotalPageFieldKeepsPageNumberAndSectionLinks(t *testing.T) {
+	ctx := context.Background()
+	s, filename := headerDocument(t)
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	yes, no := true, false
+	text := "Footer"
+	both, err := s.Apply(ctx, headerBatch(v, 0, HeaderFooterUpdate{
+		Kind: "footer", Variant: "default", Text: &text, PageNumber: &yes, TotalPages: &yes,
+	}), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range 2 {
+		slot := headerSlot(t, both, index, "footer", "default")
+		if !slot.PageNumber || !slot.TotalPages || !slot.Editable || slot.Linked != (index > 0) {
+			t.Fatalf("section %d lost a field or link: %+v", index, slot)
+		}
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := mustSnapshot(t, reopened)
+	if first := headerSlot(t, view, 0, "footer", "default"); first.Text != text || !first.TotalPages {
+		t.Fatal("page count field did not survive reopen")
+	}
+	withoutCount, err := reopened.Apply(ctx, headerBatch(view, 0, HeaderFooterUpdate{
+		Kind: "footer", Variant: "default", Text: &text, TotalPages: &no,
+	}), "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slot := headerSlot(t, withoutCount, 0, "footer", "default"); !slot.PageNumber || slot.TotalPages {
+		t.Fatal("removing the total affected the independent PAGE field")
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the original document")
+	}
+}
