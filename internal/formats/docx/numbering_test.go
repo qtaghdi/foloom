@@ -93,7 +93,7 @@ func TestListsPreserveCustomNumberingAndOtherParts(t *testing.T) {
 	if v.Blocks[0].Paragraph.ListLabel != "★" {
 		t.Fatal("custom bullet not displayed")
 	}
-	_, err = s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{Type: "define_list", ListDefinition: &ListDefinition{Key: "new", Kind: "decimal", Start: 4}}}}, "human")
+	_, err = s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{Type: "define_list", ListDefinition: &ListDefinition{Key: "new", Kind: "decimal", Start: 4, Compound: true}}}}, "human")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,5 +226,70 @@ func TestCreateRomanAndLetterListFormats(t *testing.T) {
 				t.Fatal("undo changed original bytes")
 			}
 		})
+	}
+}
+
+func TestCreateCompoundListAndResetChildCounters(t *testing.T) {
+	ctx := context.Background()
+	levels := []int{0, 1, 2, 1, 0, 1, 2, 8}
+	var body strings.Builder
+	for range levels {
+		body.WriteString(`<w:p><w:r><w:t>Heading</w:t></w:r></w:p>`)
+	}
+	s, path := withDocument(t, bodyXML(body.String()))
+	original := fileBytes(t, path)
+	v := mustSnapshot(t, s)
+	contents := make([]ParagraphContent, 0, len(levels))
+	for i, level := range levels {
+		p := v.Blocks[i].Paragraph
+		contents = append(contents, ParagraphContent{SourceID: p.ID,
+			Format: &ParagraphFormat{List: &ParagraphList{Key: "outline", Level: level}},
+			Runs:   []RunContent{{SourceID: p.Runs[0].ID, Text: p.Runs[0].Text}},
+		})
+	}
+	input := paragraphPlan(v, contents...)
+	input.Operations = append(input.Operations,
+		Operation{Type: "define_list", ListDefinition: &ListDefinition{Key: "outline", Kind: "decimal", Start: 3, Compound: true}})
+	next, err := s.Apply(ctx, input, "ai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, snapshot := range []Snapshot{next, mustSnapshot(t, reopened)} {
+		for i, want := range []string{"3.", "3.1.", "3.1.1.", "3.2.", "4.", "4.1.", "4.1.1.", "4.1.1.1.1.1.1.1.1."} {
+			p := snapshot.Blocks[i].Paragraph
+			if p.ListLabel != want || p.List.ID != snapshot.Lists[0].ID || p.List.Level != levels[i] {
+				t.Fatalf("position %d = %+v, want label %q and level %d", i, p, want, levels[i])
+			}
+		}
+		if snapshot.Lists[0].Levels[8].Text != "%1.%2.%3.%4.%5.%6.%7.%8.%9." {
+			t.Fatal("native numbering level omits parent counters")
+		}
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("undo changed the original package")
+	}
+}
+
+func TestCompoundOptionRejectsBulletAndRestartDefinitions(t *testing.T) {
+	for _, definition := range []ListDefinition{
+		{Key: "invalid", Kind: "bullet", Compound: true},
+		{Key: "invalid", SourceID: 7, Start: 3, Compound: true},
+	} {
+		ctx := context.Background()
+		s, path := withDocument(t, bodyXML(`<w:p><w:r><w:t>Before</w:t></w:r></w:p>`))
+		original := fileBytes(t, path)
+		v := mustSnapshot(t, s)
+		p := v.Blocks[0].Paragraph
+		input := paragraphPlan(v, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "After"}}})
+		input.Operations = append(input.Operations, Operation{Type: "define_list", ListDefinition: &definition})
+		if _, err := s.Apply(ctx, input, "ai"); err == nil || !bytes.Equal(original, fileBytes(t, path)) ||
+			mustSnapshot(t, s).Revision != v.Revision {
+			t.Fatal("invalid compound list batch changed the document")
+		}
 	}
 }

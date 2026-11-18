@@ -160,12 +160,12 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 			return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list definition")
 		}
 		if d.SourceID != 0 {
-			if d.SourceID < 0 || d.Kind != "" || d.Level < 0 || d.Level > 8 || d.Start < 1 {
+			if d.SourceID < 0 || d.Kind != "" || d.Compound || d.Level < 0 || d.Level > 8 || d.Start < 1 {
 				return nil, numberingCatalog{}, fmt.Errorf("DOCX list restart requires an existing list ID and starting number")
 			}
 		} else {
 			limit := listStartLimit(d.Kind)
-			if limit == 0 || d.Level != 0 || d.Start < 0 || d.Start > limit {
+			if limit == 0 || d.Level != 0 || d.Start < 0 || d.Start > limit || d.Compound && d.Kind == "bullet" {
 				return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list format or starting number")
 			}
 		}
@@ -255,9 +255,13 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 		}
 		levels := map[int]listLevel{}
 		fmt.Fprintf(&abstractXML, `<w:abstractNum xmlns:w="%s" w:abstractNumId="%d"><w:multiLevelType w:val="multilevel"/>`, wordNS, abstract)
+		var hierarchy string
 		for level := 0; level < 9; level++ {
 			label := fmt.Sprintf("%%%d.", level+1)
-			if d.Kind == "bullet" {
+			if d.Compound {
+				hierarchy += label
+				label = hierarchy
+			} else if d.Kind == "bullet" {
 				label = []string{"•", "◦", "▪"}[level%3]
 			}
 			start := 1

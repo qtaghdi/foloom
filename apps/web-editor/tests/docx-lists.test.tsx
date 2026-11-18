@@ -106,3 +106,13 @@ it('repeats the same letter after each group of 26 in imported and new lists', (
   for(const block of numbered.blocks)if(block.type==='paragraph')block.paragraph.list={key:'letters'};
   expect(labels(previewLists(numbered,[{key:'letters',kind:'lowerLetter',start:26}]))).toEqual(['z.','aa.','bb.']);
 });
+
+it('previews compound numbering with parent counters and restarts children', () => {
+  const numbered=structuredClone(base);
+  numbered.blocks=[0,1,2,1,0,1].map((level,index)=>({
+    id:'block'+index,type:'paragraph',paragraph:{id:'paragraph'+index,runs:[],list:{key:'outline',level}},
+  }));
+  const preview=previewLists(numbered,[{key:'outline',kind:'upperRoman',start:3,compound:true}]);
+  expect(preview.blocks.map(block=>block.type==='paragraph'&&block.paragraph.listLabel))
+    .toEqual(['III.','III.I.','III.I.I.','III.II.','IV.','IV.I.']);
+});
