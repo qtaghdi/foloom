@@ -23,7 +23,7 @@ func markBookmarkParagraphs(root *node, paragraphs map[*node]*Paragraph, protect
 			candidates[p] = true
 			continue
 		}
-		if !structuralParagraphContents(p, root.source, true, nil) {
+		if !structuralParagraphContents(p, root.source, "bookmark", nil) {
 			continue
 		}
 		hasBookmark, safe := false, true
@@ -62,16 +62,20 @@ func markBookmarkParagraphs(root *node, paragraphs map[*node]*Paragraph, protect
 	}
 }
 
-func moveBookmarkedParagraph(data []byte, target target, operation string) (replacement, error) {
-	if target.kind != "bookmark_paragraph" {
-		return replacement{}, fmt.Errorf("DOCX bookmark movement requires a supported body paragraph")
+func movePreservedParagraph(data []byte, target target, operation string) (replacement, error) {
+	requiredKind := "bookmark_paragraph"
+	if operation == "move_hyperlink_up" || operation == "move_hyperlink_down" {
+		requiredKind = "hyperlink_paragraph"
+	}
+	if target.kind != requiredKind {
+		return replacement{}, fmt.Errorf("DOCX movement requires a supported body paragraph")
 	}
 	first, second := target.paragraph, target.moveDown
-	if operation == "move_bookmark_up" {
+	if operation == "move_bookmark_up" || operation == "move_hyperlink_up" {
 		first, second = target.moveUp, target.paragraph
 	}
 	if first == nil || second == nil || first.end > second.start {
-		return replacement{}, fmt.Errorf("protected DOCX bookmark movement boundary")
+		return replacement{}, fmt.Errorf("protected DOCX paragraph movement boundary")
 	}
 	// Both paragraphs retain their original parent and namespace context.
 	raw := bytes.Join([][]byte{data[second.start:second.end], data[first.end:second.start], data[first.start:first.end]}, nil)

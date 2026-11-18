@@ -12,7 +12,7 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -20,16 +20,18 @@ type ReferenceEdit struct {
 }
 
 type BookmarkInfo struct {
-	TextReference  bool   `json:"textReference,omitempty"`
-	Name           string `json:"name"`
-	ParagraphID    string `json:"paragraphId"`
-	RenameEditable bool   `json:"renameEditable,omitempty"`
+	NumberReference bool   `json:"numberReference,omitempty"`
+	TextReference   bool   `json:"textReference,omitempty"`
+	Name            string `json:"name"`
+	ParagraphID     string `json:"paragraphId"`
+	RenameEditable  bool   `json:"renameEditable,omitempty"`
 }
 
 type LinkInfo struct {
-	Field    bool   `json:"field,omitempty"`
-	URL      string `json:"url,omitempty"`
-	Bookmark string `json:"bookmark,omitempty"`
+	PageReference bool   `json:"pageReference,omitempty"`
+	Field         bool   `json:"field,omitempty"`
+	URL           string `json:"url,omitempty"`
+	Bookmark      string `json:"bookmark,omitempty"`
 }
 
 type bookmarkIndex struct {
@@ -130,6 +132,12 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 	if edit.Action == "delete_footnote" || edit.Action == "delete_endnote" {
 		return p.deleteNote(strings.TrimPrefix(edit.Action, "delete_"), t, edit, changes)
 	}
+	if edit.Action == "update_toc" {
+		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
+			return nil, fmt.Errorf("unexpected DOCX table of contents fields")
+		}
+		return p.updateTableOfContents(t)
+	}
 	paragraph := t.paragraph
 	if t.kind != "replace_paragraphs" || paragraph == nil || !paragraph.parent.is("body") {
 		return nil, fmt.Errorf("DOCX reference requires an editable body paragraph")
@@ -151,11 +159,24 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 			return nil, err
 		}
 		return appendRun(marker), nil
-	case "insert_bookmark_ref":
+	case "insert_toc":
+		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
+			return nil, fmt.Errorf("unexpected DOCX table of contents fields")
+		}
+		return p.insertTableOfContents(paragraph)
+	case "insert_bookmark_ref", "insert_bookmark_page_ref", "insert_bookmark_number_ref":
 		if edit.URL != "" || edit.Text != "" {
 			return nil, fmt.Errorf("unexpected DOCX bookmark field data")
 		}
-		field, err := bookmarkFieldXML(bookmarks, edit.Bookmark)
+		number := ""
+		if edit.Action == "insert_bookmark_number_ref" {
+			var err error
+			number, err = p.bookmarkNumberText(paragraph.parent.parent, bookmarks, edit.Bookmark)
+			if err != nil {
+				return nil, err
+			}
+		}
+		field, err := bookmarkFieldXML(bookmarks, edit.Bookmark, edit.Action, number)
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +314,7 @@ func (index bookmarkIndex) hasTarget(name string) bool {
 	return false
 }
 
-func (p *documentPackage) projectReferences(root *node, blocks []Block, targets map[string]target) []BookmarkInfo {
+func (p *documentPackage) projectReferences(root *node, blocks []Block, targets map[string]target, numbering numberingCatalog) []BookmarkInfo {
 	bookmarks := []BookmarkInfo{}
 	if !bytes.Contains(p.document, []byte("hyperlink")) && !bytes.Contains(p.document, []byte("bookmarkStart")) {
 		return bookmarks
@@ -301,6 +322,7 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 	index := readBookmarks(root)
 	names := map[string]string{}
 	referenceTexts := map[string]string{}
+	numberTexts := map[string]string{}
 	blockIndex := 0
 	for _, child := range root.child("body").children {
 		if !child.is("p") && !child.is("tbl") {
@@ -323,8 +345,15 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 				if text != "" {
 					referenceTexts[key] = text
 				}
+				number := ""
+				if text != "" {
+					number = numberedBookmarkText(block.Paragraph, numbering)
+				}
+				if number != "" {
+					numberTexts[key] = number
+				}
 				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID,
-					RenameEditable: targets[block.Paragraph.ID].kind == "bookmark_paragraph", TextReference: text != ""})
+					RenameEditable: targets[block.Paragraph.ID].kind == "bookmark_paragraph", TextReference: text != "", NumberReference: number != ""})
 			}
 		}
 	}
@@ -352,9 +381,17 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 				continue
 			}
 			if t.kind == "bookmark_ref" {
+				kind, _ := bookmarkFieldTarget(t.node)
 				key := strings.ToLower(t.text)
-				if text := referenceTexts[key]; text != "" {
-					run.Text, run.Link = text, &LinkInfo{Bookmark: names[key], Field: true}
+				if kind == "PAGEREF" && names[key] != "" {
+					run.Link = &LinkInfo{Bookmark: names[key], Field: true, PageReference: true}
+				} else if kind == "number" && names[key] != "" {
+					if number := numberTexts[key]; number != "" {
+						run.Text = number
+					}
+					run.Link = &LinkInfo{Bookmark: names[key], Field: true}
+				} else if kind == "REF" && referenceTexts[key] != "" {
+					run.Text, run.Link = referenceTexts[key], &LinkInfo{Bookmark: names[key], Field: true}
 				}
 				continue
 			}

@@ -11,6 +11,7 @@ import (
 const numberingRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering"
 
 var listKey = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`)
+var listCounter = regexp.MustCompile(`%[1-9]`)
 
 type listLevel struct {
 	kind    string
@@ -79,7 +80,9 @@ func readNumbering(root *node) numberingCatalog {
 		}
 		c.maxID = max(c.maxID, id)
 		levels := map[int]listLevel{}
-		for k, v := range abstracts[listInt(n.child("abstractNumId").attr("val"), -1)] {
+		abstract := listInt(n.child("abstractNumId").attr("val"), -1)
+		c.maxAbstract = max(c.maxAbstract, abstract)
+		for k, v := range abstracts[abstract] {
 			levels[k] = v
 		}
 		for _, override := range n.children {
@@ -104,6 +107,41 @@ func readNumbering(root *node) numberingCatalog {
 	return c
 }
 
+func listStartLimit(kind string) int {
+	switch kind {
+	case "bullet":
+		return 1
+	case "decimal":
+		return 9999
+	case "upperRoman", "lowerRoman":
+		return 3999
+	case "upperLetter", "lowerLetter":
+		return 702
+	default:
+		return 0
+	}
+}
+
+func restartableListLevel(levels map[int]listLevel, index, start int) bool {
+	level := levels[index]
+	token := "%" + strconv.Itoa(index+1)
+	if level.kind == "bullet" || start > listStartLimit(level.kind) || !strings.Contains(level.text, token) {
+		return false
+	}
+	if index == 0 {
+		return true
+	}
+	if listCounter.MatchString(strings.ReplaceAll(level.text, token, "")) {
+		return false
+	}
+	for child, definition := range levels {
+		if child > index && strings.Contains(definition.text, token) {
+			return false
+		}
+	}
+	return true
+}
+
 // Numbering instances are append-only. Starting a new list never mutates the
 // shared instance or abstract definition of an unrelated paragraph.
 func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][]byte) (map[string]int, numberingCatalog, error) {
@@ -121,21 +159,15 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 			!listKey.MatchString(d.Key) {
 			return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list definition")
 		}
-		var maxStart int
-		switch d.Kind {
-		case "bullet":
-			maxStart = 1
-		case "decimal":
-			maxStart = 9999
-		case "upperRoman", "lowerRoman":
-			maxStart = 3999
-		case "upperLetter", "lowerLetter":
-			maxStart = 702
-		default:
-			return nil, numberingCatalog{}, fmt.Errorf("unsupported DOCX list format")
-		}
-		if d.Start < 0 || d.Start > maxStart {
-			return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list starting number")
+		if d.SourceID != 0 {
+			if d.SourceID < 0 || d.Kind != "" || d.Level < 0 || d.Level > 8 || d.Start < 1 {
+				return nil, numberingCatalog{}, fmt.Errorf("DOCX list restart requires an existing list ID and starting number")
+			}
+		} else {
+			limit := listStartLimit(d.Kind)
+			if limit == 0 || d.Level != 0 || d.Start < 0 || d.Start > limit {
+				return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list format or starting number")
+			}
 		}
 		defs = append(defs, *d)
 	}
@@ -197,6 +229,30 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 		catalog.maxAbstract++
 		id, abstract := catalog.maxID, catalog.maxAbstract
 		keys[d.Key] = id
+		if d.SourceID != 0 {
+			source := catalog.levels[d.SourceID]
+			if !restartableListLevel(source, d.Level, d.Start) {
+				return nil, numberingCatalog{}, fmt.Errorf("unsupported DOCX list for restart or invalid starting number")
+			}
+			copiedAbstract, instance, err := copyListWithStart(root, data, d, id, abstract)
+			if err != nil {
+				return nil, numberingCatalog{}, err
+			}
+			levels := make(map[int]listLevel, len(source))
+			for index, original := range source {
+				levels[index] = original
+			}
+			level := source[d.Level]
+			level.start = d.Start
+			levels[d.Level] = level
+			catalog.levels[id] = levels
+			if len(data)+abstractXML.Len()+instanceXML.Len()+len(instance)+len(copiedAbstract) > maxPartBytes {
+				return nil, numberingCatalog{}, fmt.Errorf("DOCX numbering part exceeds limit")
+			}
+			abstractXML.WriteString(copiedAbstract)
+			instanceXML.WriteString(instance)
+			continue
+		}
 		levels := map[int]listLevel{}
 		fmt.Fprintf(&abstractXML, `<w:abstractNum xmlns:w="%s" w:abstractNumId="%d"><w:multiLevelType w:val="multilevel"/>`, wordNS, abstract)
 		for level := 0; level < 9; level++ {
