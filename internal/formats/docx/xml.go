@@ -159,13 +159,14 @@ func escapeText(s string) string {
 }
 
 type target struct {
-	trackable        bool
-	boldTrackable    bool
-	textStories      [][]*node
-	moveUp, moveDown *node
-	paragraph, run   *node
-	node             *node
-	text, kind       string
+	alignmentTrackable bool
+	trackable          bool
+	boldTrackable      bool
+	textStories        [][]*node
+	moveUp, moveDown   *node
+	paragraph, run     *node
+	node               *node
+	text, kind         string
 }
 
 func inspect(data []byte, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
@@ -348,9 +349,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				} else if run.Object != nil && run.Object.Kind == "date_field" && !protected[p] && dateFieldCache(r, root.source) != nil {
 					run.Object.Editable = true
 					targets[run.ID] = target{node: r, paragraph: p, kind: "date_field"}
-				} else if run.Object != nil && run.Object.Kind == "toc" && !protected[p] && tocCacheRun(r, root.source) != nil {
+				} else if run.Object != nil && !protected[p] && tocCacheRun(r, root.source) != nil {
 					run.Object.Editable = true
-					targets[run.ID] = target{node: r, paragraph: p, kind: "toc"}
+					targets[run.ID] = target{node: r, paragraph: p, kind: run.Object.Kind}
 				} else {
 					unsupported = true
 				}
@@ -474,8 +475,12 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		for _, run := range out.Runs {
 			out.StructureEditable = out.StructureEditable && run.Editable
 		}
-		if out.StructureEditable {
-			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "replace_paragraphs"}
+		out.AlignmentRevision = paragraphAlignmentRevisionPreview(p, root.source, reviewable)
+		out.AlignmentTrackable = reviewable && out.StructureEditable && plainParagraphAlignment(props)
+		if out.AlignmentRevision != nil && out.AlignmentRevision.Editable {
+			targets[out.ID] = target{node: props.child("pPrChange"), paragraph: p, kind: "tracked_alignment"}
+		} else if out.StructureEditable {
+			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "replace_paragraphs", alignmentTrackable: out.AlignmentTrackable}
 		} else if allowed && p.parent == body && (out.PageBreakBefore || props.child("pageBreakBefore") != nil) {
 			targets[out.ID] = target{node: p, paragraph: p, text: textContent(p), kind: "update_boundary"}
 		} else if allowed && p.parent == body && props.child("sectPr") != nil {

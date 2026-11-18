@@ -301,6 +301,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	}
 	seen := map[string]bool{}
 	var edits []replacement
+	var usedIDs paragraphIDs
 	headerCount := 0
 	var drawingID uint64
 	nextDrawingID := func() (uint32, error) {
@@ -331,6 +332,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var controlIDs map[int64]bool
 	nextControlID := int64(1)
 	for _, op := range input.Operations {
+		if op.Alignment != "" && op.Type != "track_paragraph_alignment" {
+			return nil, fmt.Errorf("unexpected DOCX tracked paragraph alignment")
+		}
 		if op.Bold != nil && op.Type != "track_run_bold" {
 			return nil, fmt.Errorf("unexpected DOCX tracked bold field")
 		}
@@ -420,11 +424,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, edit)
 			continue
 		}
-		if op.Type == "track_run_text" || op.Type == "track_run_bold" {
+		if op.Type == "track_run_text" || op.Type == "track_run_bold" || op.Type == "track_paragraph_alignment" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || referenceCount >= 32 {
-				return nil, fmt.Errorf("invalid DOCX tracked text fields")
+				return nil, fmt.Errorf("invalid DOCX tracked change fields")
 			}
 			if revisionIDs == nil {
 				revisionIDs = s.pkg.revisionIDs(root)
@@ -436,9 +440,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			var edit replacement
 			var err error
-			if op.Type == "track_run_bold" {
+			switch op.Type {
+			case "track_paragraph_alignment":
+				edit, err = trackedParagraphAlignment(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
+			case "track_run_bold":
 				edit, err = trackedBoldEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
-			} else {
+			default:
 				edit, err = trackedTextEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
 			}
 			if err != nil {
@@ -481,6 +488,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX revision review fields")
+			}
+			if t := targets[op.TargetID]; t.kind == "tracked_alignment" {
+				changes, err := alignmentRevisionReplacement(s.pkg.document, t, op.Type)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, changes...)
+				referenceCount++
+				continue
 			}
 			edit, err := revisionReplacement(s.pkg.document, targets[op.TargetID], op.Type)
 			if err != nil {
@@ -561,8 +577,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if op.Reference.Action == "insert_bookmark_number_ref" && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark number reference must stand alone")
 			}
-			if (op.Reference.Action == "insert_toc" || op.Reference.Action == "update_toc") && len(input.Operations) != 1 {
-				return nil, fmt.Errorf("DOCX table of contents edit must stand alone")
+			switch op.Reference.Action {
+			case "insert_toc", "update_toc", "insert_figure_list", "insert_table_list", "update_caption_list":
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX table of contents or caption list edit must stand alone")
+				}
 			}
 			if bookmarks == nil {
 				index := readBookmarks(root)
@@ -778,7 +797,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if err != nil {
 				return nil, err
 			}
-			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles)
+			if usedIDs == nil {
+				usedIDs = usedParagraphIDs(root)
+			}
+			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles, usedIDs)
 			if err != nil {
 				return nil, err
 			}

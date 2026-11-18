@@ -389,6 +389,11 @@ controller에 알리며 조합 최종값 확정 전에는 저장하지 않습니
 본문에 포커스가 있고 양쪽 리비전에서 같은 고유 문단 ID를 확인한 경우
 다른 탭에서도 선택을 복원합니다.
 
+문단을 분리하거나 여러 문단을 붙여넣어 만든 새 문단에는 Word 문단 ID가
+생깁니다. 첫 원본 문단과 기존의 문단 ID를 보존합니다. 이 ID는 다음 편집에서
+활동 또는 선택 위치를 해당 문단으로 다시 연결할 때 사용합니다. LibreOffice에서
+다시 저장한 파일에서는 이 ID가 사라질 수 있습니다.
+
 ### 선택 글자 서식
 
 글자 서식 도구는 현재 본문 선택 또는 커서 위치에 적용됩니다. 글꼴·크기·
@@ -977,6 +982,19 @@ Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
 문서에 이미 목차가 있으면 새 목차 삽입을 막습니다.
 [Word 목차 삽입과 업데이트](https://support.microsoft.com/en-us/word/training/insert-a-table-of-contents)를 참고하세요.
 
+같은 메뉴에서 `그림 목록 삽입` 또는 `표 목록 삽입`을 적용하고 저장하면
+선택한 본문 문단 앞에 해당 번호 캡션을 본문 순서대로 모읍니다. 목록은 제목
+목차와 별개이며 같은 종류의 목록은 하나만 삽입할 수 있습니다. Foloom은
+본문의 단순 `SEQ Figure`와 `SEQ Table` 번호 캡션을 읽습니다. Word가
+목록을 갱신하면 페이지 번호와 링크를 계산합니다. HTTP·MCP는 대상 문단 ID에
+`reference: { action: "insert_figure_list" }` 또는
+`reference: { action: "insert_table_list" }`를 단독 작업으로 적용합니다.
+캡션이 바뀌면 `그림 목록 업데이트` 또는 `표 목록 업데이트`를 적용하고
+저장해 현재 캡션을 다시 모읍니다. HTTP·MCP는 목록 run ID에
+`reference: { action: "update_caption_list" }`를 단독 작업으로 적용합니다.
+잠겼거나 복합 형태인 목록, 복합 캡션은 원본을 보호합니다.
+[Word의 그림 및 표 목록](https://support.microsoft.com/en-gb/word/insert-a-table-of-figures)을 참고하세요.
+
 같은 메뉴의 `날짜 필드 삽입`을 적용하고 저장하면 일반 본문 문단 끝에 Word DATE
 필드를 넣습니다. 화면에 표시된 날짜는 저장 시점의 서버 UTC 날짜이며 형식은
 `yyyy-MM-dd`입니다. 날짜 값과 필드 코드를 함께 저장합니다. HTTP·MCP는
@@ -1073,6 +1091,15 @@ Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 
 `굵게 해제 기록`을 선택할 수 있습니다. 저장하면 기존 서식이 Word rPrChange에
 기록됩니다. 다른 변경과 넓은 선택 영역은 별도 작업으로 처리합니다. HTTP·MCP는
 `track_run_bold`에 run ID, 현재 `expectedText`, 불리언 `bold`를 보냅니다.
+
+검토의 `추적할 문단 정렬`에서 일반 본문 문단을 시작, 가운데, 끝, 양쪽 정렬로
+바꿉니다. `문단 정렬 변경 기록`을 저장하면 작성자·시각과 이전 직접 정렬이
+Word의 `w:pPrChange`에 남습니다. 검토에서 수락하면 새 정렬을 확정하며,
+거절하면 이전 직접 정렬 또는 스타일 상속으로 돌아갑니다. HTTP·MCP는
+`track_paragraph_alignment`에 현 리비전의 문단 ID와
+`alignment: "start" | "center" | "end" | "justify"`를 보냅니다.
+`accept_revision`과 `reject_revision`도 이 문단 ID를 사용합니다.
+다른 문단 속성도 함께 달라지거나 보호 구조가 포함되면 읽기 전용으로 표시합니다.
 
 검토의 `텍스트·서식 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존

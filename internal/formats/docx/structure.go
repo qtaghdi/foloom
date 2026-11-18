@@ -24,7 +24,10 @@ func structuralParagraphContents(p *node, data []byte, allowedChild string, igno
 		if a.Name.Space == wordNS && strings.HasPrefix(a.Name.Local, "rsid") {
 			continue
 		}
-		if a.Name.Space == "http://schemas.microsoft.com/office/word/2010/wordml" && (a.Name.Local == "paraId" || a.Name.Local == "textId") {
+		if a.Name.Space == word2010NS && (a.Name.Local == "paraId" || a.Name.Local == "textId") {
+			continue
+		}
+		if a.Name.Space == markupCompatNS && a.Name.Local == "Ignorable" && namespaceForPrefix(p, strings.TrimSpace(a.Value)) == word2010NS {
 			continue
 		}
 		return false
@@ -118,7 +121,7 @@ func structuralParagraphContents(p *node, data []byte, allowedChild string, igno
 	return true
 }
 
-func paragraphReplacement(data []byte, targets map[string]target, op Operation, styles previewStyles) (replacement, error) {
+func paragraphReplacement(data []byte, targets map[string]target, op Operation, styles previewStyles, ids paragraphIDs) (replacement, error) {
 	fail := func(message string) (replacement, error) {
 		return replacement{}, fmt.Errorf("DOCX paragraph plan: %s", message)
 	}
@@ -217,8 +220,17 @@ func paragraphReplacement(data []byte, targets map[string]target, op Operation, 
 			}
 			content.WriteString(runXML)
 		}
-		opening, closing := scopedOpening(source.node, data, used[paragraph.SourceID])
-		used[paragraph.SourceID] = true
+		var opening, closing string
+		if used[paragraph.SourceID] {
+			id, err := ids.reserve()
+			if err != nil {
+				return replacement{}, err
+			}
+			opening, closing = newParagraphOpening(source.node, data, id)
+		} else {
+			opening, closing = scopedOpening(source.node, data, false)
+			used[paragraph.SourceID] = true
+		}
 		if result.Len()+len(opening)+content.Len()+len(closing) > maxPartBytes {
 			return fail("replacement XML exceeds limit")
 		}
