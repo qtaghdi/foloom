@@ -12,7 +12,7 @@ export function DocumentComments(props:{
   const targetText=()=>props.target?.structureEditable?props.target.runs.map(run=>run.text).join('').trim():'';
   const disabled=()=>props.disabled||props.pending;
   const changes=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
-    ? block.paragraph.runs.filter(run=>run.object?.kind==='tracked_insert'||run.object?.kind==='tracked_delete')
+    ? block.paragraph.runs.filter(run=>run.object?.kind==='tracked_insert'||run.object?.kind==='tracked_delete'||run.object?.kind==='tracked_format')
     : []).slice(0,100)??[];
   const [replyTo,setReplyTo]=createSignal('');
   const comments=()=>props.snapshot?.comments??[];
@@ -70,11 +70,11 @@ export function DocumentComments(props:{
       <Show when={props.snapshot?.trackedChanges}>
         <section aria-label="변경 추적" class="my-2 border-b border-slate-200 pb-2">
           <h3 class="text-sm font-semibold">변경 추적</h3>
-          <Show when={changes().length} fallback={<p class="py-2 text-sm text-slate-600">지원되는 일반 텍스트 변경이 없습니다.</p>}>
+          <Show when={changes().length} fallback={<p class="py-2 text-sm text-slate-600">검토할 수 있는 변경이 없습니다.</p>}>
             <ul class="space-y-2">
               <For each={changes()}>{change=><li class="rounded border border-slate-200 p-2">
                 <p class="text-xs font-semibold">
-                  {change.object?.kind==='tracked_insert'?'삽입':'삭제'}
+                  {change.object?.kind==='tracked_format'?'서식 변경':change.object?.kind==='tracked_insert'?'삽입':'삭제'}
                   {change.object?.author?` · ${change.object.author}`:''}
                   <Show when={change.object?.date}>{date=><time dateTime={date()}> · {new Date(date()).toLocaleString()}</time>}</Show>
                 </p>
