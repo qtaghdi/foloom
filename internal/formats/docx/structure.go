@@ -10,10 +10,10 @@ import (
 // opaque anchors, section boundaries or extension metadata requires a contract
 // that the current source-reference plan does not yet provide.
 func structuralParagraph(p *node, data []byte) bool {
-	return structuralParagraphContents(p, data, false, nil)
+	return structuralParagraphContents(p, data, "", nil)
 }
 
-func structuralParagraphContents(p *node, data []byte, allowBookmarks bool, ignoredProperty *node) bool {
+func structuralParagraphContents(p *node, data []byte, allowedChild string, ignoredProperty *node) bool {
 	if strings.Contains(string(data[p.start:p.end]), "<!--") {
 		return false
 	}
@@ -65,8 +65,31 @@ func structuralParagraphContents(p *node, data []byte, allowBookmarks bool, igno
 	if props := p.child("pPr"); props != nil && !safeProperties(props) {
 		return false
 	}
+	validRun := func(run *node) bool {
+		if !run.is("r") || countChild(run, "rPr") > 1 || strings.TrimSpace(run.text.String()) != "" {
+			return false
+		}
+		if props := run.child("rPr"); props != nil && !safeProperties(props) {
+			return false
+		}
+		for _, part := range run.children {
+			if !part.is("t") && !part.is("rPr") && !plainLineBreak(part) && !plainTab(part) {
+				return false
+			}
+			if part.is("t") && (len(part.children) != 0 || !plainTextAttributes(part)) {
+				return false
+			}
+		}
+		for _, a := range run.attrs {
+			if !isNamespaceAttribute(a) && !(a.Name.Space == wordNS && strings.HasPrefix(a.Name.Local, "rsid")) {
+				return false
+			}
+		}
+		return true
+	}
 	for _, child := range p.children {
-		if child.is("pPr") {
+		switch {
+		case child.is("pPr"):
 			for _, prop := range child.children {
 				if prop == ignoredProperty {
 					continue
@@ -82,33 +105,14 @@ func structuralParagraphContents(p *node, data []byte, allowBookmarks bool, igno
 					return false
 				}
 			}
-		} else if !child.is("r") && !(allowBookmarks && (child.is("bookmarkStart") || child.is("bookmarkEnd"))) {
+		case child.is("r"):
+			if !validRun(child) {
+				return false
+			}
+		case allowedChild == "bookmark" && (child.is("bookmarkStart") || child.is("bookmarkEnd")):
+		case allowedChild == "hyperlink" && allowPlainHyperlink(child, validRun):
+		default:
 			return false
-		}
-		if child.is("r") {
-			if countChild(child, "rPr") > 1 {
-				return false
-			}
-			if props := child.child("rPr"); props != nil && !safeProperties(props) {
-				return false
-			}
-			for _, part := range child.children {
-				if !part.is("t") && !part.is("rPr") && !plainLineBreak(part) && !plainTab(part) {
-					return false
-				}
-				if part.is("t") {
-					for _, attr := range part.attrs {
-						if attr.Name.Space != "xmlns" && attr.Name.Local != "xmlns" && !(attr.Name.Space == "http://www.w3.org/XML/1998/namespace" && attr.Name.Local == "space") {
-							return false
-						}
-					}
-				}
-			}
-			for _, a := range child.attrs {
-				if a.Name.Space != "xmlns" && a.Name.Local != "xmlns" && !(a.Name.Space == wordNS && strings.HasPrefix(a.Name.Local, "rsid")) {
-					return false
-				}
-			}
 		}
 	}
 	return true

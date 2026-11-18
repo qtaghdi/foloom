@@ -26,6 +26,7 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 	}
 	var edits []replacement
 	display := ""
+	var number *string
 	if deleting {
 		display = bookmarkedPlainText(index, start)
 		end := index.ends[start.attr("id")][0]
@@ -43,15 +44,29 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 		case n.is("fldChar") || n.is("instrText") || n.is("delInstrText"):
 			return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 		case n.is("fldSimple"):
-			bookmark := bookmarkFieldName(n)
-			if bookmark == "" && pageFieldInstruction(n) == "" && !supportedFigureSequence(n.attr("instr")) {
+			kind, bookmark := bookmarkFieldTarget(n)
+			if bookmark == "" && pageFieldInstruction(n) == "" && !supportedTOCField(n) && !supportedFigureSequence(n.attr("instr")) {
 				return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 			}
 			if bookmark != "" && strings.EqualFold(bookmark, edit.Bookmark) {
 				if !main {
 					return fmt.Errorf("protected DOCX bookmark field outside body")
 				}
-				result, err := patchBookmarkField(data, n, deleting, edit.NewBookmark, display)
+				cachedText := display
+				if kind == "PAGEREF" {
+					cachedText = ""
+				}
+				if kind == "number" && deleting {
+					if number == nil {
+						value, err := p.bookmarkNumberText(t.paragraph.parent.parent, index, edit.Bookmark)
+						if err != nil {
+							return err
+						}
+						number = &value
+					}
+					cachedText = *number
+				}
+				result, err := patchBookmarkField(data, n, deleting, edit.NewBookmark, cachedText)
 				if err != nil {
 					return err
 				}

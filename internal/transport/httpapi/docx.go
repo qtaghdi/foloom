@@ -158,7 +158,7 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		"Use replace_run_text or replace_cell_text with exact expectedText for text. LF inserts an inline break. " +
 		"Use replace_paragraphs for a contiguous editable sibling range with source IDs and exact paragraph texts joined by LF. " +
 		"Paragraph plans support styles, direction, spacing, tab stops, and list references. Define styles with define_style. " +
-		"Use define_list to create a nine-level list with kind bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter. " +
+		"Use define_list to create a nine-level list with kind bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter. Restart a supported list level with sourceId, level, and start. " +
 		"Use list {key, level} to apply a new definition in the same batch, {id, level} to continue a list from snapshot.lists, or {id:0, level:0} to remove numbering. " +
 		"Use update_section for paper settings and supported header or footer text, PAGE, and NUMPAGES fields, including compactPageNumbers to combine the two fields, or update_boundary for supported page and section breaks. " +
 		"Use update_table, update_image, and update_math for supported tables, inline pictures, and equations. " +

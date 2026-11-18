@@ -145,7 +145,8 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
 		}
 	}
-	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID)
+	numbering := s.pkg.projectNumbering(blocks)
+	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID, numbering)
 	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일과 머리글·바닥글을 미리 보며 자동 페이지 매김, 떠 있는 그림과 필드는 재현하지 않습니다. 지원 범위 밖 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
 		warnings = append(warnings, "스타일 목록은 최대 500개입니다. 나머지 원본 정의는 보존하며 이 UI 목록에서는 생략합니다.")
@@ -194,9 +195,6 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			}
 		}
 	}
-	listRoot, _ := parseXML(s.pkg.partData(s.pkg.numberingPath, nil))
-	numbering := readNumbering(listRoot)
-	applyListLabels(blocks, numbering)
 	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
@@ -394,11 +392,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, updated...)
 			continue
 		}
-		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" {
+		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
-				return nil, fmt.Errorf("invalid DOCX bookmark move fields")
+				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
 			if moveTargets == nil {
 				_, moveTargets, _, err = inspectDocument(root, s.id, s.revision, s.pkg.styles)
@@ -406,7 +404,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 					return nil, err
 				}
 			}
-			edit, err := moveBookmarkedParagraph(s.pkg.document, moveTargets[op.TargetID], op.Type)
+			edit, err := movePreservedParagraph(s.pkg.document, moveTargets[op.TargetID], op.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -549,6 +547,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if (op.Reference.Action == "rename_bookmark" || op.Reference.Action == "delete_bookmark") && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark edit must stand alone")
 			}
+			if op.Reference.Action == "insert_bookmark_number_ref" && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX bookmark number reference must stand alone")
+			}
+			if (op.Reference.Action == "insert_toc" || op.Reference.Action == "update_toc") && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX table of contents edit must stand alone")
+			}
 			if bookmarks == nil {
 				index := readBookmarks(root)
 				bookmarks = &index
@@ -564,17 +568,26 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
 		}
-		if op.Type == "insert_picture_caption" {
+		if op.Type == "insert_picture_caption" || op.Type == "edit_picture_caption" {
 			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
 				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
-				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Type == "insert_picture_caption" && op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid or duplicate DOCX figure caption operation")
 			}
-			added, err := s.pkg.pictureCaption(targets[op.TargetID], op.Text)
+			seen[op.Type] = true
+			t := targets[op.TargetID]
+			if op.Type == "edit_picture_caption" {
+				edit, err := s.pkg.editPictureCaption(t, op.ExpectedText, op.Text)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
+			}
+			added, err := s.pkg.pictureCaption(t, op.Text)
 			if err != nil {
 				return nil, err
 			}
-			seen[op.Type] = true
 			edits = append(edits, added...)
 			continue
 		}
