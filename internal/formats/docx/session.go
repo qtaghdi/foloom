@@ -140,11 +140,6 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	s.addPicturePreviews(blocks, targetsByID)
 	s.pkg.projectSmartArt(blocks, targetsByID)
 	s.pkg.projectChartTitles(root, blocks, targetsByID)
-	for _, kind := range []string{"footnote", "endnote"} {
-		if root.has(kind + "Reference") {
-			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
-		}
-	}
 	numbering := s.pkg.projectNumbering(blocks)
 	projectCompoundRestarts(root.child("body"), blocks, targetsByID, numbering)
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID, numbering)
@@ -169,6 +164,11 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	targets := inspectSections(root, s.id, s.revision)
 	headers := s.pkg.headerFooterCatalog(targets)
 	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
+	for _, kind := range []string{"footnote", "endnote"} {
+		if root.has(kind + "Reference") {
+			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID, settings, settingsErr == nil && len(targets) == 1)
+		}
+	}
 	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
 	var parity *bool
 	var defaultTabStop *int
