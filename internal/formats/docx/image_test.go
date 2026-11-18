@@ -336,3 +336,60 @@ func TestDOCXInlinePictureQuarterTurnsKeepIntrinsicSize(t *testing.T) {
 		t.Fatal("undo did not recover the exact original document")
 	}
 }
+
+func TestPictureCaptionRenumbersExistingFigureAndKeepsMedia(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>first image</w:t></w:r></w:p><w:p><w:r><w:t>second image</w:t></w:r></w:p>`))
+	v := mustSnapshot(t, s)
+	var pngBytes bytes.Buffer
+	if err := png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 4, 2))); err != nil {
+		t.Fatal(err)
+	}
+	picture := &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pngBytes.Bytes())}
+	save := func(v Snapshot, ops ...Operation) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: ops}, "human")
+	}
+	v, err := save(v, Operation{Type: "update_image", TargetID: v.Blocks[0].ID, Image: picture},
+		Operation{Type: "update_image", TargetID: v.Blocks[1].ID, Image: picture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := fileBytes(t, filename)
+	media := s.pkg.picturePartMap()
+	if !v.Blocks[0].Paragraph.Runs[1].Picture.CaptionEditable || !v.Blocks[1].Paragraph.Runs[1].Picture.CaptionEditable {
+		t.Fatal("supported body pictures were not offered captions")
+	}
+	v, err = save(v, Operation{Type: "insert_picture_caption", TargetID: v.Blocks[1].Paragraph.Runs[1].ID, Text: "Second & image"})
+	if err != nil || v.Blocks[2].Paragraph.Runs[1].Text != "1" {
+		t.Fatal("initial figure caption missing", err)
+	}
+	v, err = save(v, Operation{Type: "insert_picture_caption", TargetID: v.Blocks[0].Paragraph.Runs[1].ID, Text: "First image"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, reopened)
+	if len(v.Blocks) != 4 || v.Blocks[1].Paragraph.Runs[1].Text != "1" || v.Blocks[3].Paragraph.Runs[1].Text != "2" ||
+		v.Blocks[3].Paragraph.Runs[2].Text != ". Second & image" || v.Blocks[0].Paragraph.Runs[1].Picture.CaptionEditable {
+		t.Fatal("caption numbers, captions or duplicate guard did not survive open")
+	}
+	for _, name := range media {
+		if !bytes.Equal(pngBytes.Bytes(), reopened.pkg.partData(name, nil)) {
+			t.Fatal("caption changed original image bytes")
+		}
+	}
+	committed := fileBytes(t, filename)
+	s = reopened
+	if _, err := save(v, Operation{Type: "insert_picture_caption", TargetID: v.Blocks[0].Paragraph.Runs[1].ID, Text: "Duplicate"}); err == nil ||
+		!bytes.Equal(committed, fileBytes(t, filename)) {
+		t.Fatal("duplicate caption changed the document")
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo changed original picture package bytes")
+	}
+}

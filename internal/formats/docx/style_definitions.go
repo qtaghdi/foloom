@@ -15,7 +15,7 @@ func directInlineStyle(props *node) *InlineStyle {
 	}
 	r := Run{}
 	directRun(&r, props)
-	s := &InlineStyle{Color: r.Color, Font: r.Font, Highlight: r.Highlight, Vertical: r.Vertical}
+	s := &InlineStyle{Color: r.Color, Font: r.Font, Highlight: r.Highlight, Vertical: r.Vertical, ProofingLang: r.ProofingLang, EastAsiaLang: r.EastAsiaLang}
 	if props.child("b") != nil {
 		s.Bold = &r.Bold
 	}
@@ -140,6 +140,9 @@ func patchStyle(root *node, data []byte, d StyleDefinition) ([]byte, error) {
 	if d.Run != nil && d.Run.StyleID != nil || d.Paragraph != nil && (d.Paragraph.StyleID != nil || d.Paragraph.List != nil) {
 		return nil, fmt.Errorf("style definitions use basedOn rather than style references")
 	}
+	if d.Run != nil && (d.Run.ProofingLang != "" || d.Run.EastAsiaLang != "") {
+		return nil, fmt.Errorf("DOCX proofing language edits require a run selection")
+	}
 	if err := validateInlineStyle(d.Run); err != nil {
 		return nil, err
 	}
@@ -193,7 +196,7 @@ func patchStyle(root *node, data []byte, d StyleDefinition) ([]byte, error) {
 		if old != nil {
 			n = old.child("rPr")
 		}
-		v, err := inlineProperties(n, data, d.Run)
+		v, err := inlineProperties(n, data, d.Run, nil)
 		if err != nil {
 			return nil, err
 		}
