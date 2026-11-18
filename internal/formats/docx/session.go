@@ -538,6 +538,22 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX revision review fields")
 			}
+			if t := targets[op.TargetID]; t.kind == "tracked_paragraph_break" {
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX paragraph break review must stand alone")
+				}
+				// Inherited page breaks are part of the real review boundary.
+				_, styledTargets, _, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+				if err != nil {
+					return nil, err
+				}
+				edit, err := paragraphBreakRevisionReplacement(s.pkg.document, styledTargets[op.TargetID], op.Type)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
+			}
 			if t := targets[op.TargetID]; t.kind == "tracked_alignment" {
 				changes, err := alignmentRevisionReplacement(s.pkg.document, t, op.Type)
 				if err != nil {

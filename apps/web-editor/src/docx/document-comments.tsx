@@ -18,7 +18,8 @@ export function DocumentComments(props:{
     if(block.type!=='paragraph')return [];
     const paragraph=block.paragraph;
     const runs=paragraph.runs.filter(run=>run.object?.kind==='tracked_insert'||run.object?.kind==='tracked_delete'||run.object?.kind==='tracked_format');
-    return [...(paragraph.alignmentRevision?[{id:paragraph.id,object:paragraph.alignmentRevision}]:[]),...runs];
+    const boundary=paragraph.breakRevision?[{id:paragraph.id,object:paragraph.breakRevision}]:[];
+    return [...boundary,...(paragraph.alignmentRevision?[{id:paragraph.id,object:paragraph.alignmentRevision}]:[]),...runs];
   }).slice(0,100)??[];
   const [alignment,setAlignment]=createSignal<ParagraphAlignment>('center');
   const currentAlignment=()=>props.target?.layout?.align??'start';

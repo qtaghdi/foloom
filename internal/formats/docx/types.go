@@ -114,6 +114,7 @@ type ListLevelInfo struct {
 	Restart *int   `json:"restart,omitempty"`
 }
 type Paragraph struct {
+	BreakRevision      *ObjectInfo      `json:"breakRevision,omitempty"`
 	MoveNoteUp         bool             `json:"moveNoteUp,omitempty"`
 	MoveNoteDown       bool             `json:"moveNoteDown,omitempty"`
 	AlignmentTrackable bool             `json:"alignmentTrackable,omitempty"`
