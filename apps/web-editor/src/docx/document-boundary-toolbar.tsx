@@ -37,6 +37,8 @@ export function DocumentBoundaryToolbar(props: {
         <option value="no_page_before">문단 앞 페이지 나눔 해제</option>
         <option value="no_page_after">문단 끝 페이지 나눔 해제</option>
         <option value="section_next_page">문단 뒤에 다음 페이지 구역 나눔</option>
+        <option value="section_even_page">문단 뒤에 다음 짝수 페이지 구역 나눔</option>
+        <option value="section_odd_page">문단 뒤에 다음 홀수 페이지 구역 나눔</option>
         <option value="section_continuous">문단 뒤에 연속 구역 나눔</option>
         <option value="remove_section">구역 나눔 제거</option>
         <option value="move_section_earlier">구역 나눔을 앞 문단으로 이동</option>
