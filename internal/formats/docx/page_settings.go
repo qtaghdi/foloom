@@ -59,14 +59,9 @@ func (p *documentPackage) pageSettings(changes map[string][]byte) (string, []byt
 	return filename, data, settings, nil
 }
 
-func (p *documentPackage) headerParity() *bool {
-	_, _, root, err := p.pageSettings(nil)
-	if err != nil {
-		return nil
-	}
-	setting := root.child(evenAndOddHeaders)
-	value := setting != nil && onOff(attribute(setting, wordNS, "val"), true)
-	return &value
+func headerParity(settings *node) bool {
+	setting := settings.child(evenAndOddHeaders)
+	return setting != nil && onOff(attribute(setting, wordNS, "val"), true)
 }
 
 // The OOXML settings sequence places this option before the following children.
