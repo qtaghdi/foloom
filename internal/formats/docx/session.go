@@ -457,6 +457,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if (op.Reference.Action == "rename_bookmark" || op.Reference.Action == "delete_bookmark") && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark edit must stand alone")
 			}
+			if op.Reference.Action == "insert_toc" && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX table of contents insertion must stand alone")
+			}
 			if bookmarks == nil {
 				index := readBookmarks(root)
 				bookmarks = &index
