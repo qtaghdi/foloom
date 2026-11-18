@@ -283,6 +283,12 @@ LibreOffice가 편집한 파일을 다시 열 수 있도록 각 항목의 CRC와
 part는 유지합니다. 수정된 문단 안 XML의 byte 동일성은 보장하지 않습니다.
 `replace_run_text`와 `replace_cell_text`의 LF는 `w:br`이며 새 문단이 아닙니다.
 
+`페이지`의 `본문 문단 이동`에서 같은 본문 구역의 인접한 일반 문단으로
+`문단 위로` 또는 `문단 아래로`를 적용합니다. 문단의 서식과 문단 안 커서 또는
+선택을 유지합니다. 문단 이동은 먼저 초안에 반영하며, 저장과 실행 취소는 본문
+구조 변경과 같은 이력을 사용합니다. 이 도구는 표·목록·보호된 문단과 페이지·구역
+경계를 가로지르지 않습니다.
+
 ## 연속 선택과 문자 경계
 
 본문의 방향키·Home/End·단어 이동과 드래그 선택은 브라우저의 native 선택을
@@ -917,7 +923,12 @@ HTTP·MCP 값은 `square_left`와 `square_right`입니다. 기존 위아래 감�
 가로 거리를 맞춰 표시하고, 저장 파일은 지정한 거리를 유지합니다. 정렬
 프리셋이나 `인라인`을 선택해 배치를 다시 바꿀 수 있습니다. HTTP·MCP에서는
 `placement: "floating_offset"`과 함께 `horizontalOffsetEmu`를 보냅니다.
-1pt는 12700EMU입니다.
+1pt는 12700EMU입니다. 지원 그림은 `문단 아래로 거리 (pt)`에서 0~50pt를
+지정할 수 있습니다. 그림 높이와 거리가 본문 높이 안에 들어와야 합니다.
+저장할 때 문단 기준 세로 위치와 그림 위의 감싸기 간격에 같은 값을 써서
+뒤따르는 캡션과 본문이 그림 아래에 남도록 합니다. HTTP·MCP에서는
+`verticalOffsetEmu`를 함께 보냅니다. 생략하면 0입니다. 브라우저 편집 화면에서
+자동 페이지 나눔은 적용되지 않습니다.
 
 [Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
 
@@ -1264,6 +1275,7 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
 | 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 및 크기 변경·삭제 | Word 도형 |
+| 기본 인라인 선 | 치수, 기울기와 선 색상 | 좌상단에서 우하단으로 이어지는 선 삽입 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
 | 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기, 단일 계열의 직접 수치 | 원형·세로 막대·선 차트 생성, 제목·수치 수정, 크기 변경, 지원 인라인 배치 이동·삭제 | Word 차트 |
 | 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
@@ -1333,6 +1345,14 @@ HTTP·MCP는 `update_chart_value`에 현재 차트의 run ID와
 EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상과 테두리는
 그대로 유지합니다. 위치와 다른 서식은 Word에서
 수정할 수 있습니다. [Word 도형 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/69190647-27d1-4890-8089-a8aca57becb9)를 사용합니다.
+
+삽입의 `도형`에서 선의 너비와 높이를 각각 1~1440 pt로 입력하고
+`인라인 선 삽입`을 누른 뒤 저장합니다. 현재 본문 문단 끝에 좌상단에서
+우하단으로 이어지는 1 pt 두께의 Word 선 도형을 넣습니다. HTTP·MCP의
+`insert_line`은 편집 가능한 본문 문단 ID와 EMU 단위의
+`lineSize: { widthEmu, heightEmu }`를 받습니다. 기존 선 편집, 화살표,
+다른 도형에 연결된 선, 부동 배치는 Word에서 수정합니다.
+[DrawingML 사전 정의 도형](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry)을 사용합니다.
 
 수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
 `제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을

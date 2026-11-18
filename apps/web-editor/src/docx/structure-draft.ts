@@ -7,7 +7,7 @@ import { validateRunText } from './validation';
 
 type DraftRun = Run & { sourceId: string; style?: InlineStyle };
 type DraftParagraph = Omit<Paragraph, 'runs'> & { sourceId: string; format?: ParagraphFormat; runs: DraftRun[] };
-type Group = { originals: Paragraph[]; current: DraftParagraph[]; changed: boolean };
+type Group = { body: boolean; originals: Paragraph[]; current: DraftParagraph[]; changed: boolean };
 
 // Local identities survive splits and moves until commit. Source identities are
 // revision-scoped formatting references and are never submitted as new OOXML IDs.
@@ -17,11 +17,11 @@ export class StructureDraft {
   private groups: Group[] = [];
   private paragraphGroup = new Map<string, Group>();
   constructor(private readonly original: Snapshot) {
-    const collect = (paragraphs: Paragraph[]) => {
+    const collect = (paragraphs: Paragraph[], body = false) => {
       let group: Group | undefined;
       for (const paragraph of paragraphs) {
         if (!paragraph.structureEditable) { group = undefined; continue; }
-        if (!group || group.originals.length >= 500) { group = { originals: [], current: [], changed: false }; this.groups.push(group); }
+        if (!group || group.originals.length >= 500) { group = { body, originals: [], current: [], changed: false }; this.groups.push(group); }
         group.originals.push(paragraph);
         group.current.push({ ...paragraph, sourceId: paragraph.id, runs: paragraph.runs.map(run => ({ ...run, sourceId: run.id })) });
         this.paragraphGroup.set(paragraph.id, group);
@@ -30,9 +30,9 @@ export class StructureDraft {
     let body: Paragraph[] = [];
     for (const block of original.blocks) {
       if (block.type === 'paragraph') body.push(block.paragraph);
-      else { collect(body); body = []; for (const row of block.rows) for (const cell of row.cells) collect(cell.paragraphs); }
+      else { collect(body, true); body = []; for (const row of block.rows) for (const cell of row.cells) collect(cell.paragraphs); }
     }
-    collect(body);
+    collect(body, true);
   }
   currentText(runId: string): string | undefined { return this.find(runId)?.run.text ?? this.otherText.get(runId); }
   capture(): string {
@@ -68,6 +68,15 @@ export class StructureDraft {
   }
   ownsOriginal(runId: string): boolean {
     return this.groups.some(group => group.changed && group.originals.some(p => p.runs.some(r => r.id === runId)));
+  }
+  canMoveBodyParagraph(direction: -1 | 1, selection: TextSelection): boolean {
+    const found = this.find(selection.focus.runId);
+    if (!found?.group.body || !found.paragraph.runs.some(run => run.id === selection.anchor.runId)) return false;
+    const current = found.paragraph;
+    const neighbor = found.group.current[found.p + direction];
+    return Boolean(neighbor && current.sectionId === neighbor.sectionId &&
+      !current.list && !neighbor.list && !current.pageBreakBefore && !current.pageBreakAfter &&
+      !neighbor.pageBreakBefore && !neighbor.pageBreakAfter);
   }
   change(action: StructureAction, runId: string, start: number, end: number, insertion?: string): DraftFocus | undefined {
     const found = this.find(runId);

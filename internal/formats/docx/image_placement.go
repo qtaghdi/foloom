@@ -3,11 +3,15 @@ package docx
 import (
 	"encoding/xml"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 )
 
-const inlinePlacement = "inline"
+const (
+	inlinePlacement          = "inline"
+	maxPictureVerticalOffset = 50 * 12700
+)
 
 var pictureAnchorAttrs = map[string]string{
 	"distT": "0", "distB": "0", "distL": "0", "distR": "0",
@@ -93,26 +97,39 @@ func canSquareWrapPicture(t target, data []byte, page PageLayout) bool {
 	return followingText
 }
 
-func pictureOffsetLimit(t target, page PageLayout) *int {
+func pictureOffsetLimits(t target, page PageLayout) (horizontal, vertical *int) {
 	frame := t.run.child("drawing").children[0]
 	info, _ := pictureFrameInfo(frame)
 	if info == nil {
-		return nil
+		return nil, nil
 	}
-	limit := (page.Width-page.Left-page.Right)*635 - info.WidthEMU
-	if limit < 0 {
-		return nil
+	availableWidth := (page.Width-page.Left-page.Right)*635 - info.WidthEMU
+	if availableWidth < 0 {
+		return nil, nil
 	}
-	return &limit
+	availableHeight := (page.Height-page.Top-page.Bottom)*635 - info.HeightEMU
+	if availableHeight < 0 {
+		return &availableWidth, nil
+	}
+	verticalLimit := min(availableHeight, maxPictureVerticalOffset)
+	return &availableWidth, &verticalLimit
 }
 
 func pictureHorizontalOffset(frame *node) *int {
-	x := childNS(childNS(frame, drawingWordNS, "positionH"), drawingWordNS, "posOffset")
-	if x == nil || !drawingFields(x, nil) || len(x.children) != 0 {
+	return pictureAnchorOffset(frame, "positionH", 50000*635)
+}
+
+func pictureVerticalOffset(frame *node) *int {
+	return pictureAnchorOffset(frame, "positionV", maxPictureVerticalOffset)
+}
+
+func pictureAnchorOffset(frame *node, axis string, limit int) *int {
+	offsetNode := childNS(childNS(frame, drawingWordNS, axis), drawingWordNS, "posOffset")
+	if offsetNode == nil || !drawingFields(offsetNode, nil) || len(offsetNode.children) != 0 {
 		return nil
 	}
-	value, err := strconv.ParseInt(x.text.String(), 10, 32)
-	if err != nil || value < 0 || value > 50000*635 {
+	value, err := strconv.ParseInt(offsetNode.text.String(), 10, 32)
+	if err != nil || value < 0 || value > int64(limit) {
 		return nil
 	}
 	offset := int(value)
@@ -132,7 +149,16 @@ func picturePlacementContent(frame *node, data []byte) (mode string, first, rest
 	offset := frame.inner
 	mode = inlinePlacement
 	if frame.name.Local == "anchor" {
-		if len(children) < 7 || !drawingFields(frame, pictureAnchorAttrs) {
+		y := pictureVerticalOffset(frame)
+		if len(children) < 7 || y == nil {
+			return "", nil, nil
+		}
+		attrs := pictureAnchorAttrs
+		if *y != 0 {
+			attrs = maps.Clone(attrs)
+			attrs["distT"] = strconv.Itoa(*y)
+		}
+		if !drawingFields(frame, attrs) {
 			return "", nil, nil
 		}
 		pos, horizontal, vertical, wrap := children[0], children[1], children[2], children[4]
@@ -145,9 +171,8 @@ func picturePlacementContent(frame *node, data []byte) (mode string, first, rest
 			len(wrap.children) != 0 || strings.TrimSpace(wrap.text.String()) != "" {
 			return "", nil, nil
 		}
-		x, y := horizontal.children[0], vertical.children[0]
-		if !drawingFields(x, nil) || len(x.children) != 0 ||
-			!sameDrawingName(y, "posOffset") || !drawingFields(y, nil) || len(y.children) != 0 || y.text.String() != "0" {
+		x := horizontal.children[0]
+		if !drawingFields(x, nil) || len(x.children) != 0 {
 			return "", nil, nil
 		}
 		side := x.text.String()
@@ -156,10 +181,10 @@ func picturePlacementContent(frame *node, data []byte) (mode string, first, rest
 		switch {
 		case topAndBottom && pictureHorizontalOffset(frame) != nil:
 			mode = "floating_offset"
-		case aligned && sameDrawingName(wrap, "wrapSquare") && squareWrapTextSide(side) != "" &&
+		case *y == 0 && aligned && sameDrawingName(wrap, "wrapSquare") && squareWrapTextSide(side) != "" &&
 			drawingFields(wrap, map[string]string{"wrapText": squareWrapTextSide(side)}):
 			mode = "square_" + side
-		case aligned && topAndBottom && (side == "left" || side == "center" || side == "right"):
+		case *y == 0 && aligned && topAndBottom && (side == "left" || side == "center" || side == "right"):
 			mode = "floating_" + side
 		default:
 			return "", nil, nil
@@ -205,17 +230,24 @@ func sameDrawingName(n *node, name string) bool {
 	return n.name.Space == drawingWordNS && n.name.Local == name
 }
 
-func (p *documentPackage) setPicturePlacement(t target, placement string, offset *int) (replacement, error) {
+func (p *documentPackage) setPicturePlacement(t target, placement string, offset, verticalOffset *int) (replacement, error) {
 	fail := func() (replacement, error) {
 		return replacement{}, fmt.Errorf("unsupported DOCX picture placement or unchanged layout")
 	}
-	if placement != "floating_offset" && offset != nil {
+	if placement != "floating_offset" && (offset != nil || verticalOffset != nil) {
 		return fail()
 	}
+	vertical := 0
 	switch placement {
 	case "floating_offset":
 		if offset == nil || t.pictureOffsetLimit == nil || *offset < 0 || *offset > *t.pictureOffsetLimit {
 			return fail()
+		}
+		if verticalOffset != nil {
+			vertical = *verticalOffset
+			if t.pictureVerticalOffsetLimit == nil || vertical < 0 || vertical > *t.pictureVerticalOffsetLimit {
+				return fail()
+			}
 		}
 	case inlinePlacement, "floating_left", "floating_center", "floating_right":
 	case "square_left", "square_right":
@@ -230,8 +262,8 @@ func (p *documentPackage) setPicturePlacement(t target, placement string, offset
 	}
 	frame := t.run.child("drawing").children[0]
 	if t.picturePlacement == placement {
-		current := pictureHorizontalOffset(frame)
-		if offset == nil || current != nil && *current == *offset {
+		currentX, currentY := pictureHorizontalOffset(frame), pictureVerticalOffset(frame)
+		if offset == nil || currentX != nil && *currentX == *offset && currentY != nil && *currentY == vertical {
 			return fail()
 		}
 	}
@@ -270,7 +302,9 @@ func (p *documentPackage) setPicturePlacement(t target, placement string, offset
 	if kind == "inline" {
 		raw.WriteString(">")
 	} else {
-		raw.WriteString(` distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="0">`)
+		// Reserving the distance above the picture keeps the following caption below it.
+		verticalText := strconv.Itoa(vertical)
+		raw.WriteString(` distT="` + verticalText + `" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="0">`)
 		raw.WriteString("<" + prefix + `simplePos x="0" y="0"/>`)
 		raw.WriteString("<" + prefix + `positionH relativeFrom="column">`)
 		if offset != nil {
@@ -279,7 +313,7 @@ func (p *documentPackage) setPicturePlacement(t target, placement string, offset
 			raw.WriteString("<" + prefix + "align>" + side + "</" + prefix + "align>")
 		}
 		raw.WriteString("</" + prefix + "positionH>")
-		raw.WriteString("<" + prefix + `positionV relativeFrom="paragraph"><` + prefix + "posOffset>0</" +
+		raw.WriteString("<" + prefix + `positionV relativeFrom="paragraph"><` + prefix + "posOffset>" + verticalText + "</" +
 			prefix + "posOffset></" + prefix + "positionV>")
 	}
 	raw.Write(first)
