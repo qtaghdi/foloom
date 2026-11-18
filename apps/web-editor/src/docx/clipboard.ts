@@ -45,6 +45,11 @@ export function parseClipboardHTML(html: string, document: Document): { paragrap
     if (tag==='B' || tag==='STRONG' || /^H[1-6]$/.test(tag)) style.bold=true;
     if (tag==='I' || tag==='EM') style.italic=true;
     const css=node.style;
+    const decoration=(css.textDecorationLine||css.textDecoration||'').trim().split(/\s+/u).filter(Boolean);
+    style.underline=Boolean(inherited.underline || decoration.includes('underline') || !decoration.length && (tag==='U'||tag==='INS'));
+    style.strike=Boolean(inherited.strike || decoration.includes('line-through') || !decoration.length && (tag==='S'||tag==='STRIKE'||tag==='DEL'));
+    if (decoration.some(line=>!['underline','line-through','none','solid'].includes(line)) ||
+        css.textDecorationStyle && css.textDecorationStyle!=='solid' || css.textDecorationColor && css.textDecorationColor!=='currentcolor') stripped=true;
     if (css.fontWeight) { if (/^(?:normal|bold|[1-9]00)$/.test(css.fontWeight)) style.bold=css.fontWeight==='bold' || Number(css.fontWeight)>=600;else stripped=true; }
     if (css.fontStyle) { if (['normal','italic','oblique'].includes(css.fontStyle)) style.italic=css.fontStyle!=='normal';else stripped=true; }
     const font=css.fontFamily.split(',')[0]?.trim().replace(/^['"]|['"]$/g,'');
@@ -52,7 +57,7 @@ export function parseClipboardHTML(html: string, document: Document): { paragrap
     if (css.color || node.getAttribute('color')) {const value=color(css.color||node.getAttribute('color')!);if (value) style.color=value;else stripped=true;}
     const size=/^(\d+(?:\.\d+)?)(pt|px)$/.exec(css.fontSize);
     if (css.fontSize) {const value=size?Math.round(Number(size[1])*(size[2]==='pt'?2:1.5)):0;if (value>=8 && value<=288) style.sizeHalfPoints=value;else stripped=true;}
-    for (const property of Array.from({length:css.length},(_,i)=>css.item(i))) if (!['font-weight','font-style','font-family','font-size','color','white-space'].includes(property)) stripped=true;
+    for (const property of Array.from({length:css.length},(_,i)=>css.item(i))) if (!['font-weight','font-style','font-family','font-size','color','white-space','text-decoration','text-decoration-line','text-decoration-style','text-decoration-color'].includes(property)) stripped=true;
     for (const attribute of [...node.attributes]) if (!['style','color'].includes(attribute.name)) stripped=true;
     if (['A','TABLE','TR','OL','UL','LI'].includes(tag)) stripped=true;
     const block=blockTags.has(tag);if (block) boundary();
@@ -60,7 +65,7 @@ export function parseClipboardHTML(html: string, document: Document): { paragrap
     for (const child of node.childNodes) walk(child,style,preserve||tag==='PRE'||css.whiteSpace.startsWith('pre'),depth+1);
     if (block) { if (paragraphs.length===before && !current().length) current().push({text:'',style:{...style}}); boundary(); }
   };
-  try {for (const child of template.content.childNodes) walk(child,{bold:false,italic:false},false,0);}
+  try {for (const child of template.content.childNodes) walk(child,{bold:false,italic:false,underline:false,strike:false},false,0);}
   catch {return;}
   while (paragraphs.length && !paragraphs.at(-1)!.length) paragraphs.pop();
   if (!paragraphs.length || paragraphs.length>1000) return;
@@ -71,6 +76,8 @@ export function clipboardHTML(paragraphs: ClipboardParagraph[]): string {
   return paragraphs.map(p=>'<p>'+p.map(run=>{
     const s=run.style??{};
     const css=[`font-weight:${s.bold?'700':'400'}`,`font-style:${s.italic?'italic':'normal'}`];
+    const decoration = [s.underline?'underline':'',s.strike?'line-through':''].filter(Boolean).join(' ');
+    if (decoration) css.push(`text-decoration-line:${decoration}`);
     if (s.color && /^#[0-9a-f]{6}$/i.test(s.color)) css.push(`color:${s.color}`);
     if (s.font) css.push(`font-family:${JSON.stringify(s.font)}`);
     if (s.sizeHalfPoints) css.push(`font-size:${s.sizeHalfPoints/2}pt`);
