@@ -99,7 +99,7 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 	extension := "." + kind
 	filename := p.availablePart(changes, "word/media/foloom-image", extension)
 	id := strconv.FormatUint(uint64(drawingID), 10)
-	rel, err := p.addRelatedPart(changes, filename, "image", "image/"+kind, "rIdFoloomImage"+id)
+	rel, err := p.addRelatedPart(changes, filename, officeRelNS+"/image", "image/"+kind, "rIdFoloomImage"+id)
 	if err != nil {
 		return replacement{}, err
 	}
@@ -194,7 +194,7 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 		}
 		filename := p.availablePart(changes, "word/media/foloom-image", "."+kind)
 		// Existing drawings can share this relationship, so replace only this blip.
-		relation, err := p.addRelatedPart(changes, filename, "image", "image/"+kind, "rIdFoloomReplacement")
+		relation, err := p.addRelatedPart(changes, filename, officeRelNS+"/image", "image/"+kind, "rIdFoloomReplacement")
 		if err != nil {
 			return replacement{}, err
 		}
@@ -262,6 +262,7 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
+	CaptionEditable  bool       `json:"captionEditable,omitempty"`
 	Rotation         int        `json:"rotation,omitempty"`
 	RotationEditable bool       `json:"rotationEditable,omitempty"`
 	Crop             *ImageCrop `json:"crop,omitempty"`
@@ -341,6 +342,7 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 	s.pictureAssets = make(map[string]pictureAsset)
 	assets := make(map[string]pictureAsset)
 	var relations map[string]string
+	captionFieldsChecked, captionFieldsValid := false, false
 	project := func(paragraph *Paragraph) {
 		for index := range paragraph.Runs {
 			run := &paragraph.Runs[index]
@@ -367,6 +369,13 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				if captionParagraph(source) {
+					if !captionFieldsChecked {
+						_, err := documentFigureFields(source.paragraph.parent)
+						captionFieldsChecked, captionFieldsValid = true, err == nil
+					}
+					info.CaptionEditable = captionFieldsValid
+				}
 				inline := childNS(source.run.child("drawing"), drawingWordNS, "inline")
 				_, info.Rotation, info.RotationEditable = supportedPictureRotation(inline, s.pkg.document)
 				if crop, _, _ := supportedPictureCrop(inline, s.pkg.document); crop != nil {
