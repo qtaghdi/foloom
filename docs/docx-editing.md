@@ -1250,6 +1250,7 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
 | 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 및 크기 변경·삭제 | Word 도형 |
+| 기본 인라인 선 | 치수, 기울기와 선 색상 | 좌상단에서 우하단으로 이어지는 선 삽입 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
 | 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기, 단일 계열의 직접 수치 | 원형·세로 막대·선 차트 생성, 제목·수치 수정, 크기 변경, 지원 인라인 배치 이동·삭제 | Word 차트 |
 | 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
@@ -1319,6 +1320,14 @@ HTTP·MCP는 `update_chart_value`에 현재 차트의 run ID와
 EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상과 테두리는
 그대로 유지합니다. 위치와 다른 서식은 Word에서
 수정할 수 있습니다. [Word 도형 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/69190647-27d1-4890-8089-a8aca57becb9)를 사용합니다.
+
+삽입의 `도형`에서 선의 너비와 높이를 각각 1~1440 pt로 입력하고
+`인라인 선 삽입`을 누른 뒤 저장합니다. 현재 본문 문단 끝에 좌상단에서
+우하단으로 이어지는 1 pt 두께의 Word 선 도형을 넣습니다. HTTP·MCP의
+`insert_line`은 편집 가능한 본문 문단 ID와 EMU 단위의
+`lineSize: { widthEmu, heightEmu }`를 받습니다. 기존 선 편집, 화살표,
+다른 도형에 연결된 선, 부동 배치는 Word에서 수정합니다.
+[DrawingML 사전 정의 도형](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry)을 사용합니다.
 
 수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
 `제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을

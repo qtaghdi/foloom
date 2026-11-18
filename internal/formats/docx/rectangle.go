@@ -187,11 +187,16 @@ func editInlineRectangleColors(data []byte, t target, edit RectangleColorEdit) (
 }
 
 func inlineRectangle(id uint32) string {
+	return inlineWordShape(id, "Rectangle", 1143000, 571500,
+		`<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+<a:solidFill><a:srgbClr val="D7EAE4"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="0F766E"/></a:solidFill></a:ln>`)
+}
+
+func inlineWordShape(id uint32, name string, width, height int, geometry string) string {
 	return fmt.Sprintf(`<dws:r xmlns:dws="%s" xmlns:wp="%s" xmlns:a="%s" xmlns:wps="%s">
-<dws:drawing><wp:inline><wp:extent cx="1143000" cy="571500"/><wp:docPr id="%d" name="Rectangle %d"/><wp:cNvGraphicFramePr/>
+<dws:drawing><wp:inline><wp:extent cx="%d" cy="%d"/><wp:docPr id="%d" name="%s %d"/><wp:cNvGraphicFramePr/>
 <a:graphic><a:graphicData uri="%s"><wps:wsp><wps:cNvSpPr/>
-<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1143000" cy="571500"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-<a:solidFill><a:srgbClr val="D7EAE4"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="0F766E"/></a:solidFill></a:ln></wps:spPr>
+<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%d" cy="%d"/></a:xfrm>%s</wps:spPr>
 <wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></dws:drawing></dws:r>`,
-		wordNS, drawingWordNS, drawingNS, shapeWordNS, id, id, shapeWordNS)
+		wordNS, drawingWordNS, drawingNS, shapeWordNS, width, height, id, name, id, shapeWordNS, width, height, geometry)
 }

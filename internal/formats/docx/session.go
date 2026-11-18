@@ -337,6 +337,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var controlIDs map[int64]bool
 	nextControlID := int64(1)
 	for _, op := range input.Operations {
+		if op.LineSize != nil && op.Type != "insert_line" {
+			return nil, fmt.Errorf("unexpected DOCX line size")
+		}
 		if op.DefaultTabStop != nil && op.Type != "update_default_tab_stop" {
 			return nil, fmt.Errorf("unexpected DOCX default tab stop")
 		}
@@ -776,7 +779,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, added...)
 			continue
 		}
-		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" || op.Type == "insert_chart" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_line" || op.Type == "insert_control_text" || op.Type == "insert_chart" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -823,9 +826,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				continue
 			}
 			var drawing string
-			if op.Type == "insert_rectangle" {
+			switch op.Type {
+			case "insert_line":
+				if op.LineSize == nil || !op.LineSize.valid() || op.Text != "" {
+					return nil, fmt.Errorf("DOCX line creation requires width and height from 1 to 1440 pt")
+				}
+				drawing = inlineLine(id, *op.LineSize)
+			case "insert_rectangle":
 				drawing = inlineRectangle(id)
-			} else {
+			default:
 				drawing = inlineTextBox(id, op.Text)
 			}
 			edits = append(edits, appendParagraphContent(s.pkg.document, t.paragraph, drawing))

@@ -1,6 +1,6 @@
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
-import type { RectangleOperation, MathOperation, Paragraph, Run, Snapshot } from './contracts';
+import type { ShapeOperation, MathOperation, Paragraph, Run, Snapshot } from './contracts';
 
 const labels:Record<NonNullable<Run['object']>['kind'],string> = {
   math:'수식',shape:'도형',textbox:'텍스트 상자',toc:'목차',figure_list:'그림 목록',table_list:'표 목록',date_field:'날짜 필드',chart:'차트',smartart:'SmartArt',
@@ -8,7 +8,7 @@ const labels:Record<NonNullable<Run['object']>['kind'],string> = {
 };
 
 export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
-  return <Show when={props.object.rectangle} fallback={<span data-docx-opaque contentEditable={false} aria-label={labels[props.object.kind]}
+  return <Switch fallback={<span data-docx-opaque contentEditable={false} aria-label={labels[props.object.kind]}
     class="inline-block max-w-full break-words rounded border border-slate-300 bg-stone-50 px-1.5 align-middle text-sm">
     <span class="mr-1 text-xs text-slate-600">{labels[props.object.kind]}{props.object.editable?'':' · 읽기 전용'}</span>
     <Show when={props.object.fraction}>{fraction=>
@@ -32,17 +32,31 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
         <Show when={diagram().truncated}><span class="block text-xs text-slate-600">일부 항목이나 문구만 표시됩니다.</span></Show>
       </>
     }</Show>
-  </span>}>{rectangle=>
+  </span>}>
+    <Match when={props.object.line}>{line=>{
+      const rise=()=>line().heightEmu/line().widthEmu;
+      return <span data-docx-line data-docx-opaque contentEditable={false} role="img" aria-label="인라인 선"
+        class="relative inline-block max-w-full align-middle" style={{
+          width:`${line().widthEmu/9525}px`,'aspect-ratio':`${line().widthEmu}/${line().heightEmu}`,
+        }}>
+        <span class="absolute top-0 left-0 origin-top-left" aria-hidden="true" style={{
+          width:`${Math.hypot(1,rise())*100}%`,transform:`rotate(${Math.atan(rise())}rad)`,
+          'border-top':`1pt solid #${line().stroke}`,
+        }}/>
+      </span>;
+    }}</Match>
+    <Match when={props.object.rectangle}>{rectangle=>
     <span data-docx-rectangle data-docx-opaque contentEditable={false} role="img" aria-label="인라인 사각형"
       class="inline-block max-w-full align-middle" style={{
         width:`${rectangle().widthEmu/9525}px`,'aspect-ratio':`${rectangle().widthEmu}/${rectangle().heightEmu}`,
         'background-color':`#${rectangle().fill}`,border:`1pt solid #${rectangle().stroke}`,
       }}/>
-  }</Show>;
+    }</Match>
+  </Switch>;
 }
 
 export function DocumentShapeToolbar(props:{
-  snapshot?:Snapshot;target?:Paragraph;pending:boolean;disabled:boolean;onApply:(operation:RectangleOperation)=>boolean;
+  snapshot?:Snapshot;target?:Paragraph;pending:boolean;disabled:boolean;onApply:(operation:ShapeOperation)=>boolean;
 }) {
   const [id,setID]=createSignal(''),[error,setError]=createSignal('');
   const rectangles=createMemo(()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
@@ -59,6 +73,27 @@ export function DocumentShapeToolbar(props:{
           const accepted=props.onApply({type:'insert_rectangle',targetId:target.id});
           setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
         }}>인라인 사각형 삽입</button>
+      <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+        event.preventDefault();
+        const target=props.target;
+        if(disabled()||!target?.structureEditable)return;
+        const inputs=event.currentTarget.elements;
+        const widthEmu=Math.round((inputs.namedItem('lineWidth') as HTMLInputElement).valueAsNumber*12700);
+        const heightEmu=Math.round((inputs.namedItem('lineHeight') as HTMLInputElement).valueAsNumber*12700);
+        if(![widthEmu,heightEmu].every(size=>Number.isFinite(size)&&size>=12700&&size<=18288000))return;
+        const accepted=props.onApply({type:'insert_line',targetId:target.id,lineSize:{widthEmu,heightEmu}});
+        setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+      }}>
+        <label class="flex flex-col gap-1">선 너비 (pt)
+          <input name="lineWidth" type="number" min="1" max="1440" step="any" required value="120"
+            class="min-h-11 w-24 rounded border border-slate-300 px-2" disabled={disabled()||!props.target?.structureEditable}/>
+        </label>
+        <label class="flex flex-col gap-1">선 높이 (pt)
+          <input name="lineHeight" type="number" min="1" max="1440" step="any" required value="36"
+            class="min-h-11 w-24 rounded border border-slate-300 px-2" disabled={disabled()||!props.target?.structureEditable}/>
+        </label>
+        <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>인라인 선 삽입</button>
+      </form>
       <Show when={rectangles().length}>
         <select aria-label="편집할 사각형" class="editor-select min-h-11" value={selected()?.id??''}
           disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setError('');}}>
