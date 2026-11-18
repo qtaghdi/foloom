@@ -814,7 +814,10 @@ HTTP·MCP는 문단 ID에 `reference: { action: "insert_endnote", text }`를 적
 `기존 각주·미주`에서 기본 번호와 한 문단의 평문을 포함한 미주를 골라 수정합니다.
 HTTP·MCP는 미주 run ID에 `reference: { action: "set_endnote_text", text }`를 적용합니다.
 미주 번호와 본문 참조, 다른 각주, 변경하지 않은 텍스트의 서식은 유지합니다.
-미주 삭제와 복합 미주 편집은 Word에서 할 수 있습니다.
+`미주 삭제`는 한 곳에서 참조하는 평문 미주의 본문 마커와 해당 항목을
+삭제합니다. HTTP·MCP는 미주 run ID에 `reference: { action: "delete_endnote" }`를
+적용합니다. 다른 미주·각주·구분선, 공유 참조와 북마크 범위는 보호합니다.
+복합 미주 편집은 Word에서 할 수 있습니다.
 [Word 미주 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.endnotes?view=openxml-3.0.1)을 사용합니다.
 
 `기존 각주·미주`에서 편집 가능한 각주를 고르면 한 줄 텍스트를 수정할 수 있습니다.
