@@ -895,7 +895,12 @@ Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 
 보냅니다. 주석·필드와 겹치거나 문단·복합 개체에 걸친 서식 변경은 보호합니다.
 [Word 글자 서식 변경](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.runpropertieschange)을 사용합니다.
 
-검토의 `텍스트 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
+같은 검토 메뉴에서 일반 본문 텍스트 구간을 고르고 `굵게 적용 기록` 또는
+`굵게 해제 기록`을 선택할 수 있습니다. 저장하면 기존 서식이 Word rPrChange에
+기록됩니다. 다른 변경과 넓은 선택 영역은 별도 작업으로 처리합니다. HTTP·MCP는
+`track_run_bold`에 run ID, 현재 `expectedText`, 불리언 `bold`를 보냅니다.
+
+검토의 `텍스트·서식 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존
 텍스트는 삭제 변경으로, 교체 텍스트는 삽입 변경으로 기록되며 두 변경에 원래
 서식과 작성자·시각이 유지됩니다. HTTP·MCP는 `track_run_text`에 현재 run ID,

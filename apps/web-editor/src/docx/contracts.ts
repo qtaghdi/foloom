@@ -13,7 +13,7 @@ const runSchema = z.object({
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:z.literal(180).optional(),rotationEditable:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
-  id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
+  id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), boldTrackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
   sizeHalfPoints: z.number().int().min(8).max(288).optional(),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
   font: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
@@ -110,7 +110,7 @@ export type CommentOperation = {type:'add_comment';targetId:string;comment:{text
 export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}};
 export type BookmarkMoveOperation = {type:'move_bookmark_up';targetId:string}|{type:'move_bookmark_down';targetId:string};
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};
-export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string};
+export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} | {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean};
 export type ObjectTextOperation = {type:'update_control_text'|'update_textbox_text'|'insert_textbox';targetId:string;expectedText:string;text:string};
 export type Operation = TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | BookmarkMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };

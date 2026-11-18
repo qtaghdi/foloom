@@ -320,6 +320,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var nextRevisionID int64
 	var revisionDate string
 	for _, op := range input.Operations {
+		if op.Bold != nil && op.Type != "track_run_bold" {
+			return nil, fmt.Errorf("unexpected DOCX tracked bold field")
+		}
 		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
@@ -343,7 +346,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, edit)
 			continue
 		}
-		if op.Type == "track_run_text" {
+		if op.Type == "track_run_text" || op.Type == "track_run_bold" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || referenceCount >= 32 {
@@ -357,7 +360,13 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if actor == "ai" {
 				author = "AI"
 			}
-			edit, err := trackedTextEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
+			var edit replacement
+			var err error
+			if op.Type == "track_run_bold" {
+				edit, err = trackedBoldEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
+			} else {
+				edit, err = trackedTextEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
+			}
 			if err != nil {
 				return nil, err
 			}

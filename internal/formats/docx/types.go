@@ -20,6 +20,7 @@ const (
 )
 
 type Run struct {
+	BoldTrackable    bool         `json:"boldTrackable,omitempty"`
 	Trackable        bool         `json:"trackable,omitempty"`
 	Object           *ObjectInfo  `json:"object,omitempty"`
 	Link             *LinkInfo    `json:"link,omitempty"`
@@ -218,6 +219,7 @@ type StyleInfo struct {
 	Paragraph    *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
+	Bold              *bool              `json:"bold,omitempty" jsonschema:"Set bold for track_run_bold"`
 	ListDefinition    *ListDefinition    `json:"listDefinition,omitempty"`
 	Table             *TableEdit         `json:"table,omitempty"`
 	Math              *MathEdit          `json:"math,omitempty"`
@@ -231,7 +233,7 @@ type Operation struct {
 	StyleDefinition   *StyleDefinition   `json:"styleDefinition,omitempty"`
 	EndTargetID       string             `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
 	Paragraphs        []ParagraphContent `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type              string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, update_table, move_bookmark_up, move_bookmark_down, accept_revision, reject_revision, track_run_text, update_control_text, update_textbox_text, or insert_textbox"`
+	Type              string             `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, update_table, move_bookmark_up, move_bookmark_down, accept_revision, reject_revision, track_run_text, track_run_bold, update_control_text, update_textbox_text, or insert_textbox"`
 	TargetID          string             `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
 	ExpectedText      string             `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
 	Text              string             `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. Use replace_paragraphs to split paragraphs"`

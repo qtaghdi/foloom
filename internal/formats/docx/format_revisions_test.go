@@ -67,3 +67,64 @@ func TestRunFormatReviewProtectsCommentRangesAndUnsupportedProperties(t *testing
 		t.Fatal("unsupported former properties must not be replaced")
 	}
 }
+
+func TestTrackBoldWritesNativePreviousPropertiesAndSupportsReject(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:rPr><w:i/><w:color w:val="002244"/></w:rPr><w:t>sample</w:t></w:r></w:p>`))
+	before := fileBytes(t, filename)
+	apply := func(op Operation) Snapshot {
+		t.Helper()
+		v := mustSnapshot(t, s)
+		out, err := s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}, "ai")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	v := mustSnapshot(t, s)
+	run := v.Blocks[0].Paragraph.Runs[0]
+	on := true
+	op := Operation{Type: "track_run_bold", TargetID: run.ID, ExpectedText: "stale", Bold: &on}
+	if _, err := s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}, "ai"); err == nil ||
+		!bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("a stale tracked formatting operation changed the file")
+	}
+	op.ExpectedText = run.Text
+	v = apply(op)
+	run = v.Blocks[0].Paragraph.Runs[0]
+	if !run.Bold || !run.Italic || run.Color != "#002244" || run.Text != "sample" ||
+		run.Object == nil || run.Object.Author != "AI" || !run.Object.Editable ||
+		!bytes.Contains(s.pkg.document, []byte("rPrChange")) {
+		t.Fatalf("tracked bold changed prior text/properties or cannot be reviewed: %+v", run)
+	}
+	s, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, s)
+	v = apply(Operation{Type: "reject_revision", TargetID: v.Blocks[0].Paragraph.Runs[0].ID})
+	run = v.Blocks[0].Paragraph.Runs[0]
+	if run.Bold || !run.Italic || run.Color != "#002244" || run.Object != nil {
+		t.Fatalf("rejecting bold did not restore formatting: %+v", run)
+	}
+	historyRestore(t, s, "undo")
+	historyRestore(t, s, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore the original DOCX")
+	}
+}
+
+func TestTrackBoldOffWithEmptyAndExplicitPropertySets(t *testing.T) {
+	for _, prior := range []string{"", `<w:rPr><w:b/></w:rPr>`} {
+		s, _ := withDocument(t, bodyXML(`<w:p><w:r>`+prior+`<w:t>sample</w:t></w:r></w:p>`))
+		v := mustSnapshot(t, s)
+		run := v.Blocks[0].Paragraph.Runs[0]
+		off := false
+		v, err := s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{
+			Type: "track_run_bold", TargetID: run.ID, ExpectedText: run.Text, Bold: &off,
+		}}}, "human")
+		if err != nil || v.Blocks[0].Paragraph.Runs[0].Bold {
+			t.Fatal("tracked bold-off did not write the direct value", err)
+		}
+	}
+}

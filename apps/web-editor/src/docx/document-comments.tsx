@@ -37,7 +37,7 @@ export function DocumentComments(props:{
       <div class="flex items-center justify-between"><strong>문서 주석</strong><button type="button" class={quietButtonClass} onClick={()=>setOpen(false)}>닫기</button></div>
       <Show when={availableRuns().length}>
         <details class="my-2 border-b border-slate-200 pb-2">
-          <summary class="min-h-11 cursor-pointer content-center text-sm font-semibold focus-visible:outline-2 focus-visible:outline-teal-700">텍스트 변경 추적</summary>
+          <summary class="min-h-11 cursor-pointer content-center text-sm font-semibold focus-visible:outline-2 focus-visible:outline-teal-700">텍스트·서식 변경 추적</summary>
           <select aria-label="추적할 텍스트" value={trackRun()?.id??''} disabled={disabled()}
             class="editor-select min-h-11 max-w-full" onChange={event=>{setTrackId(event.currentTarget.value);setError('');}}>
             <option value="">텍스트 선택</option>
@@ -59,6 +59,12 @@ export function DocumentComments(props:{
               </label>
               <p class="text-xs text-slate-600">텍스트를 비우면 삭제로 기록합니다.</p>
               <button type="submit" class={buttonClass} disabled={disabled()}>변경 추적 적용</button>
+              <Show when={run.boldTrackable}>
+                <button type="button" class={quietButtonClass} disabled={disabled()} onClick={()=>
+                  applyReview({type:'track_run_bold',targetId:run.id,expectedText:run.text,bold:!run.bold})}>
+                  {run.bold?'굵게 해제 기록':'굵게 적용 기록'}
+                </button>
+              </Show>
             </form>
           }</Show>
         </details>
