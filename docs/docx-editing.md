@@ -911,6 +911,14 @@ Word 계열 편집기에서 확인합니다.
 HTTP·MCP 값은 `square_left`와 `square_right`입니다. 기존 위아래 감싸기와
 인라인 복귀는 그대로 사용할 수 있습니다.
 
+단일 구역·단일 열 본문의 지원 전용 그림은 `단 왼쪽에서 거리 (pt)`로
+가로 위치를 직접 지정할 수 있습니다. 그림의 전체 너비가 단 안에 들어오는
+범위에서 위아래 감싸기로 저장합니다. 편집 화면은 좁을 때 그림이 보이도록
+가로 거리를 맞춰 표시하고, 저장 파일은 지정한 거리를 유지합니다. 정렬
+프리셋이나 `인라인`을 선택해 배치를 다시 바꿀 수 있습니다. HTTP·MCP에서는
+`placement: "floating_offset"`과 함께 `horizontalOffsetEmu`를 보냅니다.
+1pt는 12700EMU입니다.
+
 [Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
 
 번호 캡션이 있는 지원 인라인 그림은 `그림 번호 상호 참조 삽입`에서 선택할 수

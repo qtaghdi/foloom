@@ -127,6 +127,9 @@ export function DocumentImageToolbar(props: {
                 <label class="flex min-w-0 flex-col gap-1">그림 배치
                   <select name="placement" class="editor-select min-h-11" value={current()} disabled={disabled()}>
                     <option value="inline">인라인</option>
+                    <Show when={current()==='floating_offset'}>
+                      <option value="floating_offset" disabled>직접 지정한 가로 위치</option>
+                    </Show>
                     <option value="floating_left">위아래 감싸기 · 왼쪽</option>
                     <option value="floating_center">위아래 감싸기 · 가운데</option>
                     <option value="floating_right">위아래 감싸기 · 오른쪽</option>
@@ -139,6 +142,29 @@ export function DocumentImageToolbar(props: {
                 <button type="submit" class={buttonClass} disabled={disabled()}>그림 배치 적용</button>
               </form>
             }</Show>
+            <Show when={picture.picture?.offsetLimitEmu!==undefined}>
+              <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(disabled())return;
+                const input=event.currentTarget.elements.namedItem('offset') as HTMLInputElement;
+                const value=input.valueAsNumber;
+                const horizontalOffsetEmu=Math.round(value*12700);
+                const limit=picture.picture?.offsetLimitEmu;
+                if(!Number.isFinite(value)||value<0||limit===undefined||horizontalOffsetEmu>limit||
+                  horizontalOffsetEmu===picture.picture?.horizontalOffsetEmu)return;
+                const accepted=props.onApply({type:'update_image',targetId:picture.id,
+                  image:{action:'set_placement',placement:'floating_offset',horizontalOffsetEmu}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <label class="flex min-w-0 flex-col gap-1">단 왼쪽에서 거리 (pt)
+                  <input name="offset" type="number" min="0" step="any" required disabled={disabled()}
+                    max={Math.floor((picture.picture?.offsetLimitEmu??0)/127)/100}
+                    value={((picture.picture?.horizontalOffsetEmu??0)/12700).toFixed(2)}
+                    class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 가로 위치 적용</button>
+              </form>
+            </Show>
             <Show when={picture.picture?.captionEditable || picture.picture?.caption}>
               <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
                 event.preventDefault();

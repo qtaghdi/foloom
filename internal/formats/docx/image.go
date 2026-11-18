@@ -24,14 +24,15 @@ const (
 )
 
 type ImageEdit struct {
-	Placement string     `json:"placement,omitempty" jsonschema:"inline, floating_left, floating_center, floating_right, square_left, or square_right"`
-	Align     string     `json:"align,omitempty" jsonschema:"start, center, or end for a dedicated inline picture paragraph"`
-	Rotation  *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
-	Crop      *ImageCrop `json:"crop,omitempty"`
-	Action    string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, rotate, align, or set_placement"`
-	Base64    string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
-	Alt       string     `json:"alt,omitempty"`
-	WidthEMU  int        `json:"widthEmu,omitempty"`
+	HorizontalOffsetEMU *int       `json:"horizontalOffsetEmu,omitempty" jsonschema:"Distance in EMUs from the current column left edge for floating_offset"`
+	Placement           string     `json:"placement,omitempty" jsonschema:"inline, floating_left, floating_center, floating_right, floating_offset, square_left, or square_right"`
+	Align               string     `json:"align,omitempty" jsonschema:"start, center, or end for a dedicated inline picture paragraph"`
+	Rotation            *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
+	Crop                *ImageCrop `json:"crop,omitempty"`
+	Action              string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, rotate, align, or set_placement"`
+	Base64              string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
+	Alt                 string     `json:"alt,omitempty"`
+	WidthEMU            int        `json:"widthEmu,omitempty"`
 }
 
 func imageConfig(raw []byte, byteLimit int) (image.Config, string, error) {
@@ -79,7 +80,7 @@ func (p *documentPackage) availableDrawingID() (uint32, error) {
 
 func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageEdit, drawingID uint32, changes map[string][]byte) (replacement, error) {
 	paragraph := target.paragraph
-	if edit.Action != "insert" || edit.Placement != "" || edit.Align != "" || edit.Rotation != nil || edit.Crop != nil || target.kind != "replace_paragraphs" || paragraph == nil ||
+	if edit.Action != "insert" || edit.HorizontalOffsetEMU != nil || edit.Placement != "" || edit.Align != "" || edit.Rotation != nil || edit.Crop != nil || target.kind != "replace_paragraphs" || paragraph == nil ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture insertion")
 	}
@@ -132,7 +133,7 @@ func decodePicture(encoded string) ([]byte, image.Config, string, error) {
 func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, changes map[string][]byte) (replacement, error) {
 	if t.kind != "picture" || t.run == nil || edit.Action != "replace" && edit.Base64 != "" || edit.Action != "resize" && edit.WidthEMU != 0 ||
 		edit.Action != "crop" && edit.Crop != nil || edit.Action != "rotate" && edit.Rotation != nil ||
-		edit.Action != "align" && edit.Align != "" || edit.Action != "set_placement" && edit.Placement != "" ||
+		edit.Action != "align" && edit.Align != "" || edit.Action != "set_placement" && (edit.Placement != "" || edit.HorizontalOffsetEMU != nil) ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture update")
 	}
@@ -145,7 +146,7 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 		if edit.Alt != "" {
 			return replacement{}, fmt.Errorf("unexpected DOCX picture description")
 		}
-		return p.setPicturePlacement(t, edit.Placement)
+		return p.setPicturePlacement(t, edit.Placement, edit.HorizontalOffsetEMU)
 	}
 	info, relationship := inlinePictureInfo(t.run)
 	inline := childNS(t.run.child("drawing"), drawingWordNS, "inline")
@@ -357,22 +358,24 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
-	SquareWrap       bool       `json:"squareWrap,omitempty"`
-	CaptionReference bool       `json:"captionReference,omitempty"`
-	Placement        string     `json:"placement,omitempty"`
-	Align            string     `json:"align,omitempty"`
-	Caption          string     `json:"caption,omitempty"`
-	CaptionEditable  bool       `json:"captionEditable,omitempty"`
-	MoveCaptionUp    bool       `json:"moveCaptionUp,omitempty"`
-	MoveCaptionDown  bool       `json:"moveCaptionDown,omitempty"`
-	Rotation         int        `json:"rotation,omitempty"`
-	RotationEditable bool       `json:"rotationEditable,omitempty"`
-	Crop             *ImageCrop `json:"crop,omitempty"`
-	CropEditable     bool       `json:"cropEditable,omitempty"`
-	WidthEMU         int        `json:"widthEmu"`
-	HeightEMU        int        `json:"heightEmu"`
-	Alt              string     `json:"alt"`
-	Preview          bool       `json:"preview"`
+	HorizontalOffsetEMU *int       `json:"horizontalOffsetEmu,omitempty"`
+	OffsetLimitEMU      *int       `json:"offsetLimitEmu,omitempty"`
+	SquareWrap          bool       `json:"squareWrap,omitempty"`
+	CaptionReference    bool       `json:"captionReference,omitempty"`
+	Placement           string     `json:"placement,omitempty"`
+	Align               string     `json:"align,omitempty"`
+	Caption             string     `json:"caption,omitempty"`
+	CaptionEditable     bool       `json:"captionEditable,omitempty"`
+	MoveCaptionUp       bool       `json:"moveCaptionUp,omitempty"`
+	MoveCaptionDown     bool       `json:"moveCaptionDown,omitempty"`
+	Rotation            int        `json:"rotation,omitempty"`
+	RotationEditable    bool       `json:"rotationEditable,omitempty"`
+	Crop                *ImageCrop `json:"crop,omitempty"`
+	CropEditable        bool       `json:"cropEditable,omitempty"`
+	WidthEMU            int        `json:"widthEmu"`
+	HeightEMU           int        `json:"heightEmu"`
+	Alt                 string     `json:"alt"`
+	Preview             bool       `json:"preview"`
 }
 
 type pictureAsset struct {
@@ -481,6 +484,10 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			if asset.data != nil {
 				info.Preview = true
 				info.Placement = source.picturePlacement
+				info.OffsetLimitEMU = source.pictureOffsetLimit
+				if info.Placement == "floating_offset" {
+					info.HorizontalOffsetEMU = pictureHorizontalOffset(frame)
+				}
 				info.SquareWrap = source.squareWrap
 				info.Align = source.pictureAlign
 				s.pictureAssets[run.ID] = asset

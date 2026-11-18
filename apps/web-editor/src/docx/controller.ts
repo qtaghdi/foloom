@@ -162,7 +162,9 @@ export class DocumentController {
     let blocks=snapshot.blocks;
     if(draft?.type==='update_image'&&(draft.image.action==='align'||draft.image.action==='set_placement')){
       const image=draft.image;
-      const settings=image.action==='align'?{align:image.align}:{placement:image.placement};
+      const settings=image.action==='align'?{align:image.align}:{
+        placement:image.placement,horizontalOffsetEmu:image.placement==='floating_offset'?image.horizontalOffsetEmu:undefined,
+      };
       blocks=blocks.map(block=>{
         if(block.type!=='paragraph'||!block.paragraph.runs.some(run=>run.id===draft.targetId))return block;
         const paragraph=block.paragraph;
