@@ -73,3 +73,56 @@ func TestRunReplacementWritesTabElements(t *testing.T) {
 		t.Fatal("tab stored as literal text")
 	}
 }
+
+func TestImportedTabRunReplacesCompleteText(t *testing.T) {
+	for _, test := range []struct {
+		name, markup, before, after string
+		cell                        bool
+	}{
+		{"body around tab", `<w:t>left</w:t><w:tab/><w:t>right</w:t>`, "left\tright", "new\ttail", false},
+		{"cell with tabs and line break", `<w:t>left</w:t><w:tab/><w:tab/><w:t>right</w:t><w:br/><w:t>end</w:t>`, "left\t\tright\nend", "left\t\tright\nnew", true},
+		{"tab only", `<w:tab/>`, "\t", "\ttext", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			paragraph := `<w:p><w:r><w:rPr><w:b/></w:rPr>` + test.markup + `</w:r><w:r><w:t>untouched</w:t></w:r></w:p>`
+			operation := "replace_run_text"
+			targetParagraph := func(snapshot Snapshot) Paragraph { return *snapshot.Blocks[0].Paragraph }
+			if test.cell {
+				paragraph = `<w:tbl><w:tr><w:tc>` + paragraph + `</w:tc></w:tr></w:tbl>`
+				operation = "replace_cell_text"
+				targetParagraph = func(snapshot Snapshot) Paragraph { return snapshot.Blocks[0].Rows[0].Cells[0].Paragraphs[0] }
+			}
+			session, path := withDocument(t, bodyXML(paragraph))
+			original := fileBytes(t, path)
+			snapshot := mustSnapshot(t, session)
+			run := targetParagraph(snapshot).Runs[0]
+			if run.Text != test.before || !run.Editable {
+				t.Fatalf("wrong imported run: %+v", run)
+			}
+			updated, err := session.Apply(context.Background(), batch(snapshot, operation, run, test.after), "human")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertRuns := func(snapshot Snapshot) {
+				t.Helper()
+				runs := targetParagraph(snapshot).Runs
+				if len(runs) != 2 || runs[0].Text != test.after || !runs[0].Bold || runs[1].Text != "untouched" {
+					t.Fatalf("tab replacement changed unrelated content: %+v", runs)
+				}
+			}
+			assertRuns(updated)
+			reopened, err := Open(context.Background(), path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertRuns(mustSnapshot(t, reopened))
+			if strings.Count(string(reopened.pkg.document), "<dw:tab ") != strings.Count(test.after, "\t") {
+				t.Fatal("native tab was duplicated or lost")
+			}
+			historyRestore(t, reopened, "undo")
+			if !bytes.Equal(original, fileBytes(t, path)) {
+				t.Fatal("undo changed the original document")
+			}
+		})
+	}
+}
