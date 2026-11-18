@@ -350,7 +350,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.ChartValue != nil && op.Type != "update_chart_value" {
 			return nil, fmt.Errorf("unexpected DOCX chart value")
 		}
-		if op.Type == "update_chart_title" || op.Type == "resize_chart" || op.Type == "update_chart_value" {
+		if op.Type == "update_chart_title" || op.Type == "resize_chart" || op.Type == "update_chart_value" || op.Type == "delete_chart" {
 			t := targets[op.TargetID]
 			if t.kind != "chart" || seen[op.TargetID] ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -358,10 +358,21 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
 				return nil, fmt.Errorf("invalid DOCX chart operation")
 			}
+			seen[op.TargetID] = true
+			if op.Type == "delete_chart" {
+				if op.Text != "" || op.ExpectedText != "" {
+					return nil, fmt.Errorf("invalid DOCX chart deletion fields")
+				}
+				edit, err := s.pkg.deleteInlineChart(t)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
+			}
 			if chartCounts == nil {
 				chartCounts = s.pkg.chartUseCounts(root)
 			}
-			seen[op.TargetID] = true
 			switch op.Type {
 			case "resize_chart":
 				if op.ChartWidthEMU == nil || op.Text != "" || op.ExpectedText != "" {
