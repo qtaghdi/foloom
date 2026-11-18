@@ -105,20 +105,54 @@ func TestParagraphPlanRejectedAtomically(t *testing.T) {
 	}
 }
 func TestParagraphPlanNamespaceAndIdentity(t *testing.T) {
-	xml := `<x:document xmlns:x="` + wordNS + `" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"><x:body><x:p xmlns:local="` + wordNS + `" w14:paraId="12345678"><local:pPr><local:jc local:val="center"/></local:pPr><local:r><local:rPr><local:b/></local:rPr><local:t>original</local:t></local:r></x:p></x:body></x:document>`
-	s, _ := withDocument(t, xml)
+	xml := `<x:document xmlns:x="` + wordNS + `" xmlns:w14="` + word2010NS + `" xmlns:dw14="urn:custom" xmlns:dwmc="urn:custom"><x:body><x:p xmlns:local="` + wordNS + `" w14:paraId="12345678"><local:pPr><local:jc local:val="center"/></local:pPr><local:r><local:rPr><local:b/></local:rPr><local:t>original</local:t></local:r></x:p></x:body></x:document>`
+	s, path := withDocument(t, xml)
+	original := fileBytes(t, path)
 	snap := mustSnapshot(t, s)
 	p := snap.Blocks[0].Paragraph
 	if !p.StructureEditable {
 		t.Fatal("namespace aliases disabled safe paragraph")
 	}
-	plan := paragraphPlan(snap, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "left"}}}, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "right"}}})
+	plan := paragraphPlan(snap, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "left"}}}, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "right"}}}, ParagraphContent{SourceID: p.ID, Runs: []RunContent{{SourceID: p.Runs[0].ID, Text: "third"}}})
 	after, err := s.Apply(context.Background(), plan, "human")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Count(string(s.pkg.document), `paraId="12345678"`) != 1 || !after.Blocks[1].Paragraph.Runs[0].Bold || after.Blocks[1].Paragraph.Layout.Align != "center" {
 		t.Fatal("namespace scope or unique paragraph identity was not preserved")
+	}
+	seen := map[string]bool{"12345678": true}
+	for _, block := range after.Blocks[1:] {
+		paragraph := block.Paragraph
+		if paragraph.Anchor == "" || seen[paragraph.Anchor] || !paragraph.StructureEditable {
+			t.Fatalf("invalid new paragraph identity: %+v", paragraph)
+		}
+		seen[paragraph.Anchor] = true
+	}
+	reopened, err := Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := mustSnapshot(t, reopened)
+	left, right, third := fresh.Blocks[0].Paragraph, fresh.Blocks[1].Paragraph, fresh.Blocks[2].Paragraph
+	if right.Anchor != after.Blocks[1].Paragraph.Anchor || third.Anchor != after.Blocks[2].Paragraph.Anchor {
+		t.Fatal("new anchors changed on reload")
+	}
+	move := paragraphPlan(fresh,
+		ParagraphContent{SourceID: right.ID, Runs: []RunContent{{SourceID: right.Runs[0].ID, Text: "right"}}},
+		ParagraphContent{SourceID: left.ID, Runs: []RunContent{{SourceID: left.Runs[0].ID, Text: "left"}}},
+		ParagraphContent{SourceID: third.ID, Runs: []RunContent{{SourceID: third.Runs[0].ID, Text: "third"}}})
+	moved, err := reopened.Apply(context.Background(), move, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.Blocks[0].Paragraph.Anchor != right.Anchor || moved.Blocks[1].Paragraph.Anchor != left.Anchor {
+		t.Fatal("reorder changed paragraph identity")
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, path)) {
+		t.Fatal("undo did not restore original document bytes")
 	}
 }
 func TestParagraphStructureProtection(t *testing.T) {
@@ -158,7 +192,7 @@ func TestParagraphPlanInsideTableCell(t *testing.T) {
 		t.Fatal(err)
 	}
 	cell := after.Blocks[1].Rows[0].Cells[0]
-	if len(cell.Paragraphs) != 2 || textContentForTest(cell.Paragraphs[1]) != "new cell paragraph" || after.Blocks[1].Rows[0].Cells[1].Paragraphs[0].Runs[0].Text != "B" {
+	if len(cell.Paragraphs) != 2 || cell.Paragraphs[1].Anchor == "" || textContentForTest(cell.Paragraphs[1]) != "new cell paragraph" || after.Blocks[1].Rows[0].Cells[1].Paragraphs[0].Runs[0].Text != "B" {
 		t.Fatal("cell structure edit escaped its cell")
 	}
 }
