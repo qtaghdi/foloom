@@ -25,7 +25,7 @@ const runSchema = z.object({
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional(),bookmarkEditable:z.boolean().optional(),refreshNeeded:z.boolean().optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),placement:picturePlacementSchema.optional(),squareWrap:z.boolean().optional(),align:pictureAlignmentSchema.optional(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),captionReference:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
-  splitNoteParagraph:z.boolean().optional(),
+  splitNoteParagraph:z.boolean().optional(),breakTrackable:z.boolean().optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), boldTrackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
   eastAsiaFont: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
   sizeHalfPoints: z.number().int().min(8).max(288).optional(),
@@ -149,6 +149,7 @@ export type ParagraphMoveOperation = {type:'move_bookmark_up';targetId:string} |
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};
 export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} |
   {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean} |
+  {type:'track_paragraph_break';targetId:string;expectedText:string;text:string} |
   {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ChartKind='pie'|'bar'|'line';
 export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
