@@ -7,6 +7,8 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"strconv"
+
 	"strings"
 	"testing"
 )
@@ -841,5 +843,94 @@ func TestDedicatedPictureOffsetValidatesColumnAndKeepsNativeInline(t *testing.T)
 	historyRestore(t, s, "undo")
 	if !bytes.Equal(fileBytes(t, filename), offsetPackage) {
 		t.Fatal("undo did not restore exact offset package")
+	}
+}
+
+func TestDedicatedPictureVerticalOffsetReservesSpaceForCaption(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(
+		`<w:p/><w:p><w:r><w:t>Figure caption</w:t></w:r></w:p>`))
+	var pixels bytes.Buffer
+	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	v, err := s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{
+		Type: "update_image", TargetID: v.Blocks[0].ID, Image: &ImageEdit{
+			Action: "insert", Base64: base64.StdEncoding.EncodeToString(pixels.Bytes()), WidthEMU: 1270000,
+		},
+	}}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := bytes.Clone(s.pkg.document)
+	horizontal := 635000
+	save := func(edit ImageEdit) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{
+			Type: "update_image", TargetID: v.Blocks[0].Paragraph.Runs[0].ID, Image: &edit,
+		}}}, "human")
+	}
+	place := func(vertical *int) ImageEdit {
+		return ImageEdit{Action: "set_placement", Placement: "floating_offset", HorizontalOffsetEMU: &horizontal, VerticalOffsetEMU: vertical}
+	}
+	for _, vertical := range []int{0, 317500, 635000} {
+		edit := place(&vertical)
+		if vertical == 0 {
+			edit.VerticalOffsetEMU = nil
+		}
+		v, err = save(edit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := Open(ctx, filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		blocks := mustSnapshot(t, reopened).Blocks
+		info := blocks[0].Paragraph.Runs[0].Picture
+		value := strconv.Itoa(vertical)
+		if info.VerticalOffsetEMU == nil || *info.VerticalOffsetEMU != vertical ||
+			info.VerticalOffsetLimitEMU == nil || *info.VerticalOffsetLimitEMU != 635000 ||
+			info.HorizontalOffsetEMU == nil || *info.HorizontalOffsetEMU != horizontal ||
+			!bytes.Contains(s.pkg.document, []byte(`distT="`+value+`"`)) ||
+			!bytes.Contains(s.pkg.document, []byte(`relativeFrom="paragraph"><wp:posOffset>`+value+`</wp:posOffset>`)) ||
+			blocks[1].Paragraph.Runs[0].Text != "Figure caption" {
+			t.Fatal("reopen lost picture position or changed caption", vertical, info)
+		}
+	}
+	offset := fileBytes(t, filename)
+	negative, tooFar, same := -1, 635001, 635000
+	for _, edit := range []ImageEdit{place(&negative), place(&tooFar), place(&same),
+		{Action: "align", Align: "right", VerticalOffsetEMU: &same},
+		{Action: "set_placement", Placement: "floating_center", VerticalOffsetEMU: &same}} {
+		if _, err := save(edit); err == nil || !bytes.Equal(offset, fileBytes(t, filename)) {
+			t.Fatal("invalid vertical placement changed the package", edit)
+		}
+	}
+	frame := v.Blocks[0].Paragraph.Runs[0].ID
+	raw := bytes.Replace(s.pkg.document, []byte(`distT="635000"`), []byte(`distT="0"`), 1)
+	_, targets, _, err := inspect(raw, v.ID, v.Revision)
+	if err != nil || targets[frame].picturePlacement != "" {
+		t.Fatal("unreserved vertical layout must be preserved without editing", err)
+	}
+	shortPage := bytes.Replace(s.pkg.document, []byte(`</w:body>`),
+		[]byte(`<w:sectPr><w:pgSz w:h="4000"/></w:sectPr></w:body>`), 1)
+	_, targets, _, err = inspect(shortPage, v.ID, v.Revision)
+	current := targets[frame]
+	const availableHeight = (4000 - 1440 - 1440 - 1000) * 635
+	if err != nil || current.pictureVerticalOffsetLimit == nil || *current.pictureVerticalOffsetLimit != availableHeight {
+		t.Fatal("vertical offset bound did not include picture height and page margins", err)
+	}
+	outsideBody := availableHeight + 1
+	if _, err := s.pkg.setPicturePlacement(current, "floating_offset", &horizontal, &outsideBody); err == nil {
+		t.Fatal("vertical offset beyond the body was accepted")
+	}
+	if _, err := save(ImageEdit{Action: "set_placement", Placement: "inline"}); err != nil ||
+		!bytes.Equal(s.pkg.document, original) {
+		t.Fatal("inline fallback changed the original drawing or caption", err)
+	}
+	historyRestore(t, s, "undo")
+	if !bytes.Equal(fileBytes(t, filename), offset) {
+		t.Fatal("undo did not restore the offset package")
 	}
 }

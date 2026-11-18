@@ -20,6 +20,7 @@ const (
 )
 
 type Run struct {
+	BreakTrackable     bool         `json:"breakTrackable,omitempty"`
 	SplitNoteParagraph bool         `json:"splitNoteParagraph,omitempty"`
 	BoldTrackable      bool         `json:"boldTrackable,omitempty"`
 	ProofingLang       string       `json:"proofingLanguage,omitempty"`
@@ -262,10 +263,10 @@ type Operation struct {
 	StyleDefinition   *StyleDefinition    `json:"styleDefinition,omitempty"`
 	EndTargetID       string              `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
 	Paragraphs        []ParagraphContent  `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type              string              `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_default_tab_stop, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, restart_compound_sublevel, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, split_note_paragraph, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_alignment, insert_control_text, update_control_text, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, insert_chart, update_chart_title, resize_chart, update_chart_value, delete_chart, insert_rectangle, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
+	Type              string              `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_default_tab_stop, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, restart_compound_sublevel, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, split_note_paragraph, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_break, track_paragraph_alignment, insert_control_text, update_control_text, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, insert_chart, update_chart_title, resize_chart, update_chart_value, delete_chart, move_chart_up, move_chart_down, insert_rectangle, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
 	TargetID          string              `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
 	ExpectedText      string              `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
-	Text              string              `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. For split_note_paragraph, send the exact text before the split"`
+	Text              string              `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. For split_note_paragraph and track_paragraph_break, send the exact text before the split"`
 	ChartWidthEMU     *int                `json:"chartWidthEmu,omitempty" jsonschema:"New inline chart width in EMUs for resize_chart"`
 	RectangleSize     *RectangleSizeEdit  `json:"rectangleSize,omitempty"`
 	RectangleColors   *RectangleColorEdit `json:"rectangleColors,omitempty"`

@@ -15,11 +15,7 @@ func trailingNoteSplitRun(paragraph *node) *node {
 		return nil
 	}
 	run := children[0]
-	if !run.is("r") || len(run.children) > 2 || len(run.children) == 2 && !run.children[0].is("rPr") {
-		return nil
-	}
-	text := run.child("t")
-	if text == nil || !validText(text.text.String()) || utf8.RuneCountInString(text.text.String()) < 2 {
+	if !splittableTextRun(run) {
 		return nil
 	}
 	for _, marker := range children[1:] {
@@ -30,10 +26,25 @@ func trailingNoteSplitRun(paragraph *node) *node {
 	return run
 }
 
+func splittableTextRun(run *node) bool {
+	if !run.is("r") || len(run.children) > 2 || len(run.children) == 2 && !run.children[0].is("rPr") {
+		return false
+	}
+	text := run.child("t")
+	return text != nil && validText(text.text.String()) && utf8.RuneCountInString(text.text.String()) >= 2
+}
+
 func splitNoteParagraph(data []byte, t target, op Operation, ids paragraphIDs) (replacement, error) {
-	if !t.splitNoteParagraph || !validText(op.Text) || op.ExpectedText != t.text ||
+	if !t.splitNoteParagraph {
+		return replacement{}, fmt.Errorf("protected DOCX note paragraph")
+	}
+	return splitParagraphText(data, t, op, ids, nil)
+}
+
+func splitParagraphText(data []byte, t target, op Operation, ids paragraphIDs, firstProps []byte) (replacement, error) {
+	if !validText(op.Text) || op.ExpectedText != t.text ||
 		op.Text == "" || op.Text == t.text || !strings.HasPrefix(t.text, op.Text) {
-		return replacement{}, fmt.Errorf("DOCX note paragraph requires a split within the original text")
+		return replacement{}, fmt.Errorf("DOCX paragraph requires a split within the original text")
 	}
 	n := t.run.child("t")
 	left, err := replaceTextNode(data, n, op.Text)
@@ -51,7 +62,17 @@ func splitNoteParagraph(data []byte, t target, op Operation, ids paragraphIDs) (
 	p := t.paragraph
 	open, close := newParagraphOpening(p, data, id)
 	var result strings.Builder
-	result.Write(data[p.start:left.start])
+	if firstProps == nil {
+		result.Write(data[p.start:left.start])
+	} else {
+		after := p.inner
+		if props := p.child("pPr"); props != nil {
+			after = props.end
+		}
+		result.Write(data[p.start:p.inner])
+		result.Write(firstProps)
+		result.Write(data[after:left.start])
+	}
 	result.Write(left.data)
 	result.Write(data[left.end:t.run.end])
 	result.Write(data[p.endStart:p.end])
@@ -62,7 +83,7 @@ func splitNoteParagraph(data []byte, t target, op Operation, ids paragraphIDs) (
 	result.Write(data[right.end:p.endStart])
 	result.WriteString(close)
 	if result.Len() > maxPartBytes {
-		return replacement{}, fmt.Errorf("DOCX note paragraph split exceeds the XML size limit")
+		return replacement{}, fmt.Errorf("DOCX paragraph split exceeds the XML size limit")
 	}
 	return replacement{start: p.start, end: p.end, data: []byte(result.String())}, nil
 }
