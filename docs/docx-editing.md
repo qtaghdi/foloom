@@ -645,6 +645,12 @@ even variant 작성은 참조를 보관하지만 문서 전체의 홀짝 구분 
 계산합니다. [단일 Word 필드 구조](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.simplefield)를
 사용합니다.
 
+같은 도구의 `전체 쪽 수 필드`를 켜면 Word가 계산하는 NUMPAGES 필드를
+추가합니다. HTTP·MCP의 머리글·바닥글 설정은 `totalPages: true` 또는
+`totalPages: false`를 사용합니다. 쪽 번호 필드와 독립적으로 바뀌며, 브라우저는
+계산값 대신 필드 위치를 보여 줍니다.
+[Word 필드 코드 목록](https://support.microsoft.com/en-us/word/list-of-field-codes-in-word)에서 NUMPAGES를 확인할 수 있습니다.
+
 ### 문단 페이지 나눔과 구역 나눔
 
 `구역 나눔 제거`에서 경계를 선택하고 저장하면 앞뒤 구역을 합칩니다.
@@ -712,6 +718,13 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 0.001% 단위의 정수를 받습니다. 네 값을 모두 0으로 보내면 자르기를 해제합니다.
 표시 영역의 바깥 크기와 그림 파일·관계·설명은 유지합니다.
 [DrawingML 원본 자르기](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.sourcerectangle)를 사용합니다.
+
+기본 인라인 PNG·JPEG는 `그림 180도 회전`으로 방향을 바꾸고
+`그림 방향 되돌리기`로 복원할 수 있습니다. 크기, 원본 파일과 자르기 범위는 유지합니다.
+HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rotation: 180 }`을
+보냅니다. `rotation: 0`은 기본 방향으로 되돌립니다. 회전 뒤 자르기 비율은 원본
+이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
+
 
 ### 인쇄와 PDF 저장
 
@@ -802,6 +815,14 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 클릭 동작만 사라집니다. HTTP·MCP는 링크 run ID에 `reference: { action: "unlink" }`를
 사용합니다. 복잡한 구조는 보호하고 공유 관계는 남겨 둡니다.
 
+다른 본문 문단의 `텍스트 상호 참조 삽입`에서 한 문단의 평문을 포함한 북마크를
+선택하면 Word REF 필드가 추가됩니다. HTTP·MCP는 문단 ID에
+`reference: { action: "insert_bookmark_ref", bookmark }`를 적용합니다.
+브라우저에서 참조의 텍스트를 확인하고 대상 문단으로 이동할 수 있습니다.
+북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
+참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
+[Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
+
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
 적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 각주의 번호와
@@ -815,7 +836,10 @@ HTTP·MCP는 문단 ID에 `reference: { action: "insert_endnote", text }`를 적
 `기존 각주·미주`에서 기본 번호와 한 문단의 평문을 포함한 미주를 골라 수정합니다.
 HTTP·MCP는 미주 run ID에 `reference: { action: "set_endnote_text", text }`를 적용합니다.
 미주 번호와 본문 참조, 다른 각주, 변경하지 않은 텍스트의 서식은 유지합니다.
-미주 삭제와 복합 미주 편집은 Word에서 할 수 있습니다.
+`미주 삭제`는 한 곳에서 참조하는 평문 미주의 본문 마커와 해당 항목을
+삭제합니다. HTTP·MCP는 미주 run ID에 `reference: { action: "delete_endnote" }`를
+적용합니다. 다른 미주·각주·구분선, 공유 참조와 북마크 범위는 보호합니다.
+복합 미주 편집은 Word에서 할 수 있습니다.
 [Word 미주 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.endnotes?view=openxml-3.0.1)을 사용합니다.
 
 `기존 각주·미주`에서 편집 가능한 각주를 고르면 한 줄 텍스트를 수정할 수 있습니다.
@@ -896,10 +920,19 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 단순 인라인 수식 | 수식 텍스트 | 삽입·교체·삭제 | Word 수식 개체 |
 | 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
-| 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 일부 | 미지원 | Word |
+| 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
+
+삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
+기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
+일반 텍스트를 `insert_textbox`에 보냅니다. 저장한 상자를 같은 도구에서 선택해
+평문을 수정할 수 있습니다. HTTP·MCP는 `update_textbox_text`에 상자 run ID, 현재
+`expectedText`와 새 `text`를 보냅니다. 위치·크기·기존 서식을 유지하며 수정을
+적용할 때 같은 내용의 DrawingML과 VML 호환 표현을 함께 편집합니다.
+상자가 연결돼 있거나 호환 표현의 텍스트가 서로 다르면 읽기 전용으로 표시합니다.
+[Word 텍스트 상자 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/9ef316cc-3b39-4765-89ac-f8524fab383b)를 사용합니다.
 
 삽입의 `콘텐츠 컨트롤 편집`에서 일반 본문 평문 컨트롤을 골라 텍스트를
 바꿉니다. HTTP·MCP는 `update_control_text`에 컨트롤 run ID, 현재 문자열

@@ -15,6 +15,7 @@ type HeaderFooterUpdate struct {
 	LinkPrevious bool    `json:"linkPrevious,omitempty"`
 	Text         *string `json:"text,omitempty"`
 	PageNumber   *bool   `json:"pageNumber,omitempty"`
+	TotalPages   *bool   `json:"totalPages,omitempty"`
 }
 type HeaderFooterInfo struct {
 	Truncated       bool   `json:"truncated,omitempty"`
@@ -25,6 +26,7 @@ type HeaderFooterInfo struct {
 	Text            string `json:"text"`
 	Editable        bool   `json:"editable"`
 	PageNumber      bool   `json:"pageNumber,omitempty"`
+	TotalPages      bool   `json:"totalPages,omitempty"`
 }
 
 func attribute(n *node, namespace, name string) string {
@@ -104,6 +106,7 @@ type headerFooterContent struct {
 	text       string
 	editable   bool
 	pageNumber bool
+	totalPages bool
 }
 
 func plainHeader(data []byte, kind string) headerFooterContent {
@@ -117,13 +120,26 @@ func plainHeader(data []byte, kind string) headerFooterContent {
 	}
 	texts := []string{}
 	info := headerFooterContent{editable: true}
-	for index, paragraph := range root.children {
+	for _, paragraph := range root.children {
 		if !paragraph.is("p") || !onlyNamespaceAttributes(paragraph) || paragraph.child("pPr") != nil || strings.TrimSpace(paragraph.text.String()) != "" {
 			info.editable = false
 		}
-		if index == len(root.children)-1 && len(paragraph.children) == 1 && simplePageField(paragraph.children[0]) {
-			info.pageNumber = true
-			continue
+		if len(paragraph.children) == 1 {
+			switch simplePageField(paragraph.children[0]) {
+			case "PAGE":
+				if !info.pageNumber && !info.totalPages {
+					info.pageNumber = true
+					continue
+				}
+			case "NUMPAGES":
+				if !info.totalPages {
+					info.totalPages = true
+					continue
+				}
+			}
+		}
+		if info.pageNumber || info.totalPages {
+			info.editable = false
 		}
 		for _, run := range paragraph.children {
 			if !plainHeaderRun(run) {
@@ -151,21 +167,31 @@ func plainHeaderRun(run *node) bool {
 	return true
 }
 
-func simplePageField(field *node) bool {
-	if !field.is("fldSimple") || !strings.EqualFold(strings.TrimSpace(field.attr("instr")), "PAGE") ||
-		len(field.children) > 1 || strings.TrimSpace(field.text.String()) != "" {
-		return false
+func pageFieldInstruction(field *node) string {
+	instruction := strings.ToUpper(strings.TrimSpace(field.attr("instr")))
+	if instruction == "PAGE" || instruction == "NUMPAGES" {
+		return instruction
+	}
+	return ""
+}
+
+func simplePageField(field *node) string {
+	instruction := pageFieldInstruction(field)
+	if !field.is("fldSimple") || instruction == "" || len(field.children) > 1 || strings.TrimSpace(field.text.String()) != "" {
+		return ""
 	}
 	for _, attr := range field.attrs {
 		if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS || attr.Name.Local != "instr" && attr.Name.Local != "dirty") {
-			return false
+			return ""
 		}
 	}
-	if len(field.children) == 0 {
-		return true
+	if len(field.children) == 1 {
+		run := field.children[0]
+		if !plainHeaderRun(run) || len(run.children) != 1 {
+			return ""
+		}
 	}
-	run := field.children[0]
-	return plainHeaderRun(run) && len(run.children) == 1
+	return instruction
 }
 
 func onlyNamespaceAttributes(n *node) bool {
@@ -214,6 +240,7 @@ func (p *documentPackage) headerFooterCatalog(targets []sectionTarget) [][]Heade
 						info.Editable = inherited.Editable
 						info.Truncated = inherited.Truncated
 						info.PageNumber = inherited.PageNumber
+						info.TotalPages = inherited.TotalPages
 					}
 				} else {
 					info.Linked = false
@@ -226,6 +253,7 @@ func (p *documentPackage) headerFooterCatalog(targets []sectionTarget) [][]Heade
 					}
 					info.Text, info.Editable = item.text, item.editable && plainHeaderReference(ref)
 					info.PageNumber = item.pageNumber
+					info.TotalPages = item.totalPages
 					if len(info.Text) > remaining {
 						info.Text = ""
 						info.Editable = false
@@ -255,7 +283,7 @@ func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterU
 			return "", fmt.Errorf("invalid or duplicate DOCX header/footer variant")
 		}
 		seen[key] = true
-		if update.LinkPrevious && (sectionIndex == 0 || update.Text != nil || update.PageNumber != nil) || !update.LinkPrevious && (update.Text == nil || !validInlineText(*update.Text)) {
+		if update.LinkPrevious && (sectionIndex == 0 || update.Text != nil || update.PageNumber != nil || update.TotalPages != nil) || !update.LinkPrevious && (update.Text == nil || !validInlineText(*update.Text)) {
 			return "", fmt.Errorf("DOCX header/footer requires text or a previous section link")
 		}
 		data := []byte(raw)
@@ -273,17 +301,20 @@ func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterU
 
 		replacement := ""
 		if !update.LinkPrevious {
-			pageNumber := false
+			pageNumber, totalPages := false, false
 			if ref != nil {
 				filename := p.relatedPart(attribute(ref, officeRelNS, "id"), update.Kind, changes)
 				content := plainHeader(p.partData(filename, changes), update.Kind)
 				if !content.editable {
 					return "", fmt.Errorf("formatted or protected DOCX header/footer cannot be flattened")
 				}
-				pageNumber = content.pageNumber
+				pageNumber, totalPages = content.pageNumber, content.totalPages
 			}
 			if update.PageNumber != nil {
 				pageNumber = *update.PageNumber
+			}
+			if update.TotalPages != nil {
+				totalPages = *update.TotalPages
 			}
 			filename, err := p.addWordPart(changes, update.Kind, "rIdDocx"+update.Kind)
 			if err != nil {
@@ -299,7 +330,10 @@ func (p *documentPackage) patchHeaderFooters(raw string, updates []HeaderFooterU
 				content.WriteString(`<w:p><w:r>` + inlineXML(line) + `</w:r></w:p>`)
 			}
 			if pageNumber {
-				content.WriteString(`<w:p><w:fldSimple w:instr="PAGE" w:dirty="true"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p>`)
+				content.WriteString(headerPageFieldXML("PAGE"))
+			}
+			if totalPages {
+				content.WriteString(headerPageFieldXML("NUMPAGES"))
 			}
 			content.WriteString(`</w:` + tag + `>`)
 			changes[filename] = []byte(content.String())
@@ -342,4 +376,8 @@ func plainHeaderReference(ref *node) bool {
 		}
 	}
 	return true
+}
+
+func headerPageFieldXML(instruction string) string {
+	return `<w:p><w:fldSimple w:instr="` + instruction + `" w:dirty="true"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p>`
 }
