@@ -559,17 +559,26 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
 		}
-		if op.Type == "insert_picture_caption" {
+		if op.Type == "insert_picture_caption" || op.Type == "edit_picture_caption" {
 			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
 				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
-				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Type == "insert_picture_caption" && op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid or duplicate DOCX figure caption operation")
 			}
-			added, err := s.pkg.pictureCaption(targets[op.TargetID], op.Text)
+			seen[op.Type] = true
+			t := targets[op.TargetID]
+			if op.Type == "edit_picture_caption" {
+				edit, err := s.pkg.editPictureCaption(t, op.ExpectedText, op.Text)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+				continue
+			}
+			added, err := s.pkg.pictureCaption(t, op.Text)
 			if err != nil {
 				return nil, err
 			}
-			seen[op.Type] = true
 			edits = append(edits, added...)
 			continue
 		}

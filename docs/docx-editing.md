@@ -795,6 +795,11 @@ HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rota
 기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
 [Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
 
+같은 그림을 다시 고른 뒤 `그림 캡션 변경`으로 기존 설명을 바꿀 수 있습니다.
+Word 번호 필드와 그림은 유지됩니다. HTTP·MCP에서는 그림 run ID,
+현재 설명의 `expectedText`, 새 `text`를 `edit_picture_caption`에 보냅니다.
+복합 캡션과 해당 구조 밖의 캡션은 이 도구의 편집 대상에서 제외됩니다.
+
 ### 인쇄와 PDF 저장
 
 파일 작업의 `인쇄·PDF`는 저장된 문서를 브라우저 인쇄 창으로 보냅니다.
