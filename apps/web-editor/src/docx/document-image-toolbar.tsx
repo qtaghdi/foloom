@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
 import type { ImageOperation, Paragraph, Run } from './contracts';
+import { utf8Length } from './validation';
 
 const maxBytes = 512*1024;
 
@@ -106,6 +107,23 @@ export function DocumentImageToolbar(props: {
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>비율 유지 크기 변경</button>
             </form>
+            <Show when={picture.picture?.captionEditable}>
+              <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(disabled())return;
+                const input=event.currentTarget.elements.namedItem('caption') as HTMLInputElement;
+                const text=input.value.trim();
+                if(!text){setError('그림 캡션을 입력하세요.');return;}
+                if(utf8Length(text)>1024){setError('캡션을 UTF-8 1 KiB 이하로 줄이세요.');return;}
+                const accepted=props.onApply({type:'insert_picture_caption',targetId:picture.id,expectedText:'',text});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <label class="flex min-w-0 flex-col gap-1">그림 캡션
+                  <input name="caption" type="text" maxlength="1024" class="min-h-11 max-w-full rounded border border-slate-300 px-2" disabled={disabled()}/>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>그림 번호와 캡션 삽입</button>
+              </form>
+            </Show>
             <Show when={picture.picture?.rotationEditable}>
               <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
                 const rotation=picture.picture?.rotation===180?0:180;
