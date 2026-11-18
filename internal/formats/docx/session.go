@@ -140,7 +140,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	s.addPicturePreviews(blocks, targetsByID)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
-			s.pkg.projectNotes(kind, blocks, targetsByID)
+			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
 		}
 	}
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID)
