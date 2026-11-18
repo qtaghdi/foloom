@@ -164,7 +164,15 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	sections := []SectionInfo{}
 	targets := inspectSections(root, s.id, s.revision)
 	headers := s.pkg.headerFooterCatalog(targets)
+	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
+	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
+	var parity *bool
+	if settingsErr == nil {
+		value := headerParity(settings)
+		parity = &value
+	}
 	for index, target := range targets {
+		target.info.Gutter = sectionGutter(target.props, fixedLeft)
 		target.info.HeaderFooters = headers[index]
 		if n := target.props.child("titlePg"); n != nil {
 			target.info.FirstPage = onOff(n.attr("val"), true)
@@ -187,7 +195,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	listRoot, _ := parseXML(s.pkg.partData(s.pkg.numberingPath, nil))
 	numbering := readNumbering(listRoot)
 	applyListLabels(blocks, numbering)
-	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {

@@ -1,6 +1,6 @@
 import { TabText, layoutTabCharacters } from './tab-layout';
 import { resolveHeaderText } from './document-header-footer';
-import { defaultHeaderFooterDistance } from './sections';
+import { defaultHeaderFooterDistance, sectionPaper } from './sections';
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import type { PasteMode, ClipboardParagraph } from './clipboard';
@@ -60,7 +60,7 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
   const pageSection=(page:PreviewPage)=>{const block=page[0]?.block;const id=block?.type==='paragraph'?block.paragraph.sectionId:block?.rows[0]?.cells[0]?.paragraphs[0]?.sectionId;return props.snapshot.sections?.find(section=>section.id===id);};
   const sectionStyle=(page:PreviewPage)=>{
    const info=pageSection(page);if(!info)return {'--docx-print-paper':printPaperFor(props.snapshot)};
-   const p=info.page,width=`min(100cqi, ${p.width/15}px)`;
+   const p=sectionPaper(info),width=`min(100cqi, ${p.width/15}px)`;
    const scaled=(twips:number)=>`calc(${width} * ${twips/p.width})`;
    return {
     '--docx-print-paper':printPaperFor(props.snapshot,info),
