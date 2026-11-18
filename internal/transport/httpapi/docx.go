@@ -154,7 +154,19 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		snapshot, err := s.docxSnapshot(ctx)
 		return nil, snapshot, err
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "apply_docx_operations", Title: "DOCX 편집", Description: "Atomically edit body or simple table text, formatting and supported paragraph structure. Use define_list with listDefinition (key, kind bullet/decimal, start) to append an independent nine-level numbering instance. Apply it with paragraph format list {key, level} in the same batch, use {id, level} to continue an existing list from snapshot.lists, or {id:0, level:0} to remove numbering. New instances never modify shared original definitions. Use define_style with styleDefinition (id, name, kind paragraph/character, basedOn, run and paragraph) to create or modify a definition. Style definitions may precede their applications in the same batch. Use paragraph format styleId or run style styleId to apply an existing or same-batch definition. Style boolean flags follow Word style-toggle inheritance; direct run flags are absolute. Use replace_run_text/replace_cell_text for text (LF is an inline line break), or replace_paragraphs with first/last paragraph IDs and ordered paragraphs referencing sourceId formatting. Run style supports bounded inline formatting overrides and reset of supported direct properties. Paragraph format supports align, indent and spacing in twips, line in 240ths for auto or twips for exact/atLeast, bidi and textDirection. Only structureEditable paragraphs in one contiguous sibling range are supported. Pass sessionId, baseRevision and exact expectedText (paragraph texts joined by LF). Do not overlap operations. Refresh after conflicts. Tabs, protected section/page boundaries, fields and tracked changes are unsupported.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "apply_docx_operations", Title: "DOCX 편집", Description: "Atomically edit a DOCX using the operation schema and the current sessionId, baseRevision, and applicable IDs from get_docx. " +
+		"Use replace_run_text or replace_cell_text with exact expectedText for text. LF inserts an inline break. " +
+		"Use replace_paragraphs for a contiguous editable sibling range with source IDs and exact paragraph texts joined by LF. " +
+		"Paragraph plans support styles, direction, spacing, tab stops, and list references. Define styles with define_style. " +
+		"Use define_list to create a nine-level list with kind bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter. " +
+		"Use list {key, level} to apply a new definition in the same batch, {id, level} to continue a list from snapshot.lists, or {id:0, level:0} to remove numbering. " +
+		"Use update_section for paper settings and supported header or footer text, PAGE, and NUMPAGES fields, or update_boundary for supported page and section breaks. " +
+		"Use update_table, update_image, and update_math for supported tables, inline pictures, and equations. " +
+		"Use update_reference for supported links, bookmarks, footnotes, and endnotes. " +
+		"Use update_control_text or update_textbox_text to edit supported object text. " +
+		"Use add_comment to annotate text, or resolve_comment and reopen_comment with an eligible imported comment ID. " +
+		"Use track_run_text to record a simple text replacement or deletion, and accept_revision or reject_revision to review supported inline changes. " +
+		"Keep edits within the editable targets returned by get_docx. Do not overlap operations. Refresh the document after a conflict.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {
 		snapshot, err := s.applyDOCX(ctx, input, "ai")
 		return nil, snapshot, err
 	})
