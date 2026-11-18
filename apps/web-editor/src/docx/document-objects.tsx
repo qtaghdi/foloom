@@ -8,9 +8,14 @@ const labels:Record<NonNullable<Run['object']>['kind'],string> = {
 };
 
 export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
-  return <Switch fallback={<span data-docx-opaque contentEditable={false} aria-label={labels[props.object.kind]}
+  const label=()=>{
+    const object=props.object;
+    const name=labels[object.kind];
+    return (object.kind==='footnote'||object.kind==='endnote')&&object.label ? `${name} ${object.label}` : name;
+  };
+  return <Switch fallback={<span data-docx-opaque contentEditable={false} aria-label={label()}
     class="inline-block max-w-full break-words rounded border border-slate-300 bg-stone-50 px-1.5 align-middle text-sm">
-    <span class="mr-1 text-xs text-slate-600">{labels[props.object.kind]}{props.object.editable?'':' · 읽기 전용'}</span>
+    <span class="mr-1 text-xs text-slate-600">{label()}{props.object.editable?'':' · 읽기 전용'}</span>
     <Show when={props.object.fraction}>{fraction=>
       <span class="inline-grid max-w-full grid-rows-2 text-center align-middle font-serif"
         aria-label={`분자 ${fraction().numerator}, 분모 ${fraction().denominator}`}>

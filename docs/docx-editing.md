@@ -1118,9 +1118,12 @@ HTTP·MCP는 필드 run ID에 `reference: { action: "refresh_date_field" }`를
 
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
-적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 각주의 번호와
-쪽 아래 배치는 Word가 계산합니다. 사용자 지정 번호와
-미주는 지원 범위에 포함되지 않습니다.
+적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 본문이 한 구역이고
+참조가 일반 자동 번호를 사용하면 각주와 미주의 연속 번호를 각각 미리 봅니다.
+십진수와 대·소문자 로마 숫자의 문서 기본값과 구역별 재정의, 시작값 및 본문 참조 순서를 사용합니다. 문서를
+편집하거나 다시 열면 새 순서에 맞춰 번호가 갱신됩니다. 사용자 지정 표식, 공유 참조,
+쪽별 다시 시작과 복합 구역은 노트 내용만 표시합니다. 쪽 아래 실제 배치는 Word가 처리합니다.
+[Word의 미주 기본 숫자 형식](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/a910e9f7-f95f-49ad-ad23-68ea9a7922cd)을 따릅니다.
 [Word 각주 참조 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.footnotereferencemark)을 사용합니다.
 
 편집 가능한 본문 문단에서 `미주 삽입`을 선택하면 문단 끝에 미주를 연결합니다.
