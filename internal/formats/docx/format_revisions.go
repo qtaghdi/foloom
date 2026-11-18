@@ -93,7 +93,7 @@ func trackedBoldEdit(data []byte, t target, op Operation, author, date string, u
 	if props != nil && !safeRunRevisionProperties(props, nil) {
 		return replacement{}, fmt.Errorf("protected DOCX run properties")
 	}
-	current, err := inlineProperties(props, data, &InlineStyle{Bold: op.Bold})
+	current, err := inlineProperties(props, data, &InlineStyle{Bold: op.Bold}, nil)
 	if err != nil {
 		return replacement{}, err
 	}
