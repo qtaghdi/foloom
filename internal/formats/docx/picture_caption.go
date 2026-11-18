@@ -86,26 +86,30 @@ func editableCaptionParagraph(next *node, data []byte) (*node, string) {
 }
 
 func documentFigureFields(body *node) ([]*node, error) {
+	return documentCaptionFields(body, "figure", isFigureSequence, supportedFigureSequence)
+}
+
+func documentCaptionFields(body *node, label string, isSequence, supported func(string) bool) ([]*node, error) {
 	var values []*node
 	var walk func(*node) error
 	walk = func(n *node) error {
 		if n.is("fldChar") || n.is("instrText") || n.is("delInstrText") {
-			return fmt.Errorf("DOCX figure numbering cannot be derived with complex body fields")
+			return fmt.Errorf("DOCX %s numbering cannot be derived with complex body fields", label)
 		}
-		if n.is("fldSimple") && isFigureSequence(n.attr("instr")) {
-			if !supportedFigureSequence(n.attr("instr")) || len(n.children) != 1 || !n.children[0].is("r") || !n.parent.is("p") || !n.parent.parent.is("body") ||
+		if n.is("fldSimple") && isSequence(n.attr("instr")) {
+			if !supported(n.attr("instr")) || len(n.children) != 1 || !n.children[0].is("r") || !n.parent.is("p") || !n.parent.parent.is("body") ||
 				strings.Contains(string(body.parent.source[n.start:n.end]), "<!--") {
-				return fmt.Errorf("protected DOCX figure sequence")
+				return fmt.Errorf("protected DOCX %s sequence", label)
 			}
 			for _, attr := range n.attrs {
 				if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS || attr.Name.Local != "instr" && attr.Name.Local != "dirty") {
-					return fmt.Errorf("protected DOCX figure sequence")
+					return fmt.Errorf("protected DOCX %s sequence", label)
 				}
 			}
 			nodes, label := plainTextRunNodes(n.children)
 			number, err := strconv.ParseInt(label, 10, 32)
 			if len(nodes) != 1 || err != nil || number < 1 {
-				return fmt.Errorf("invalid DOCX figure sequence result")
+				return fmt.Errorf("invalid DOCX %s sequence result", label)
 			}
 			values = append(values, nodes[0])
 		}
@@ -135,7 +139,10 @@ func (p *documentPackage) pictureCaption(t target, text string) ([]replacement, 
 	if err != nil {
 		return nil, err
 	}
-	at := t.paragraph.end
+	return numberedCaptionEdits(p.document, values, t.paragraph.end, figureSequence, "그림 ", text, false)
+}
+
+func numberedCaptionEdits(data []byte, values []*node, at int, instruction, prefix, text string, keepNext bool) ([]replacement, error) {
 	number := 1
 	var edits []replacement
 	for i, value := range values {
@@ -145,14 +152,18 @@ func (p *documentPackage) pictureCaption(t target, text string) ([]replacement, 
 		}
 		next := strconv.Itoa(i + 2)
 		if value.text.String() != next {
-			edit, err := replaceTextNode(p.document, value, next)
+			edit, err := replaceTextNode(data, value, next)
 			if err != nil {
 				return nil, err
 			}
 			edits = append(edits, edit)
 		}
 	}
-	xml := `<w:p xmlns:w="` + wordNS + `"><w:r>` + inlineXML("그림 ") + `</w:r><w:fldSimple w:instr="` + figureSequence +
+	properties := ""
+	if keepNext {
+		properties = `<w:pPr><w:keepNext/></w:pPr>`
+	}
+	xml := `<w:p xmlns:w="` + wordNS + `">` + properties + `<w:r>` + inlineXML(prefix) + `</w:r><w:fldSimple w:instr="` + instruction +
 		`" w:dirty="true"><w:r>` + inlineXML(strconv.Itoa(number)) + `</w:r></w:fldSimple><w:r>` +
 		inlineXML(". "+strings.TrimSpace(text)) + `</w:r></w:p>`
 	return append(edits, replacement{start: at, end: at, data: []byte(xml)}), nil

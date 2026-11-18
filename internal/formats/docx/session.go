@@ -526,12 +526,23 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if !ok || seen[key] || op.Table == nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid or duplicate DOCX table operation")
 			}
-			if op.Table.Action == "insert_body_paragraph_before" && (op.Image != nil || op.Reference != nil ||
+			if (op.Table.Action == "insert_body_paragraph_before" || op.Table.Action == "insert_caption") && (op.Image != nil || op.Reference != nil ||
 				op.Comment != nil || op.Math != nil || op.ListDefinition != nil || op.Boundary != "" ||
 				op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil) {
-				return nil, fmt.Errorf("unexpected DOCX leading paragraph operation fields")
+				return nil, fmt.Errorf("unexpected DOCX table insertion operation fields")
 			}
 			seen[key] = true
+			if op.Table.Action == "insert_caption" {
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX numbered table caption must be added as a single operation")
+				}
+				changes, err := s.pkg.insertTableCaption(t, *op.Table)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, changes...)
+				continue
+			}
 			edit, err := tableReplacement(s.pkg.document, t, *op.Table)
 			if err != nil {
 				return nil, err
