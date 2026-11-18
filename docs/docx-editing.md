@@ -993,7 +993,7 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 단순 인라인 수식 | 수식 텍스트 | 삽입·교체·삭제 | Word 수식 개체 |
 | 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
-| 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입 | Word 도형 |
+| 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 변경 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
 | 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
@@ -1002,8 +1002,12 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 삽입의 `도형`에서 `인라인 사각형 삽입`을 누르고 저장하면 선택한 본문 문단의
 끝에 기본 사각형을 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
 `type: "insert_rectangle"`을 보냅니다. 단순 채우기와 테두리를 가진 인라인
-사각형은 브라우저에도 모양과 색을 표시합니다. 위치와 서식 수정은 Word에서
-할 수 있습니다. [Word 도형 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/69190647-27d1-4890-8089-a8aca57becb9)를 사용합니다.
+사각형은 브라우저에도 모양과 색을 표시합니다. 해당 도구에서 사각형을 선택하고
+채우기와 테두리 색을 바꾼 뒤 `사각형 색 적용`을 누릅니다. HTTP·MCP는 대상
+도형 run ID와 `type: "update_rectangle_colors"`,
+`rectangleColors: { fill: "F3D6C7", stroke: "8A341D" }`를 보냅니다.
+두 값은 # 없이 여섯 자리 RGB 색을 사용합니다. 위치와 다른 서식은 Word에서
+수정할 수 있습니다. [Word 도형 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/69190647-27d1-4890-8089-a8aca57becb9)를 사용합니다.
 
 수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
 `제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을

@@ -328,6 +328,25 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var nextRevisionID int64
 	var revisionDate string
 	for _, op := range input.Operations {
+		if op.RectangleColors != nil && op.Type != "update_rectangle_colors" {
+			return nil, fmt.Errorf("unexpected DOCX rectangle colors")
+		}
+		if op.Type == "update_rectangle_colors" {
+			t := targets[op.TargetID]
+			if t.kind != op.Type || seen[op.TargetID] || op.RectangleColors == nil ||
+				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid DOCX rectangle color operation")
+			}
+			updated, err := editInlineRectangleColors(s.pkg.document, t, *op.RectangleColors)
+			if err != nil {
+				return nil, err
+			}
+			seen[op.TargetID] = true
+			edits = append(edits, updated...)
+			continue
+		}
 		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||

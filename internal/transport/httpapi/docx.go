@@ -163,7 +163,7 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		"Use update_section for paper settings and supported header or footer text, PAGE, and NUMPAGES fields, including compactPageNumbers to combine the two fields, or update_boundary for supported page and section breaks. " +
 		"Use update_table, update_image, and update_math for supported tables, inline pictures, and equations. " +
 		"Use update_reference for supported links, bookmarks, footnotes, and endnotes. " +
-		"Use insert_rectangle for a basic inline shape or insert_textbox for an inline text box. Use update_control_text or update_textbox_text to edit supported object text. " +
+		"Use insert_rectangle for a basic inline shape, update_rectangle_colors to set its fill and outline, or insert_textbox for an inline text box. Use update_control_text or update_textbox_text to edit supported object text. " +
 		"Use add_comment to annotate text, or resolve_comment and reopen_comment with an eligible imported comment ID. " +
 		"Use track_run_text to record a simple text replacement or deletion, and accept_revision or reject_revision to review supported inline changes. " +
 		"Keep edits within the editable targets returned by get_docx. Do not overlap operations. Refresh the document after a conflict.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {

@@ -3,6 +3,7 @@ package docx
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type RectanglePreview struct {
@@ -12,24 +13,38 @@ type RectanglePreview struct {
 	Stroke    string `json:"stroke"`
 }
 
-func solidShapeColor(parent *node) string {
-	color := singlePayload(parent)
-	if color == nil || color.name.Space != drawingNS || color.name.Local != "srgbClr" || len(color.children) != 0 {
-		return ""
-	}
-	rgb := attribute(color, "", "val")
+type RectangleColorEdit struct {
+	Fill   string `json:"fill" jsonschema:"Six hexadecimal RGB digits for the solid fill, without a hash prefix"`
+	Stroke string `json:"stroke" jsonschema:"Six hexadecimal RGB digits for the solid outline, without a hash prefix"`
+}
+
+type inlineRectangleInfo struct {
+	RectanglePreview
+	fillNode, strokeNode *node
+}
+
+func validRectangleColor(rgb string) bool {
 	if len(rgb) != 6 {
-		return ""
+		return false
 	}
 	for _, digit := range rgb {
 		if !(digit >= '0' && digit <= '9' || digit >= 'a' && digit <= 'f' || digit >= 'A' && digit <= 'F') {
-			return ""
+			return false
 		}
 	}
-	return rgb
+	return true
 }
 
-func previewInlineRectangle(inline, graphic *node) *RectanglePreview {
+func solidShapeColor(parent *node) *node {
+	color := singlePayload(parent)
+	if color == nil || color.name.Space != drawingNS || color.name.Local != "srgbClr" || len(color.children) != 0 ||
+		!validRectangleColor(attribute(color, "", "val")) {
+		return nil
+	}
+	return color
+}
+
+func inspectInlineRectangle(inline, graphic *node) *inlineRectangleInfo {
 	if inline == nil || inline.name.Local != "inline" {
 		return nil
 	}
@@ -71,10 +86,43 @@ func previewInlineRectangle(inline, graphic *node) *RectanglePreview {
 		return nil
 	}
 	stroke := solidShapeColor(lineFill)
-	if fill == "" || stroke == "" {
+	if fill == nil || stroke == nil {
 		return nil
 	}
-	return &RectanglePreview{WidthEMU: *width, HeightEMU: *height, Fill: fill, Stroke: stroke}
+	return &inlineRectangleInfo{
+		RectanglePreview: RectanglePreview{WidthEMU: *width, HeightEMU: *height, Fill: attribute(fill, "", "val"), Stroke: attribute(stroke, "", "val")},
+		fillNode:         fill, strokeNode: stroke,
+	}
+}
+
+func editInlineRectangleColors(data []byte, t target, edit RectangleColorEdit) ([]replacement, error) {
+	if !validRectangleColor(edit.Fill) || !validRectangleColor(edit.Stroke) {
+		return nil, fmt.Errorf("DOCX rectangle colors require six hexadecimal digits")
+	}
+	inline := childNS(t.run.child("drawing"), drawingWordNS, "inline")
+	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+	info := inspectInlineRectangle(inline, graphic)
+	if info == nil {
+		return nil, fmt.Errorf("unsupported DOCX rectangle")
+	}
+	var replacements []replacement
+	for _, color := range []struct {
+		node     *node
+		old, rgb string
+	}{{info.fillNode, info.Fill, edit.Fill}, {info.strokeNode, info.Stroke, edit.Stroke}} {
+		if strings.EqualFold(color.old, color.rgb) {
+			continue
+		}
+		raw, err := patchScalarProperty(color.node, data, "srgbClr", "", map[string]string{"val": strings.ToUpper(color.rgb)}, nil)
+		if err != nil {
+			return nil, err
+		}
+		replacements = append(replacements, replacement{color.node.start, color.node.end, []byte(raw)})
+	}
+	if len(replacements) == 0 {
+		return nil, fmt.Errorf("DOCX rectangle colors are unchanged")
+	}
+	return replacements, nil
 }
 
 func inlineRectangle(id uint32) string {

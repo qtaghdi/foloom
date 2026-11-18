@@ -149,7 +149,9 @@ func objectPreview(n *node) *ObjectInfo {
 		}
 		out := &ObjectInfo{Kind: "shape"}
 		if attribute(graphic, "", "uri") == shapeWordNS {
-			out.Rectangle = previewInlineRectangle(container, graphic)
+			if rectangle := inspectInlineRectangle(container, graphic); rectangle != nil {
+				out.Rectangle = &rectangle.RectanglePreview
+			}
 		}
 		return out
 	case pictureNS:

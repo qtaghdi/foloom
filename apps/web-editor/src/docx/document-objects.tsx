@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
-import type { InsertRectangleOperation, MathOperation, Paragraph, Run, Snapshot } from './contracts';
+import type { RectangleOperation, MathOperation, Paragraph, Run, Snapshot } from './contracts';
 
 const labels:Record<NonNullable<Run['object']>['kind'],string> = {
   math:'수식',shape:'도형',textbox:'텍스트 상자',chart:'차트',smartart:'SmartArt',
@@ -34,19 +34,53 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
 }
 
 export function DocumentShapeToolbar(props:{
-  target?:Paragraph;pending:boolean;disabled:boolean;onApply:(operation:InsertRectangleOperation)=>boolean;
+  snapshot?:Snapshot;target?:Paragraph;pending:boolean;disabled:boolean;onApply:(operation:RectangleOperation)=>boolean;
 }) {
-  const [error,setError]=createSignal('');
+  const [id,setID]=createSignal(''),[error,setError]=createSignal('');
+  const rectangles=createMemo(()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ?block.paragraph.runs.filter(run=>run.object?.editable&&run.object.rectangle):[]).slice(0,200)??[]);
+  const selected=()=>rectangles().find(run=>run.id===id())??rectangles()[0];
+  const disabled=()=>props.disabled||props.pending;
   return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
     <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">도형</summary>
     <div class="flex min-w-0 flex-wrap items-center gap-2 pb-2">
-      <button type="button" class={buttonClass} disabled={props.disabled||props.pending||!props.target?.structureEditable}
+      <button type="button" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}
         onClick={()=>{
           const target=props.target;
           if(!target?.structureEditable)return;
           const accepted=props.onApply({type:'insert_rectangle',targetId:target.id});
           setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
         }}>인라인 사각형 삽입</button>
+      <Show when={rectangles().length}>
+        <select aria-label="편집할 사각형" class="editor-select min-h-11" value={selected()?.id??''}
+          disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setError('');}}>
+          <For each={rectangles()}>{(run,index)=><option value={run.id}>사각형 {index()+1}</option>}</For>
+        </select>
+        <Show when={selected()} keyed>{run=>
+          <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+            event.preventDefault();
+            if(disabled())return;
+            const rectangle=run.object?.rectangle;
+            if(!rectangle)return;
+            const inputs=event.currentTarget.elements;
+            const readColor=(name:string)=>(inputs.namedItem(name) as HTMLInputElement).value.slice(1).toUpperCase();
+            const fill=readColor('fill'),stroke=readColor('stroke');
+            if(fill===rectangle.fill.toUpperCase()&&stroke===rectangle.stroke.toUpperCase())return;
+            const accepted=props.onApply({type:'update_rectangle_colors',targetId:run.id,rectangleColors:{fill,stroke}});
+            setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+          }}>
+            <label class="flex flex-col gap-1">채우기 색
+              <input name="fill" type="color" value={`#${run.object!.rectangle!.fill}`} disabled={disabled()}
+                class="min-h-11 w-14 rounded border border-slate-300"/>
+            </label>
+            <label class="flex flex-col gap-1">테두리 색
+              <input name="stroke" type="color" value={`#${run.object!.rectangle!.stroke}`} disabled={disabled()}
+                class="min-h-11 w-14 rounded border border-slate-300"/>
+            </label>
+            <button type="submit" class={buttonClass} disabled={disabled()}>사각형 색 적용</button>
+          </form>
+        }</Show>
+      </Show>
       <Show when={props.pending}><p class="basis-full text-slate-600">저장하거나 실행 취소하세요.</p></Show>
       <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
     </div>
