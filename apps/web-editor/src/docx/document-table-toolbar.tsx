@@ -36,6 +36,8 @@ export function DocumentTableToolbar(props: {
   const selected = createMemo(()=>tables().find(table=>table.id===tableId())??tables()[0]);
   const dimension = () => (action().endsWith('_row') || action()==='set_row_height') ? selected()?.rows.length??0 : selected()?.rows[0]?.cells.length??0;
   const disabled = () => props.disabled||props.pending;
+  const protectsFigureOrder = () => selected()?.tableFigureOrderProtected &&
+    (action()==='delete'||action().startsWith('delete_')||action().startsWith('move_'));
   const valid = (number:number, max:number) => Number.isInteger(number)&&number>=1&&number<=max;
   const apply = () => {
     const kind = action();
@@ -48,7 +50,7 @@ export function DocumentTableToolbar(props: {
       operation = {type:'update_table',targetId:props.insertAfter.id,table:{action:kind,rows:rows(),columns:columns()}};
     } else {
       const table = selected();
-      if (!table?.tableEditable) return;
+      if (!table?.tableEditable || protectsFigureOrder()) return;
       const edit:TableOperation['table'] = {action:kind};
       if (kind!=='delete') {
         if (!valid(position(),dimension()+Number(kind.startsWith('add_')))) {
@@ -107,7 +109,7 @@ export function DocumentTableToolbar(props: {
         {field('새 표의 행 수',rows,setRows,()=>100)}
         {field('새 표의 열 수',columns,setColumns,()=>50)}
       </Show>
-      <button type="button" class={buttonClass} disabled={disabled()||!(action()==='insert'?props.insertAfter:selected()?.tableEditable)}
+      <button type="button" class={buttonClass} disabled={disabled()||!(action()==='insert'?props.insertAfter:selected()?.tableEditable&&!protectsFigureOrder())}
         onClick={apply}>표 작업 적용</button>
       <Show when={captionTables().length}>
         <form class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2" onSubmit={event=>{
@@ -139,6 +141,7 @@ export function DocumentTableToolbar(props: {
       </Show>
       <p class="basis-full text-slate-600">{props.pending?'표 작업을 저장하거나 실행 취소하세요.':action()==='insert'
         ? `삽입 위치: ${props.insertAfter?.runs.map(run=>run.text).join('').trim().slice(0,80)||'편집 가능한 본문 문단'} 뒤`
+        : protectsFigureOrder()?'그림 번호가 있는 표의 삭제와 순서 변경은 보호됩니다.'
         : action()==='set_row_height' ? '내용이 많으면 행은 지정한 최소 높이보다 커질 수 있습니다. 적용 후 저장으로 확정합니다.' : '삭제는 선택한 표, 행 또는 열의 내용을 포함합니다. 적용 후 저장으로 확정합니다.'}</p>
       <Show when={error()}><p class="basis-full text-red-700" role="alert">{error()}</p></Show>
     </div>

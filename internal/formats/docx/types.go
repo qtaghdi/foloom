@@ -153,6 +153,8 @@ type Row struct {
 }
 
 type Block struct {
+	TableFigureOrderProtected bool `json:"tableFigureOrderProtected,omitempty"`
+
 	TableCaptionInsertable bool       `json:"tableCaptionInsertable,omitempty"`
 	PrependParagraph       bool       `json:"prependParagraph,omitempty"`
 	TableEditable          bool       `json:"tableEditable,omitempty"`

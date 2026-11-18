@@ -934,3 +934,112 @@ func TestDedicatedPictureVerticalOffsetReservesSpaceForCaption(t *testing.T) {
 		t.Fatal("undo did not restore the offset package")
 	}
 }
+
+func TestTableCellPictureCaptionKeepsFigureOrderAndNeighbors(t *testing.T) {
+	ctx := context.Background()
+	const cellNeighbor = `<w:tc><w:p><w:r><w:t>Neighbor cell</w:t></w:r></w:p></w:tc>`
+	const table = `<w:tbl><w:tblGrid><w:gridCol w:w="3900"/><w:gridCol w:w="3000"/></w:tblGrid>` +
+		`<w:tr><w:tc><w:p/></w:tc>` + cellNeighbor + `</w:tr></w:tbl>`
+	s, filename := withDocument(t, bodyXML(table+`<w:p/><w:p><w:r><w:t>Figure reference </w:t></w:r></w:p>`))
+	save := func(snapshot Snapshot, operations ...Operation) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: snapshot.ID, BaseRevision: snapshot.Revision, Operations: operations}, "human")
+	}
+	var pixels bytes.Buffer
+	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	imageEdit := &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pixels.Bytes())}
+	v, err := save(v, Operation{Type: "update_image", TargetID: v.Blocks[0].Rows[0].Cells[0].Paragraphs[0].ID, Image: imageEdit},
+		Operation{Type: "update_image", TargetID: v.Blocks[1].ID, Image: imageEdit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err = save(v, Operation{Type: "insert_picture_caption", TargetID: v.Blocks[1].Paragraph.Runs[0].ID, Text: "Body figure"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err = save(v, Operation{Type: "update_reference", TargetID: v.Blocks[3].ID, Reference: &ReferenceEdit{
+		Action: "insert_figure_ref", FigureID: v.Blocks[1].Paragraph.Runs[0].ID,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	packageBefore := fileBytes(t, filename)
+	figure := func(snapshot Snapshot) Run {
+		return snapshot.Blocks[0].Rows[0].Cells[0].Paragraphs[0].Runs[0]
+	}
+	first := figure(v)
+	if !first.Picture.CaptionEditable || first.Picture.CaptionReference || first.Picture.MoveCaptionUp || first.Picture.MoveCaptionDown {
+		t.Fatal("only cell-caption insertion should be offered", first)
+	}
+	for _, rowProperties := range []string{`<w:trPr><w:trHeight w:val="400" w:hRule="exact"/></w:trPr>`, ""} {
+		xml := bytes.Replace(s.pkg.document, []byte(`<w:tr>`), []byte(`<w:tr>`+rowProperties), 1)
+		if rowProperties == "" {
+			xml = bytes.Replace(xml, []byte(cellNeighbor), []byte(`<w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p/></w:tc>`), 1)
+		}
+		_, targets, _, err := inspect(xml, v.ID, v.Revision)
+		if err != nil || targets[first.ID].pictureCellCaption {
+			t.Fatal("fixed-height or merged layout exposed a cell caption", err)
+		}
+	}
+	add := Operation{Type: "insert_picture_caption", TargetID: first.ID, Text: "Cell figure"}
+	if _, err := save(v, add, Operation{Type: "update_image", TargetID: first.ID, Image: &ImageEdit{Action: "delete"}}); err == nil ||
+		!bytes.Equal(packageBefore, fileBytes(t, filename)) {
+		t.Fatal("combined picture removal and caption insertion changed the package")
+	}
+	pkgWithCaption, err := save(v, add)
+	if err != nil {
+		t.Fatal(err)
+	}
+	captionBytes := fileBytes(t, filename)
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s = reopened
+	v = mustSnapshot(t, reopened)
+	picture := figure(v)
+	firstCell := v.Blocks[0].Rows[0].Cells[0]
+	if len(firstCell.Paragraphs) != 2 || firstCell.Paragraphs[1].Runs[1].Text != "1" ||
+		v.Blocks[2].Paragraph.Runs[1].Text != "2" || v.Blocks[3].Paragraph.Runs[1].Text != "2" ||
+		picture.Picture.Caption != "Cell figure" || picture.Picture.CaptionEditable || picture.Picture.CaptionReference ||
+		!picture.Picture.DeleteProtected || !v.Blocks[0].TableFigureOrderProtected ||
+		!bytes.Contains(s.pkg.document, []byte(cellNeighbor)) {
+		t.Fatal("saved figure order, neighboring cell or capability changed", picture)
+	}
+	if pkgWithCaption.Revision != v.Revision {
+		t.Fatal("reopened caption revision changed")
+	}
+	column, neighbor := 0, 1
+	update := Operation{Type: "edit_picture_caption", TargetID: picture.ID, ExpectedText: "Cell figure", Text: "Updated cell figure"}
+	for _, invalid := range []Operation{
+		{Type: "insert_picture_caption", TargetID: picture.ID, Text: "Duplicate"},
+		{Type: "edit_picture_caption", TargetID: picture.ID, ExpectedText: "Stale", Text: "Updated cell figure"},
+		{Type: "update_table", TargetID: v.Blocks[0].ID, Table: &TableEdit{Action: "delete"}},
+		{Type: "update_table", TargetID: v.Blocks[0].ID, Table: &TableEdit{Action: "move_column", Index: &column, Destination: &neighbor}},
+		{Type: "update_image", TargetID: picture.ID, Image: &ImageEdit{Action: "delete"}},
+	} {
+		if _, err := save(v, invalid); err == nil || !bytes.Equal(captionBytes, fileBytes(t, filename)) {
+			t.Fatal("invalid cell caption or structure operation changed package", invalid.Type)
+		}
+	}
+	beforeEdit := bytes.Clone(s.pkg.document)
+	v, err = save(v, update)
+	if err != nil || !bytes.Equal(s.pkg.document, bytes.Replace(beforeEdit, []byte(". Cell figure"), []byte(". Updated cell figure"), 1)) {
+		t.Fatal("caption edit affected other document content", err)
+	}
+	for _, part := range s.pkg.picturePartMap() {
+		if !bytes.Equal(s.pkg.partData(part, nil), pixels.Bytes()) {
+			t.Fatal("caption changed image bytes")
+		}
+	}
+	historyRestore(t, s, "undo")
+	if !bytes.Equal(captionBytes, fileBytes(t, filename)) {
+		t.Fatal("caption edit undo did not restore exact package")
+	}
+	historyRestore(t, s, "undo")
+	if !bytes.Equal(packageBefore, fileBytes(t, filename)) {
+		t.Fatal("caption insertion undo did not restore exact package")
+	}
+}
