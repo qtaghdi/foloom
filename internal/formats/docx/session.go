@@ -170,9 +170,13 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
 	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
 	var parity *bool
+	var defaultTabStop *int
 	if settingsErr == nil {
 		value := headerParity(settings)
 		parity = &value
+		if sectionChildCount(settings, "defaultTabStop") == 1 {
+			defaultTabStop = previewNumber(attribute(settings.child("defaultTabStop"), wordNS, "val"), 1, 32767)
+		}
 	}
 	for index, target := range targets {
 		target.info.Gutter = sectionGutter(target.props, fixedLeft)
@@ -195,7 +199,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			}
 		}
 	}
-	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, DefaultTabStop: defaultTabStop, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {

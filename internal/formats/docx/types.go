@@ -173,6 +173,7 @@ type Snapshot struct {
 	TrackedChanges    bool            `json:"trackedChanges,omitempty"`
 	Bookmarks         []BookmarkInfo  `json:"bookmarks,omitempty"`
 	EvenAndOddHeaders *bool           `json:"evenAndOddHeaders,omitempty"`
+	DefaultTabStop    *int            `json:"defaultTabStop,omitempty"`
 	Sections          []SectionInfo   `json:"sections"`
 	Styles            []StyleInfo     `json:"styles"`
 	History           HistoryState    `json:"history"`

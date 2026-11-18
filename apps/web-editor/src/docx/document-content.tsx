@@ -43,7 +43,7 @@ export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPage
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
   let frame=0;
-  const scheduleTabs=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{if(editor&&!editor.matches(':active'))layoutTabCharacters(editor);});};
+  const scheduleTabs=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{if(editor&&!editor.matches(':active'))layoutTabCharacters(editor, props.snapshot.defaultTabStop);});};
   createEffect(()=>{props.snapshot;queueMicrotask(scheduleTabs);});
   onMount(()=>{if(typeof ResizeObserver==='undefined')return;const observer=new ResizeObserver(scheduleTabs);observer.observe(editor);onCleanup(()=>observer.disconnect());});
   onCleanup(()=>cancelAnimationFrame(frame));
