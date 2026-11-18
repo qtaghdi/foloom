@@ -55,6 +55,7 @@ type PageLayout struct {
 }
 
 type ListDefinition struct {
+	Compound bool   `json:"compound,omitempty" jsonschema:"For a fresh numbered list, include the parent counter at each deeper level. Omit for bullets and restarts"`
 	Key      string `json:"key" jsonschema:"Batch-local reference key for new list paragraphs"`
 	Kind     string `json:"kind,omitempty" jsonschema:"For a fresh definition: bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter"`
 	SourceID int    `json:"sourceId,omitempty" jsonschema:"Existing list instance ID to restart. Omit kind"`
@@ -268,9 +269,10 @@ type InitialBlock struct {
 }
 
 type Event struct {
-	TextOnly bool   `json:"textOnly,omitempty"`
-	Sequence uint64 `json:"sequence"`
-	Revision uint64 `json:"revision"`
-	Actor    string `json:"actor"`
-	Type     string `json:"type"`
+	HistoryDirection string `json:"historyDirection,omitempty"`
+	TextOnly         bool   `json:"textOnly,omitempty"`
+	Sequence         uint64 `json:"sequence"`
+	Revision         uint64 `json:"revision"`
+	Actor            string `json:"actor"`
+	Type             string `json:"type"`
 }

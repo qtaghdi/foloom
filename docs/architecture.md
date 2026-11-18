@@ -90,7 +90,9 @@ DOCX는 `create_docx`, `open_docx`, `get_docx`, `apply_docx_operations`,
 `restore_docx_history` 전용 도구, `/api/docx`, `/api/docx/operations`,
 `/api/docx/history`, `/api/docx/events`, `/docx` 브라우저를
 사용합니다. DOCX event는 별도 bounded replay와 sequence·revision을 가지며
-SSE 전송은 1초 간격으로 새로운 commit을 확인합니다. 문서 교체나 gap은 reload를
+SSE 전송은 1초 간격으로 새로운 commit을 확인합니다. 확정 이력 복원 event는
+선택적인 `historyDirection` 필드에 `undo` 또는 `redo`를 담습니다.
+문서 교체나 gap은 reload를
 요청하고 local draft가 있으면 복구 전 저장을 차단합니다.
 
 다른 형식은 공통 계약이 증명되기 전까지 형식별 typed 도구를 가질 수 있습니다.

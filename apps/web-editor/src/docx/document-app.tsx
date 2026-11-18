@@ -233,14 +233,17 @@ export function DocumentApp() {
     const runId = formattingSelection()?.focus.runId??focusedRun()?.id;
     return paragraphs.find(paragraph=>paragraph.runs.some(run=>run.id===runId))??paragraphs.at(-1);
   };
-  const controller = new DocumentController({ ...view, recovery: setRecovery, render: (snapshot, focus) => {
+  const controller = new DocumentController({ ...view, recovery: setRecovery, render: (snapshot, focus, preserveRemoteSelection) => {
     setStructuralDraft(controller.hasStructuralDraft() || (Boolean(focus) && controller.hasDrafts()));
     if(focus)setFormattingSelection(focus.selection??{anchor:{runId:focus.runId,offset:focus.start},focus:{runId:focus.runId,offset:focus.end}});
     const article = document.getElementById('document-content');
     const active = document.activeElement;
     const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
     const previousSnapshot = state().snapshot;
-    const richSelection = previousEditor && (readTextSelection(previousEditor) ?? (state().snapshot?.id===snapshot.id ? formattingSelection() : undefined));
+    const currentSelection = previousEditor && readTextSelection(previousEditor);
+    const richSelection = preserveRemoteSelection
+      ? active === previousEditor ? currentSelection : undefined
+      : currentSelection ?? (previousSnapshot?.id === snapshot.id ? formattingSelection() : undefined);
     const previousRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
     const fields = [...article?.querySelectorAll('textarea') ?? []];
     const previousField = active instanceof HTMLTextAreaElement ? active
@@ -260,7 +263,7 @@ export function DocumentApp() {
           if (editor) restoreTextSelection(editor, focus.selection ?? { anchor: { runId: focus.runId, offset: focus.start }, focus: { runId: focus.runId, offset: focus.end } });
         }
       });
-    } else if (richSelection && restoringSave) {
+    } else if (richSelection && (restoringSave || preserveRemoteSelection)) {
       queueMicrotask(() => {
         const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
         const currentRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
@@ -269,6 +272,7 @@ export function DocumentApp() {
             const anchored = restoreAnchoredPoint(previousSnapshot,snapshot,point);
             if (anchored !== undefined) return anchored;
           }
+          if (preserveRemoteSelection) return undefined;
           const index = previousRuns.findIndex(run => run.dataset.docxRun === point.runId);
           const run = index >= 0 ? currentRuns[Math.min(index, currentRuns.length - 1)] : undefined;
           return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
