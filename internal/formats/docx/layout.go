@@ -139,6 +139,7 @@ func applyParagraphPreview(layout *ParagraphLayout, props *node) {
 }
 
 func applyRunPreview(run *Run, props *node) {
+	previewProofingLanguages(run, props.child("lang"))
 	if n := props.child("u"); n != nil {
 		run.Underline = n.attr("val") != "none"
 	}

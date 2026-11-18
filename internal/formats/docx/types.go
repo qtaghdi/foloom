@@ -20,6 +20,8 @@ const (
 )
 
 type Run struct {
+	ProofingLang     string       `json:"proofingLanguage,omitempty"`
+	EastAsiaLang     string       `json:"eastAsiaProofingLanguage,omitempty"`
 	Trackable        bool         `json:"trackable,omitempty"`
 	Object           *ObjectInfo  `json:"object,omitempty"`
 	Link             *LinkInfo    `json:"link,omitempty"`
@@ -181,6 +183,8 @@ type ParagraphContent struct {
 // InlineStyle contains explicit, bounded clipboard formatting overrides. Source
 // run properties not named here remain unchanged.
 type InlineStyle struct {
+	ProofingLang   string  `json:"proofingLanguage,omitempty" jsonschema:"BCP 47 tag for Latin-script spelling and grammar"`
+	EastAsiaLang   string  `json:"eastAsiaProofingLanguage,omitempty" jsonschema:"BCP 47 tag for East Asian spelling and grammar"`
 	StyleID        *string `json:"styleId,omitempty"`
 	Reset          bool    `json:"reset,omitempty"`
 	Underline      *bool   `json:"underline,omitempty"`

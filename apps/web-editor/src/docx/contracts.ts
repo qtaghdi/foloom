@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-const baseStyleSchema = z.object({styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
+const proofingLanguageSchema = z.string().min(1).max(35).regex(/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/).optional();
+const baseStyleSchema = z.object({proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
 const bookmarkName=z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
 const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.string().max(1027)});
 
@@ -8,6 +9,7 @@ export const cropInset=z.number().int().min(0).max(99000);
 const cropSchema=z.object({left:cropInset,top:cropInset,right:cropInset,bottom:cropInset})
   .refine(crop=>crop.left+crop.right<=99000&&crop.top+crop.bottom<=99000);
 const runSchema = z.object({
+  proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,
   object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional()})]).optional(),
@@ -86,7 +88,7 @@ export type TextOperation = {
 
 export type StyleInfo=z.infer<typeof styleInfoSchema>;
 export type StyleDefinition={id:string;name?:string;kind:'paragraph'|'character';basedOn?:string;run?:InlineStyle;paragraph?:ParagraphFormat};
-export type InlineStyle = {styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; sizeHalfPoints?: number };
+export type InlineStyle = {proofingLanguage?:string; eastAsiaProofingLanguage?:string; styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; sizeHalfPoints?: number };
 export type ParagraphFormat = z.infer<typeof paragraphFormatSchema>;
 export type ParagraphOperation = {
  type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';

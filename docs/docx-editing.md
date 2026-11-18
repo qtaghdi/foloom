@@ -407,6 +407,16 @@ Word가 서로 다른 대체 글꼴로 표시할 수 있습니다. 브라우저�
 미리 보기는 단일 밑줄·취소선·일부 강조색·첨자 위치를 표현하며 Word의 정밀
 조판이나 복합 밑줄 모양까지 일치한다고 주장하지 않습니다.
 
+**서식**의 **맞춤법 검사 언어**에서 선택한 글자의 라틴 문자와 동아시아 문자에
+사용할 언어 태그를 지정할 수 있습니다. 예를 들어 `en-GB` 또는 `ko-KR`를
+입력합니다. 지정한 영역의 기존 글꼴, 복합 문자 언어, 선택 밖 언어가 유지됩니다.
+선택한 run이 언어를 스타일에서 상속받았다면 처음 직접 지정할 때 나머지 문자권의
+기존 언어도 해당 run에 함께 기록합니다. 직접 서식을 지워도 언어는 유지됩니다.
+HTTP·MCP는 `replace_paragraphs`의
+run 서식에 `proofingLanguage` 또는 `eastAsiaProofingLanguage`를 보냅니다.
+맞춤법 검사는 문서를 연 Word의 교정 언어 사전을 사용합니다.
+[Word run의 언어 속성](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.languages?view=openxml-3.0.1)을 따릅니다.
+
 ### 문단 서식
 
 문단 도구는 커서가 있는 문단 또는 선택이 닿은 문단에 적용합니다. 선택 끝이
