@@ -114,7 +114,7 @@ func structuralParagraphContents(p *node, data []byte, allowBookmarks bool, igno
 	return true
 }
 
-func paragraphReplacement(data []byte, targets map[string]target, op Operation) (replacement, error) {
+func paragraphReplacement(data []byte, targets map[string]target, op Operation, styles previewStyles) (replacement, error) {
 	fail := func(message string) (replacement, error) {
 		return replacement{}, fmt.Errorf("DOCX paragraph plan: %s", message)
 	}
@@ -186,9 +186,13 @@ func paragraphReplacement(data []byte, targets map[string]target, op Operation) 
 			if err := validateInlineStyle(run.Style); err != nil {
 				return fail(err.Error())
 			}
+			var inheritedLang *node
+			if run.Style != nil && (run.Style.ProofingLang != "" || run.Style.EastAsiaLang != "") && target.run.child("rPr").child("lang") == nil {
+				inheritedLang = styles.inheritedProofingLanguages(target)
+			}
 			var runXML string
 			if target.run == nil {
-				props, err := inlineProperties(nil, data, run.Style)
+				props, err := inlineProperties(nil, data, run.Style, inheritedLang)
 				if err != nil {
 					return fail(err.Error())
 				}
@@ -198,7 +202,7 @@ func paragraphReplacement(data []byte, targets map[string]target, op Operation) 
 				runXML = opening + string(data[target.run.inner:target.run.endStart]) + closing
 			} else {
 				opening, closing := scopedOpening(target.run, data, false)
-				props, err := inlineProperties(target.run.child("rPr"), data, run.Style)
+				props, err := inlineProperties(target.run.child("rPr"), data, run.Style, inheritedLang)
 				if err != nil {
 					return fail(err.Error())
 				}
