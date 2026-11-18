@@ -25,7 +25,7 @@ const snapshot = { id: 'docx-session', name: 'test.docx', revision: 1, sequence:
   ] } }], warnings: [] };
 const edit = { type: 'replace_run_text', targetId: 'r1', expectedText: 'old', text: 'draft' };
 function fixture() {
-  const state = { writes: [], statuses: [], renders: [], errors: [], enabled: [], events: [] };
+  const state = { writes: [], statuses: [], renders: [], focuses: [], errors: [], enabled: [], events: [] };
   let handler = async (_url, init) => {
     if (_url.startsWith('/api/save')) return { ok: true, json: async () => ({ id: snapshot.id, revision: snapshot.revision, name: snapshot.name }) };
     if (init?.method === 'POST') state.writes.push(JSON.parse(init.body));
@@ -40,7 +40,7 @@ function fixture() {
     fetch: (...args) => handler(...args), EventSource, URLSearchParams,
   });
   const controller = new DocumentController({
-    render: (s) => state.renders.push(s), status: (...args) => state.statuses.push(args),
+    render: (s, focus) => { state.renders.push(s); state.focuses.push(focus); }, status: (...args) => state.statuses.push(args),
     error: (e) => state.errors.push(e), canSave: (v) => state.enabled.push(v),
   });
   return { state, controller, fetch: (next) => { handler = next; } };
@@ -293,4 +293,27 @@ test('continuous typing in a long document captures one undo state per group', a
   assert.equal(captures, 1);
   assert.equal(await f.controller.restore('undo'), true);
   assert.equal(f.state.renders.at(-1).blocks.at(-1).paragraph.runs[0].text, '원본');
+});
+
+test('DOCX focuses the empty leading paragraph only after the table operation commits', async () => {
+  const f = fixture();
+  const table = { id: 'table', type: 'table', tableEditable: false, prependParagraph: true, rows: [] };
+  const newParagraph = { ...snapshot.blocks[0], id: 'paragraph-2', paragraph: {
+    id: 'paragraph-2', structureEditable: true,
+    runs: [{ ...snapshot.blocks[0].paragraph.runs[0], id: 'run-2', text: '' }],
+  } };
+  f.fetch(async (_url, init) => ({
+    ok: true,
+    json: async () => init?.method === 'POST'
+      ? { ...snapshot, revision: 2, blocks: [newParagraph, { ...table, prependParagraph: false }] }
+      : { ...snapshot, blocks: [table] },
+  }));
+  await f.controller.load();
+  assert.equal(f.controller.editTable({ type: 'update_table', targetId: table.id, table: { action: 'insert_body_paragraph_before' } }), true);
+  assert.equal(f.state.focuses.at(-1), undefined);
+  assert.equal(await f.controller.save(), true);
+  const focus = f.state.focuses.at(-1);
+  assert.equal(focus.runId, 'run-2');
+  assert.equal(focus.start, 0);
+  assert.equal(focus.end, 0);
 });

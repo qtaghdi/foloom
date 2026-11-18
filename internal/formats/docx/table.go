@@ -14,7 +14,7 @@ const maxTableRowHeight = 31680
 
 type TableEdit struct {
 	Height      *int   `json:"height,omitempty" jsonschema:"Minimum row height in twips, from 20 to 31680"`
-	Action      string `json:"action" jsonschema:"insert, delete, add_row, delete_row, move_row, add_column, delete_column, move_column, or set_row_height"`
+	Action      string `json:"action" jsonschema:"insert, delete, add_row, delete_row, move_row, add_column, delete_column, move_column, set_row_height, or insert_body_paragraph_before"`
 	Rows        int    `json:"rows,omitempty"`
 	Columns     int    `json:"columns,omitempty"`
 	Index       *int   `json:"index,omitempty" jsonschema:"Zero-based row or column index"`
@@ -101,10 +101,26 @@ func newTableRow(columns int) string {
 	return `<dwt:tr xmlns:dwt="` + wordNS + `">` + strings.Repeat(newTableCell, columns) + `</dwt:tr>`
 }
 
+func leadingBodyTable(n *node) bool {
+	return n != nil && n.is("tbl") && n.parent != nil && n.parent.is("body") &&
+		len(n.parent.children) != 0 && n.parent.children[0] == n &&
+		tableChildCount(n, "tblGrid") == 1 && n.child("tblGrid").child("gridCol") != nil && n.child("tr") != nil
+}
+
 func tableReplacement(data []byte, target target, op TableEdit) (replacement, error) {
 	if op.Action != "set_row_height" && op.Height != nil {
 		return replacement{}, fmt.Errorf("unexpected DOCX row height")
 	}
+	if op.Action == "insert_body_paragraph_before" {
+		table := target.node
+		if !leadingBodyTable(table) || op.Rows != 0 || op.Columns != 0 || op.Index != nil || op.Destination != nil {
+			return replacement{}, fmt.Errorf("DOCX body paragraph insertion requires the leading table")
+		}
+		// Inserting outside the first table does not interpret or reconstruct its XML.
+		raw := `<dwt:p xmlns:dwt="` + wordNS + `"/>`
+		return replacement{table.start, table.start, []byte(raw)}, nil
+	}
+
 	if op.Action == "insert" {
 		p := target.paragraph
 		if target.kind != "replace_paragraphs" || p == nil || !p.parent.is("body") ||

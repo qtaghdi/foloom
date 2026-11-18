@@ -455,8 +455,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		case child.is("tbl"):
 			block := Block{ID: id(), Type: "table", Rows: []Row{}}
 			_, block.TableEditable = simpleTable(child)
+			block.PrependParagraph = leadingBodyTable(child)
 			if block.TableEditable {
 				targets[block.ID] = target{node: child, kind: "update_table"}
+			} else if block.PrependParagraph {
+				targets[block.ID] = target{node: child, kind: "leading_body_table"}
 			}
 			// Merged, nested or revision-marked tables are inspection-only.
 			allowed := true
