@@ -954,6 +954,13 @@ HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url
 HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", bookmark }`를
 받습니다. 복합 필드와 다른 story의 참조는 보호합니다.
 
+`기존 링크`에서 일반 본문의 내부 링크를 고르고 `새 대상 북마크`를 선택한 뒤
+`북마크 대상 변경 적용`을 누르고 저장합니다. 링크 문구와 서식, 다른 링크와
+기존 관계는 유지됩니다. HTTP·MCP는 링크 run ID에
+`reference: { action: "set_link_bookmark", bookmark }`를 적용합니다.
+중복되거나 쌍이 끊어진 북마크와 보호된 링크는 대상 변경에서 제외합니다.
+[Word 내부 링크의 북마크 앵커](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/54a4ddbd-7262-47f3-8c94-56d2a7fd5e55)를 사용합니다.
+
 기존 링크에서 `링크 해제`를 적용하고 저장하면 표시된 글과 서식은 유지되고
 클릭 동작만 사라집니다. HTTP·MCP는 링크 run ID에 `reference: { action: "unlink" }`를
 사용합니다. 복잡한 구조는 보호하고 공유 관계는 남겨 둡니다.

@@ -159,6 +159,7 @@ func escapeText(s string) string {
 }
 
 type target struct {
+	linkAnchorEditable bool
 	pictureAlign       string
 	alignmentTrackable bool
 	trackable          bool
@@ -344,7 +345,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					}
 				}
 				if r.is("hyperlink") {
-					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
+					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink", linkAnchorEditable: allowed && p.parent == body &&
+						attribute(r, officeRelNS, "id") == "" && strings.TrimSpace(run.Text) != "" && allowPlainHyperlink(r, plainHyperlinkRun)}
 				} else if _, name := bookmarkFieldTarget(r); name != "" {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
 				} else if run.Object != nil && run.Object.Kind == "date_field" && !protected[p] && dateFieldCache(r, root.source) != nil {
