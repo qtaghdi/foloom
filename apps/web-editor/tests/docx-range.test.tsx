@@ -70,3 +70,21 @@ it('formats touched paragraphs without including a selection ending at the next 
  draft.formatParagraph(selection('p1:0',0),{hanging:120});
  expect(draft.operations()[0]!.paragraphs[0]!.format).toEqual({align:'center',hanging:120});
 });
+
+it('keeps East Asian font overrides separate and lets a later all-script choice replace them',()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
+  {id:'r',text:'Latin 한글',editable:true,bold:false,italic:false,font:'Latin',eastAsiaFont:'원본',baseStyle:{eastAsiaFont:'상속'}},
+ ]}}]};
+ const draft=new StructureDraft(initial);
+ const east=draft.format(selection('r',6,'r',8),{eastAsiaFont:'새 글꼴'});
+ expect(east?.selection).toBeDefined();
+ expect(draft.selectedRuns(east!.selection!)[0]).toMatchObject({font:'Latin',eastAsiaFont:'새 글꼴'});
+ expect(draft.operations()[0]!.paragraphs[0]!.runs.map(r=>[r.text,r.style])).toEqual([
+  ['Latin ',undefined],['한글',{eastAsiaFont:'새 글꼴'}],
+ ]);
+ const all=draft.format(east!.selection!,{font:'All scripts'});
+ expect(draft.selectedRuns(all!.selection!)[0]).toMatchObject({font:'All scripts',eastAsiaFont:'All scripts'});
+ expect(draft.operations()[0]!.paragraphs[0]!.runs[1]!.style).toEqual({font:'All scripts'});
+ const reset=draft.format(all!.selection!,{reset:true});
+ expect(draft.selectedRuns(reset!.selection!)[0]!.eastAsiaFont).toBe('상속');
+});
