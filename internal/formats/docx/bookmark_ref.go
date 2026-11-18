@@ -133,7 +133,7 @@ func refreshBookmarkReference(data []byte, t target, bookmarks *bookmarkIndex) (
 	if start == nil {
 		return nil, fmt.Errorf("DOCX bookmark field target does not exist")
 	}
-	value := bookmarkedPlainText(bookmarks, start)
+	value := displayedBookmarkText(bookmarks, start, data)
 	if value == "" {
 		return nil, fmt.Errorf("DOCX bookmark field requires a plain text range")
 	}

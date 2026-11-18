@@ -1,3 +1,4 @@
+import { splitRunFonts } from './run-fonts';
 import { previewLists } from './lists';
 import type { Snapshot, Paragraph, Run, ParagraphOperation, DraftFocus, StructureAction, InlineStyle, ParagraphFormat, ListDefinition } from './contracts';
 import type { ClipboardParagraph } from './clipboard';
@@ -295,7 +296,14 @@ export class StructureDraft {
     const result:ClipboardParagraph[]=[];let previous:string|undefined;
     for (const [index,{paragraph,run}] of range.runs.entries()) {
       if (previous!==paragraph.id) result.push([]);previous=paragraph.id;
-      result.at(-1)!.push({text:run.text.slice(index===0?range.start.offset:0,index===range.runs.length-1?range.end.offset:undefined),style:{bold:run.bold,italic:run.italic,underline:Boolean(run.underline),strike:Boolean(run.strike),highlight:run.highlight??'none',vertical:run.vertical??'baseline',...run.font?{font:run.font}:{},...run.color?{color:run.color}:{},...run.sizeHalfPoints?{sizeHalfPoints:run.sizeHalfPoints}:{}}});
+      const text = run.text.slice(index === 0 ? range.start.offset : 0, index === range.runs.length - 1 ? range.end.offset : undefined);
+      const style: InlineStyle = {
+        bold: run.bold, italic: run.italic, underline: Boolean(run.underline), strike: Boolean(run.strike),
+        highlight: run.highlight ?? 'none', vertical: run.vertical ?? 'baseline', color: run.color, sizeHalfPoints: run.sizeHalfPoints,
+      };
+      for (const segment of splitRunFonts(run, text)) {
+        result.at(-1)!.push({ text: segment.text, style: { ...style, font: segment.font } });
+      }
     }
     return result;
   }

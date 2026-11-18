@@ -357,6 +357,7 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
+	CaptionReference bool       `json:"captionReference,omitempty"`
 	Placement        string     `json:"placement,omitempty"`
 	Align            string     `json:"align,omitempty"`
 	Caption          string     `json:"caption,omitempty"`
@@ -489,12 +490,14 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 				}
 				info.MoveCaptionUp, info.MoveCaptionDown = source.moveUp != nil, source.moveDown != nil
 				_, info.Caption = editablePictureCaption(source, s.pkg.document)
-				if captionParagraph(source) {
+				insertCaption := captionParagraph(source)
+				if insertCaption || info.Caption != "" {
 					if !captionFieldsChecked {
 						_, err := documentFigureFields(source.paragraph.parent)
 						captionFieldsChecked, captionFieldsValid = true, err == nil
 					}
-					info.CaptionEditable = captionFieldsValid
+					info.CaptionEditable = captionFieldsValid && insertCaption
+					info.CaptionReference = captionFieldsValid && info.Caption != ""
 				}
 				_, info.Rotation, info.RotationEditable = supportedPictureRotation(inline, s.pkg.document)
 				if crop, _, _ := supportedPictureCrop(inline, s.pkg.document); crop != nil {

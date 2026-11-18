@@ -7,14 +7,15 @@ export function TabText(props:{text:string}) {
  return <For each={props.text.split('\t')}>{(part,index)=><>{index()>0?<span data-docx-tab class="inline-block whitespace-pre" style={{'text-indent':'0',color:'transparent'}}>{'\t'}</span>:null}{part}</>}</For>;
 }
 
-export function tabAdvance(current:number,following:number,decimal:number,stops:TabStop[]):{width:number;leader?:string} {
+export function tabAdvance(current:number,following:number,decimal:number,stops:TabStop[],defaultTabStop=720):{width:number;leader?:string} {
  const next=stops.find(stop=>stop.align!=='bar'&&stop.align!=='clear'&&stop.position/15>current+0.5);
- const target=next?next.position/15:(Math.floor((current+0.5)/48)+1)*48;
+ const interval = defaultTabStop / 15;
+ const target = next ? next.position / 15 : (Math.floor((current + 0.5) / interval) + 1) * interval;
  const shift=next?.align==='right'?following:next?.align==='center'?following/2:next?.align==='decimal'?decimal:0;
  return {width:Math.max(0,target-current-shift),leader:next?.leader};
 }
 
-export function layoutTabCharacters(editor:HTMLElement) {
+export function layoutTabCharacters(editor:HTMLElement, defaultTabStop?: number) {
  let budget=1000;
  for(const paragraph of editor.querySelectorAll<HTMLElement>('[data-docx-tab-stops]')) {
   let stops:TabStop[];
@@ -40,7 +41,7 @@ export function layoutTabCharacters(editor:HTMLElement) {
     const offset=(node.textContent??'').search(/[.,]/);
     if(offset>=0){const prefix=range.cloneRange();prefix.setEnd(node,offset);decimal=prefix.getBoundingClientRect().width/scale;break;}
    }
-   const result=tabAdvance(current,following,decimal,stops);
+   const result=tabAdvance(current,following,decimal,stops,defaultTabStop);
    tab.style.width=`${Math.min(result.width,Math.max(0,(box.right-origin)/scale-current))}px`;
    tab.style.borderBottom=result.leader==='dot'||result.leader==='middleDot'?'1px dotted currentColor':result.leader==='hyphen'?'1px dashed currentColor':result.leader==='underscore'?'1px solid currentColor':result.leader==='heavy'?'2px solid currentColor':'';
    tab.style.borderBottomColor='var(--docx-tab-leader, #475569)';

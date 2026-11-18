@@ -13,7 +13,8 @@ import (
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, refresh_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_date_field, refresh_date_field, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, set_link_bookmark, or unlink"`
+	FigureID    string `json:"figureId,omitempty" jsonschema:"Current inline picture run ID for insert_figure_ref"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, refresh_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_figure_ref, insert_toc, update_toc, insert_date_field, refresh_date_field, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, set_link_bookmark, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -21,6 +22,7 @@ type ReferenceEdit struct {
 }
 
 type BookmarkInfo struct {
+	Figure          bool   `json:"figure,omitempty"`
 	NumberReference bool   `json:"numberReference,omitempty"`
 	TextReference   bool   `json:"textReference,omitempty"`
 	Name            string `json:"name"`
@@ -370,19 +372,26 @@ func (p *documentPackage) projectReferences(root *node, blocks []Block, targets 
 				name := attribute(marker, wordNS, "name")
 				key := strings.ToLower(name)
 				names[key] = name
-				text := bookmarkedPlainText(&index, marker)
+				figureNumber := bookmarkedFigureNumber(&index, marker, p.document)
+				figure := figureNumber != nil
+				var text string
+				if figure {
+					text = figureNumber.text.String()
+				} else {
+					text = bookmarkedPlainText(&index, marker)
+				}
 				if text != "" {
 					referenceTexts[key] = text
 				}
 				number := ""
-				if text != "" {
+				if text != "" && !figure {
 					number = numberedBookmarkText(block.Paragraph, numbering)
 				}
 				if number != "" {
 					numberTexts[key] = number
 				}
-				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID,
-					RenameEditable: targets[block.Paragraph.ID].kind == "bookmark_paragraph", TextReference: text != "", NumberReference: number != ""})
+				bookmarks = append(bookmarks, BookmarkInfo{Name: name, ParagraphID: block.Paragraph.ID, Figure: figure,
+					RenameEditable: targets[block.Paragraph.ID].kind == "bookmark_paragraph", TextReference: !figure && text != "", NumberReference: number != ""})
 			}
 		}
 	}
