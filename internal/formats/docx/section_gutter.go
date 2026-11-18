@@ -4,19 +4,31 @@ import "strings"
 
 const maxSectionGutter = 31680
 
-func fixedLeftGutters(settings *node) bool {
-	for _, name := range []string{"mirrorMargins", "gutterAtTop", "bookFoldPrinting", "bookFoldRevPrinting", "printTwoOnOne"} {
+func sectionGutterSide(settings *node) string {
+	for _, name := range []string{"mirrorMargins", "bookFoldPrinting", "bookFoldRevPrinting", "printTwoOnOne"} {
 		if !bindingFlagDisabled(settings, name) {
-			return false
+			return ""
 		}
 	}
-	return true
+	flag := settings.child("gutterAtTop")
+	if bindingFlagDisabled(settings, "gutterAtTop") {
+		return "left"
+	}
+	if sectionChildCount(settings, "gutterAtTop") != 1 || len(flag.children) != 0 || strings.TrimSpace(flag.text.String()) != "" {
+		return ""
+	}
+	switch flag.attr("val") {
+	case "", "1", "true", "on":
+		return "top"
+	default:
+		return ""
+	}
 }
 
 // An absent value in a snapshot protects a gutter whose binding or column
-// layout cannot be projected with the fixed left margin model.
-func sectionGutter(props *node, fixedLeft bool) *int {
-	if !fixedLeft || sectionChildCount(props, "pgMar") > 1 || sectionChildCount(props, "cols") > 1 {
+// layout cannot be projected with the fixed left or top margin model.
+func sectionGutter(props *node, supported bool) *int {
+	if !supported || sectionChildCount(props, "pgMar") > 1 || sectionChildCount(props, "cols") > 1 {
 		return nil
 	}
 	for _, name := range []string{"rtlGutter", "bidi"} {

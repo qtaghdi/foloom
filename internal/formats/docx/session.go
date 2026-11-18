@@ -169,7 +169,10 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID, settings, settingsErr == nil && len(targets) == 1)
 		}
 	}
-	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
+	gutterSide := ""
+	if settingsErr == nil {
+		gutterSide = sectionGutterSide(settings)
+	}
 	var parity *bool
 	var defaultTabStop *int
 	if settingsErr == nil {
@@ -180,7 +183,8 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 		}
 	}
 	for index, target := range targets {
-		target.info.Gutter = sectionGutter(target.props, fixedLeft)
+		target.info.Gutter = sectionGutter(target.props, gutterSide != "")
+		target.info.GutterAtTop = target.info.Gutter != nil && gutterSide == "top"
 		target.info.HeaderFooters = headers[index]
 		if n := target.props.child("titlePg"); n != nil {
 			target.info.FirstPage = onOff(n.attr("val"), true)

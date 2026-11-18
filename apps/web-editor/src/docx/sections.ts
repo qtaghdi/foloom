@@ -20,14 +20,22 @@ export function previewSection(original:SectionInfo,format:SectionFormat):Sectio
 }
 export function sectionPaper(section:SectionInfo):SectionInfo['page'] {
  const page=section.page;
+ if(section.gutterAtTop) return {...page,top:page.top+topBindingSpace(section)};
  const safeGutter=Math.min(section.gutter??0,Math.max(0,page.width-page.left-page.right-1200));
  return safeGutter?{...page,left:page.left+safeGutter}:page;
 }
 
+export function topBindingSpace(section:SectionInfo):number {
+ const {page}=section;
+ return section.gutterAtTop ? Math.min(section.gutter??0,Math.max(0,page.height-page.top-page.bottom-1200)) : 0;
+}
+
 export function validateSection(section:SectionInfo):string {
  const {page,columns,columnSpace}=section;
- const bodyWidth=page.width-page.left-page.right-(section.gutter??0);
- if(bodyWidth<1200||page.height-page.top-page.bottom<1200)return '여백을 줄여 본문 영역을 확보하세요.';
+ const gutter=section.gutter??0;
+ const bodyWidth=page.width-page.left-page.right-(section.gutterAtTop?0:gutter);
+ const bodyHeight=page.height-page.top-page.bottom-(section.gutterAtTop?gutter:0);
+ if(bodyWidth<1200||bodyHeight<1200)return '여백을 줄여 본문 영역을 확보하세요.';
  if(bodyWidth-(columns-1)*columnSpace<columns*240)return '단 수나 간격을 줄여 본문 폭을 확보하세요.';
  return '';
 }
