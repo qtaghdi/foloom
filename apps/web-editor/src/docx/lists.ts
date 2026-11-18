@@ -5,6 +5,15 @@ const romanDigits = [
   [40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I'],
 ] as const;
 
+export function maxListStart(kind?:string):number {
+  switch(kind) {
+    case 'decimal': return 9999;
+    case 'upperLetter': case 'lowerLetter': return 702;
+    case 'upperRoman': case 'lowerRoman': return 3999;
+    default: return 0;
+  }
+}
+
 function formatListNumber(value: number, kind?: string): string | undefined {
   if (kind==='decimal'||kind==='bullet') return String(value);
   if (kind==='upperLetter'||kind==='lowerLetter') {
@@ -28,9 +37,16 @@ export function previewLists(snapshot: Snapshot, drafts: ListDefinition[] = []):
   const catalog = new Map<string, NonNullable<Snapshot['lists']>[number]['levels']>(
     snapshot.lists?.map(info => [String(info.id), info.levels]),
   );
-  for (const d of drafts) catalog.set(d.key, Array.from({length:9}, (_,level)=>({
-    level,kind:d.kind,text:d.kind==='bullet'?['•','◦','▪'][level%3]!:`%${level+1}.`,start:level===0?d.start??1:1,
-  })));
+  for (const d of drafts) {
+    if ('sourceId' in d) {
+      const source=snapshot.lists?.find(list=>list.id===d.sourceId);
+      if (source) catalog.set(d.key,source.levels.map(level=>level.level===(d.level??0)?{...level,start:d.start}:level));
+      continue;
+    }
+    catalog.set(d.key, Array.from({length:9}, (_,level)=>({
+      level,kind:d.kind,text:d.kind==='bullet'?['•','◦','▪'][level%3]!:`%${level+1}.`,start:level===0?d.start??1:1,
+    })));
+  }
   const counters = new Map<string, Array<number | undefined>>();
   const paragraph = (p: Paragraph): Paragraph => {
     const ref = p.list;

@@ -12,12 +12,13 @@ function safeWebAddress(address:string):boolean {
 }
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;links:Run[];notes:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;links:Run[];notes:Run[];toc?:Run;bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
-  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'footnote'|'endnote'>('bookmark');
+  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'footnote'|'endnote'>('bookmark');
   const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
-  const bookmarkChoices=()=>mode()==='reference'?props.bookmarks.filter(item=>item.textReference):props.bookmarks;
+  const crossReference=()=>mode()==='reference'||mode()==='pageReference'||mode()==='numberReference';
+  const bookmarkChoices=()=>crossReference()?props.bookmarks.filter(item=>mode()==='numberReference'?item.numberReference:item.textReference):props.bookmarks;
   const targetBookmark=()=>bookmarkChoices().find(item=>item.name===anchor())?.name??bookmarkChoices()[0]?.name;
   const [linkId,setLinkId]=createSignal('');
   const selectedLink = () => props.links.find(link=>link.id===linkId());
@@ -38,10 +39,14 @@ export function DocumentReferenceToolbar(props:{
       if(!/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(bookmark())){setError('북마크 이름은 영문자로 시작하는 영문자·숫자·밑줄 1~40자를 사용하세요.');return;}
       if(props.bookmarks.some(item=>item.name.toLowerCase()===bookmark().toLowerCase())){setError('같은 이름의 북마크가 있습니다.');return;}
       reference={action:'insert_bookmark',bookmark:bookmark()};
-    }else if(mode()==='reference'){
+    }else if(mode()==='contents'){
+      reference={action:'insert_toc'};
+    }else if(crossReference()){
       const name=targetBookmark();
       if(!name){setError('평문 북마크를 선택하세요.');return;}
-      reference={action:'insert_bookmark_ref',bookmark:name};
+      const action=mode()==='pageReference'?'insert_bookmark_page_ref':
+        mode()==='numberReference'?'insert_bookmark_number_ref':'insert_bookmark_ref';
+      reference={action,bookmark:name};
     }else if(addingNote()){
       if(!text().trim()){setError(`${noteLabel()} 내용을 입력하세요.`);return;}
       reference={action:mode()==='endnote'?'insert_endnote':'insert_footnote',text:text()};
@@ -60,16 +65,17 @@ export function DocumentReferenceToolbar(props:{
     setError(props.onApply({type:'update_reference',targetId:props.target.id,reference})?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
   };
   return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
-    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">링크·북마크·각주·미주</summary>
+    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">링크·북마크·각주·미주·목차</summary>
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="참조 작업" class="editor-select min-h-11" disabled={disabled()} value={mode()}
         onChange={event=>{setMode(event.currentTarget.value as ReturnType<typeof mode>);setError('');}}>
-        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
+        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="pageReference">쪽 번호 상호 참조 삽입</option><option value="numberReference">목록 번호 상호 참조 삽입</option><option value="contents">자동 목차 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
       </select>
+      <Show when={mode()!=='contents'} fallback={<span class="text-slate-600">선택한 문단 앞에 제목 1~3 수준의 목차를 넣습니다.</span>}>
       <Show when={addingNote()} fallback={<Show when={mode()==='bookmark'} fallback={<>
-        <Show when={mode()!=='reference'}><input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
+        <Show when={!crossReference()}><input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
           disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/></Show>
-        <Show when={mode()==='url'} fallback={<select aria-label={mode()==='reference'?'상호 참조할 북마크':'링크 대상 북마크'} class="editor-select min-h-11" disabled={disabled()}
+        <Show when={mode()==='url'} fallback={<select aria-label={crossReference()?'상호 참조할 북마크':'링크 대상 북마크'} class="editor-select min-h-11" disabled={disabled()}
           value={targetBookmark()??''} onChange={event=>setAnchor(event.currentTarget.value)}>
           <Show when={!bookmarkChoices().length}><option value="">북마크 없음</option></Show>
           <For each={bookmarkChoices()}>{item=><option value={item.name}>{item.name}</option>}</For>
@@ -85,10 +91,17 @@ export function DocumentReferenceToolbar(props:{
           class="min-h-11 rounded border border-slate-300 px-2"
           disabled={disabled()} value={text()} onInput={event=>setText(event.currentTarget.value)}/>
       </Show>
+      </Show>
       <button type="button" class={buttonClass} disabled={disabled()||!props.target?.structureEditable} onClick={apply}>참조 적용</button>
       <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':props.target?.structureEditable
         ? `대상 문단: ${props.target.runs.map(run=>run.text).join('').trim().slice(0,80)||'빈 문단'}`
         : '편집 가능한 본문 문단에 커서를 놓으세요.'}</p>
+      <Show when={props.toc}>{toc=>
+        <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+          const accepted=props.onApply({type:'update_reference',targetId:toc().id,reference:{action:'update_toc'}});
+          setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+        }}>목차 제목 업데이트</button>
+      }</Show>
       <Show when={props.links.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
           <label class="flex min-w-0 flex-col gap-1">기존 링크

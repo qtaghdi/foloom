@@ -12,7 +12,7 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type ListDefinition, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type ListDefinition, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
 type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
@@ -258,14 +258,18 @@ export class DocumentController {
     if(!focus)return false;this.remember(before);this.view.render(this.preview(),focus);
     if(!this.blocked)this.view.status('미저장 변경','pending');this.updateSave();return true;
   }
-  applyList(selection: TextSelection, list: ParagraphList | Omit<ListDefinition,'key'>): boolean {
+  applyList(selection: TextSelection, list: ParagraphList | ListSetup): boolean {
     if(this.busy||this.loading||this.disposed||this.composing||!this.structureDraft)return false;
     const before=this.checkpoint(selection);
     let reference:ParagraphList;
     let definition:ListDefinition|undefined;
-    if ('kind' in list) {
-      definition={key:`list_${++this.activitySequence}`,kind:list.kind,start:list.start??1};
-      reference={key:definition.key,level:0};
+    if ('sourceId' in list) {
+      const selected=this.structureDraft.selectedParagraphs(selection);
+      if (!selected.length || selected.some(p=>p.list?.id!==list.sourceId || (p.list.level??0)!==(list.level??0))) return false;
+    }
+    if ('kind' in list || 'sourceId' in list) {
+      definition={...list,key:`list_${++this.activitySequence}`};
+      reference={key:definition.key,level:'sourceId' in list?list.level??0:0};
     } else reference=list;
     const focus=this.structureDraft.formatParagraph(selection,{list:reference});
     if(!focus)return false;
