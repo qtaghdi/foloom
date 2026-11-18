@@ -102,6 +102,7 @@ export function DocumentApp() {
       if(current)document.getElementById(`docx-paragraph-${current.documentChange!.key}`)?.focus();
     });
   };
+  const noteSplitPending = () => { state().snapshot; draftVersion(); return controller.pendingNoteSplit(); };
   const standalonePending = () => { state().snapshot; draftVersion(); return controller.pendingStandalone(); };
   const documentLinks = createMemo(() => {
     const snapshot = state().snapshot;
@@ -471,12 +472,17 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} layout={pageLayout()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending() || imagePending() || standalonePending() || tablePending()} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} layout={pageLayout()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving||noteSplitPending()} changes={changes()}
           selected={resolvedEntry(selectedChange())}
           onListLevel={(selection,delta)=>{const changed=controller.changeListLevel(selection,delta);if(changed)setDraftVersion(v=>v+1);return changed;}}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onDelete={(selection, direction, word) => { const changed = controller.deleteSelection(selection, direction, word); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onComposition={active => controller.composition(active)} onRefresh={selection => controller.refreshSelection(selection)} selectionText={selection => controller.selectionText(selection)}
+          onSplitNote={(run, offset) => {
+            const staged = controller.splitNoteParagraph(run, offset);
+            if (staged) setDraftVersion(v => v + 1);
+            return staged;
+          }}
           onStructure={(action, id, start, end, insertion) => { const changed = controller.changeStructure(action, id, start, end, insertion); if (changed) setDraftVersion(v => v + 1); return changed; }}
           onFocusRun={setFocusedRun} onChangeSelect={(entry) => setSelectedChange(selectedChange()?.id === entry.id ? undefined : entry)} onEdit={(operation, selection) => { controller.edit(operation, selection); setDraftVersion((version) => version + 1); }}/>}</Show>
       </article>

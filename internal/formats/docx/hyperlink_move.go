@@ -9,6 +9,9 @@ func markHyperlinkParagraphs(root *node, paragraphs map[*node]*Paragraph, protec
 	markBodyParagraphMoves(root, paragraphs, protected, func(p *node) bool {
 		return p.child("hyperlink") != nil && structuralParagraphContents(p, root.source, "hyperlink", nil)
 	}, func(p, before, after *node) {
+		if before == nil && after == nil {
+			return
+		}
 		paragraph := paragraphs[p]
 		paragraph.MoveHyperlinkUp, paragraph.MoveHyperlinkDown = before != nil, after != nil
 		targets[paragraph.ID] = target{kind: "hyperlink_paragraph", paragraph: p, moveUp: before, moveDown: after}
@@ -43,9 +46,7 @@ func markBodyParagraphMoves(root *node, paragraphs map[*node]*Paragraph, protect
 				after = next
 			}
 		}
-		if before != nil || after != nil {
-			mark(p, before, after)
-		}
+		mark(p, before, after)
 	}
 }
 
