@@ -593,8 +593,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			return nil, fmt.Errorf("unsupported, duplicate or stale DOCX target")
 		}
 		seen[op.TargetID] = true
-		if op.Type == "update_control_text" && (len(op.Text) > 1024 || !validText(op.Text) || op.SectionID != "") {
-			return nil, fmt.Errorf("DOCX control requires plain text of up to 1024 bytes")
+		editingObjectText := op.Type == "update_control_text" || op.Type == "update_textbox_text"
+		if editingObjectText && (len(op.Text) > 1024 || !validText(op.Text) || op.SectionID != "") {
+			return nil, fmt.Errorf("DOCX object requires plain text of up to 1024 bytes")
 		}
 		if op.ExpectedText != t.text {
 			return nil, fmt.Errorf("DOCX expected text mismatch")
@@ -615,12 +616,14 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("overlapping DOCX operations must be combined into one paragraph plan")
 			}
 		}
-		if op.Type == "update_control_text" {
-			changes, err := plainRunTextEdits(s.pkg.document, t.controlTexts, t.text, op.Text)
-			if err != nil {
-				return nil, err
+		if editingObjectText {
+			for _, story := range t.textStories {
+				changes, err := plainRunTextEdits(s.pkg.document, story, t.text, op.Text)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, changes...)
 			}
-			edits = append(edits, changes...)
 			continue
 		}
 		opening := string(s.pkg.document[n.start:n.inner])
