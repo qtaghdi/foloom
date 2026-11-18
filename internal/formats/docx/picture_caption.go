@@ -180,7 +180,7 @@ func markCaptionedPictureMoves(root *node, paragraphs map[*node]*Paragraph, prot
 	safe := func(p *node) bool {
 		paragraph := paragraphs[p]
 		return paragraph != nil && !protected[p] && !ranged[p] && !paragraph.PageBreakBefore &&
-			!paragraph.PageBreakAfter && captionMoveProperties(p)
+			!paragraph.PageBreakAfter && plainVisualParagraphProperties(p)
 	}
 	for i := 0; i+1 < len(body.children); i++ {
 		picture, caption := body.children[i], body.children[i+1]
@@ -211,54 +211,6 @@ func markCaptionedPictureMoves(root *node, paragraphs map[*node]*Paragraph, prot
 			targets[run.ID] = t
 		}
 	}
-}
-
-func captionMoveProperties(p *node) bool {
-	if countChild(p, "pPr") > 1 {
-		return false
-	}
-	if props := p.child("pPr"); props != nil {
-		if strings.TrimSpace(props.text.String()) != "" {
-			return false
-		}
-		for _, child := range props.children {
-			if child.name.Space != wordNS || len(child.children) != 0 || strings.TrimSpace(child.text.String()) != "" ||
-				!strings.Contains(" jc spacing ind widowControl keepLines ", " "+child.name.Local+" ") {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func dedicatedPictureParagraph(t target, data []byte) bool {
-	p := t.paragraph
-	if !t.run.parent.is("p") || !t.run.parent.parent.is("body") || p != t.run.parent ||
-		strings.TrimSpace(p.text.String()) != "" || bytes.Contains(data[p.start:p.end], []byte("<!--")) ||
-		p.has("rPrChange") || countChild(t.run, "drawing") != 1 ||
-		(len(t.run.children) != 1 && (len(t.run.children) != 2 || t.run.child("rPr") == nil)) {
-		return false
-	}
-	drawing := t.run.child("drawing")
-	if len(drawing.children) != 1 || childNS(drawing, drawingWordNS, "inline") == nil {
-		return false
-	}
-	for _, child := range p.children {
-		if child == t.run || child.is("pPr") {
-			continue
-		}
-		if !child.is("r") || strings.TrimSpace(child.text.String()) != "" {
-			return false
-		}
-		if len(child.children) == 0 {
-			continue
-		}
-		text := child.children[0]
-		if len(child.children) != 1 || !text.is("t") || len(text.children) != 0 || text.text.Len() != 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func (p *documentPackage) movePictureCaption(t target, operation string) (replacement, error) {
