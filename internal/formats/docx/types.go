@@ -54,9 +54,10 @@ type PageLayout struct {
 }
 
 type ListDefinition struct {
-	Key   string `json:"key" jsonschema:"Batch-local reference key for new list paragraphs"`
-	Kind  string `json:"kind" jsonschema:"bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter"`
-	Start int    `json:"start,omitempty" jsonschema:"Start number from 1 to 9999, default 1"`
+	Key      string `json:"key" jsonschema:"Batch-local reference key for new list paragraphs"`
+	Kind     string `json:"kind,omitempty" jsonschema:"For a fresh definition: bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter"`
+	SourceID int    `json:"sourceId,omitempty" jsonschema:"Existing list instance ID to restart at level zero. Omit kind"`
+	Start    int    `json:"start,omitempty" jsonschema:"Start number for the format. Required to restart an existing instance"`
 }
 
 type ParagraphList struct {
