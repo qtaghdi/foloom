@@ -84,6 +84,7 @@ export const snapshotSchema = z.object({
   comments:z.array(z.object({id:z.string(),author:z.string(),date:z.string().optional(),text:z.string(),paragraphId:z.string().optional(),parentId:z.string().optional(),resolved:z.boolean().optional(),resolutionEditable:z.boolean().optional()})).max(100).optional(),
   bookmarks:z.array(z.object({figure:z.boolean().optional(),name:bookmarkName,paragraphId:z.string(),renameEditable:z.boolean().optional(),textReference:z.boolean().optional(),numberReference:z.boolean().optional()})).max(500).optional(),
   evenAndOddHeaders: z.boolean().optional(),
+  defaultTabStop: z.number().int().min(1).max(32767).optional(),
  sections:z.array(sectionSchema).max(128).optional(),
   styles:z.array(styleInfoSchema).max(500).optional(),id: z.string(), name: z.string(), revision: z.number().int().nonnegative(),
   sequence: z.number().int().nonnegative(), page: pageSchema.optional(), warnings: z.array(z.string()),

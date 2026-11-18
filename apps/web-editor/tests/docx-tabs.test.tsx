@@ -10,6 +10,8 @@ it('aligns left, right, center, decimal and default tabs without changing text',
  expect(tabAdvance(20,30,10,[{position:1440,align:'center'}]).width).toBe(61);
  expect(tabAdvance(20,30,10,[{position:1440,align:'decimal'}]).width).toBe(66);
  expect(tabAdvance(49,0,0,[{position:1440,align:'bar'}]).width).toBe(47);
+ expect(tabAdvance(40,0,0,[],360).width).toBe(8);
+ expect(tabAdvance(40,0,0,[{position:1080,align:'left'}],360).width).toBe(32);
  const host=document.createElement('div');const dispose=render(()=><TabText text={'a\tb\tc'}/>,host);
  expect(host.textContent).toBe('a\tb\tc');expect(host.querySelectorAll('[data-docx-tab]')).toHaveLength(2);dispose();
 });
