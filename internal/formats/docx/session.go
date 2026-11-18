@@ -146,6 +146,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 		}
 	}
 	numbering := s.pkg.projectNumbering(blocks)
+	projectCompoundRestarts(root.child("body"), blocks, targetsByID, numbering)
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID, numbering)
 	warnings := []string{"본문과 단순 표의 지원 텍스트와 일반 문단 구조를 편집합니다. 구역·명시적 페이지 경계·참조는 구조 편집을 보호합니다. 용지, 일부 스타일, 머리글·바닥글과 단순 위아래 그림 배치를 미리 봅니다. 자동 페이지 매김은 지원 범위에서 제외되며 복잡한 떠 있는 그림과 필드의 원본 OOXML은 보존합니다.", "Microsoft Word의 native 열기와 시각 호환성은 아직 검증하지 않았습니다. 복사본으로 작업하세요."}
 	if len(s.pkg.styles.byID) > 500 {
@@ -332,6 +333,24 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var controlIDs map[int64]bool
 	nextControlID := int64(1)
 	for _, op := range input.Operations {
+		if op.ListStart != nil && op.Type != "restart_compound_sublevel" {
+			return nil, fmt.Errorf("unexpected DOCX compound list start")
+		}
+		if op.Type == "restart_compound_sublevel" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.Paragraphs != nil || op.ExpectedText != "" || op.Text != "" ||
+				op.Alignment != "" || op.Bold != nil || op.ChartWidthEMU != nil || op.ChartValue != nil || op.ChartInsert != nil ||
+				op.RectangleColors != nil || op.RectangleSize != nil {
+				return nil, fmt.Errorf("DOCX compound list restart must be a single operation")
+			}
+			changes, err := s.pkg.restartCompoundSublevel(root, input, op, parts)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, changes...)
+			continue
+		}
 		if op.Alignment != "" && op.Type != "track_paragraph_alignment" {
 			return nil, fmt.Errorf("unexpected DOCX tracked paragraph alignment")
 		}

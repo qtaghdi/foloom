@@ -56,6 +56,8 @@ type PageLayout struct {
 }
 
 type ListDefinition struct {
+	parentNumber int
+
 	Compound bool   `json:"compound,omitempty" jsonschema:"For a fresh numbered list, include the parent counter at each deeper level. Omit for bullets and restarts"`
 	Key      string `json:"key" jsonschema:"Batch-local reference key for new list paragraphs"`
 	Kind     string `json:"kind,omitempty" jsonschema:"For a fresh definition: bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter"`
@@ -114,27 +116,28 @@ type ListLevelInfo struct {
 	Restart *int   `json:"restart,omitempty"`
 }
 type Paragraph struct {
-	MoveNoteUp         bool             `json:"moveNoteUp,omitempty"`
-	MoveNoteDown       bool             `json:"moveNoteDown,omitempty"`
-	AlignmentTrackable bool             `json:"alignmentTrackable,omitempty"`
-	AlignmentRevision  *ObjectInfo      `json:"alignmentRevision,omitempty"`
-	MoveHyperlinkUp    bool             `json:"moveHyperlinkUp,omitempty"`
-	MoveHyperlinkDown  bool             `json:"moveHyperlinkDown,omitempty"`
-	MoveBookmarkUp     bool             `json:"moveBookmarkUp,omitempty"`
-	MoveBookmarkDown   bool             `json:"moveBookmarkDown,omitempty"`
-	List               *ParagraphList   `json:"list,omitempty"`
-	ListLabel          string           `json:"listLabel,omitempty"`
-	Anchor             string           `json:"anchor,omitempty"`
-	OutlineLevel       *int             `json:"outlineLevel,omitempty"`
-	OutlineOverride    *int             `json:"outlineOverride,omitempty"`
-	SectionID          string           `json:"sectionId,omitempty"`
-	StyleID            string           `json:"styleId,omitempty"`
-	StructureEditable  bool             `json:"structureEditable"`
-	PageBreakBefore    bool             `json:"pageBreakBefore,omitempty"`
-	PageBreakAfter     bool             `json:"pageBreakAfter,omitempty"`
-	ID                 string           `json:"id"`
-	Runs               []Run            `json:"runs"`
-	Layout             *ParagraphLayout `json:"layout,omitempty"`
+	CompoundRestart    *CompoundRestartInfo `json:"compoundRestart,omitempty"`
+	MoveNoteUp         bool                 `json:"moveNoteUp,omitempty"`
+	MoveNoteDown       bool                 `json:"moveNoteDown,omitempty"`
+	AlignmentTrackable bool                 `json:"alignmentTrackable,omitempty"`
+	AlignmentRevision  *ObjectInfo          `json:"alignmentRevision,omitempty"`
+	MoveHyperlinkUp    bool                 `json:"moveHyperlinkUp,omitempty"`
+	MoveHyperlinkDown  bool                 `json:"moveHyperlinkDown,omitempty"`
+	MoveBookmarkUp     bool                 `json:"moveBookmarkUp,omitempty"`
+	MoveBookmarkDown   bool                 `json:"moveBookmarkDown,omitempty"`
+	List               *ParagraphList       `json:"list,omitempty"`
+	ListLabel          string               `json:"listLabel,omitempty"`
+	Anchor             string               `json:"anchor,omitempty"`
+	OutlineLevel       *int                 `json:"outlineLevel,omitempty"`
+	OutlineOverride    *int                 `json:"outlineOverride,omitempty"`
+	SectionID          string               `json:"sectionId,omitempty"`
+	StyleID            string               `json:"styleId,omitempty"`
+	StructureEditable  bool                 `json:"structureEditable"`
+	PageBreakBefore    bool                 `json:"pageBreakBefore,omitempty"`
+	PageBreakAfter     bool                 `json:"pageBreakAfter,omitempty"`
+	ID                 string               `json:"id"`
+	Runs               []Run                `json:"runs"`
+	Layout             *ParagraphLayout     `json:"layout,omitempty"`
 }
 
 type Cell struct {
@@ -237,6 +240,7 @@ type StyleInfo struct {
 	Paragraph    *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
+	ListStart         *int                `json:"listStart,omitempty" jsonschema:"Starting direct-child number for restart_compound_sublevel, from 1 to 9999"`
 	ChartInsert       *ChartInsert        `json:"chartInsert,omitempty" jsonschema:"Title and literal points for insert_chart"`
 	ChartValue        *ChartValueEdit     `json:"chartValue,omitempty"`
 	Alignment         string              `json:"alignment,omitempty" jsonschema:"Set paragraph alignment with track_paragraph_alignment: start, center, end, or justify"`
@@ -254,7 +258,7 @@ type Operation struct {
 	StyleDefinition   *StyleDefinition    `json:"styleDefinition,omitempty"`
 	EndTargetID       string              `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
 	Paragraphs        []ParagraphContent  `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type              string              `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, split_note_paragraph, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_alignment, insert_control_text, update_control_text, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, insert_chart, update_chart_title, resize_chart, update_chart_value, delete_chart, insert_rectangle, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
+	Type              string              `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, restart_compound_sublevel, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, split_note_paragraph, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_alignment, insert_control_text, update_control_text, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, insert_chart, update_chart_title, resize_chart, update_chart_value, delete_chart, insert_rectangle, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
 	TargetID          string              `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
 	ExpectedText      string              `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
 	Text              string              `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. For split_note_paragraph, send the exact text before the split"`

@@ -45,6 +45,7 @@ const paragraphFormatSchema = z.object({tabs:z.array(tabStopSchema).max(32).opti
 });
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
+  compoundRestart:z.object({parentNumber:z.number().int().min(1).max(9999),terminal:z.boolean().optional()}).optional(),
   alignmentTrackable:z.boolean().optional(),
   alignmentRevision:z.object({kind:z.literal('tracked_format'),text:z.string().max(1027).optional(),
     author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
@@ -125,6 +126,7 @@ export type ListSetup =
   | {sourceId:number;level?:number;start:number};
 export type ListDefinition=ListSetup & {key:string};
 export type ListOperation={type:'define_list';listDefinition:ListDefinition};
+export type CompoundListRestartOperation={type:'restart_compound_sublevel';targetId:string;endTargetId:string;listStart:number};
 export type ParagraphList=z.infer<typeof paragraphListSchema>;
 export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column' | 'set_row_height';
 export type TableEdit = {action:'insert_body_paragraph_before'} | {action:'insert_caption';caption:string} | {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number;height?:number};
@@ -153,6 +155,6 @@ export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {ty
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};
 export type SplitNoteParagraphOperation = {type:'split_note_paragraph';targetId:string;expectedText:string;text:string};
-export type Operation = SplitNoteParagraphOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
+export type Operation = CompoundListRestartOperation | SplitNoteParagraphOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

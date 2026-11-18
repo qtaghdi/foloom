@@ -40,7 +40,27 @@ func copyListWithStart(root *node, data []byte, restart ListDefinition, id, abst
 	if err != nil {
 		return "", "", err
 	}
-	copiedDefinition := definitionOpen + string(data[definition.inner:definition.endStart]) + definitionClose
+	inner := string(data[definition.inner:definition.endStart])
+	if restart.parentNumber > 0 {
+		var start *node
+		for _, level := range definition.children {
+			if level.is("lvl") && listInt(level.attr("ilvl"), -1) == 0 {
+				start = level.child("start")
+				break
+			}
+		}
+		if start == nil {
+			return "", "", fmt.Errorf("DOCX compound restart requires an explicit parent start")
+		}
+		// Native readers can ignore the ancestor's startOverride when the
+		// copied list starts at a child level. Set the copied level's start.
+		field, err := patchProperty(start, data, "start", map[string]string{"val": strconv.Itoa(restart.parentNumber)}, nil)
+		if err != nil {
+			return "", "", err
+		}
+		inner = string(data[definition.inner:start.start]) + field + string(data[start.end:definition.endStart])
+	}
+	copiedDefinition := definitionOpen + inner + definitionClose
 	reference, err := patchProperty(abstractReference, data, "abstractNumId", map[string]string{"val": idValue}, nil)
 	if err != nil {
 		return "", "", err
