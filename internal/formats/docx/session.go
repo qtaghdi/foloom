@@ -457,6 +457,20 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
 		}
+		if op.Type == "insert_picture_caption" {
+			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid or duplicate DOCX figure caption operation")
+			}
+			added, err := s.pkg.pictureCaption(targets[op.TargetID], op.Text)
+			if err != nil {
+				return nil, err
+			}
+			seen[op.Type] = true
+			edits = append(edits, added...)
+			continue
+		}
 		if op.Type == "update_image" {
 			target, ok := targets[op.TargetID]
 			if !ok || op.Image == nil || op.ListDefinition != nil || op.Table != nil || op.Math != nil || op.Comment != nil || op.Reference != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
