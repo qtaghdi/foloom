@@ -331,19 +331,24 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.RectangleColors != nil && op.Type != "update_rectangle_colors" {
 			return nil, fmt.Errorf("unexpected DOCX rectangle colors")
 		}
-		if op.Type == "update_rectangle_colors" {
+		if op.Type == "update_rectangle_colors" || op.Type == "delete_rectangle" {
 			t := targets[op.TargetID]
-			if t.kind != op.Type || seen[op.TargetID] || op.RectangleColors == nil ||
+			if t.kind != "inline_rectangle" || seen[op.TargetID] ||
+				op.Type == "update_rectangle_colors" && op.RectangleColors == nil ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
-				return nil, fmt.Errorf("invalid DOCX rectangle color operation")
+				return nil, fmt.Errorf("invalid DOCX rectangle operation")
+			}
+			seen[op.TargetID] = true
+			if op.Type == "delete_rectangle" {
+				edits = append(edits, replacement{start: t.run.start, end: t.run.end})
+				continue
 			}
 			updated, err := editInlineRectangleColors(s.pkg.document, t, *op.RectangleColors)
 			if err != nil {
 				return nil, err
 			}
-			seen[op.TargetID] = true
 			edits = append(edits, updated...)
 			continue
 		}
