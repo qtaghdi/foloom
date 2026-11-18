@@ -472,20 +472,31 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
 		}
-		if op.Type == "insert_textbox" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
-				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" ||
-				len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "" {
-				return nil, fmt.Errorf("DOCX text box requires plain text and an editable body paragraph")
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
+				return nil, fmt.Errorf("DOCX inline shape requires an editable body paragraph")
+			}
+			if op.Type == "insert_rectangle" && op.Text != "" {
+				return nil, fmt.Errorf("unexpected DOCX rectangle text")
+			}
+			if op.Type == "insert_textbox" && (len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "") {
+				return nil, fmt.Errorf("DOCX text box requires plain text")
 			}
 			id, err := nextDrawingID()
 			if err != nil {
 				return nil, err
 			}
-			edits = append(edits, appendDrawingRun(s.pkg.document, t.paragraph, inlineTextBox(id, op.Text)))
+			var drawing string
+			if op.Type == "insert_rectangle" {
+				drawing = inlineRectangle(id)
+			} else {
+				drawing = inlineTextBox(id, op.Text)
+			}
+			edits = append(edits, appendDrawingRun(s.pkg.document, t.paragraph, drawing))
 			continue
 		}
 		if op.Type == "update_image" {
