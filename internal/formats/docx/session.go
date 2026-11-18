@@ -373,6 +373,19 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			referenceCount++
 			continue
 		}
+		if op.Type == "reply_comment" {
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment == nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" ||
+				referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX comment reply fields")
+			}
+			if err := s.pkg.appendCommentReply(root, op.TargetID, *op.Comment, actor, parts); err != nil {
+				return nil, err
+			}
+			referenceCount++
+			continue
+		}
 		if op.Type == "resolve_comment" || op.Type == "reopen_comment" {
 			key := "comment:" + op.TargetID
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
