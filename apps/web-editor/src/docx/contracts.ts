@@ -25,6 +25,7 @@ const runSchema = z.object({
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional(),bookmarkEditable:z.boolean().optional(),refreshNeeded:z.boolean().optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),placement:picturePlacementSchema.optional(),align:pictureAlignmentSchema.optional(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
+  splitNoteParagraph:z.boolean().optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), boldTrackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
   eastAsiaFont: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
   sizeHalfPoints: z.number().int().min(8).max(288).optional(),
@@ -151,6 +152,7 @@ export type ObjectTextOperation = {type:'insert_control_text'|'update_control_te
 export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};
-export type Operation = TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
+export type SplitNoteParagraphOperation = {type:'split_note_paragraph';targetId:string;expectedText:string;text:string};
+export type Operation = SplitNoteParagraphOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';

@@ -50,46 +50,86 @@ func markNoteParagraphs(root *node, paragraphs map[*node]*Paragraph, protected m
 		return false
 	}, func(p, before, after *node) {
 		paragraph := paragraphs[p]
-		paragraph.MoveNoteUp, paragraph.MoveNoteDown = before != nil, after != nil
-		targets[paragraph.ID] = target{kind: "note_paragraph", paragraph: p, moveUp: before, moveDown: after}
+		if before != nil || after != nil {
+			paragraph.MoveNoteUp, paragraph.MoveNoteDown = before != nil, after != nil
+			targets[paragraph.ID] = target{kind: "note_paragraph", paragraph: p, moveUp: before, moveDown: after}
+		}
+		splitRun := trailingNoteSplitRun(p)
+		if splitRun == nil {
+			return
+		}
+		for i := range paragraph.Runs {
+			run := &paragraph.Runs[i]
+			t := targets[run.ID]
+			if t.kind == "replace_run_text" && t.run == splitRun {
+				run.SplitNoteParagraph, t.splitNoteParagraph = true, true
+				targets[run.ID] = t
+				break
+			}
+		}
 	})
 }
 
-func (p *documentPackage) inspectWithNoteMoves(root *node, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
+func (p *documentPackage) inspectWithNoteParagraphs(root *node, sessionID string, revision uint64) ([]Block, map[string]target, bool, error) {
 	blocks, targets, unsupported, err := inspectDocument(root, sessionID, revision, p.styles)
 	if err != nil {
 		return nil, nil, false, err
 	}
-	// Resolve the document relationship only for reference types present in
-	// candidate paragraphs. Movement leaves those package parts intact.
+	// Resolve only relationships used by movable or splittable paragraphs.
 	available := map[string]map[int64]bool{}
 	for _, block := range blocks {
 		paragraph := block.Paragraph
-		if paragraph == nil || !(paragraph.MoveNoteUp || paragraph.MoveNoteDown) {
+		if paragraph == nil {
 			continue
 		}
 		move := targets[paragraph.ID]
-		for _, run := range move.paragraph.children {
-			ref := plainBodyNoteReference(run)
-			if ref == nil {
-				continue
-			}
-			kind := strings.TrimSuffix(ref.name.Local, "Reference")
-			if available[kind] == nil {
-				available[kind] = p.movableNotes(root.child("body"), kind)
-			}
-			id, _ := strconv.ParseInt(ref.attr("id"), 10, 32)
-			if !available[kind][id] {
-				paragraph.MoveNoteUp, paragraph.MoveNoteDown = false, false
-				delete(targets, paragraph.ID)
+		node := move.paragraph
+		var split *Run
+		for i := range paragraph.Runs {
+			run := &paragraph.Runs[i]
+			if run.SplitNoteParagraph {
+				split, node = run, targets[run.ID].paragraph
 				break
 			}
+		}
+		if move.kind != "note_paragraph" && split == nil {
+			continue
+		}
+		if p.validNoteParagraph(root.child("body"), node, available) {
+			continue
+		}
+		if move.kind == "note_paragraph" {
+			paragraph.MoveNoteUp, paragraph.MoveNoteDown = false, false
+			delete(targets, paragraph.ID)
+		}
+		if split != nil {
+			t := targets[split.ID]
+			split.SplitNoteParagraph, t.splitNoteParagraph = false, false
+			targets[split.ID] = t
 		}
 	}
 	return blocks, targets, unsupported, nil
 }
 
-func (p *documentPackage) movableNotes(body *node, kind string) map[int64]bool {
+func (p *documentPackage) validNoteParagraph(body, paragraph *node, available map[string]map[int64]bool) bool {
+	for _, run := range paragraph.children {
+		ref := plainBodyNoteReference(run)
+		if ref == nil {
+			continue
+		}
+		kind := strings.TrimSuffix(ref.name.Local, "Reference")
+		if available[kind] == nil {
+			available[kind] = p.standaloneNoteIDs(body, kind)
+		}
+		id, _ := strconv.ParseInt(ref.attr("id"), 10, 32)
+		if !available[kind][id] {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *documentPackage) standaloneNoteIDs(body *node, kind string) map[int64]bool {
 	available := map[int64]bool{}
 	_, notes, err := p.notesPart(kind, nil)
 	if err != nil || notes == nil {
