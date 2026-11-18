@@ -31,7 +31,7 @@ import { DocumentOutline } from './document-outline';
 import { DocumentBookmarkMoveToolbar } from './document-bookmark-move-toolbar';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
-import { DocumentMathToolbar } from './document-objects';
+import { DocumentMathToolbar, DocumentShapeToolbar } from './document-objects';
 import { DocumentObjectTextToolbar } from './document-object-text-toolbar';
 import { paragraphs, restoreAnchoredPoint } from './paragraphs';
 import { DocumentTableToolbar } from './document-table-toolbar';
@@ -411,7 +411,10 @@ export function DocumentApp() {
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <For each={['control','textbox'] as const}>{kind=>
+    <DocumentShapeToolbar snapshot={state().snapshot} target={referenceParagraph()} pending={standalonePending()}
+      disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
+      onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <For each={['control','textbox','chart'] as const}>{kind=>
       <DocumentObjectTextToolbar kind={kind} target={referenceParagraph()} snapshot={state().snapshot} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
