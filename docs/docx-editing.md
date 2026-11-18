@@ -996,7 +996,8 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 및 크기 변경·삭제 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
 | 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기 | 제목 수정·크기 변경 | Word 차트 |
-| 그 밖의 차트·SmartArt | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
+| 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
+| SmartArt | 내부 데이터에 있는 도형 문구 | 미지원 | Word |
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
 
@@ -1031,6 +1032,12 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 유지합니다. HTTP·MCP는 `update_math`의 `math: { action: "insert_root", expression }` 또는
 `math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
 [Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
+
+내부 데이터가 있는 SmartArt는 실제 도형 문구를 원본 데이터 순서에 따라 읽기
+전용 목록으로 표시합니다. 자리표시자와 화면에 그리기 위한 중복 항목은 제외합니다.
+목록은 도형 하나당 최대 32개 항목을 표시하며 배치와 서식은 Word에서 확인할 수
+있습니다. 외부 연결을 읽지 않으며 다른 본문을 저장해도 관련 part를 보존합니다.
+[SmartArt의 데이터와 표시 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/c36c1152-3aec-45e5-8f16-936da2678e5d)를 따릅니다.
 
 삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
 기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와

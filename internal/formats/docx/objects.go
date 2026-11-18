@@ -28,6 +28,7 @@ type ObjectInfo struct {
 	Text                    string            `json:"text,omitempty"`
 	Editable                bool              `json:"editable"`
 	Fraction                *MathFraction     `json:"fraction,omitempty"`
+	SmartArt                *SmartArtPreview  `json:"smartArt,omitempty"`
 	ChartFrame              *ChartFrame       `json:"chartFrame,omitempty"`
 	RectangleResizeEditable bool              `json:"rectangleResizeEditable,omitempty"`
 	Rectangle               *RectanglePreview `json:"rectangle,omitempty"`
@@ -143,7 +144,7 @@ func objectPreview(n *node) *ObjectInfo {
 	switch attribute(graphic, "", "uri") {
 	case drawingNS + "/chart", chartNS:
 		return &ObjectInfo{Kind: "chart"}
-	case drawingNS + "/diagram", "http://schemas.openxmlformats.org/drawingml/2006/diagram":
+	case drawingNS + "/diagram", diagramNS:
 		return &ObjectInfo{Kind: "smartart"}
 	case shapeWordNS, "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup":
 		if drawing.has("txbxContent") {
