@@ -18,6 +18,7 @@ type CommentEdit struct {
 }
 
 type ReviewComment struct {
+	ParentID           string `json:"parentId,omitempty"`
 	Resolved           bool   `json:"resolved,omitempty"`
 	ResolutionEditable bool   `json:"resolutionEditable,omitempty"`
 	ID                 string `json:"id"`
@@ -80,7 +81,13 @@ func (p *documentPackage) projectComments(root *node, blocks []Block) []ReviewCo
 	}
 	var resolutions map[string]*node
 	if _, extended, err := p.commentExtensions(nil); err == nil && extended != nil {
-		resolutions = commentResolutionNodes(comments, extended)
+		resolutions = commentExtensionNodes(comments, extended)
+	}
+	threads := map[string]string{}
+	for id, entry := range resolutions {
+		if attribute(entry, commentExtNS, "paraIdParent") == "" {
+			threads[commentParagraphID(attribute(entry, commentExtNS, "paraId"))] = id
+		}
 	}
 	locations := map[string]string{}
 	blockIndex := 0
@@ -127,11 +134,17 @@ func (p *documentPackage) projectComments(root *node, blocks []Block) []ReviewCo
 			date = ""
 		}
 		resolved, resolutionEditable := false, false
+		parentID := ""
 		if entry := resolutions[id]; entry != nil {
-			resolved, resolutionEditable = commentDone(entry)
+			parent := attribute(entry, commentExtNS, "paraIdParent")
+			if parent == "" {
+				resolved, resolutionEditable = commentDone(entry)
+			} else {
+				parentID = threads[commentParagraphID(parent)]
+			}
 		}
 		out = append(out, ReviewComment{ID: reviewText(id, 40), Author: reviewText(attribute(comment, wordNS, "author"), 256), Date: date,
-			Text: reviewText(strings.Join(lines, "\n"), 4000), ParagraphID: locations[id], Resolved: resolved, ResolutionEditable: resolutionEditable})
+			Text: reviewText(strings.Join(lines, "\n"), 4000), ParagraphID: locations[id], Resolved: resolved, ResolutionEditable: resolutionEditable, ParentID: parentID})
 		if len(out) == 100 {
 			break
 		}
@@ -239,58 +252,10 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 	if err != nil {
 		return nil, err
 	}
-	highest := int64(-1)
-	seen := map[int64]bool{}
-	check := func(id string) error {
-		n, err := strconv.ParseInt(id, 10, 32)
-		if err != nil || n < 0 {
-			return fmt.Errorf("unsupported DOCX comment identifier")
-		}
-		if n > highest {
-			highest = n
-		}
-		return nil
-	}
-	if comments != nil {
-		for _, comment := range comments.children {
-			if !comment.is("comment") {
-				continue
-			}
-			id := attribute(comment, wordNS, "id")
-			if err := check(id); err != nil {
-				return nil, err
-			}
-			number, _ := strconv.ParseInt(id, 10, 32)
-			if seen[number] {
-				return nil, fmt.Errorf("duplicate DOCX comment identifier")
-			}
-			seen[number] = true
-		}
-	}
-	if len(seen) >= 100 {
-		return nil, fmt.Errorf("DOCX comments limit exceeded")
-	}
-	var scan func(*node) error
-	scan = func(n *node) error {
-		if n.is("commentRangeStart") || n.is("commentRangeEnd") || n.is("commentReference") {
-			if err := check(attribute(n, wordNS, "id")); err != nil {
-				return err
-			}
-		}
-		for _, child := range n.children {
-			if err := scan(child); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if err := scan(root); err != nil {
+	id, err := nextCommentID(root, comments)
+	if err != nil {
 		return nil, err
 	}
-	if highest >= 2147483647 {
-		return nil, fmt.Errorf("DOCX comment identifiers exhausted")
-	}
-	id := strconv.FormatInt(highest+1, 10)
 	if filename == "" {
 		filename, err = p.addWordPart(changes, "comments", "rIdFoloomComments")
 		if err != nil {
@@ -308,7 +273,15 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 		xml.WriteString(`<dwc:p><dwc:r><dwc:t xml:space="preserve">` + escapeText(line) + `</dwc:t></dwc:r></dwc:p>`)
 	}
 	xml.WriteString(`</dwc:comment>`)
-	next, err := appendXMLChild(raw, xml.String())
+	comment := xml.String()
+	threaded, err := p.extendNewComment(root, comments, id, edit.Text, actor, changes)
+	if err != nil {
+		return nil, err
+	}
+	if threaded != "" {
+		comment = threaded
+	}
+	next, err := appendXMLChild(raw, comment)
 	if err != nil {
 		return nil, err
 	}
@@ -328,4 +301,59 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 		return []replacement{first, last}, err
 	}
 	return []replacement{{first, first, []byte(start)}, {last, last, []byte(end)}}, nil
+}
+
+func nextCommentID(root, comments *node) (string, error) {
+	highest := int64(-1)
+	seen := map[int64]bool{}
+	check := func(id string) error {
+		n, err := strconv.ParseInt(id, 10, 32)
+		if err != nil || n < 0 {
+			return fmt.Errorf("unsupported DOCX comment identifier")
+		}
+		if n > highest {
+			highest = n
+		}
+		return nil
+	}
+	if comments != nil {
+		for _, comment := range comments.children {
+			if !comment.is("comment") {
+				continue
+			}
+			id := attribute(comment, wordNS, "id")
+			if err := check(id); err != nil {
+				return "", err
+			}
+			number, _ := strconv.ParseInt(id, 10, 32)
+			if seen[number] {
+				return "", fmt.Errorf("duplicate DOCX comment identifier")
+			}
+			seen[number] = true
+		}
+	}
+	if len(seen) >= 100 {
+		return "", fmt.Errorf("DOCX comments limit exceeded")
+	}
+	var scan func(*node) error
+	scan = func(n *node) error {
+		if n.is("commentRangeStart") || n.is("commentRangeEnd") || n.is("commentReference") {
+			if err := check(attribute(n, wordNS, "id")); err != nil {
+				return err
+			}
+		}
+		for _, child := range n.children {
+			if err := scan(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := scan(root); err != nil {
+		return "", err
+	}
+	if highest >= 2147483647 {
+		return "", fmt.Errorf("DOCX comment identifiers exhausted")
+	}
+	return strconv.FormatInt(highest+1, 10), nil
 }
