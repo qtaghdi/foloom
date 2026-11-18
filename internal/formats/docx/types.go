@@ -209,6 +209,7 @@ type InlineStyle struct {
 	Italic         *bool   `json:"italic,omitempty"`
 	Color          string  `json:"color,omitempty"`
 	Font           string  `json:"font,omitempty"`
+	LatinFont      string  `json:"latinFont,omitempty" jsonschema:"Override only the ASCII and High ANSI typefaces; takes precedence over font for those slots"`
 	EastAsiaFont   string  `json:"eastAsiaFont,omitempty" jsonschema:"Override only the East Asian typeface; takes precedence over font for that slot"`
 	SizeHalfPoints *int    `json:"sizeHalfPoints,omitempty"`
 }
