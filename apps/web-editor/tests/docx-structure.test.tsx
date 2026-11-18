@@ -44,3 +44,23 @@ it('keeps text drafts outside the structurally edited group when projecting a ne
   expect(projected.type === 'paragraph' && projected.paragraph.runs[0]?.text).toBe('protected paragraph draft');
   expect(draft.ownsOriginal('r1')).toBe(false);
 });
+
+it('moves selected plain body paragraphs but excludes section, page and list boundaries', () => {
+  const first = snapshot.blocks[0]!;
+  const second = snapshot.blocks[1]!;
+  if (first.type !== 'paragraph' || second.type !== 'paragraph') throw new Error('body paragraph fixture required');
+  const backwards = { anchor: { runId: 'r2', offset: 3 }, focus: { runId: 'r1', offset: 1 } };
+  const draft = new StructureDraft(snapshot);
+  expect(draft.canMoveBodyParagraph(-1, backwards)).toBe(false);
+  expect(draft.canMoveBodyParagraph(1, backwards)).toBe(true);
+  draft.change('moveDown', 'r1', 1, 1);
+  expect(draft.snapshot().blocks.map(block => block.id)).toEqual(['p2', 'p1']);
+  expect(draft.canMoveBodyParagraph(1, backwards)).toBe(false);
+  expect(draft.canMoveBodyParagraph(-1, backwards)).toBe(true);
+  expect(draft.operations()[0]?.paragraphs.map(paragraph => paragraph.sourceId)).toEqual(['p2', 'p1']);
+  for (const boundary of [{ sectionId: 'different' }, { pageBreakBefore: true }, { pageBreakAfter: true }, { list: { id: 4 } }, { structureEditable: false }]) {
+    const guarded = new StructureDraft({ ...snapshot, blocks: [first, { ...second, paragraph: { ...second.paragraph, ...boundary } }] });
+    expect(guarded.canMoveBodyParagraph(1, backwards)).toBe(false);
+  }
+  expect(draft.canMoveBodyParagraph(1, { ...backwards, focus: { runId: 'r3', offset: 0 } })).toBe(false);
+});

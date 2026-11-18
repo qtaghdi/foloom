@@ -108,13 +108,22 @@ export class DocumentController {
     this.updateSave();
   }
 
-  changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string): boolean {
+  canMoveBodyParagraph(direction: -1 | 1, selection: TextSelection): boolean {
+    return !this.blocked && !this.composing && !this.boundaryDraft && !this.imageDraft && !this.standaloneDraft &&
+      Boolean(this.structureDraft?.canMoveBodyParagraph(direction, selection));
+  }
+  moveBodyParagraph(direction: -1 | 1, selection: TextSelection): boolean {
+    if (!this.canMoveBodyParagraph(direction, selection)) return false;
+    const { runId, offset } = selection.focus;
+    return this.changeStructure(direction === -1 ? 'moveUp' : 'moveDown', runId, offset, offset, undefined, selection);
+  }
+  changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string, selection?: TextSelection): boolean {
     if (this.busy || this.loading || this.disposed || this.boundaryDraft || this.imageDraft || this.standaloneDraft) return false;
-    const before = this.structureDraft && this.checkpoint({anchor:{runId,offset:start},focus:{runId,offset:end}});
+    const before = this.structureDraft && this.checkpoint(selection ?? {anchor:{runId,offset:start},focus:{runId,offset:end}});
     const focus = this.structureDraft?.change(action, runId, start, end, insertion);
     if (!focus || !this.structureDraft) return false;
     this.remember(before!);
-    this.view.render(this.preview(), focus);
+    this.view.render(this.preview(), selection ? { ...focus, selection } : focus);
     if (!this.blocked) this.view.status('미저장 변경', 'pending');
     this.updateSave();
     return true;
