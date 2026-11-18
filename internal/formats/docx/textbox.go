@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -132,4 +133,15 @@ func hasLinkedTextBox(n *node) bool {
 		}
 	}
 	return false
+}
+
+func inlineTextBox(id uint32, text string) string {
+	// The native shape and inline frame start at the same dimensions.
+	return fmt.Sprintf(`<dwt:r xmlns:dwt="%s" xmlns:wp="%s" xmlns:a="%s" xmlns:wps="%s">
+<dwt:drawing><wp:inline><wp:extent cx="2743200" cy="457200"/><wp:docPr id="%d" name="Text Box %d"/><wp:cNvGraphicFramePr/>
+<a:graphic><a:graphicData uri="%s"><wps:wsp><wps:cNvSpPr txBox="1"/>
+<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" cy="457200"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>
+<wps:txbx><dwt:txbxContent><dwt:p><dwt:r>%s</dwt:r></dwt:p></dwt:txbxContent></wps:txbx>
+<wps:bodyPr wrap="square" anchor="t"><a:spAutoFit/></wps:bodyPr></wps:wsp></a:graphicData></a:graphic></wp:inline></dwt:drawing></dwt:r>`,
+		wordNS, drawingWordNS, drawingNS, shapeWordNS, id, id, shapeWordNS, inlineXML(text))
 }

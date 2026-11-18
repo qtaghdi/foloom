@@ -104,7 +104,7 @@ export function DocumentApp() {
   const standalonePending = () => { state().snapshot; draftVersion(); return controller.pendingStandalone(); };
   const documentLinks = createMemo(() => {
     const snapshot = state().snapshot;
-    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs.filter(run => run.link)) : [];
+    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs.filter(run => run.link && !('field' in run.link && run.link.field))) : [];
   });
   const documentNotes = createMemo(() => {
     const snapshot = state().snapshot;
@@ -410,7 +410,7 @@ export function DocumentApp() {
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <For each={['control','textbox'] as const}>{kind=>
-      <DocumentObjectTextToolbar kind={kind} snapshot={state().snapshot} pending={standalonePending()}
+      <DocumentObjectTextToolbar kind={kind} target={referenceParagraph()} snapshot={state().snapshot} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     }</For>
