@@ -881,6 +881,10 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
 보호합니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
 
+기존 주석이 없는 문서에서 새로 주석을 작성하면 Word 확장 메타데이터가 함께
+저장돼 작성 직후 답글과 해결 상태를 사용할 수 있습니다. 확장 정보가 없는
+기존 주석과 Word의 별도 확장 형식은 그대로 보존합니다.
+
 Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 `주석 해결`과
 `주석 다시 열기`를 적용할 수 있습니다. HTTP·MCP는 기존 주석 ID를
 `targetId`로 보내고 `resolve_comment` 또는 `reopen_comment`를 사용합니다.

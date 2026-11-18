@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const commentMarkupCompatibilityNS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
-
 func (p *documentPackage) appendCommentReply(root *node, parentID string, edit CommentEdit, actor string, changes map[string][]byte) error {
 	if edit.StartRunID != "" || edit.EndRunID != "" || edit.StartOffset != nil || edit.EndOffset != nil ||
 		len(edit.Text) > 4000 || !validInlineText(edit.Text) || strings.TrimSpace(edit.Text) == "" {
@@ -30,24 +28,8 @@ func (p *documentPackage) appendCommentReply(root *node, parentID string, edit C
 	if err != nil {
 		return err
 	}
-	paraID := p.nextReplyParagraphID(root, comments, extended, changes)
-	author := "사용자"
-	if actor == "ai" {
-		author = "AI"
-	}
-	var xml strings.Builder
-	xml.WriteString(`<w:comment xmlns:w="` + wordNS + `" xmlns:w14="` + word2010NS + `" xmlns:mc="` + commentMarkupCompatibilityNS +
-		`" mc:Ignorable="w14" w:id="` + id + `" w:author="` + author + `" w:date="` + time.Now().UTC().Format(time.RFC3339) + `">`)
-	lines := strings.Split(edit.Text, "\n")
-	for index, line := range lines {
-		opening := "<w:p>"
-		if index == len(lines)-1 {
-			opening = `<w:p w14:paraId="` + paraID + `">`
-		}
-		xml.WriteString(opening + "<w:r>" + inlineXML(line) + "</w:r></w:p>")
-	}
-	xml.WriteString("</w:comment>")
-	newComments, err := appendXMLChild(commentsRaw, xml.String())
+	paraID := p.nextCommentParagraphID(root, comments, extended, changes)
+	newComments, err := appendXMLChild(commentsRaw, threadedComment(id, paraID, edit.Text, actor))
 	if err != nil {
 		return err
 	}
@@ -61,7 +43,27 @@ func (p *documentPackage) appendCommentReply(root *node, parentID string, edit C
 	return nil
 }
 
-func (p *documentPackage) nextReplyParagraphID(root, comments, extended *node, changes map[string][]byte) string {
+func threadedComment(id, paraID, text, actor string) string {
+	author := "사용자"
+	if actor == "ai" {
+		author = "AI"
+	}
+	var xml strings.Builder
+	xml.WriteString(`<w:comment xmlns:w="` + wordNS + `" xmlns:w14="` + word2010NS + `" xmlns:mc="` + markupCompatNS +
+		`" mc:Ignorable="w14" w:id="` + id + `" w:author="` + author + `" w:date="` + time.Now().UTC().Format(time.RFC3339) + `">`)
+	lines := strings.Split(text, "\n")
+	for index, line := range lines {
+		opening := "<w:p>"
+		if index == len(lines)-1 {
+			opening = `<w:p w14:paraId="` + paraID + `">`
+		}
+		xml.WriteString(opening + "<w:r>" + inlineXML(line) + "</w:r></w:p>")
+	}
+	xml.WriteString("</w:comment>")
+	return xml.String()
+}
+
+func (p *documentPackage) nextCommentParagraphID(root, comments, extended *node, changes map[string][]byte) string {
 	used := map[string]bool{}
 	var visit func(*node)
 	visit = func(n *node) {
@@ -75,8 +77,14 @@ func (p *documentPackage) nextReplyParagraphID(root, comments, extended *node, c
 		}
 	}
 	visit(root)
-	visit(comments)
-	for _, entry := range extended.children {
+	if comments != nil {
+		visit(comments)
+	}
+	var entries []*node
+	if extended != nil {
+		entries = extended.children
+	}
+	for _, entry := range entries {
 		for _, name := range []string{"paraId", "paraIdParent"} {
 			if id := commentParagraphID(attribute(entry, commentExtNS, name)); id != "" {
 				used[id] = true

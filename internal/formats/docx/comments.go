@@ -273,7 +273,15 @@ func (p *documentPackage) appendComment(root *node, t target, edit CommentEdit, 
 		xml.WriteString(`<dwc:p><dwc:r><dwc:t xml:space="preserve">` + escapeText(line) + `</dwc:t></dwc:r></dwc:p>`)
 	}
 	xml.WriteString(`</dwc:comment>`)
-	next, err := appendXMLChild(raw, xml.String())
+	comment := xml.String()
+	threaded, err := p.extendNewComment(root, comments, id, edit.Text, actor, changes)
+	if err != nil {
+		return nil, err
+	}
+	if threaded != "" {
+		comment = threaded
+	}
+	next, err := appendXMLChild(raw, comment)
 	if err != nil {
 		return nil, err
 	}
