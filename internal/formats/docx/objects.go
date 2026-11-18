@@ -28,6 +28,7 @@ type ObjectInfo struct {
 	Text           string        `json:"text,omitempty"`
 	Editable       bool          `json:"editable"`
 	Fraction       *MathFraction `json:"fraction,omitempty"`
+	ChartFrame     *ChartFrame   `json:"chartFrame,omitempty"`
 }
 
 func editableMath(math *node) bool {

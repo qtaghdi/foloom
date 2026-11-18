@@ -6,7 +6,7 @@ import { utf8Length } from './validation';
 const objectLabels={
   control:{title:'콘텐츠 컨트롤 편집',select:'편집할 콘텐츠 컨트롤',name:'컨트롤',text:'콘텐츠 컨트롤 텍스트'},
   textbox:{title:'텍스트 상자 편집',select:'편집할 텍스트 상자',name:'텍스트 상자',text:'텍스트 상자 내용'},
-  chart:{title:'차트 제목 편집',select:'편집할 차트',name:'차트',text:'차트 제목'},
+  chart:{title:'차트 편집',select:'편집할 차트',name:'차트',text:'차트 제목'},
 };
 
 export function DocumentObjectTextToolbar(props:{
@@ -58,6 +58,7 @@ export function DocumentObjectTextToolbar(props:{
           }</For>
         </select>
         <Show when={selected()} keyed>{run=>
+          <>
           <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
             event.preventDefault();
             if (disabled()) return;
@@ -76,6 +77,28 @@ export function DocumentObjectTextToolbar(props:{
             </label>
             <button type="submit" class={buttonClass} disabled={disabled()}>{props.kind==='chart'?'차트 제목 적용':`${labels().name} 내용 적용`}</button>
           </form>
+          <Show when={run.object?.chartFrame}>{frame=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const input=event.currentTarget.elements.namedItem('chartWidth') as HTMLInputElement;
+              if(input.value===(frame().widthEmu/12700).toFixed(2))return;
+              const chartWidthEmu=Math.round(input.valueAsNumber*12700);
+              if(!Number.isFinite(chartWidthEmu)||chartWidthEmu<9525||chartWidthEmu>18288000||
+                chartWidthEmu===frame().widthEmu)return;
+              const accepted=props.onApply({type:'resize_chart',targetId:run.id,chartWidthEmu});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">차트 너비 (pt)
+                <input name="chartWidth" type="number" min=".75" max="1440" step="any" required
+                  value={(frame().widthEmu/12700).toFixed(2)} disabled={disabled()}
+                  class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <span class="self-center text-slate-600">현재 높이 {(frame().heightEmu/12700).toFixed(2)} pt</span>
+              <button type="submit" class={buttonClass} disabled={disabled()}>차트 비율 유지 크기 변경</button>
+            </form>
+          }</Show>
+          </>
         }</Show>
         </Show>
         <Show when={props.pending}><p class="basis-full text-slate-600">{labels().name} 내용을 저장하거나 실행 취소하세요.</p></Show>
