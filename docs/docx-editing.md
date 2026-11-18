@@ -558,7 +558,7 @@ Enter는 같은 목록의 다음 항목을 만들고, 빈 목록 항목에서 En
 목록 변경과 문단 내용은 한 batch로 저장하고 한 번에 실행 취소합니다.
 직접 번호 참조와 상속 번호 참조를 해제할 때는 numId 0을 명시합니다.
 
-새 목록은 기본 글머리와 decimal 9수준을 지원합니다. 가져온 목록은 원래
+새 목록은 글머리와 번호 목록을 9수준까지 지원합니다. 가져온 목록은 원래
 numbering part와 사용자 정의 글머리를 보존합니다. 일부 고급 번호 형식과
 재시작·스타일 연결 규칙은 브라우저 미리보기와 native 비교를 추가 검증 중이며
 가져온 목록은 [Word의 단계별 재시작 규칙](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/140a2cd9-2f26-456d-9760-ae6ecef4e8b5)에
@@ -569,7 +569,11 @@ numbering part와 사용자 정의 글머리를 보존합니다. 일부 고급 �
 대문자·소문자 영문자를 선택할 수 있습니다. `define_list`의 `kind`는 `decimal`,
 `upperRoman`, `lowerRoman`, `upperLetter`, `lowerLetter` 또는 `bullet`을 사용합니다.
 영문자는 1~702 범위에서 Word의 반복 문자 번호를 표시합니다. Z 다음에는 AA와 BB가 이어집니다. 로마 숫자 목록은
-시작 값을 1~3,999 사이로 지정합니다.
+시작 값을 1~3,999 사이로 지정합니다. 새 번호 목록을 만들기 전 `상위 번호 포함`을
+선택하면 하위 수준의 번호가 `1.1.`, `1.1.1.`처럼 이어집니다. 상위 항목이
+늘어나면 하위 카운터가 해당 수준의 시작값으로 돌아갑니다. HTTP·MCP에서는
+새 번호 목록의 `define_list`에 `listDefinition: { key, kind, start, compound: true }`를
+사용합니다. 이 옵션은 선택한 번호 형식을 모든 수준에 적용합니다.
 
 로마 숫자 목록은 1~3,999 범위의 대문자·소문자 번호를 표시합니다. 다른 미지원 형식은 형식 이름으로 표시합니다. 기존 공유 번호 정의 자체를
 다른 내용으로 덮어쓰는 UI는 제공하지 않습니다.
@@ -972,6 +976,19 @@ Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
 번호와 링크도 다시 계산할 수 있습니다.
 문서에 이미 목차가 있으면 새 목차 삽입을 막습니다.
 [Word 목차 삽입과 업데이트](https://support.microsoft.com/en-us/word/training/insert-a-table-of-contents)를 참고하세요.
+
+같은 메뉴에서 `그림 목록 삽입` 또는 `표 목록 삽입`을 적용하고 저장하면
+선택한 본문 문단 앞에 해당 번호 캡션을 본문 순서대로 모읍니다. 목록은 제목
+목차와 별개이며 같은 종류의 목록은 하나만 삽입할 수 있습니다. Foloom은
+본문의 단순 `SEQ Figure`와 `SEQ Table` 번호 캡션을 읽습니다. Word가
+목록을 갱신하면 페이지 번호와 링크를 계산합니다. HTTP·MCP는 대상 문단 ID에
+`reference: { action: "insert_figure_list" }` 또는
+`reference: { action: "insert_table_list" }`를 단독 작업으로 적용합니다.
+캡션이 바뀌면 `그림 목록 업데이트` 또는 `표 목록 업데이트`를 적용하고
+저장해 현재 캡션을 다시 모읍니다. HTTP·MCP는 목록 run ID에
+`reference: { action: "update_caption_list" }`를 단독 작업으로 적용합니다.
+잠겼거나 복합 형태인 목록, 복합 캡션은 원본을 보호합니다.
+[Word의 그림 및 표 목록](https://support.microsoft.com/en-gb/word/insert-a-table-of-figures)을 참고하세요.
 
 같은 메뉴의 `날짜 필드 삽입`을 적용하고 저장하면 일반 본문 문단 끝에 Word DATE
 필드를 넣습니다. 화면에 표시된 날짜는 저장 시점의 서버 UTC 날짜이며 형식은

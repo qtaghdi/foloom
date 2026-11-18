@@ -562,8 +562,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if op.Reference.Action == "insert_bookmark_number_ref" && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark number reference must stand alone")
 			}
-			if (op.Reference.Action == "insert_toc" || op.Reference.Action == "update_toc") && len(input.Operations) != 1 {
-				return nil, fmt.Errorf("DOCX table of contents edit must stand alone")
+			switch op.Reference.Action {
+			case "insert_toc", "update_toc", "insert_figure_list", "insert_table_list", "update_caption_list":
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX table of contents or caption list edit must stand alone")
+				}
 			}
 			if bookmarks == nil {
 				index := readBookmarks(root)

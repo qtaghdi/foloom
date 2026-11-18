@@ -12,10 +12,10 @@ function safeWebAddress(address:string):boolean {
 }
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;links:Run[];notes:Run[];toc?:Run;dateFields:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;links:Run[];notes:Run[];referenceLists:Run[];dateFields:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
-  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'dateField'|'footnote'|'endnote'>('bookmark');
+  const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'figureList'|'tableList'|'dateField'|'footnote'|'endnote'>('bookmark');
   const [bookmark,setBookmark]=createSignal(''),[text,setText]=createSignal(''),[url,setURL]=createSignal(''),[anchor,setAnchor]=createSignal('');
   const crossReference=()=>mode()==='reference'||mode()==='pageReference'||mode()==='numberReference';
   const bookmarkChoices=()=>crossReference()?props.bookmarks.filter(item=>mode()==='numberReference'?item.numberReference:item.textReference):props.bookmarks;
@@ -43,6 +43,8 @@ export function DocumentReferenceToolbar(props:{
       reference={action:'insert_bookmark',bookmark:bookmark()};
     }else if(mode()==='contents'){
       reference={action:'insert_toc'};
+    }else if(mode()==='figureList'||mode()==='tableList'){
+      reference={action:mode()==='figureList'?'insert_figure_list':'insert_table_list'};
     }else if(mode()==='dateField'){
       reference={action:'insert_date_field'};
     }else if(crossReference()){
@@ -73,10 +75,10 @@ export function DocumentReferenceToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="참조 작업" class="editor-select min-h-11" disabled={disabled()} value={mode()}
         onChange={event=>{setMode(event.currentTarget.value as ReturnType<typeof mode>);setError('');}}>
-        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="pageReference">쪽 번호 상호 참조 삽입</option><option value="numberReference">목록 번호 상호 참조 삽입</option><option value="contents">자동 목차 삽입</option><option value="dateField">날짜 필드 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
+        <option value="bookmark">북마크 추가</option><option value="url">웹 링크 삽입</option><option value="anchor">북마크 링크 삽입</option><option value="reference">텍스트 상호 참조 삽입</option><option value="pageReference">쪽 번호 상호 참조 삽입</option><option value="numberReference">목록 번호 상호 참조 삽입</option><option value="contents">자동 목차 삽입</option><option value="figureList">그림 목록 삽입</option><option value="tableList">표 목록 삽입</option><option value="dateField">날짜 필드 삽입</option><option value="footnote">각주 삽입</option><option value="endnote">미주 삽입</option>
       </select>
-      <Show when={mode()!=='contents'&&mode()!=='dateField'} fallback={<span class="text-slate-600">
-        {mode()==='contents'?'선택한 문단 앞에 제목 1~3 수준의 목차를 넣습니다.':'선택한 문단 끝에 UTC 기준 날짜를 넣습니다.'}
+      <Show when={mode()!=='contents'&&mode()!=='figureList'&&mode()!=='tableList'&&mode()!=='dateField'} fallback={<span class="text-slate-600">
+        {mode()==='contents'?'선택한 문단 앞에 제목 1~3 수준의 목차를 넣습니다.':mode()==='dateField'?'선택한 문단 끝에 UTC 기준 날짜를 넣습니다.':'선택한 문단 앞에 본문의 번호 캡션을 모읍니다.'}
       </span>}>
       <Show when={addingNote()} fallback={<Show when={mode()==='bookmark'} fallback={<>
         <Show when={!crossReference()}><input type="text" maxlength="256" aria-label="링크 표시 텍스트" placeholder="표시 텍스트" class="min-h-11 rounded border border-slate-300 px-2"
@@ -102,12 +104,13 @@ export function DocumentReferenceToolbar(props:{
       <p class="basis-full text-slate-600">{props.pending?'저장하거나 실행 취소하세요.':props.target?.structureEditable
         ? `대상 문단: ${props.target.runs.map(run=>run.text).join('').trim().slice(0,80)||'빈 문단'}`
         : '편집 가능한 본문 문단에 커서를 놓으세요.'}</p>
-      <Show when={props.toc}>{toc=>
+      <For each={props.referenceLists}>{list=>
         <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
-          const accepted=props.onApply({type:'update_reference',targetId:toc().id,reference:{action:'update_toc'}});
+          const action=list.object?.kind==='toc'?'update_toc':'update_caption_list';
+          const accepted=props.onApply({type:'update_reference',targetId:list.id,reference:{action}});
           setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
-        }}>목차 제목 업데이트</button>
-      }</Show>
+        }}>{list.object?.kind==='toc'?'목차 제목 업데이트':list.object?.kind==='figure_list'?'그림 목록 업데이트':'표 목록 업데이트'}</button>
+      }</For>
       <Show when={props.dateFields.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
           <label class="flex min-w-0 flex-col gap-1">기존 날짜 필드
