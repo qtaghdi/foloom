@@ -552,5 +552,6 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 	}
 	markBookmarkParagraphs(root, bodyParagraphs, protected, targets)
 	markHyperlinkParagraphs(root, bodyParagraphs, protected, targets)
+	markCaptionedPictureMoves(root, bodyParagraphs, protected, targets)
 	return blocks, targets, unsupported, nil
 }

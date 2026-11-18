@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -58,7 +59,14 @@ func captionParagraph(t target) bool {
 
 func editablePictureCaption(t target, data []byte) (*node, string) {
 	next, eligible := captionFollowingPicture(t)
-	if !eligible || next == nil || !next.is("p") || next.has("sectPr") ||
+	if !eligible {
+		return nil, ""
+	}
+	return editableCaptionParagraph(next, data)
+}
+
+func editableCaptionParagraph(next *node, data []byte) (*node, string) {
+	if next == nil || !next.is("p") || next.has("sectPr") ||
 		strings.Contains(string(data[next.start:next.end]), "<!--") {
 		return nil, ""
 	}
@@ -155,4 +163,132 @@ func (p *documentPackage) editPictureCaption(t target, expected, text string) (r
 		return replacement{}, fmt.Errorf("DOCX caption requires the current plain numbered picture caption")
 	}
 	return replaceTextNode(p.document, node, ". "+strings.TrimSpace(text))
+}
+
+// Moving only across a plain sibling keeps the figure sequence in order and
+// leaves the drawing, caption and surrounding package parts untouched.
+func markCaptionedPictureMoves(root *node, paragraphs map[*node]*Paragraph, protected map[*node]bool, targets map[string]target) {
+	body := root.child("body")
+	if !body.has("fldSimple") || !body.has("drawing") {
+		return
+	}
+	ranged, valid := bodyRangeBlocks(body)
+	if !valid {
+		return
+	}
+	data := root.source
+	safe := func(p *node) bool {
+		paragraph := paragraphs[p]
+		return paragraph != nil && !protected[p] && !ranged[p] && !paragraph.PageBreakBefore &&
+			!paragraph.PageBreakAfter && captionMoveProperties(p)
+	}
+	for i := 0; i+1 < len(body.children); i++ {
+		picture, caption := body.children[i], body.children[i+1]
+		if !safe(picture) || !picture.has("drawing") || !safe(caption) || !whitespaceBetween(data, picture, caption) {
+			continue
+		}
+		label, _ := editableCaptionParagraph(caption, data)
+		if label == nil || strings.TrimSpace(caption.text.String()) != "" || caption.has("rPrChange") {
+			continue
+		}
+		for _, run := range paragraphs[picture].Runs {
+			t := targets[run.ID]
+			if t.kind != "picture" || protected[t.run] || !dedicatedPictureParagraph(t, data) {
+				continue
+			}
+			if i > 0 {
+				before := body.children[i-1]
+				if safe(before) && paragraphs[before].StructureEditable && whitespaceBetween(data, before, picture) {
+					t.moveUp = before
+				}
+			}
+			if i+2 < len(body.children) {
+				after := body.children[i+2]
+				if safe(after) && paragraphs[after].StructureEditable && whitespaceBetween(data, caption, after) {
+					t.moveDown = after
+				}
+			}
+			targets[run.ID] = t
+		}
+	}
+}
+
+func captionMoveProperties(p *node) bool {
+	if countChild(p, "pPr") > 1 {
+		return false
+	}
+	if props := p.child("pPr"); props != nil {
+		if strings.TrimSpace(props.text.String()) != "" {
+			return false
+		}
+		for _, child := range props.children {
+			if child.name.Space != wordNS || len(child.children) != 0 || strings.TrimSpace(child.text.String()) != "" ||
+				!strings.Contains(" jc spacing ind widowControl keepLines ", " "+child.name.Local+" ") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func dedicatedPictureParagraph(t target, data []byte) bool {
+	p := t.paragraph
+	if !t.run.parent.is("p") || !t.run.parent.parent.is("body") || p != t.run.parent ||
+		strings.TrimSpace(p.text.String()) != "" || bytes.Contains(data[p.start:p.end], []byte("<!--")) ||
+		p.has("rPrChange") || countChild(t.run, "drawing") != 1 ||
+		(len(t.run.children) != 1 && (len(t.run.children) != 2 || t.run.child("rPr") == nil)) {
+		return false
+	}
+	drawing := t.run.child("drawing")
+	if len(drawing.children) != 1 || childNS(drawing, drawingWordNS, "inline") == nil {
+		return false
+	}
+	for _, child := range p.children {
+		if child == t.run || child.is("pPr") {
+			continue
+		}
+		if !child.is("r") || strings.TrimSpace(child.text.String()) != "" {
+			return false
+		}
+		if len(child.children) == 0 {
+			continue
+		}
+		text := child.children[0]
+		if len(child.children) != 1 || !text.is("t") || len(text.children) != 0 || text.text.Len() != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *documentPackage) movePictureCaption(t target, operation string) (replacement, error) {
+	other := t.moveDown
+	if operation == "move_picture_caption_up" {
+		other = t.moveUp
+	}
+	if t.kind != "picture" || other == nil {
+		return replacement{}, fmt.Errorf("protected DOCX picture caption movement boundary")
+	}
+	inline, relationship := inlinePictureInfo(t.run)
+	if inline == nil {
+		return replacement{}, fmt.Errorf("DOCX caption movement requires an inline picture")
+	}
+	if _, _, err := imageConfig(p.partData(p.picturePartMap()[relationship], nil), maxImageReadBytes); err != nil {
+		return replacement{}, err
+	}
+	caption, eligible := captionFollowingPicture(t)
+	if !eligible || caption == nil {
+		return replacement{}, fmt.Errorf("DOCX picture requires an adjacent caption")
+	}
+	picture := t.paragraph
+	data := p.document
+	pair := data[picture.start:caption.end]
+	if operation == "move_picture_caption_up" {
+		return replacement{other.start, caption.end, bytes.Join([][]byte{
+			pair, data[other.end:picture.start], data[other.start:other.end],
+		}, nil)}, nil
+	}
+	return replacement{picture.start, other.end, bytes.Join([][]byte{
+		data[other.start:other.end], data[caption.end:other.start], pair,
+	}, nil)}, nil
 }
