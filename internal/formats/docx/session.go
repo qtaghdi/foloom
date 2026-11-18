@@ -240,7 +240,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 			break
 		}
 	}
-	return s.persistHistory(ctx, content, candidate, m, actor, textOnly)
+	return s.persistHistory(ctx, content, candidate, m, Event{Actor: actor, TextOnly: textOnly})
 }
 
 // RecoveryFile validates a draft against the exact in-memory base. It never

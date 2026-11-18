@@ -89,10 +89,12 @@ export const snapshotSchema = z.object({
   ])),
 });
 export const eventSchema = z.object({
+  historyDirection: z.enum(['undo', 'redo']).optional(),
   textOnly:z.boolean().optional(),
   sequence: z.number().int().nonnegative(), revision: z.number().int().nonnegative(),
   type: z.enum(['docx.committed', 'docx.reload']), actor: z.string().optional(),
 });
+export type DocumentEvent = z.infer<typeof eventSchema>;
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type Paragraph = z.infer<typeof paragraphSchema>;
 export type Run = z.infer<typeof runSchema>;
