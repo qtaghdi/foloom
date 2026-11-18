@@ -43,7 +43,7 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 		case n.is("fldChar") || n.is("instrText") || n.is("delInstrText"):
 			return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 		case n.is("fldSimple"):
-			bookmark := bookmarkFieldName(n)
+			kind, bookmark := bookmarkFieldTarget(n)
 			if bookmark == "" && pageFieldInstruction(n) == "" && !supportedTOCField(n) {
 				return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 			}
@@ -51,7 +51,11 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 				if !main {
 					return fmt.Errorf("protected DOCX bookmark field outside body")
 				}
-				result, err := patchBookmarkField(data, n, deleting, edit.NewBookmark, display)
+				cachedText := display
+				if kind == "PAGEREF" {
+					cachedText = ""
+				}
+				result, err := patchBookmarkField(data, n, deleting, edit.NewBookmark, cachedText)
 				if err != nil {
 					return err
 				}
