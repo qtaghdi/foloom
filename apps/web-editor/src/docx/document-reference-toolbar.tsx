@@ -12,7 +12,7 @@ function safeWebAddress(address:string):boolean {
 }
 
 export function DocumentReferenceToolbar(props:{
-  target?:Paragraph;links:Run[];notes:Run[];toc?:Run;bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
+  target?:Paragraph;links:Run[];notes:Run[];toc?:Run;dateFields:Run[];bookmarks:NonNullable<Snapshot['bookmarks']>;pending:boolean;disabled:boolean;
   onApply:(operation:ReferenceOperation)=>boolean;
 }) {
   const [mode,setMode]=createSignal<'bookmark'|'url'|'anchor'|'reference'|'pageReference'|'numberReference'|'contents'|'dateField'|'footnote'|'endnote'>('bookmark');
@@ -25,6 +25,8 @@ export function DocumentReferenceToolbar(props:{
   const [noteId,setNoteId]=createSignal('');
   const selectedNote=()=>props.notes.find(note=>note.id===noteId());
   const existingNoteLabel=()=>selectedNote()?.object?.kind==='endnote'?'미주':'각주';
+  const [dateFieldID,setDateFieldID]=createSignal('');
+  const selectedDateField=()=>props.dateFields.find(field=>field.id===dateFieldID());
   const [editBookmark,setEditBookmark]=createSignal('');
   const renameableBookmarks=()=>props.bookmarks.filter(item=>item.renameEditable);
   const bookmarkToRename=()=>renameableBookmarks().find(item=>item.name===editBookmark());
@@ -106,6 +108,23 @@ export function DocumentReferenceToolbar(props:{
           setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
         }}>목차 제목 업데이트</button>
       }</Show>
+      <Show when={props.dateFields.length}>
+        <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
+          <label class="flex min-w-0 flex-col gap-1">기존 날짜 필드
+            <select class="editor-select min-h-11 max-w-56" value={selectedDateField()?.id??''} disabled={disabled()}
+              onChange={event=>{setDateFieldID(event.currentTarget.value);setError('');}}>
+              <option value="">날짜 필드 선택</option>
+              <For each={props.dateFields}>{(field,index)=><option value={field.id}>{index()+1}. {field.text}</option>}</For>
+            </select>
+          </label>
+          <button type="button" class={buttonClass} disabled={disabled()||!selectedDateField()} onClick={()=>{
+            const field=selectedDateField();
+            if(!field)return;
+            const accepted=props.onApply({type:'update_reference',targetId:field.id,reference:{action:'refresh_date_field'}});
+            setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+          }}>오늘 날짜로 갱신</button>
+        </div>
+      </Show>
       <Show when={props.links.length}>
         <div class="flex basis-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2">
           <label class="flex min-w-0 flex-col gap-1">기존 링크

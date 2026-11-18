@@ -959,6 +959,11 @@ Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
 필드를 넣습니다. 화면에 표시된 날짜는 저장 시점의 서버 UTC 날짜이며 형식은
 `yyyy-MM-dd`입니다. 날짜 값과 필드 코드를 함께 저장합니다. HTTP·MCP는
 본문 문단 ID에 `reference: { action: "insert_date_field" }`를 적용합니다.
+`기존 날짜 필드`에서 해당 필드를 선택하고 `오늘 날짜로 갱신`을 적용해
+저장하면 필드 코드와 문서 서식을 유지한 채 저장된 날짜만 바뀝니다.
+HTTP·MCP는 필드 run ID에 `reference: { action: "refresh_date_field" }`를
+사용합니다. 파일을 열 때는 저장된 값을 표시합니다. 잠긴 필드, 다른 날짜
+형식 및 복합 필드는 원본을 보존합니다.
 [Word 날짜 필드 형식](https://support.microsoft.com/en-us/word/format-field-results)을 참고하세요.
 
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
