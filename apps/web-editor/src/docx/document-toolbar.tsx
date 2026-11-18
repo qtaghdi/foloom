@@ -21,7 +21,7 @@ export function DocumentToolbar(props: {
 }) {
   const format = () => {
     const run = props.styles[0] ?? props.run;
-    if(props.styles.some(style=>style.font!==run?.font||style.sizeHalfPoints!==run?.sizeHalfPoints||style.bold!==run?.bold||style.italic!==run?.italic))return '혼합 서식';
+    if(props.styles.some(style=>style.font!==run?.font||style.eastAsiaFont!==run?.eastAsiaFont||style.sizeHalfPoints!==run?.sizeHalfPoints||style.bold!==run?.bold||style.italic!==run?.italic))return '혼합 서식';
     return run ? `${run.font ?? '기본 글꼴'} · ${(run.sizeHalfPoints ?? 22) / 2} pt` : '본문 서식';
   };
   return <div role="group" aria-label="문서 도구" class="flex min-w-0 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-200 bg-stone-50 px-3 py-1 sm:px-6">
