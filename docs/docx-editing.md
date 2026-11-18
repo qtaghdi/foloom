@@ -127,9 +127,11 @@ native 선택과 범위 교체를 제공합니다. 같은 본문 구간 안의 �
 연결 중단이나 외부 변경 및 리비전 충돌 시 미저장 입력을 유지하고 저장을
 차단합니다. 필요한 입력을 복사한 뒤 **다시 불러오기**를 누릅니다. 미저장 입력이 있으면 자체
 확인 UI의 **입력 버리고 불러오기**를 선택해야 복구합니다. **취소**는 초안을
-유지합니다. 화면은 Solid 컴포넌트로 구성하며 controller가 저장과 draft를 소유합니다. 저장 결과를
-받지 못한 요청은 자동 재시도하지 않습니다. 이 DOCX 기능에는 서버 undo/redo가
-없습니다.
+유지합니다. 저장 결과를 받지 못한 요청은 자동 재시도하지 않습니다. 서버 재시작 뒤에는
+새 인증 링크에서 같은 원본 경로를 다시 열어 [확정된 DOCX 이력](#확정된-docx-이력)을
+복구할 수 있습니다. 기존 탭의 미저장 텍스트가 필요하면 탭을 새로고침하기 전에
+복사하세요. 실행 취소는 같은 탭의 미저장 변경을 먼저 되돌린 뒤 확정 이력을 사용합니다.
+다시 실행도 현재 초안과 확정 이력에 맞춰 동작합니다.
 
 ## MCP 작업
 
@@ -142,6 +144,7 @@ XLSX 도구와 계약은 유지하며 DOCX 활성 문서는 별도로 관리합�
 | `open_docx` | 기존 절대 `.docx` 경로. 검사 후 활성화하고 snapshot과 `browserUrl` 반환 |
 | `get_docx` | 세션 ID, 리비전, 본문·표, run ID, 편집 가능 여부, 호환성 안내 반환 |
 | `apply_docx_operations` | 현재 `sessionId`, `baseRevision`, typed operation batch. 원자적 저장 뒤 snapshot 반환 |
+| `restore_docx_history` | 현재 `sessionId`, `baseRevision`, `direction: undo 또는 redo`. 확정 batch 한 개를 복원한 뒤 새 revision과 snapshot 반환 |
 
 생성 예시:
 
