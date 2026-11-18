@@ -19,6 +19,7 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
+	Date     string `json:"date,omitempty"`
 	noteID   string
 	Kind     string        `json:"kind"`
 	Author   string        `json:"author,omitempty"`

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func reviewTextRevision(n *node, data []byte) *ObjectInfo {
@@ -51,7 +52,11 @@ func reviewTextRevision(n *node, data []byte) *ObjectInfo {
 	if text.Len() == 0 || text.Len() > maxTextBytes {
 		return nil
 	}
-	return &ObjectInfo{Kind: kind, Text: reviewText(text.String(), 1024), Author: reviewText(n.attr("author"), 160)}
+	date := ""
+	if parsed, err := time.Parse(time.RFC3339Nano, n.attr("date")); err == nil {
+		date = parsed.UTC().Format(time.RFC3339)
+	}
+	return &ObjectInfo{Kind: kind, Text: reviewText(text.String(), 1024), Author: reviewText(n.attr("author"), 160), Date: date}
 }
 
 func revisionReplacement(data []byte, t target, operation string) (replacement, error) {
@@ -83,4 +88,73 @@ func revisionReplacement(data []byte, t target, operation string) (replacement, 
 	}
 	edit.data = []byte(contents.String())
 	return edit, nil
+}
+
+func trackableRun(run *node, texts []*node, data []byte) bool {
+	if len(texts) != 1 || !plainTextAttributes(texts[0]) ||
+		(strings.TrimSpace(texts[0].text.String()) == "" || len(texts[0].text.String()) > 1024 ||
+			!validText(texts[0].text.String())) ||
+		(len(run.children) != 1 && (len(run.children) != 2 || !run.children[0].is("rPr"))) ||
+		strings.Contains(string(data[run.start:run.end]), "<!--") {
+		return false
+	}
+	for _, attr := range run.attrs {
+		if !isNamespaceAttribute(attr) && (attr.Name.Space != wordNS || !strings.HasPrefix(attr.Name.Local, "rsid")) {
+			return false
+		}
+	}
+	return true
+}
+
+// Reserve Word IDs in existing stories before adding review annotations.
+func (p *documentPackage) revisionIDs(root *node) map[int64]bool {
+	used := map[int64]bool{}
+	var visit func(*node)
+	visit = func(n *node) {
+		if id, err := strconv.ParseInt(n.attr("id"), 10, 32); err == nil {
+			used[id] = true
+		}
+		for _, child := range n.children {
+			visit(child)
+		}
+	}
+	visit(root)
+	for _, part := range p.parts {
+		name := part.header.Name
+		if name == "word/document.xml" || !strings.HasPrefix(name, "word/") || !strings.HasSuffix(name, ".xml") {
+			continue
+		}
+		other, err := parseXML(part.data)
+		if err == nil && other.name.Space == wordNS {
+			visit(other)
+		}
+	}
+	return used
+}
+
+func trackedTextEdit(data []byte, t target, op Operation, author, date string, used map[int64]bool, nextID *int64) (replacement, error) {
+	if !t.trackable || t.kind != "replace_run_text" || t.text != op.ExpectedText ||
+		t.text == op.Text || len(op.Text) > 1024 || !validText(op.Text) {
+		return replacement{}, fmt.Errorf("invalid or stale DOCX tracked text")
+	}
+	run := t.run
+	open, close := scopedOpening(run, data, false)
+	props := ""
+	if node := run.child("rPr"); node != nil {
+		props = string(data[node.start:node.end])
+	}
+	wrap := func(kind, value string) string {
+		for used[*nextID] {
+			(*nextID)++
+		}
+		id := *nextID
+		used[id] = true
+		return fmt.Sprintf(`<dwr:%s xmlns:dwr="%s" dwr:id="%d" dwr:author="%s" dwr:date="%s">%s%s%s%s</dwr:%s>`,
+			kind, wordNS, id, author, date, open, props, value, close, kind)
+	}
+	value := wrap("del", `<dwr:delText xmlns:dwr="`+wordNS+`" xml:space="preserve">`+escapeText(t.text)+`</dwr:delText>`)
+	if op.Text != "" {
+		value += wrap("ins", inlineXML(op.Text))
+	}
+	return replacement{start: run.start, end: run.end, data: []byte(value)}, nil
 }
