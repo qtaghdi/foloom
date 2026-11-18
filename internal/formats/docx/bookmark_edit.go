@@ -44,8 +44,7 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 			return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 		case n.is("fldSimple"):
 			bookmark := bookmarkFieldName(n)
-			if bookmark == "" && !strings.EqualFold(strings.TrimSpace(n.attr("instr")), "PAGE") &&
-				!strings.EqualFold(strings.TrimSpace(n.attr("instr")), "NUMPAGES") {
+			if bookmark == "" && pageFieldInstruction(n) == "" && !supportedFigureSequence(n.attr("instr")) {
 				return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 			}
 			if bookmark != "" && strings.EqualFold(bookmark, edit.Bookmark) {
