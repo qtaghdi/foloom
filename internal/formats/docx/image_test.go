@@ -528,3 +528,78 @@ func TestCaptionMoveProtectsComplexBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestDOCXAlignsOnlyDedicatedInlinePictures(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(
+		`<w:p><w:pPr><w:spacing w:after="80"/></w:pPr></w:p>`+
+			`<w:p><w:r><w:t>Other text</w:t></w:r></w:p>`))
+	apply := func(session *Session, v Snapshot, ops ...Operation) (Snapshot, error) {
+		return session.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: ops}, "human")
+	}
+	var pixels bytes.Buffer
+	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	picture := &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pixels.Bytes()), Alt: "Image"}
+	v, err := apply(s, v, Operation{Type: "update_image", TargetID: v.Blocks[0].ID, Image: picture},
+		Operation{Type: "update_image", TargetID: v.Blocks[1].ID, Image: picture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dedicated := v.Blocks[0].Paragraph.Runs[0]
+	mixed := v.Blocks[1].Paragraph.Runs[1]
+	if dedicated.Picture.Align != "start" || mixed.Picture.Align != "" {
+		t.Fatal("unexpected alignment capability")
+	}
+	original := fileBytes(t, filename)
+	makeOperation := func(id, align string) Operation {
+		return Operation{Type: "update_image", TargetID: id, Image: &ImageEdit{Action: "align", Align: align}}
+	}
+	good := makeOperation(dedicated.ID, "center")
+	for _, operations := range [][]Operation{
+		{good, makeOperation(mixed.ID, "center")},
+		{makeOperation(dedicated.ID, "justify")},
+		{makeOperation(dedicated.ID, "start")},
+		{{Type: "update_image", TargetID: dedicated.ID, Image: &ImageEdit{Action: "set_alt", Align: "end", Alt: "Unwanted"}}},
+	} {
+		if _, err := apply(s, v, operations...); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+			t.Fatal("invalid alignment or mixed operation modified the package")
+		}
+	}
+	v, err = apply(s, v, good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	centered := fileBytes(t, filename)
+	if _, err := apply(s, v, good); err == nil || !bytes.Equal(centered, fileBytes(t, filename)) {
+		t.Fatal("alignment accepted an earlier revision's picture ID")
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v = mustSnapshot(t, reopened)
+	p := v.Blocks[0].Paragraph
+	if p.Layout == nil || p.Layout.Align != "center" || p.Layout.After == nil || *p.Layout.After != 80 ||
+		p.Runs[0].Picture.Align != "center" || p.Runs[0].Picture.Alt != "Image" {
+		t.Fatal("reopened picture alignment did not preserve paragraph spacing or alternative text")
+	}
+	media, _, err := reopened.Picture(ctx, p.Runs[0].ID)
+	if err != nil || !bytes.Equal(media, pixels.Bytes()) {
+		t.Fatal("alignment changed image media", err)
+	}
+	end, err := apply(reopened, v, makeOperation(p.Runs[0].ID, "end"))
+	if err != nil || end.Blocks[0].Paragraph.Layout.Align != "end" {
+		t.Fatal("right alignment failed", err)
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(centered, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover centered package bytes")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not recover the original picture package")
+	}
+}
