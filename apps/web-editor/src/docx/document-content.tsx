@@ -145,7 +145,8 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
     <Show when={notice()}><p class="text-sm text-red-800" role="status">{localizeMessage(notice())}</p></Show>
     <div ref={editor} data-continuous-editor role="textbox" aria-multiline="true" aria-readonly={props.saving} aria-label={t('docxBodyAndTableEditor')}
       contentEditable={!props.saving} tabindex={0} class="space-y-5 cursor-text outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
-      onKeyDown={input.keydown} onKeyUp={input.focus} onPointerUp={input.focus} onFocusIn={input.focus}
+      onKeyDown={input.keydown} onKeyUp={()=>{input.endPasteShortcut();input.focus();}}
+      onPointerUp={input.focus} onFocusIn={input.focus} onFocusOut={input.endPasteShortcut}
       onBeforeInput={input.beforeinput} onInput={event=>{input.input(event);scheduleTabs();}} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
       onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
     <For each={props.pages}>{(page,index) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id} data-docx-page={index()+1} tabindex={-1}>
