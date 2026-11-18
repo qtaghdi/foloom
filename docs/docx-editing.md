@@ -972,6 +972,19 @@ Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
 문서에 이미 목차가 있으면 새 목차 삽입을 막습니다.
 [Word 목차 삽입과 업데이트](https://support.microsoft.com/en-us/word/training/insert-a-table-of-contents)를 참고하세요.
 
+같은 메뉴에서 `그림 목록 삽입` 또는 `표 목록 삽입`을 적용하고 저장하면
+선택한 본문 문단 앞에 해당 번호 캡션을 본문 순서대로 모읍니다. 목록은 제목
+목차와 별개이며 같은 종류의 목록은 하나만 삽입할 수 있습니다. Foloom은
+본문의 단순 `SEQ Figure`와 `SEQ Table` 번호 캡션을 읽습니다. Word가
+목록을 갱신하면 페이지 번호와 링크를 계산합니다. HTTP·MCP는 대상 문단 ID에
+`reference: { action: "insert_figure_list" }` 또는
+`reference: { action: "insert_table_list" }`를 단독 작업으로 적용합니다.
+캡션이 바뀌면 `그림 목록 업데이트` 또는 `표 목록 업데이트`를 적용하고
+저장해 현재 캡션을 다시 모읍니다. HTTP·MCP는 목록 run ID에
+`reference: { action: "update_caption_list" }`를 단독 작업으로 적용합니다.
+잠겼거나 복합 형태인 목록, 복합 캡션은 원본을 보호합니다.
+[Word의 그림 및 표 목록](https://support.microsoft.com/en-gb/word/insert-a-table-of-figures)을 참고하세요.
+
 같은 메뉴의 `날짜 필드 삽입`을 적용하고 저장하면 일반 본문 문단 끝에 Word DATE
 필드를 넣습니다. 화면에 표시된 날짜는 저장 시점의 서버 UTC 날짜이며 형식은
 `yyyy-MM-dd`입니다. 날짜 값과 필드 코드를 함께 저장합니다. HTTP·MCP는
