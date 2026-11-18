@@ -356,6 +356,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					if texts, value := plainControlText(r, root.source); len(texts) != 0 {
 						run.Object = &ObjectInfo{Kind: "control", Text: value, Label: reviewText(r.child("sdtPr").child("alias").attr("val"), 160), Editable: true}
 						targets[run.ID] = target{node: r, text: value, paragraph: p, kind: "update_control_text", textStories: [][]*node{texts}}
+					} else if _, display := dateControlNodes(r, root.source); display != nil {
+						targets[run.ID] = target{node: r, text: display.text.String(), paragraph: p, kind: "update_control_date"}
 					}
 				}
 				if r.is("hyperlink") {

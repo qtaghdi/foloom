@@ -21,12 +21,13 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
-	UnwrapEditable          bool     `json:"unwrapEditable,omitempty"`
-	MoveChartUp             bool     `json:"moveChartUp,omitempty"`
-	MoveChartDown           bool     `json:"moveChartDown,omitempty"`
-	ChartValues             []string `json:"chartValues,omitempty"`
-	DeleteEditable          bool     `json:"deleteEditable,omitempty"`
-	Date                    string   `json:"date,omitempty"`
+	UnwrapEditable          bool                `json:"unwrapEditable,omitempty"`
+	MoveChartUp             bool                `json:"moveChartUp,omitempty"`
+	MoveChartDown           bool                `json:"moveChartDown,omitempty"`
+	ChartValues             []string            `json:"chartValues,omitempty"`
+	DeleteEditable          bool                `json:"deleteEditable,omitempty"`
+	DateControl             *ControlDatePreview `json:"dateControl,omitempty"`
+	Date                    string              `json:"date,omitempty"`
 	noteID                  string
 	Kind                    string            `json:"kind"`
 	Author                  string            `json:"author,omitempty"`
