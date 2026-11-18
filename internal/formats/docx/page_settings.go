@@ -3,12 +3,14 @@ package docx
 import (
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 )
 
 const documentRelationships = "word/_rels/document.xml.rels"
 const packageRelNS = "http://schemas.openxmlformats.org/package/2006/relationships"
 const evenAndOddHeaders = "evenAndOddHeaders"
+const defaultTabStopProperty = "defaultTabStop"
 
 // Read the relationship rather than assuming the settings part uses its conventional name.
 func (p *documentPackage) pageSettings(changes map[string][]byte) (string, []byte, *node, error) {
@@ -82,7 +84,26 @@ func (p *documentPackage) updateHeaderParity(enabled bool, changes map[string][]
 	if enabled {
 		val = "1"
 	}
-	raw, err := patchProperty(old, data, evenAndOddHeaders, map[string]string{"val": val}, nil)
+	return p.writePageSetting(changes, filename, data, root, old, evenAndOddHeaders, val, settingsAfterHeaderParity)
+}
+
+// Default tab stops precede automatic hyphenation and the later settings.
+const settingsAfterDefaultTabStop = " autoHyphenation consecutiveHyphenLimit hyphenationZone doNotHyphenateCaps showEnvelope summaryLength clickAndTypeStyle defaultTableStyle evenAndOddHeaders" + settingsAfterHeaderParity
+
+func (p *documentPackage) updateDefaultTabStop(value int, changes map[string][]byte) error {
+	filename, data, root, err := p.pageSettings(changes)
+	if err != nil {
+		return err
+	}
+	if sectionChildCount(root, defaultTabStopProperty) > 1 {
+		return fmt.Errorf("duplicate DOCX default tab stop")
+	}
+	old := root.child(defaultTabStopProperty)
+	return p.writePageSetting(changes, filename, data, root, old, defaultTabStopProperty, strconv.Itoa(value), settingsAfterDefaultTabStop)
+}
+
+func (p *documentPackage) writePageSetting(changes map[string][]byte, filename string, data []byte, root, old *node, name, val, laterSettings string) error {
+	raw, err := patchProperty(old, data, name, map[string]string{"val": val}, nil)
 	if err != nil {
 		return err
 	}
@@ -103,7 +124,7 @@ func (p *documentPackage) updateHeaderParity(enabled bool, changes map[string][]
 			return err
 		}
 		for _, child := range root.children {
-			if child.name.Space != wordNS || strings.Contains(settingsAfterHeaderParity, " "+child.name.Local+" ") {
+			if child.name.Space != wordNS || strings.Contains(laterSettings, " "+child.name.Local+" ") {
 				start, end = child.start, child.start
 				break
 			}

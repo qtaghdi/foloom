@@ -415,7 +415,10 @@ export function DocumentApp() {
         if(controller.editStandalone({type:'restart_compound_sublevel',targetId,endTargetId,listStart}))setDraftVersion(v=>v+1);
       }}
       onLevel={delta=>{const selection=formattingSelection();if(selection&&controller.changeListLevel(selection,delta))setDraftVersion(v=>v+1);}}/>
-    <DocumentTabsToolbar formats={selectedParagraphFormats()} disabled={!selectedStyles().length||state().composing||state().saving||state().loading||Boolean(state().error)} onFormat={applyParagraphFormat} onInsert={()=>{const selection=formattingSelection();if(selection&&controller.replaceSelection(selection,'\t',true))setDraftVersion(v=>v+1);}}/>
+    <DocumentTabsToolbar formats={selectedParagraphFormats()} defaultTabStop={state().snapshot?.defaultTabStop}
+      defaultDisabled={(() => {draftVersion();return !state().snapshot||state().saving||state().loading||Boolean(state().error)||controller.hasDrafts();})()}
+      onDefault={defaultTabStop=>{if(controller.editStandalone({type:'update_default_tab_stop',defaultTabStop}))setDraftVersion(v=>v+1);}}
+      disabled={!selectedStyles().length||state().composing||state().saving||state().loading||Boolean(state().error)} onFormat={applyParagraphFormat} onInsert={()=>{const selection=formattingSelection();if(selection&&controller.replaceSelection(selection,'\t',true))setDraftVersion(v=>v+1);}}/>
     </div>
     <div id="docx-tools-insert" hidden={toolGroup()!=='insert'}>
     <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
