@@ -1254,7 +1254,12 @@ HTTP·MCP는 현재 앞 문단 ID로 `accept_revision` 또는 `reject_revision`�
 포함된 나눔은 읽기 전용으로 표시합니다.
 [Word의 삽입된 문단 표시](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/1d66ba8a-1eeb-4cff-ab8a-eaa79113cc89)를 따릅니다.
 
-가져온 `문단 나눔 삭제`를 수락하면 양쪽 텍스트를 이어 붙이고 뒤쪽
+앞 문단을 선택하고 검토의 `다음 문단과 병합 기록`을 적용하면 두 문단 사이의
+경계 삭제가 Word 변경 추적으로 저장됩니다. 검토 전에는 두 문단을 그대로
+표시합니다. HTTP·MCP는 지원하는 앞 문단 ID와 `track_paragraph_merge`를
+단독으로 보냅니다. 일반 Delete와 Backspace는 기존 편집 동작을 사용합니다.
+
+`문단 나눔 삭제`를 수락하면 양쪽 텍스트를 이어 붙이고 뒤쪽
 문단의 ID와 정렬을 사용합니다. 거절하면 나눔과 각 문단의 속성을 유지합니다.
 양쪽 글자 서식은 두 경우 모두 유지됩니다. 목록이나 다른 복합 속성,
 참조 범위와 쪽·구역 경계가 걸린 경우 읽기 전용으로 표시합니다.
