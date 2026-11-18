@@ -164,7 +164,15 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	sections := []SectionInfo{}
 	targets := inspectSections(root, s.id, s.revision)
 	headers := s.pkg.headerFooterCatalog(targets)
+	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
+	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
+	var parity *bool
+	if settingsErr == nil {
+		value := headerParity(settings)
+		parity = &value
+	}
 	for index, target := range targets {
+		target.info.Gutter = sectionGutter(target.props, fixedLeft)
 		target.info.HeaderFooters = headers[index]
 		if n := target.props.child("titlePg"); n != nil {
 			target.info.FirstPage = onOff(n.attr("val"), true)
@@ -187,7 +195,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	listRoot, _ := parseXML(s.pkg.partData(s.pkg.numberingPath, nil))
 	numbering := readNumbering(listRoot)
 	applyListLabels(blocks, numbering)
-	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: s.pkg.headerParity(), Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
+	return Snapshot{Lists: listCatalog(numbering), Comments: s.pkg.projectComments(root, blocks), TrackedChanges: root.has("ins") || root.has("del") || root.has("moveFrom") || root.has("moveTo") || root.has("rPrChange") || root.has("pPrChange"), Bookmarks: bookmarks, EvenAndOddHeaders: parity, Sections: sections, Styles: s.pkg.styleCatalog(), History: history, ID: s.id, Name: filepath.Base(s.path), Revision: s.revision, Sequence: s.sequence, Blocks: blocks, Page: pageLayout(root.child("body")), Warnings: warnings}, nil
 }
 
 type replacement struct {
@@ -365,6 +373,19 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			referenceCount++
 			continue
 		}
+		if op.Type == "reply_comment" {
+			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment == nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" ||
+				referenceCount >= 32 {
+				return nil, fmt.Errorf("invalid DOCX comment reply fields")
+			}
+			if err := s.pkg.appendCommentReply(root, op.TargetID, *op.Comment, actor, parts); err != nil {
+				return nil, err
+			}
+			referenceCount++
+			continue
+		}
 		if op.Type == "resolve_comment" || op.Type == "reopen_comment" {
 			key := "comment:" + op.TargetID
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -471,6 +492,20 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		}
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
+		}
+		if op.Type == "insert_picture_caption" {
+			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid or duplicate DOCX figure caption operation")
+			}
+			added, err := s.pkg.pictureCaption(targets[op.TargetID], op.Text)
+			if err != nil {
+				return nil, err
+			}
+			seen[op.Type] = true
+			edits = append(edits, added...)
+			continue
 		}
 		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" {
 			t := targets[op.TargetID]
@@ -617,7 +652,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if err != nil {
 				return nil, err
 			}
-			edit, err := paragraphReplacement(s.pkg.document, targets, op)
+			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles)
 			if err != nil {
 				return nil, err
 			}
