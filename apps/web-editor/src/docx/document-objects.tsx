@@ -57,6 +57,7 @@ export function DocumentShapeToolbar(props:{
           <For each={rectangles()}>{(run,index)=><option value={run.id}>사각형 {index()+1}</option>}</For>
         </select>
         <Show when={selected()} keyed>{run=>
+          <>
           <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
             event.preventDefault();
             if(disabled())return;
@@ -83,6 +84,33 @@ export function DocumentShapeToolbar(props:{
               setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
             }}>사각형 삭제</button>
           </form>
+          <Show when={run.object?.rectangleResizeEditable && run.object.rectangle}>{rectangle=>
+            <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const inputs=event.currentTarget.elements;
+              const width=(inputs.namedItem('width') as HTMLInputElement).valueAsNumber;
+              const height=(inputs.namedItem('height') as HTMLInputElement).valueAsNumber;
+              const current=rectangle();
+              const widthEmu=width===Number((current.widthEmu/12700).toFixed(2))?current.widthEmu:Math.round(width*12700);
+              const heightEmu=height===Number((current.heightEmu/12700).toFixed(2))?current.heightEmu:Math.round(height*12700);
+              if(![widthEmu,heightEmu].every(size=>Number.isFinite(size)&&size>=12700&&size<=18288000)||
+                widthEmu===current.widthEmu&&heightEmu===current.heightEmu)return;
+              const accepted=props.onApply({type:'resize_rectangle',targetId:run.id,rectangleSize:{widthEmu,heightEmu}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex flex-col gap-1">사각형 너비 (pt)
+                <input name="width" type="number" min="1" max="1440" step="any" required disabled={disabled()}
+                  value={(rectangle().widthEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <label class="flex flex-col gap-1">사각형 높이 (pt)
+                <input name="height" type="number" min="1" max="1440" step="any" required disabled={disabled()}
+                  value={(rectangle().heightEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>사각형 크기 적용</button>
+            </form>
+          }</Show>
+          </>
         }</Show>
       </Show>
       <Show when={props.pending}><p class="basis-full text-slate-600">저장하거나 실행 취소하세요.</p></Show>

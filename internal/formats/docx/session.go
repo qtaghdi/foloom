@@ -331,10 +331,14 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.RectangleColors != nil && op.Type != "update_rectangle_colors" {
 			return nil, fmt.Errorf("unexpected DOCX rectangle colors")
 		}
-		if op.Type == "update_rectangle_colors" || op.Type == "delete_rectangle" {
+		if op.RectangleSize != nil && op.Type != "resize_rectangle" {
+			return nil, fmt.Errorf("unexpected DOCX rectangle size")
+		}
+		if op.Type == "update_rectangle_colors" || op.Type == "delete_rectangle" || op.Type == "resize_rectangle" {
 			t := targets[op.TargetID]
 			if t.kind != "inline_rectangle" || seen[op.TargetID] ||
 				op.Type == "update_rectangle_colors" && op.RectangleColors == nil ||
+				op.Type == "resize_rectangle" && op.RectangleSize == nil ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
@@ -345,7 +349,13 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				edits = append(edits, replacement{start: t.run.start, end: t.run.end})
 				continue
 			}
-			updated, err := editInlineRectangleColors(s.pkg.document, t, *op.RectangleColors)
+			var updated []replacement
+			var err error
+			if op.Type == "resize_rectangle" {
+				updated, err = resizeInlineRectangle(s.pkg.document, t, *op.RectangleSize)
+			} else {
+				updated, err = editInlineRectangleColors(s.pkg.document, t, *op.RectangleColors)
+			}
 			if err != nil {
 				return nil, err
 			}
