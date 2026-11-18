@@ -16,11 +16,14 @@ type part struct {
 }
 
 type documentPackage struct {
-	parts         []part
-	document      []byte
-	styles        previewStyles
-	stylesPath    string
-	numberingPath string
+	parts              []part
+	document           []byte
+	styles             previewStyles
+	stylesPath         string
+	numberingPath      string
+	chartContentTypes  map[string]int
+	chartRelationships map[string]string
+	chartReferences    map[string]int
 }
 
 func loadPackage(content []byte) (*documentPackage, error) {
@@ -34,7 +37,11 @@ func loadPackage(content []byte) (*documentPackage, error) {
 	if len(reader.File) > 2048 {
 		return nil, fmt.Errorf("DOCX part count exceeds 2048")
 	}
-	p := &documentPackage{}
+	p := &documentPackage{
+		chartContentTypes:  map[string]int{},
+		chartRelationships: map[string]string{},
+		chartReferences:    map[string]int{},
+	}
 	names := map[string]bool{}
 	total := 0
 	for _, f := range reader.File {
@@ -101,6 +108,9 @@ func loadPackage(content []byte) (*documentPackage, error) {
 				if strings.Contains(strings.ToLower(ct), "macroenabled") {
 					return nil, fmt.Errorf("macro-enabled document content is unsupported")
 				}
+				if name := strings.TrimPrefix(partName, "/"); chartPartPath(name) && ct == chartContentType {
+					p.chartContentTypes[name]++
+				}
 				if partName == "/word/document.xml" && ct == "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml" {
 					contentTypeFound = true
 				}
@@ -149,6 +159,12 @@ func loadPackage(content []byte) (*documentPackage, error) {
 			}
 			if !names[resolved] {
 				return nil, fmt.Errorf("missing internal relationship target")
+			}
+			if chartPartPath(resolved) {
+				p.chartReferences[resolved]++
+				if part.header.Name == documentRelationships && kind == officeRelNS+"/chart" {
+					p.chartRelationships[id] = resolved
+				}
 			}
 			if part.header.Name == "_rels/.rels" && kind == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" && resolved == "word/document.xml" {
 				mainFound = true

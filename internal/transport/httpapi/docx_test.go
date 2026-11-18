@@ -378,7 +378,14 @@ func TestDOCXSectionSettingsThroughMCPAndHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := docxClient(t, api)
-	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{"sessionId": opened.ID, "baseRevision": opened.Revision, "operations": []any{map[string]any{"type": "update_section", "sectionId": opened.Sections[0].ID, "section": map[string]any{"width": 16838, "height": 11906, "orientation": "landscape", "columns": 2, "pageNumberStart": 25, "pageNumberFormat": "upperRoman"}}}}})
+	section := map[string]any{
+		"width": 16838, "height": 11906, "orientation": "landscape", "columns": 2,
+		"pageNumberStart": 25, "pageNumberFormat": "upperRoman", "headerDistance": 480, "footerDistance": 0,
+	}
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{
+		"sessionId": opened.ID, "baseRevision": opened.Revision,
+		"operations": []any{map[string]any{"type": "update_section", "sectionId": opened.Sections[0].ID, "section": section}},
+	}})
 	if err != nil || result.IsError {
 		t.Fatalf("section MCP: %v %+v", err, result)
 	}
@@ -395,6 +402,9 @@ func TestDOCXSectionSettingsThroughMCPAndHTTP(t *testing.T) {
 	}
 	if n := after.Sections[0]; n.PageNumberStart == nil || *n.PageNumberStart != 25 || n.PageNumberFormat != "upperRoman" {
 		t.Fatal("section numbering not shared", n)
+	}
+	if n := after.Sections[0]; n.HeaderDistance == nil || *n.HeaderDistance != 480 || n.FooterDistance == nil || *n.FooterDistance != 0 {
+		t.Fatal("section header and footer distances not shared", n)
 	}
 }
 

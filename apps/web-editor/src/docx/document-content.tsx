@@ -1,5 +1,6 @@
 import { TabText, layoutTabCharacters } from './tab-layout';
 import { resolveHeaderText } from './document-header-footer';
+import { defaultHeaderFooterDistance, previewHeaderVariants, sectionPaper } from './sections';
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import type { PasteMode, ClipboardParagraph } from './clipboard';
@@ -59,24 +60,26 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
   const pageSection=(page:PreviewPage)=>{const block=page[0]?.block;const id=block?.type==='paragraph'?block.paragraph.sectionId:block?.rows[0]?.cells[0]?.paragraphs[0]?.sectionId;return props.snapshot.sections?.find(section=>section.id===id);};
   const sectionStyle=(page:PreviewPage)=>{
    const info=pageSection(page);if(!info)return {'--docx-print-paper':printPaperFor(props.snapshot)};
-   const p=info.page,width=`min(100cqi, ${p.width/15}px)`;
-   return {'--docx-print-paper':printPaperFor(props.snapshot,info),width:`${p.width/15}px`,'max-width':'100%','min-block-size':`calc(${width} * ${p.height/p.width})`,'--paper-insets':[p.top,p.right,p.bottom,p.left].map(value=>`calc(${width} * ${value/p.width})`).join(' ')};
+   const p=sectionPaper(info),width=`min(100cqi, ${p.width/15}px)`;
+   const scaled=(twips:number)=>`calc(${width} * ${twips/p.width})`;
+   return {
+    '--docx-print-paper':printPaperFor(props.snapshot,info),
+    width:`${p.width/15}px`,'max-width':'100%','min-block-size':scaled(p.height),
+    '--paper-insets':[0,p.right,0,p.left].map(scaled).join(' '),
+    '--docx-body-top':scaled(p.top),'--docx-body-bottom':scaled(p.bottom),
+    '--docx-header-distance':scaled(info.headerDistance??defaultHeaderFooterDistance),
+    '--docx-footer-distance':scaled(info.footerDistance??defaultHeaderFooterDistance),
+   };
   };
-  const pageOrdinals=createMemo(()=>{
-   let previous:string|undefined, ordinal=0;
-   return props.pages.map(page=>{
-    const section=pageSection(page)?.id;
-    ordinal=section===previous?ordinal+1:1;
-    previous=section;
-    return ordinal;
-   });
-  });
+  const headerVariants=createMemo(()=>previewHeaderVariants(props.pages.map(pageSection),props.snapshot.evenAndOddHeaders));
   const headerText=(page:PreviewPage,index:number,kind:'header'|'footer')=>{
-   const section=pageSection(page),ordinal=pageOrdinals()[index]??1;
-   const variant=ordinal===1&&section?.firstPage?'first':props.snapshot.evenAndOddHeaders&&ordinal%2===0?'even':'default';
+   const section=pageSection(page),variant=headerVariants()[index]??'default';
    const slot=section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant);
    const text=resolveHeaderText(props.snapshot.sections??[],slot);
-   return [text,slot?.pageNumber?'쪽 번호 필드':'',slot?.totalPages?'전체 쪽 수 필드':''].filter(Boolean).join('\n');
+   const fields=slot?.compactPageNumbers?['쪽 번호 / 전체 쪽 수']:[
+    slot?.pageNumber?'쪽 번호 필드':'',slot?.totalPages?'전체 쪽 수 필드':'',
+   ];
+   return [text,...fields].filter(Boolean).join('\n');
   };
   const goToBookmark=(name:string)=>{
     const id=props.snapshot.bookmarks?.find(bookmark=>bookmark.name===name)?.paragraphId;
@@ -152,8 +155,10 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
       onKeyDown={input.keydown} onKeyUp={input.focus} onPointerUp={input.focus} onFocusIn={input.focus}
       onBeforeInput={input.beforeinput} onInput={event=>{input.input(event);scheduleTabs();}} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
       onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
-    <For each={props.pages}>{(page,index) => <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id} data-docx-page={index()+1} tabindex={-1}>
-    <Show when={headerText(page,index(),'header')}>{text=><div contentEditable={false} aria-label="머리글 미리보기" class="mb-4 whitespace-pre-wrap border-b border-dashed border-slate-200 pb-2 text-xs text-stone-600">{text()}</div>}</Show>
+    <For each={props.pages}>{(page,index) => <div class="docx-paper mx-auto flex w-full flex-col border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id} data-docx-page={index()+1} tabindex={-1}>
+    <div contentEditable={false} class="docx-page-edge min-h-[var(--docx-body-top,0px)]">
+      <Show when={headerText(page,index(),'header')}>{text=><div aria-label="머리글 미리보기" class="whitespace-pre-wrap border-b border-dashed border-slate-200 pt-[var(--docx-header-distance,0px)] pb-2 text-xs break-words text-stone-600 print:mb-4 print:pt-0">{text()}</div>}</Show>
+    </div>
     <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
     <Show when={pageSection(page)}>{section=><p contentEditable={false} data-docx-print-hide class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
     <div style={{'column-count':pageSection(page)?.columns,'column-gap':pageSection(page)?`${pageSection(page)!.columnSpace/20}pt`:undefined}}>
@@ -166,7 +171,9 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
     }</For>
     </div>
     </Show>
-    <Show when={headerText(page,index(),'footer')}>{text=><div contentEditable={false} aria-label="바닥글 미리보기" class="mt-4 whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 text-xs text-stone-600">{text()}</div>}</Show>
+    <div contentEditable={false} class="docx-page-edge mt-auto flex min-h-[var(--docx-body-bottom,0px)] flex-col justify-end">
+      <Show when={headerText(page,index(),'footer')}>{text=><div aria-label="바닥글 미리보기" class="whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 pb-[var(--docx-footer-distance,0px)] text-xs break-words text-stone-600 print:mt-4 print:pb-0">{text()}</div>}</Show>
+    </div>
   </div>}</For></div></>;
 }
 
