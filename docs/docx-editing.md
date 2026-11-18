@@ -855,7 +855,7 @@ HTTP·MCP는 같은 문단의 `comment.startRunId`와 `comment.endRunId`를
 선택한 전체 run에 주석을 연결합니다.
 
 주석을 단 문단의 내용은 수정할 수 있으며 범위를 없앨 수 있는 구조 조작은
-보호합니다. 새 답글 작성은 지원 범위에 포함되지 않습니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
+보호합니다. [Word 주석 구조](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-insert-a-comment-into-a-word-processing-document)를 사용합니다.
 
 Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 `주석 해결`과
 `주석 다시 열기`를 적용할 수 있습니다. HTTP·MCP는 기존 주석 ID를
@@ -863,6 +863,11 @@ Word 확장 메타데이터에 고유하게 연결된 최상위 주석에서는 
 주석 본문·작성자·연결 범위·답글은 유지합니다. 확장 정보가 없는 주석에서는
 본문과 위치를 확인할 수 있습니다.
 [Word 확장 주석 상태](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/9660dacc-2ceb-4352-87d2-42ba1184f522)를 사용합니다.
+
+같은 최상위 주석의 `답글 쓰기`에서 한 단계의 답글을 추가하고 검토 패널에서
+상위 주석과 함께 봅니다. HTTP·MCP는 상위 주석 ID에 `reply_comment`와
+`comment: { text }`를 보냅니다. 원래 주석의 범위와 해결 상태를 유지합니다.
+확장 메타데이터가 없는 주석이나 이미 다른 주석에 달린 답글은 작성 대상에서 제외합니다.
 
 검토의 `텍스트 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존
