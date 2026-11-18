@@ -34,18 +34,18 @@ DOCX_COMPATIBILITY_OUTPUT=/tmp/docx-candidate-unique make docx-compatibility-tes
 `보존`은 현재 합성 fixture 또는 adapter 검사가 다룬 범위이며 모든 외부 문서에
 대한 보장이 아닙니다. 표시와 편집은 서로 다른 기준으로 판단합니다.
 
-| 기능 | 보존 증거 | 현재 표시·편집 | 완료 증거 추적 |
-| --- | --- | --- | --- |
-| 일반 본문·혼합 run·단순 표 텍스트 | 대상 밖 XML·다른 part 및 반복 저장 검사 | run 텍스트 편집, 일부 서식 표시 | #83, #85, #87, #91 |
-| 스타일·글꼴·용지·명시적 나눔 | adapter 단위 검사, native 전체 미검증 | 제한된 미리보기, 서식 작성 미지원 | #87, #90, #93 |
-| 목록·탭 정지점 | native 자료·의미 비교 필요 | 작성 미지원 | #89 |
-| 병합·중첩 표 | 보호된 구조 쓰기 차단 검사 | 읽기 전용, 구조 작성 미지원 | #91 |
-| 그림·media | 관련 없는 media part payload 보존 | 실제 그림 배치·편집 미지원 | #92 |
-| 구역·머리글·바닥글 | 합성 머리글 part 보존 | 표시·편집 미지원 | #90 |
-| 링크·필드·각주·목차 | 합성 링크·필드 보호, 다른 참조는 미검증 | 작성·갱신 미지원 | #95 |
-| 주석·변경 추적 | 합성 tracked insertion 보호, 주석 미검증 | 검토·작성 미지원 | #96 |
-| 수식·도형·텍스트 상자·차트·SmartArt·OLE | 유형별 native 자료·관계 비교 필요 | 편집 미지원 | #97 |
-| 이력·복구·탐색·접근성·국제 문자·성능 | 기능별 회귀와 실제 기기 측정 필요 | 제한된 초안·찾기·화면 지원 | #86, #88, #94, #98 |
+| 기능 | 표시·편집 | 보존·재열기 증거와 남은 범위 |
+| --- | --- | --- |
+| 본문·혼합 run·입력 | 고른 문단의 추가·분리·병합·이동, 혼합 run 선택과 서식 붙여넣기를 지원합니다. Foloom에서 복사한 탭·연속 공백·줄바꿈이 유지됩니다. 새 문단에 Word ID를 저장합니다. | 합성 corpus의 대상 밖 XML과 반복 저장, Chrome의 범위 선택과 macOS 한글 입력을 확인했습니다. 복합 보호 경계, 일본어·중국어 실제 입력기와 모바일 키보드는 추적 중입니다. [#83](https://github.com/qtaghdi/foloom/issues/83), [#85](https://github.com/qtaghdi/foloom/issues/85), [#234](https://github.com/qtaghdi/foloom/pull/234), [#246](https://github.com/qtaghdi/foloom/pull/246) |
+| 글자·문단 서식·스타일 | 지원 글자 서식, 문단 정렬·간격·방향, 문단·글자 스타일과 언어를 지정합니다. 편집 run의 라틴·동아시아 글꼴을 구분해 표시합니다. | 부분 run 변경 뒤 주변 속성과 테마 글꼴 보존을 비교했습니다. 테마 조판과 Word에서의 고급 혼합 서식은 추적 중입니다. [#87](https://github.com/qtaghdi/foloom/issues/87), [#184](https://github.com/qtaghdi/foloom/pull/184), [#198](https://github.com/qtaghdi/foloom/pull/198), [#238](https://github.com/qtaghdi/foloom/pull/238) |
+| 목록·탭 | 글머리·번호·상위 번호를 포함한 다단계 목록과 지원하는 탭 정지점·리더를 편집합니다. | Word 번호 정의와 LibreOffice에서 다시 저장한 복합 목록 번호를 확인했습니다. 기존 복합 하위 항목의 재시작과 목록 조판은 추적 중입니다. [#89](https://github.com/qtaghdi/foloom/issues/89), [#224](https://github.com/qtaghdi/foloom/pull/224), [#226](https://github.com/qtaghdi/foloom/pull/226) |
+| 표 | 단순 표의 삽입·삭제, 행·열과 높이 등을 변경합니다. 병합·중첩 및 복합 범위가 있는 표의 구조를 보호합니다. | 사각 표의 바뀌지 않은 셀을 비교했고 표로 시작하는 문서의 원본 표를 유지했습니다. [#91](https://github.com/qtaghdi/foloom/issues/91), [#206](https://github.com/qtaghdi/foloom/pull/206) |
+| 그림 | 지원 인라인 그림을 삽입·교체·삭제하고 크기·회전·자르기·대체 텍스트·캡션을 편집합니다. 그림과 번호 캡션을 본문의 지원 위치에서 함께 옮기고 전용 인라인 그림 문단을 정렬합니다. | media 및 관계 파일과 저장·실행 취소 바이트를 비교했고 LibreOffice에서 캡션 순서를 확인했습니다. 떠 있는 그림과 복합 구조의 배치는 추적 중입니다. [#92](https://github.com/qtaghdi/foloom/issues/92), [#222](https://github.com/qtaghdi/foloom/pull/222), [#241](https://github.com/qtaghdi/foloom/pull/241) |
+| 용지·구역·머리글·인쇄 | 용지·여백·구역 경계, 지원 머리글·바닥글, 홀짝·첫 페이지, 일부 쪽 번호 설정과 인쇄를 제공합니다. | Chrome·LibreOffice PDF로 명시된 홀짝 구역의 빈 페이지와 뒤 페이지 구분을 확인했습니다. Word 자동 조판과 차이가 날 수 있는 범위는 따로 기록합니다. [#90](https://github.com/qtaghdi/foloom/issues/90), [#93](https://github.com/qtaghdi/foloom/issues/93), [#233](https://github.com/qtaghdi/foloom/pull/233) |
+| 링크·북마크·각주·필드 | 지원 링크·북마크·각주·미주, 일부 상호 참조, 날짜, 제목 목차와 그림·표 목록을 작성하거나 갱신합니다. 기존 내부 링크의 대상도 바꿀 수 있습니다. | LibreOffice에서 날짜·목차·번호 목록 및 각주·미주를 재저장했습니다. 복합 참조의 구조 편집과 Word 페이지 번호 재계산은 추적 중입니다. [#95](https://github.com/qtaghdi/foloom/issues/95), [#217](https://github.com/qtaghdi/foloom/pull/217), [#228](https://github.com/qtaghdi/foloom/pull/228), [#236](https://github.com/qtaghdi/foloom/pull/236), [#244](https://github.com/qtaghdi/foloom/pull/244) |
+| 주석·변경 추적 | 지원 주석과 답글·해결, 텍스트·굵게·문단 정렬의 변경 기록과 수락·거절을 제공합니다. | 지원하는 Word 변경 기록의 마크업과 원래 서식 복원을 비교했습니다. 복합 변경과 외부 편집기 간 위치 보존은 추적 중입니다. [#96](https://github.com/qtaghdi/foloom/issues/96), [#197](https://github.com/qtaghdi/foloom/pull/197), [#202](https://github.com/qtaghdi/foloom/pull/202), [#231](https://github.com/qtaghdi/foloom/pull/231) |
+| 수식·도형·텍스트 상자·차트·SmartArt·OLE | 단순 수식·사각형과 일부 텍스트 상자·평문 콘텐츠 컨트롤을 편집합니다. 지원 차트의 제목·크기·단일 계열 수치를 변경하고 지원 인라인 배치를 삭제합니다. SmartArt 내부 문구를 표시합니다. | LibreOffice에서 일부 개체를 재저장했습니다. 링크·내장 통합 문서·다중 계열 데이터, 복합 배치, SmartArt와 OLE 편집은 추적 중입니다. [#97](https://github.com/qtaghdi/foloom/issues/97), [#207](https://github.com/qtaghdi/foloom/pull/207), [#215](https://github.com/qtaghdi/foloom/pull/215), [#239](https://github.com/qtaghdi/foloom/pull/239), [#245](https://github.com/qtaghdi/foloom/pull/245) |
+| 이력·복구·탐색 | 확정 이력과 초안 이력, 내보내기, 복구와 검색·개요를 제공합니다. 원격 복원 작업을 활동에서 확인할 수 있습니다. | Chrome에서 서버 재시작, 확정 복구, 선택과 원격 화면 및 검색 위치를 확인했습니다. 실제 Word 및 보조 입력 검증은 개별 이슈에서 추적합니다. [#86](https://github.com/qtaghdi/foloom/issues/86), [#88](https://github.com/qtaghdi/foloom/issues/88), [#94](https://github.com/qtaghdi/foloom/issues/94), [#98](https://github.com/qtaghdi/foloom/issues/98), [#223](https://github.com/qtaghdi/foloom/pull/223) |
 
 ## native 검증 절차
 
