@@ -7,12 +7,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var bookmarkName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,39}$`)
 
 type ReferenceEdit struct {
-	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
+	Action      string `json:"action" jsonschema:"insert_link, insert_bookmark, insert_bookmark_ref, insert_bookmark_page_ref, insert_bookmark_number_ref, insert_toc, update_toc, insert_date_field, refresh_date_field, insert_figure_list, insert_table_list, update_caption_list, insert_footnote, insert_endnote, set_footnote_text, set_endnote_text, delete_footnote, delete_endnote, rename_bookmark, delete_bookmark, set_link_url, or unlink"`
 	Text        string `json:"text,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Bookmark    string `json:"bookmark,omitempty"`
@@ -138,6 +139,12 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 		}
 		return p.updateCaptionList(t)
 	}
+	if edit.Action == "refresh_date_field" {
+		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
+			return nil, fmt.Errorf("unexpected DOCX date field data")
+		}
+		return refreshDateField(data, t, time.Now())
+	}
 	if edit.Action == "update_toc" {
 		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
 			return nil, fmt.Errorf("unexpected DOCX table of contents fields")
@@ -173,6 +180,11 @@ func (p *documentPackage) referenceEdits(data []byte, t target, edit ReferenceEd
 			return insertCaptionList(paragraph, "Figure", figureListInstruction)
 		}
 		return insertCaptionList(paragraph, "Table", tableListInstruction)
+	case "insert_date_field":
+		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
+			return nil, fmt.Errorf("unexpected DOCX date field data")
+		}
+		return appendRun(dateFieldXML(time.Now())), nil
 	case "insert_toc":
 		if edit.URL != "" || edit.Text != "" || edit.Bookmark != "" {
 			return nil, fmt.Errorf("unexpected DOCX table of contents fields")

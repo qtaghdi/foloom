@@ -127,6 +127,21 @@ export function DocumentImageToolbar(props: {
                 <button type="submit" class={buttonClass} disabled={disabled()}>{picture.picture?.caption?'그림 캡션 변경':'그림 번호와 캡션 삽입'}</button>
               </form>
             </Show>
+            <Show when={picture.picture?.moveCaptionUp || picture.picture?.moveCaptionDown}>
+              <div role="group" aria-label="그림과 캡션 함께 이동" class="flex flex-wrap gap-2">
+                <For each={['up','down'] as const}>{direction=>
+                  <button type="button" class={buttonClass}
+                    disabled={disabled()||!(direction==='up'?picture.picture?.moveCaptionUp:picture.picture?.moveCaptionDown)}
+                    onClick={()=>{
+                      const type=direction==='up'?'move_picture_caption_up':'move_picture_caption_down';
+                      const accepted=props.onApply({type,targetId:picture.id});
+                      setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+                    }}>
+                    {direction==='up'?'그림과 캡션 위로':'그림과 캡션 아래로'}
+                  </button>
+                }</For>
+              </div>
+            </Show>
             <Show when={picture.picture?.rotationEditable}>
               <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
                 event.preventDefault();

@@ -256,6 +256,8 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 type PictureInfo struct {
 	Caption          string     `json:"caption,omitempty"`
 	CaptionEditable  bool       `json:"captionEditable,omitempty"`
+	MoveCaptionUp    bool       `json:"moveCaptionUp,omitempty"`
+	MoveCaptionDown  bool       `json:"moveCaptionDown,omitempty"`
 	Rotation         int        `json:"rotation,omitempty"`
 	RotationEditable bool       `json:"rotationEditable,omitempty"`
 	Crop             *ImageCrop `json:"crop,omitempty"`
@@ -362,6 +364,7 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				info.MoveCaptionUp, info.MoveCaptionDown = source.moveUp != nil, source.moveDown != nil
 				_, info.Caption = editablePictureCaption(source, s.pkg.document)
 				if captionParagraph(source) {
 					if !captionFieldsChecked {
