@@ -147,12 +147,13 @@ type Row struct {
 }
 
 type Block struct {
-	PrependParagraph bool       `json:"prependParagraph,omitempty"`
-	TableEditable    bool       `json:"tableEditable,omitempty"`
-	ID               string     `json:"id"`
-	Type             string     `json:"type"`
-	Paragraph        *Paragraph `json:"paragraph,omitempty"`
-	Rows             []Row      `json:"rows,omitempty"`
+	TableCaptionInsertable bool       `json:"tableCaptionInsertable,omitempty"`
+	PrependParagraph       bool       `json:"prependParagraph,omitempty"`
+	TableEditable          bool       `json:"tableEditable,omitempty"`
+	ID                     string     `json:"id"`
+	Type                   string     `json:"type"`
+	Paragraph              *Paragraph `json:"paragraph,omitempty"`
+	Rows                   []Row      `json:"rows,omitempty"`
 }
 
 type HistoryState struct {

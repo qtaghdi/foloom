@@ -13,8 +13,9 @@ const maxTableCells = 3000
 const maxTableRowHeight = 31680
 
 type TableEdit struct {
+	Caption     string `json:"caption,omitempty" jsonschema:"Plain caption text for insert_caption, up to 1024 UTF-8 bytes"`
 	Height      *int   `json:"height,omitempty" jsonschema:"Minimum row height in twips, from 20 to 31680"`
-	Action      string `json:"action" jsonschema:"insert, delete, add_row, delete_row, move_row, add_column, delete_column, move_column, set_row_height, or insert_body_paragraph_before"`
+	Action      string `json:"action" jsonschema:"insert, delete, add_row, delete_row, move_row, add_column, delete_column, move_column, set_row_height, insert_caption, or insert_body_paragraph_before"`
 	Rows        int    `json:"rows,omitempty"`
 	Columns     int    `json:"columns,omitempty"`
 	Index       *int   `json:"index,omitempty" jsonschema:"Zero-based row or column index"`
@@ -108,6 +109,9 @@ func leadingBodyTable(n *node) bool {
 }
 
 func tableReplacement(data []byte, target target, op TableEdit) (replacement, error) {
+	if op.Caption != "" {
+		return replacement{}, fmt.Errorf("unexpected DOCX table caption")
+	}
 	if op.Action != "set_row_height" && op.Height != nil {
 		return replacement{}, fmt.Errorf("unexpected DOCX row height")
 	}

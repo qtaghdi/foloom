@@ -88,7 +88,7 @@ export const snapshotSchema = z.object({
   history: z.object({ undo: z.number().int().min(0).max(10), redo: z.number().int().min(0).max(10), undoActor: z.enum(['human', 'ai']).optional(), redoActor: z.enum(['human', 'ai']).optional() }).optional(),
   blocks: z.array(z.discriminatedUnion('type', [
     z.object({ id: z.string(), type: z.literal('paragraph'), paragraph: paragraphSchema }),
-    z.object({ id: z.string(), type: z.literal('table'), tableEditable: z.boolean().optional(), prependParagraph:z.boolean().optional(), rows: z.array(z.object({
+    z.object({ id: z.string(), type: z.literal('table'), tableEditable: z.boolean().optional(), tableCaptionInsertable:z.boolean().optional(), prependParagraph:z.boolean().optional(), rows: z.array(z.object({
       height: z.number().int().min(1).max(31680).optional(),
       cells: z.array(z.object({ id: z.string(), paragraphs: z.array(paragraphSchema) })),
     })) }),
@@ -125,7 +125,7 @@ export type ListDefinition=ListSetup & {key:string};
 export type ListOperation={type:'define_list';listDefinition:ListDefinition};
 export type ParagraphList=z.infer<typeof paragraphListSchema>;
 export type TableAction = 'insert' | 'delete' | 'add_row' | 'delete_row' | 'move_row' | 'add_column' | 'delete_column' | 'move_column' | 'set_row_height';
-export type TableEdit = {action:'insert_body_paragraph_before'} | {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number;height?:number};
+export type TableEdit = {action:'insert_body_paragraph_before'} | {action:'insert_caption';caption:string} | {action:TableAction;rows?:number;columns?:number;index?:number;destination?:number;height?:number};
 export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'no_page_after' | 'section_next_page' | 'section_continuous' | 'remove_section' | 'move_section_earlier' | 'move_section_later';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
