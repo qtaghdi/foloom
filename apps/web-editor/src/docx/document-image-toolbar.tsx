@@ -19,7 +19,10 @@ export function DocumentImageToolbar(props: {
   const [reading,setReading]=createSignal(false),[error,setError]=createSignal('');
   const [pictureId,setPictureId] = createSignal('');
   const selectedPicture = () => props.pictures.find(picture => picture.id === pictureId());
-  const selectedIsFloating=()=>selectedPicture()?.picture?.placement?.startsWith('floating_')??false;
+  const selectedIsFloating=()=>{
+    const placement=selectedPicture()?.picture?.placement;
+    return placement!==undefined&&placement!=='inline';
+  };
   const disabled=()=>props.disabled||props.pending||reading();
   let picker!:HTMLInputElement;
   const apply=async(replace:boolean)=>{
@@ -116,7 +119,7 @@ export function DocumentImageToolbar(props: {
                 if(disabled())return;
                 const select=event.currentTarget.elements.namedItem('placement') as HTMLSelectElement;
                 const placement=select.value;
-                if((placement!=='inline'&&placement!=='floating_left'&&placement!=='floating_center'&&placement!=='floating_right')||
+                if((placement!=='inline'&&placement!=='floating_left'&&placement!=='floating_center'&&placement!=='floating_right'&&placement!=='square_left'&&placement!=='square_right')||
                     placement===current())return;
                 const accepted=props.onApply({type:'update_image',targetId:picture.id,image:{action:'set_placement',placement}});
                 setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
@@ -127,6 +130,10 @@ export function DocumentImageToolbar(props: {
                     <option value="floating_left">위아래 감싸기 · 왼쪽</option>
                     <option value="floating_center">위아래 감싸기 · 가운데</option>
                     <option value="floating_right">위아래 감싸기 · 오른쪽</option>
+                    <Show when={picture.picture?.squareWrap||current().startsWith('square_')}>
+                      <option value="square_left" disabled={!picture.picture?.squareWrap&&current()!=='square_left'}>사각 감싸기 · 왼쪽</option>
+                      <option value="square_right" disabled={!picture.picture?.squareWrap&&current()!=='square_right'}>사각 감싸기 · 오른쪽</option>
+                    </Show>
                   </select>
                 </label>
                 <button type="submit" class={buttonClass} disabled={disabled()}>그림 배치 적용</button>
