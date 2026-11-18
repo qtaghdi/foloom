@@ -698,3 +698,72 @@ func TestDOCXPicturePlacementPreservesNativeInlineFallback(t *testing.T) {
 		t.Fatal("undo did not recover the original inline package")
 	}
 }
+
+func TestSquarePictureWrapValidatesTextFlowAndRestoresInline(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(
+		`<w:p/><w:p><w:r><w:t>First ordinary paragraph</w:t></w:r></w:p>`+
+			`<w:p><w:r><w:t>Second ordinary paragraph</w:t></w:r></w:p>`))
+	save := func(snapshot Snapshot, operations ...Operation) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: snapshot.ID, BaseRevision: snapshot.Revision, Operations: operations}, "human")
+	}
+	var pixels bytes.Buffer
+	if err := png.Encode(&pixels, image.NewRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	v, err := save(v, Operation{Type: "update_image", TargetID: v.Blocks[0].ID, Image: &ImageEdit{
+		Action: "insert", Base64: base64.StdEncoding.EncodeToString(pixels.Bytes()), WidthEMU: 1270000,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := bytes.Clone(s.pkg.document)
+	baseline := fileBytes(t, filename)
+	if !v.Blocks[0].Paragraph.Runs[0].Picture.SquareWrap {
+		t.Fatal("simple single-column picture was not offered square wrapping")
+	}
+	checkUnsupported := func(name, body string) {
+		t.Helper()
+		raw := bytes.Replace(original, []byte(`</w:body>`), []byte(body+`</w:body>`), 1)
+		_, targets, _, err := inspect(raw, v.ID, v.Revision)
+		if err != nil || targets[v.Blocks[0].Paragraph.Runs[0].ID].squareWrap {
+			t.Fatal(name, "should protect square placement", err)
+		}
+	}
+	checkUnsupported("multi-column layout", `<w:sectPr><w:cols w:num="2"/></w:sectPr>`)
+	checkUnsupported("table", `<w:tbl/>`)
+	checkUnsupported("explicit next page", `<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:r><w:t>Next</w:t></w:r></w:p>`)
+	place := func(snapshot Snapshot, mode string) Operation {
+		return Operation{Type: "update_image", TargetID: snapshot.Blocks[0].Paragraph.Runs[0].ID,
+			Image: &ImageEdit{Action: "set_placement", Placement: mode}}
+	}
+	if _, err := save(v, place(v, "square_left"), place(v, "square_right")); err == nil ||
+		!bytes.Equal(baseline, fileBytes(t, filename)) {
+		t.Fatal("compound square placement altered the document")
+	}
+	for _, mode := range []struct{ placement, wrapSide string }{{"square_left", "right"}, {"square_right", "left"}} {
+		v, err = save(v, place(v, mode.placement))
+		if err != nil || v.Blocks[0].Paragraph.Runs[0].Picture.Placement != mode.placement ||
+			!bytes.Contains(s.pkg.document, []byte(`<wp:wrapSquare wrapText="`+mode.wrapSide+`"/>`)) {
+			t.Fatal("expected native square wrapping", mode, err)
+		}
+		reopened, err := Open(ctx, filename)
+		if err != nil || mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[0].Picture.Placement != mode.placement {
+			t.Fatal("reopen lost native square wrapping", mode, err)
+		}
+	}
+	v, err = save(v, place(v, "inline"))
+	if err != nil || !bytes.Equal(s.pkg.document, original) {
+		t.Fatal("inline fallback did not restore original XML", err)
+	}
+	v, err = save(v, Operation{Type: "update_image", TargetID: v.Blocks[0].Paragraph.Runs[0].ID,
+		Image: &ImageEdit{Action: "resize", WidthEMU: 4000000}})
+	if err != nil || v.Blocks[0].Paragraph.Runs[0].Picture.SquareWrap {
+		t.Fatal("full-width picture was not protected", err)
+	}
+	oversized := fileBytes(t, filename)
+	if _, err := save(v, place(v, "square_left")); err == nil || !bytes.Equal(oversized, fileBytes(t, filename)) {
+		t.Fatal("oversized picture changed placement")
+	}
+}
