@@ -155,3 +155,48 @@ func TestMoveSectionBoundaryPreservesSettingsAndRequiresContentBothSides(t *test
 		})
 	}
 }
+
+func TestInsertParitySectionBoundary(t *testing.T) {
+	ctx := context.Background()
+	for _, test := range []struct{ mode, kind string }{
+		{"section_even_page", "evenPage"},
+		{"section_odd_page", "oddPage"},
+	} {
+		t.Run(test.kind, func(t *testing.T) {
+			const paragraph = `<w:p><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>next</w:t></w:r></w:p>`
+			const layout = `<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgNumType w:start="3" w:fmt="upperRoman"/></w:sectPr>`
+			s, path := withDocument(t, bodyXML(paragraph+layout))
+			original := fileBytes(t, path)
+			before := mustSnapshot(t, s)
+			input := ApplyInput{SessionID: before.ID, BaseRevision: before.Revision, Operations: []Operation{
+				{Type: "update_boundary", TargetID: before.Blocks[1].ID, Boundary: test.mode},
+			}}
+			if _, err := s.Apply(ctx, input, "ai"); err == nil || !bytes.Equal(original, fileBytes(t, path)) {
+				t.Fatal("inserting an empty trailing section changed the file")
+			}
+			input.Operations[0].TargetID = before.Blocks[0].ID
+			if _, err := s.Apply(ctx, input, "ai"); err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := Open(ctx, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			after := mustSnapshot(t, reopened)
+			if len(after.Sections) != 2 {
+				t.Fatalf("expected two sections: %+v", after.Sections)
+			}
+			left, right := after.Sections[0], after.Sections[1]
+			if left.EndBlock != 0 || right.StartBlock != 1 || right.BreakType != test.kind ||
+				left.PageNumberStart == nil || *left.PageNumberStart != 3 || right.PageNumberStart != nil ||
+				right.PageNumberFormat != left.PageNumberFormat || right.Page != left.Page ||
+				after.Blocks[0].Paragraph.Runs[0].Text != "first" || after.Blocks[1].Paragraph.Runs[0].Text != "next" {
+				t.Fatalf("section boundary or retained settings differ: %+v", after.Sections)
+			}
+			historyRestore(t, reopened, "undo")
+			if !bytes.Equal(original, fileBytes(t, path)) {
+				t.Fatal("undo did not restore original bytes")
+			}
+		})
+	}
+}

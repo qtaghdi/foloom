@@ -14,6 +14,7 @@ func boundaryReplacements(root *node, data []byte, session string, revision uint
 	if props.child("pPrChange") != nil || p.has("ins") || p.has("del") || p.has("moveFrom") || p.has("moveTo") {
 		return nil, fmt.Errorf("tracked DOCX paragraph boundaries are protected")
 	}
+	var kind string
 	switch mode {
 	case "remove_section":
 		closing := props.child("sectPr")
@@ -75,7 +76,14 @@ func boundaryReplacements(root *node, data []byte, session string, revision uint
 			}
 		}
 		return []replacement{{insert, insert, []byte(raw)}}, nil
-	case "section_next_page", "section_continuous":
+	case "section_next_page":
+		kind = "nextPage"
+	case "section_continuous":
+		kind = "continuous"
+	case "section_even_page":
+		kind = "evenPage"
+	case "section_odd_page":
+		kind = "oddPage"
 	default:
 		return nil, fmt.Errorf("invalid DOCX boundary mode")
 	}
@@ -98,10 +106,6 @@ func boundaryReplacements(root *node, data []byte, session string, revision uint
 		}
 		if !section.info.Editable || index == section.info.EndBlock {
 			return nil, fmt.Errorf("DOCX section split requires body content on both sides")
-		}
-		kind := "nextPage"
-		if mode == "section_continuous" {
-			kind = "continuous"
 		}
 		left, right, err := splitSectionProperties(section.props, data, kind)
 		if err != nil {
