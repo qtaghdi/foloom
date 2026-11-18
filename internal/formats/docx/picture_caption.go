@@ -20,7 +20,7 @@ func supportedFigureSequence(instruction string) bool {
 
 func captionFollowingPicture(t target) (*node, bool) {
 	p := t.paragraph
-	if t.kind != "picture" || p == nil || !p.parent.is("body") || t.run == nil || t.run.parent != p ||
+	if t.kind != "picture" || p == nil || (!p.parent.is("body") && !t.pictureCellCaption) || t.run == nil || t.run.parent != p ||
 		p.has("sectPr") || p.has("br") || p.has("bookmarkStart") || p.has("bookmarkEnd") ||
 		p.has("commentRangeStart") || p.has("commentRangeEnd") {
 		return nil, false
@@ -76,7 +76,7 @@ type figureCaption struct {
 }
 
 func readFigureCaption(p *node, data []byte) figureCaption {
-	if p == nil || !p.is("p") || !p.parent.is("body") || p.has("sectPr") ||
+	if p == nil || !p.is("p") || pictureCaptionBody(p) == nil || p.has("sectPr") ||
 		bytes.Contains(data[p.start:p.end], []byte("<!--")) {
 		return figureCaption{}
 	}
@@ -105,7 +105,7 @@ func readFigureCaption(p *node, data []byte) figureCaption {
 
 func captionSequenceValue(field *node, data []byte, supported func(string) bool) *node {
 	if !field.is("fldSimple") || !supported(field.attr("instr")) || len(field.children) != 1 ||
-		!field.parent.is("p") || !field.parent.parent.is("body") || bytes.Contains(data[field.start:field.end], []byte("<!--")) {
+		!field.parent.is("p") || bytes.Contains(data[field.start:field.end], []byte("<!--")) {
 		return nil
 	}
 	for _, attr := range field.attrs {
@@ -122,11 +122,26 @@ func captionSequenceValue(field *node, data []byte, supported func(string) bool)
 }
 
 func documentFigureFields(body *node) ([]*node, error) {
-	return documentCaptionFields(body, "figure", isFigureSequence, supportedFigureSequence)
+	return documentCaptionFields(body, "figure", isFigureSequence, supportedFigureSequence, true)
 }
 
-func documentCaptionFields(body *node, label string, isSequence, supported func(string) bool) ([]*node, error) {
+// Cell figures share the document body sequence in XML order.
+func pictureCaptionBody(p *node) *node {
+	parent := p.parent
+	if parent.is("body") {
+		return parent
+	}
+	if parent.is("tc") && parent.parent.is("tr") && parent.parent.parent.is("tbl") &&
+		parent.parent.parent.parent.is("body") {
+		return parent.parent.parent.parent
+	}
+	return nil
+}
+
+func documentCaptionFields(body *node, label string, isSequence, supported func(string) bool, allowCells bool) ([]*node, error) {
 	var values []*node
+	var ranged map[*node]bool
+	safeTables := map[*node]bool{}
 	var walk func(*node) error
 	walk = func(n *node) error {
 		if n.is("fldChar") || n.is("instrText") || n.is("delInstrText") {
@@ -136,6 +151,29 @@ func documentCaptionFields(body *node, label string, isSequence, supported func(
 			value := captionSequenceValue(n, body.parent.source, supported)
 			if value == nil {
 				return fmt.Errorf("protected or invalid DOCX %s sequence", label)
+			}
+			paragraph := n.parent
+			if paragraph.parent != body {
+				if !allowCells || pictureCaptionBody(paragraph) != body {
+					return fmt.Errorf("protected DOCX %s sequence outside the body", label)
+				}
+				if ranged == nil {
+					var valid bool
+					ranged, valid = bodyRangeBlocks(body)
+					if !valid || body.has("permStart") || body.has("permEnd") {
+						return fmt.Errorf("protected DOCX numbering ranges")
+					}
+				}
+				table := paragraph.parent.parent.parent
+				safe, checked := safeTables[table]
+				if !checked {
+					_, safe = simpleTable(table)
+					safeTables[table] = safe && !ranged[table]
+				}
+				caption := readFigureCaption(paragraph, body.parent.source)
+				if !safeTables[table] || caption.number != value || caption.bookmark != nil {
+					return fmt.Errorf("protected DOCX figure sequence in a table cell")
+				}
 			}
 			values = append(values, value)
 		}
@@ -152,7 +190,7 @@ func documentCaptionFields(body *node, label string, isSequence, supported func(
 
 func (p *documentPackage) pictureCaption(t target, text string) ([]replacement, error) {
 	if !captionParagraph(t) || !validText(text) || strings.TrimSpace(text) == "" || len(text) > 1024 {
-		return nil, fmt.Errorf("DOCX caption requires plain text and an uncaptioned body picture")
+		return nil, fmt.Errorf("DOCX caption requires plain text and an uncaptioned picture")
 	}
 	info, relationship := inlinePictureInfo(t.run)
 	if info == nil {
@@ -161,7 +199,8 @@ func (p *documentPackage) pictureCaption(t target, text string) ([]replacement, 
 	if _, _, err := imageConfig(p.partData(p.picturePartMap()[relationship], nil), maxImageReadBytes); err != nil {
 		return nil, err
 	}
-	values, err := documentFigureFields(t.paragraph.parent)
+	body := pictureCaptionBody(t.paragraph)
+	values, err := documentFigureFields(body)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +208,7 @@ func (p *documentPackage) pictureCaption(t target, text string) ([]replacement, 
 	if err != nil {
 		return nil, err
 	}
-	refs, err := figureReferenceNumberEdits(t.paragraph.parent, p.document, values, t.paragraph.end)
+	refs, err := figureReferenceNumberEdits(body, p.document, values, t.paragraph.end)
 	if err != nil {
 		return nil, err
 	}

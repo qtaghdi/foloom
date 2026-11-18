@@ -228,7 +228,7 @@ export function DocumentReferenceToolbar(props:{
             <select aria-label="기존 각주·미주" class="editor-select min-h-11 max-w-56" disabled={disabled()} value={selectedNote()?.id??''}
               onChange={event=>{setNoteId(event.currentTarget.value);setError('');}}>
               <option value="">각주·미주 선택</option>
-              <For each={props.notes}>{note=><option value={note.id}>{note.object?.kind==='endnote'?'미주':'각주'} {note.object?.text?.slice(0,60)}</option>}</For>
+              <For each={props.notes}>{note=><option value={note.id}>{note.object?.kind==='endnote'?'미주':'각주'} {note.object?.label ? `${note.object.label} · ` : ''}{note.object?.text?.slice(0,60)}</option>}</For>
             </select>
           </label>
           <Show when={selectedNote()} keyed>{note=>

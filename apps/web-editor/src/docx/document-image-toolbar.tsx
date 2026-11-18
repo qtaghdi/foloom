@@ -91,10 +91,11 @@ export function DocumentImageToolbar(props: {
                   class="min-h-11 max-w-full rounded border border-slate-300 px-2" disabled={disabled()}/>
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>대체 텍스트 적용</button>
-              <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+              <button type="button" class={buttonClass} disabled={disabled()||picture.picture?.deleteProtected} onClick={()=>{
                 const changed=props.onApply({type:'update_image',targetId:picture.id,image:{action:'delete'}});
                 setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
               }}>그림 삭제</button>
+              <Show when={picture.picture?.deleteProtected}><span class="text-slate-600">셀 그림과 번호 캡션은 함께 보존됩니다.</span></Show>
             </form>
             <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
               event.preventDefault();

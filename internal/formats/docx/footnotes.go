@@ -232,13 +232,14 @@ func editableNote(kind string, note *node, source []byte) bool {
 	return footnoteTextTarget(note, source) != nil
 }
 
-func (p *documentPackage) projectNotes(kind string, body *node, blocks []Block, targets map[string]target) {
+func (p *documentPackage) projectNotes(kind string, body *node, blocks []Block, targets map[string]target, settings *node, numberable bool) {
 	_, notes, err := p.notesPart(kind, nil)
 	if err != nil || notes == nil {
 		return
 	}
 	textByID := map[string]string{}
 	editableByID := map[string]bool{}
+	normalByID := map[string]bool{}
 	for _, note := range notes.children {
 		if !note.is(kind) {
 			continue
@@ -247,6 +248,7 @@ func (p *documentPackage) projectNotes(kind string, body *node, blocks []Block, 
 		if _, seen := textByID[id]; seen {
 			textByID[id] = ""
 			delete(editableByID, id)
+			delete(normalByID, id)
 			continue
 		}
 		textByID[id] = ""
@@ -261,6 +263,11 @@ func (p *documentPackage) projectNotes(kind string, body *node, blocks []Block, 
 		}
 		textByID[id] = reviewText(strings.Join(lines, "\n"), 1024)
 		editableByID[id] = editableNote(kind, note, notes.source)
+		normalByID[id] = true
+	}
+	var labels map[string]string
+	if numberable && !notes.has(kind+"Reference") {
+		labels = continuousNoteLabels(kind, body, settings, normalByID)
 	}
 	var incoming map[int64]int
 	var bookmarks []endnoteBookmarkSpan
@@ -275,6 +282,7 @@ func (p *documentPackage) projectNotes(kind string, body *node, blocks []Block, 
 		for _, run := range block.Paragraph.Runs {
 			if run.Object != nil && run.Object.Kind == kind {
 				run.Object.Text = textByID[run.Object.noteID]
+				run.Object.Label = labels[run.Object.noteID]
 				t := targets[run.ID]
 				run.Object.Editable = t.kind == kind && editableByID[run.Object.noteID]
 				if kind == "endnote" && run.Object.Editable {

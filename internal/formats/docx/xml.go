@@ -163,6 +163,7 @@ type target struct {
 	pictureVerticalOffsetLimit *int
 
 	trackableParagraphBreak bool
+	pictureCellCaption      bool
 	squareWrap              bool
 	splitNoteParagraph      bool
 	picturePlacement        string
@@ -236,8 +237,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 	squareWrapChecked := false
 	var picturePage PageLayout
 	picturePageChecked, picturePageValid := false, false
-	var paragraph func(*node, bool, string) Paragraph
-	paragraph = func(p *node, allowed bool, kind string) Paragraph {
+	var paragraph func(*node, bool, bool, string) Paragraph
+	paragraph = func(p *node, allowed, allowCellCaption bool, kind string) Paragraph {
 		allowed = allowed && !protected[p]
 		if strings.TrimSpace(p.text.String()) != "" {
 			allowed = false
@@ -468,6 +469,10 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			}
 			if !editable && r.child("drawing") != nil && targets[run.ID].kind == "" {
 				picture := target{node: r, run: r, paragraph: p, kind: "picture"}
+				if allowed && allowCellCaption && !protected[r] && out.List == nil &&
+					!out.PageBreakBefore && plainVisualParagraphProperties(p) && singleDrawingParagraph(picture, root.source) {
+					picture.pictureCellCaption = true
+				}
 				if allowed && !protected[r] && p.parent == body && out.List == nil && !out.PageBreakBefore && !out.PageBreakAfter {
 					picture.pictureAlign = pictureParagraphAlignment(picture, root.source, layout)
 					picture.picturePlacement = supportedPicturePlacement(picture, root.source, layout)
@@ -525,11 +530,10 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 		return out
 	}
 	var captionRange map[*node]bool
-	captionReady := false
+	captionReady, captionRangesValid := false, false
 	if body.has("tbl") && !body.has("permStart") && !body.has("permEnd") {
-		var valid bool
-		captionRange, valid = bodyRangeBlocks(body)
-		if valid {
+		captionRange, captionRangesValid = bodyRangeBlocks(body)
+		if captionRangesValid {
 			_, err := documentTableCaptionFields(body)
 			captionReady = err == nil
 		}
@@ -538,7 +542,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 	for index, child := range body.children {
 		switch {
 		case child.is("p"):
-			p := paragraph(child, true, "replace_run_text")
+			p := paragraph(child, true, false, "replace_run_text")
 			blocks = append(blocks, Block{ID: p.ID, Type: "paragraph", Paragraph: &p})
 			bodyParagraphs[child] = &p
 		case child.is("tbl"):
@@ -546,6 +550,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			_, block.TableEditable = simpleTable(child)
 			block.PrependParagraph = leadingBodyTable(child)
 			if block.TableEditable {
+				block.TableFigureOrderProtected = tableHasFigureCaptions(child)
 				block.TableCaptionInsertable = captionReady && !captionRange[child] && !protected[child] &&
 					!child.has("tblpPr") && tableCaptionBoundary(body.children, index)
 				targets[block.ID] = target{node: child, kind: "update_table", tableCaptionInsertable: block.TableCaptionInsertable}
@@ -575,10 +580,14 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			if !allowed {
 				unsupported = true
 			}
+			cellCaptions := allowed && block.TableEditable && captionRangesValid && !captionRange[child] && !child.has("tblpPr")
 			for _, row := range child.children {
 				if !row.is("tr") {
 					continue
 				}
+				heights := row.child("trPr")
+				allowCellCaption := cellCaptions && countChild(heights, "trHeight") <= 1 &&
+					heights.child("trHeight").attr("hRule") != "exact"
 				r := Row{Cells: []Cell{}, Height: tableRowHeight(row)}
 				for _, cell := range row.children {
 					if !cell.is("tc") {
@@ -587,7 +596,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					c := Cell{ID: id(), Paragraphs: []Paragraph{}}
 					for _, p := range cell.children {
 						if p.is("p") {
-							c.Paragraphs = append(c.Paragraphs, paragraph(p, allowed, "replace_cell_text"))
+							c.Paragraphs = append(c.Paragraphs, paragraph(p, allowed, allowCellCaption, "replace_cell_text"))
 						} else if !p.is("tcPr") {
 							unsupported = true
 						}

@@ -140,11 +140,6 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	s.addPicturePreviews(blocks, targetsByID)
 	s.pkg.projectSmartArt(blocks, targetsByID)
 	s.pkg.projectChartTitles(root, blocks, targetsByID)
-	for _, kind := range []string{"footnote", "endnote"} {
-		if root.has(kind + "Reference") {
-			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
-		}
-	}
 	numbering := s.pkg.projectNumbering(blocks)
 	projectCompoundRestarts(root.child("body"), blocks, targetsByID, numbering)
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID, numbering)
@@ -170,6 +165,11 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	headers := s.pkg.headerFooterCatalog(targets)
 	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
 	projectControlUnwrap(root, blocks, targetsByID, settings, settingsErr)
+	for _, kind := range []string{"footnote", "endnote"} {
+		if root.has(kind + "Reference") {
+			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID, settings, settingsErr == nil && len(targets) == 1)
+		}
+	}
 	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
 	var parity *bool
 	var defaultTabStop *int
@@ -788,6 +788,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			seen[op.Type] = true
 			t := targets[op.TargetID]
+			if t.pictureCellCaption && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX table cell picture caption must stand alone")
+			}
 			if op.Type == "edit_picture_caption" {
 				edit, err := s.pkg.editPictureCaption(t, op.ExpectedText, op.Text)
 				if err != nil {
