@@ -39,10 +39,15 @@ func validateInlineStyle(style *InlineStyle) error {
 			}
 		}
 	}
+	for _, tag := range []string{style.ProofingLang, style.EastAsiaLang} {
+		if tag != "" && !validProofingLanguage(tag) {
+			return fmt.Errorf("invalid DOCX proofing language")
+		}
+	}
 	return nil
 }
 
-func inlineProperties(props *node, data []byte, style *InlineStyle) (string, error) {
+func inlineProperties(props *node, data []byte, style *InlineStyle, inheritedLang *node) (string, error) {
 	if err := validateInlineStyle(style); err != nil {
 		return "", err
 	}
@@ -138,6 +143,18 @@ func inlineProperties(props *node, data []byte, style *InlineStyle) (string, err
 			return "", err
 		}
 		additions.WriteString(fontsXML)
+	}
+	if style.ProofingLang != "" || style.EastAsiaLang != "" {
+		if countChild(props, "lang") > 1 {
+			return "", fmt.Errorf("duplicate DOCX proofing language properties cannot be changed")
+		}
+		overrides["lang"] = true
+		source, sourceData := withProofingSource(props.child("lang"), inheritedLang, data)
+		languages, err := patchProofingLanguages(source, sourceData, style)
+		if err != nil {
+			return "", err
+		}
+		additions.WriteString(languages)
 	}
 	// Insert named properties in schema order without reordering untouched XML.
 	type chunk struct{ name, raw string }

@@ -71,6 +71,20 @@ it('formats touched paragraphs without including a selection ending at the next 
  expect(draft.operations()[0]!.paragraphs[0]!.format).toEqual({align:'center',hanging:120});
 });
 
+it('preserves language metadata when direct formatting is cleared before save',()=>{
+ const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
+  {id:'r',text:'Latin 日本語',editable:true,bold:true,italic:false,proofingLanguage:'en-US',eastAsiaProofingLanguage:'ko-KR'},
+ ]}}]};
+ const draft=new StructureDraft(initial);
+ const change=draft.format(selection('r',6,'r',9),{eastAsiaProofingLanguage:'ja-JP'});
+ expect(draft.selectedRuns(change!.selection!)[0]).toMatchObject({proofingLanguage:'en-US',eastAsiaProofingLanguage:'ja-JP'});
+ const reset=draft.format(change!.selection!,{reset:true});
+ expect(draft.selectedRuns(reset!.selection!)[0]).toMatchObject({proofingLanguage:'en-US',eastAsiaProofingLanguage:'ja-JP',bold:false});
+ expect(draft.operations()[0]!.paragraphs[0]!.runs.map(r=>[r.text,r.style])).toEqual([
+  ['Latin ',undefined],['日本語',{eastAsiaProofingLanguage:'ja-JP',reset:true}],
+ ]);
+});
+
 it('keeps East Asian font overrides separate and lets a later all-script choice replace them',()=>{
  const initial:Snapshot={...snapshot,blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[
   {id:'r',text:'Latin 한글',editable:true,bold:false,italic:false,font:'Latin',eastAsiaFont:'원본',baseStyle:{eastAsiaFont:'상속'}},

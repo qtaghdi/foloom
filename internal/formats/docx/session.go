@@ -633,7 +633,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if err != nil {
 				return nil, err
 			}
-			edit, err := paragraphReplacement(s.pkg.document, targets, op)
+			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles)
 			if err != nil {
 				return nil, err
 			}
