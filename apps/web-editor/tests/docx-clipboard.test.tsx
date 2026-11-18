@@ -21,6 +21,16 @@ it('encodes only known clipboard styles and escaped text', () => {
  expect(html).toContain('&lt;img&gt;&amp;<br>text');expect(html).not.toContain('<img>');
  expect(html).toContain('font-family:&quot;name; color:red&quot;');
 });
+it('round-trips inherited underline and strike while normalizing unsupported decoration', () => {
+ const source='<p><u>하나 <s>둘</s><span style="text-decoration:none"> 셋</span></u><span style="text-decoration-line:line-through overline"> 넷</span></p>';
+ const result=parseClipboardHTML(source,document)!;
+ expect(result.stripped).toBe(true);
+ expect(result.paragraphs[0].map(({text,style})=>[text,style?.underline,style?.strike]))
+  .toEqual([['하나 ',true,false],['둘',true,true],[' 셋',true,false],[' 넷',false,true]]);
+ const restored=parseClipboardHTML(clipboardHTML(result.paragraphs),document)!;
+ expect(restored.paragraphs).toEqual(result.paragraphs);
+ expect(restored.stripped).toBe(false);
+});
 it('keeps prefix and suffix source formatting separate from pasted character styles', () => {
  const snapshot:Snapshot={id:'s',name:'x.docx',revision:1,sequence:0,warnings:[],blocks:[{id:'p',type:'paragraph',paragraph:{id:'p',structureEditable:true,runs:[{id:'r',text:'prefix suffix',editable:true,bold:true,italic:false}]}}]};
  const draft=new StructureDraft(snapshot);
