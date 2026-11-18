@@ -19,7 +19,6 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
-	RectangleResizeEditable bool   `json:"rectangleResizeEditable,omitempty"`
 	DeleteEditable          bool   `json:"deleteEditable,omitempty"`
 	Date                    string `json:"date,omitempty"`
 	noteID                  string
@@ -29,6 +28,8 @@ type ObjectInfo struct {
 	Text                    string            `json:"text,omitempty"`
 	Editable                bool              `json:"editable"`
 	Fraction                *MathFraction     `json:"fraction,omitempty"`
+	ChartFrame              *ChartFrame       `json:"chartFrame,omitempty"`
+	RectangleResizeEditable bool              `json:"rectangleResizeEditable,omitempty"`
 	Rectangle               *RectanglePreview `json:"rectangle,omitempty"`
 	SquareRoot              string            `json:"squareRoot,omitempty"`
 }

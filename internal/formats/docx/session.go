@@ -336,21 +336,33 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.RectangleSize != nil && op.Type != "resize_rectangle" {
 			return nil, fmt.Errorf("unexpected DOCX rectangle size")
 		}
-		if op.Type == "update_chart_title" {
+		if op.ChartWidthEMU != nil && op.Type != "resize_chart" {
+			return nil, fmt.Errorf("unexpected DOCX chart width")
+		}
+		if op.Type == "update_chart_title" || op.Type == "resize_chart" {
 			t := targets[op.TargetID]
-			if t.kind != op.Type || seen[op.TargetID] ||
+			if t.kind != "chart" || seen[op.TargetID] ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
-				return nil, fmt.Errorf("invalid DOCX chart title operation")
+				return nil, fmt.Errorf("invalid DOCX chart operation")
 			}
 			if chartCounts == nil {
 				chartCounts = s.pkg.chartUseCounts(root)
 			}
-			if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
+			seen[op.TargetID] = true
+			if op.Type == "resize_chart" {
+				if op.ChartWidthEMU == nil || op.Text != "" || op.ExpectedText != "" {
+					return nil, fmt.Errorf("invalid DOCX chart resize fields")
+				}
+				edit, err := s.pkg.resizeInlineChart(t, chartCounts, *op.ChartWidthEMU)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, edit)
+			} else if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
 				return nil, err
 			}
-			seen[op.TargetID] = true
 			continue
 		}
 		if op.Type == "update_rectangle_colors" || op.Type == "delete_rectangle" || op.Type == "resize_rectangle" {

@@ -190,7 +190,7 @@ func (p *documentPackage) projectChartTitles(root *node, blocks []Block, targets
 		for i := range paragraph.Runs {
 			run := &paragraph.Runs[i]
 			t := targets[run.ID]
-			if t.kind != "update_chart_title" {
+			if t.kind != "chart" {
 				continue
 			}
 			if counts == nil {
@@ -208,15 +208,22 @@ func (p *documentPackage) projectChartTitles(root *node, blocks []Block, targets
 			}
 			if text != "" {
 				run.Object.Text = text
-				run.Object.Editable = p.chartReferences[filename] == 1 && counts[relationship] == 1
+				run.Object.Editable = p.uniqueChart(relationship, counts)
+				if run.Object.Editable {
+					run.Object.ChartFrame, _ = inlineChartFrame(t.run, p.document)
+				}
 			}
 		}
 	}
 }
 
+func (p *documentPackage) uniqueChart(relationship string, counts map[string]int) bool {
+	return p.chartReferences[p.chartRelationships[relationship]] == 1 && counts[relationship] == 1
+}
+
 func (p *documentPackage) updateChartTitle(t target, counts map[string]int, op Operation, changes map[string][]byte) error {
 	relationship := chartRelationshipID(t.run)
-	if p.chartReferences[p.chartRelationships[relationship]] != 1 || counts[relationship] != 1 {
+	if !p.uniqueChart(relationship, counts) {
 		return fmt.Errorf("unsupported or shared DOCX chart title")
 	}
 	title, filename, data := p.chartTitle(relationship)

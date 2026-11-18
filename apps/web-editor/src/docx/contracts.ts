@@ -8,13 +8,16 @@ const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.st
 export const cropInset=z.number().int().min(0).max(99000);
 const cropSchema=z.object({left:cropInset,top:cropInset,right:cropInset,bottom:cropInset})
   .refine(crop=>crop.left+crop.right<=99000&&crop.top+crop.bottom<=99000);
+const chartFrameSchema=z.object({
+  widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),
+});
 const rectangleSchema=z.object({
   widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),
   fill:z.string().regex(/^[0-9a-f]{6}$/i),stroke:z.string().regex(/^[0-9a-f]{6}$/i),
 });
 const runSchema = z.object({
   proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,
-  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional(),rectangle:rectangleSchema.optional(),rectangleResizeEditable:z.boolean().optional(),squareRoot:z.string().max(1024).optional()}).optional(),
+  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional(),chartFrame:chartFrameSchema.optional(),rectangle:rectangleSchema.optional(),rectangleResizeEditable:z.boolean().optional(),squareRoot:z.string().max(1024).optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:z.literal(180).optional(),rotationEditable:z.boolean().optional(),captionEditable:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
@@ -122,7 +125,7 @@ export type MathOperation = {type:'update_math';targetId:string;math:{action:'in
 export type BookmarkMoveOperation = {type:'move_bookmark_up';targetId:string}|{type:'move_bookmark_down';targetId:string};
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};
 export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string};
-export type ObjectTextOperation = {type:'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string};
+export type ObjectTextOperation = {type:'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number};
 export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};

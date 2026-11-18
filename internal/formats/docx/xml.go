@@ -379,7 +379,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				run.Object = objectPreview(r)
 				if run.Object != nil && run.Object.Kind == "chart" && allowed && !protected[r] && p.parent == body &&
 					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
-					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "update_chart_title"}
+					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "chart"}
 				}
 				if run.Object != nil && run.Object.Rectangle != nil && allowed && !protected[r] && p.parent == body &&
 					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) &&
