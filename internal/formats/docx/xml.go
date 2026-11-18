@@ -159,8 +159,10 @@ func escapeText(s string) string {
 }
 
 type target struct {
+	pictureOffsetLimit         *int
+	pictureVerticalOffsetLimit *int
+
 	trackableParagraphBreak bool
-	pictureOffsetLimit      *int
 	squareWrap              bool
 	splitNoteParagraph      bool
 	picturePlacement        string
@@ -475,7 +477,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 							picturePageChecked = true
 						}
 						if picturePageValid {
-							picture.pictureOffsetLimit = pictureOffsetLimit(picture, picturePage)
+							picture.pictureOffsetLimit, picture.pictureVerticalOffsetLimit = pictureOffsetLimits(picture, picturePage)
 							if !squareWrapChecked {
 								squareWrapChecked = true
 								picture.squareWrap = canSquareWrapPicture(picture, root.source, picturePage)
