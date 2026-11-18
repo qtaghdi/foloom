@@ -880,6 +880,15 @@ run ID를 대상으로 `update_image`에
 Word 계열 편집기에서 확인합니다.
 [Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
 
+번호 캡션이 있는 지원 인라인 그림은 `그림 번호 상호 참조 삽입`에서 선택할 수
+있습니다. 편집 가능한 본문 문단의 끝에 번호를 표시하는 Word REF 필드를
+넣습니다. 번호 링크를 누르면 해당 캡션으로 이동합니다. 같은 캡션의 참조들은
+북마크를 공유하며, 앞에 그림 캡션을 추가하면 지원 본문 참조를 저장할 때 함께
+갱신합니다. HTTP·MCP에서는 대상 문단 ID와
+`reference: { action: "insert_figure_ref", figureId: "현재 그림 run ID" }`를
+`update_reference`에 보냅니다. 머리글·바닥글, 표 번호, 복합 필드는 이
+범위에서 제외합니다.
+
 같은 그림을 다시 고른 뒤 `그림 캡션 변경`으로 기존 설명을 바꿀 수 있습니다.
 Word 번호 필드와 그림은 유지됩니다. HTTP·MCP에서는 그림 run ID,
 현재 설명의 `expectedText`, 새 `text`를 `edit_picture_caption`에 보냅니다.

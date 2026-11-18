@@ -79,13 +79,17 @@ func allowPlainHyperlink(link *node, validRun func(*node) bool) bool {
 // A range can begin and end in other blocks, leaving no visible marker on a
 // paragraph it covers. Keep such blocks stationary even if both look ordinary.
 func bodyRangeBlocks(body *node) (map[*node]bool, bool) {
+	return bodyRangeBlocksExcept(body, nil)
+}
+
+func bodyRangeBlocksExcept(body *node, ignored map[*node]bool) (map[*node]bool, bool) {
 	type rangeID struct{ kind, id string }
 	active := map[rangeID]bool{}
 	ranged := map[*node]bool{}
 	valid := true
 	var visit func(*node, *node)
 	visit = func(n, block *node) {
-		if n.name.Space == wordNS {
+		if n.name.Space == wordNS && !ignored[n] {
 			kind, start := strings.CutSuffix(n.name.Local, "Start")
 			if !start {
 				kind, _ = strings.CutSuffix(n.name.Local, "End")
