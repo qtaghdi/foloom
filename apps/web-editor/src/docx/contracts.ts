@@ -8,6 +8,7 @@ const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.st
 export const cropInset=z.number().int().min(0).max(99000);
 const cropSchema=z.object({left:cropInset,top:cropInset,right:cropInset,bottom:cropInset})
   .refine(crop=>crop.left+crop.right<=99000&&crop.top+crop.bottom<=99000);
+const pictureAlignmentSchema=z.enum(['start','center','end']);
 const pictureRotationSchema=z.union([z.literal(0),z.literal(90),z.literal(180),z.literal(270)]);
 const chartFrameSchema=z.object({
   widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),
@@ -20,8 +21,8 @@ const runSchema = z.object({
   proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,
   object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete','tracked_format','toc','figure_list','table_list','date_field']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional(),squareRoot:z.string().max(1024).optional(),smartArt:z.object({items:z.array(z.string().max(259)).min(1).max(32),truncated:z.boolean().optional()}).optional(),chartFrame:chartFrameSchema.optional(),chartValues:z.array(z.string().min(1).max(64)).min(1).max(32).optional(),rectangle:rectangleSchema.optional(),rectangleResizeEditable:z.boolean().optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
-    z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional()})]).optional(),
-  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
+    z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional(),bookmarkEditable:z.boolean().optional()})]).optional(),
+  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),align:pictureAlignmentSchema.optional(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), boldTrackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
   eastAsiaFont: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
@@ -128,9 +129,9 @@ export type TableEdit = {action:'insert_body_paragraph_before'} | {action:'inser
 export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'no_page_after' | 'section_next_page' | 'section_continuous' | 'remove_section' | 'move_section_earlier' | 'move_section_later';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
-export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}|{action:'crop';crop:z.infer<typeof cropSchema>}|{action:'rotate';rotation:z.infer<typeof pictureRotationSchema>}} | {type:'insert_picture_caption';targetId:string;expectedText:'';text:string} | {type:'edit_picture_caption';targetId:string;expectedText:string;text:string} | {type:'move_picture_caption_up';targetId:string} | {type:'move_picture_caption_down';targetId:string};
+export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}|{action:'crop';crop:z.infer<typeof cropSchema>}|{action:'rotate';rotation:z.infer<typeof pictureRotationSchema>}|{action:'align';align:z.infer<typeof pictureAlignmentSchema>}} | {type:'insert_picture_caption';targetId:string;expectedText:'';text:string} | {type:'edit_picture_caption';targetId:string;expectedText:string;text:string} | {type:'move_picture_caption_up';targetId:string} | {type:'move_picture_caption_down';targetId:string};
 export type ReferenceEdit = {action:'insert_toc'|'update_toc'|'insert_date_field'|'refresh_date_field'|'insert_figure_list'|'insert_table_list'|'update_caption_list'} | {action:'insert_bookmark'|'insert_bookmark_ref'|'insert_bookmark_page_ref'|'insert_bookmark_number_ref';bookmark:string} | {action:'rename_bookmark';bookmark:string;newBookmark:string} | {action:'delete_bookmark';bookmark:string} | {action:'insert_footnote'|'insert_endnote'|'set_footnote_text'|'set_endnote_text';text:string} | {action:'delete_footnote'|'delete_endnote'} |
-  {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'unlink'};
+  {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'set_link_bookmark';bookmark:string} | {action:'unlink'};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'reply_comment';targetId:string;comment:{text:string}} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
@@ -143,7 +144,8 @@ export type TrackTextOperation = {type:'track_run_text';targetId:string;expected
   {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean} |
   {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
-  {type:'update_chart_value';targetId:string;chartValue:{point:number;expectedValue:string;value:string}};
+  {type:'update_chart_value';targetId:string;chartValue:{point:number;expectedValue:string;value:string}} |
+  {type:'delete_chart';targetId:string};
 export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};

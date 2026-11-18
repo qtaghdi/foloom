@@ -155,6 +155,30 @@ export function DocumentReferenceToolbar(props:{
               <button type="submit" class={buttonClass} disabled={disabled()}>웹 주소 변경 적용</button>
             </form>
             </Show>
+            <Show when={link.link&&'bookmarkEditable' in link.link&&link.link.bookmarkEditable&&props.bookmarks.length>1}>
+              <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(disabled())return;
+                const input=event.currentTarget.elements.namedItem('bookmark') as HTMLSelectElement;
+                const bookmark=input.value;
+                if(!bookmark||bookmark===link.link?.bookmark||!props.bookmarks.some(item=>item.name===bookmark)){
+                  setError('새 대상 북마크를 선택하세요.');
+                  return;
+                }
+                const accepted=props.onApply({type:'update_reference',targetId:link.id,reference:{action:'set_link_bookmark',bookmark}});
+                setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+              }}>
+                <label class="flex min-w-0 flex-col gap-1">새 대상 북마크
+                  <select name="bookmark" aria-label="새 대상 북마크" class="editor-select min-h-11 max-w-56" required disabled={disabled()}>
+                    <option value="">북마크 선택</option>
+                    <For each={props.bookmarks.filter(item=>item.name!==link.link?.bookmark)}>
+                      {item=><option value={item.name}>{item.name}</option>}
+                    </For>
+                  </select>
+                </label>
+                <button type="submit" class={buttonClass} disabled={disabled()}>북마크 대상 변경 적용</button>
+              </form>
+            </Show>
             <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
               const changed=props.onApply({type:'update_reference',targetId:link.id,reference:{action:'unlink'}});
               setError(changed?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');

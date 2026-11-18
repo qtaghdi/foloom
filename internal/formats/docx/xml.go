@@ -160,6 +160,8 @@ func escapeText(s string) string {
 
 type target struct {
 	tableCaptionInsertable bool
+	linkAnchorEditable     bool
+	pictureAlign           string
 	alignmentTrackable     bool
 	trackable              bool
 	boldTrackable          bool
@@ -344,7 +346,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					}
 				}
 				if r.is("hyperlink") {
-					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
+					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink", linkAnchorEditable: allowed && p.parent == body &&
+						attribute(r, officeRelNS, "id") == "" && strings.TrimSpace(run.Text) != "" && allowPlainHyperlink(r, plainHyperlinkRun)}
 				} else if _, name := bookmarkFieldTarget(r); name != "" {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
 				} else if run.Object != nil && run.Object.Kind == "date_field" && !protected[p] && dateFieldCache(r, root.source) != nil {
@@ -452,7 +455,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: run.Object.Kind}
 			}
 			if !editable && r.child("drawing") != nil && targets[run.ID].kind == "" {
-				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "picture"}
+				picture := target{node: r, run: r, paragraph: p, kind: "picture"}
+				if allowed && !protected[r] && p.parent == body && out.List == nil && !out.PageBreakBefore && !out.PageBreakAfter {
+					picture.pictureAlign = pictureParagraphAlignment(picture, root.source, layout)
+				}
+				targets[run.ID] = picture
 			}
 			if editable {
 				textNode := r
