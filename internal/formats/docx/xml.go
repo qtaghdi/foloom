@@ -345,6 +345,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
 				} else if _, name := bookmarkFieldTarget(r); name != "" {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
+				} else if run.Object != nil && run.Object.Kind == "date_field" && !protected[p] && dateFieldCache(r, root.source) != nil {
+					run.Object.Editable = true
+					targets[run.ID] = target{node: r, paragraph: p, kind: "date_field"}
 				} else if run.Object != nil && run.Object.Kind == "toc" && !protected[p] && tocCacheRun(r, root.source) != nil {
 					run.Object.Editable = true
 					targets[run.ID] = target{node: r, paragraph: p, kind: "toc"}
