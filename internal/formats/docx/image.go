@@ -24,7 +24,7 @@ const (
 )
 
 type ImageEdit struct {
-	Rotation *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0 and 180"`
+	Rotation *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
 	Crop     *ImageCrop `json:"crop,omitempty"`
 	Action   string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, or rotate"`
 	Base64   string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`

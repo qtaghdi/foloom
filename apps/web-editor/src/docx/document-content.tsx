@@ -115,19 +115,7 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
             title={pendingPageReference() ? '문서 편집기에서 필드를 업데이트하면 쪽 번호가 표시됩니다.' : undefined}
             onClick={event=>{const name=link().bookmark;if(name){event.preventDefault();goToBookmark(name);}}}>{pendingPageReference() ? '쪽 번호 업데이트 필요' : run.text}</a>;
         }}</Show>}>
-          <Show when={run.picture?.crop} fallback={<img loading="lazy" class="inline-block max-w-full align-middle" contentEditable={false}
-            src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}
-            width={Math.max(1,Math.round(run.picture!.widthEmu/9525))} height={Math.max(1,Math.round(run.picture!.heightEmu/9525))}
-            style={{height:'auto',transform:run.picture?.rotation?'rotate(180deg)':undefined}}/>}>{crop=>{
-            const wide=()=>100000-crop().left-crop().right;
-            const high=()=>100000-crop().top-crop().bottom;
-            return <span data-docx-crop contentEditable={false} class="relative inline-block max-w-full overflow-hidden align-middle"
-              style={{width:`${Math.max(1,Math.round(run.picture!.widthEmu/9525))}px`,'aspect-ratio':`${run.picture!.widthEmu}/${run.picture!.heightEmu}`,transform:run.picture?.rotation?'rotate(180deg)':undefined}}>
-              <img loading="lazy" class="absolute" style={{'max-width':'none',
-                width:`${10000000/wide()}%`,height:`${10000000/high()}%`,left:`${-100*crop().left/wide()}%`,top:`${-100*crop().top/high()}%`}}
-                src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(run.id)}`)} alt={run.picture!.alt}/>
-            </span>;
-          }}</Show>
+          <Show when={run.picture}>{picture=><PicturePreview picture={picture()} id={run.id}/>}</Show>
         </Show>}>
           <Show when={p.structureEditable} fallback={<><span aria-hidden="true" data-docx-print-text class="hidden whitespace-pre-wrap break-words" style={runStyle(run)}>{run.text}</span><RunField run={run} fullWidth={p.runs.length === 1} align={p.layout?.align}
             label={t('runLabel', { kind: kind === 'replace_cell_text' ? t('table') : t('body'), count: positions().get(run.id)! })} saving={props.saving}
@@ -176,6 +164,26 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
       <Show when={headerText(page,index(),'footer')}>{text=><div aria-label="바닥글 미리보기" class="whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 pb-[var(--docx-footer-distance,0px)] text-xs break-words text-stone-600 print:mt-4 print:pb-0">{text()}</div>}</Show>
     </div>
   </div>}</For></div></>;
+}
+
+function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
+  const rotation=()=>props.picture.rotation??0;
+  const quarterTurn=()=>rotation()===90||rotation()===270;
+  const width=()=>quarterTurn()?props.picture.heightEmu:props.picture.widthEmu;
+  const height=()=>quarterTurn()?props.picture.widthEmu:props.picture.heightEmu;
+  const crop=()=>props.picture.crop;
+  const wide=()=>100000-(crop()?.left??0)-(crop()?.right??0);
+  const high=()=>100000-(crop()?.top??0)-(crop()?.bottom??0);
+  return <span data-docx-picture contentEditable={false} class="relative inline-block max-w-full align-middle"
+    style={{width:`${Math.max(1,Math.round(width()/9525))}px`,'aspect-ratio':`${width()}/${height()}`}}>
+    <span data-docx-crop={crop()?'':undefined} class="absolute left-1/2 top-1/2 overflow-hidden"
+      style={{width:quarterTurn()?`${100*height()/width()}%`:'100%',height:quarterTurn()?`${100*width()/height()}%`:'100%',
+        transform:`translate(-50%, -50%) rotate(${rotation()}deg)`}}>
+      <img loading="lazy" class="absolute" style={{'max-width':'none',
+        width:`${10000000/wide()}%`,height:`${10000000/high()}%`,left:`${-100*(crop()?.left??0)/wide()}%`,top:`${-100*(crop()?.top??0)/high()}%`}}
+        src={scopedDocumentURL(`/api/docx/picture?id=${encodeURIComponent(props.id)}`)} alt={props.picture.alt}/>
+    </span>
+  </span>;
 }
 
 const eastAsianLetter=/^[\p{Script_Extensions=Han}\p{Script_Extensions=Hangul}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}\p{Script_Extensions=Bopomofo}]+$/u;
