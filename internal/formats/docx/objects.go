@@ -35,6 +35,7 @@ type ObjectInfo struct {
 	ChartFrame              *ChartFrame       `json:"chartFrame,omitempty"`
 	RectangleResizeEditable bool              `json:"rectangleResizeEditable,omitempty"`
 	Rectangle               *RectanglePreview `json:"rectangle,omitempty"`
+	Line                    *LinePreview      `json:"line,omitempty"`
 	SquareRoot              string            `json:"squareRoot,omitempty"`
 }
 
@@ -162,6 +163,8 @@ func objectPreview(n *node) *ObjectInfo {
 		if attribute(graphic, "", "uri") == shapeWordNS {
 			if rectangle := inspectInlineRectangle(container, graphic); rectangle != nil {
 				out.Rectangle = &rectangle.RectanglePreview
+			} else {
+				out.Line = inspectInlineLine(container, graphic)
 			}
 		}
 		return out

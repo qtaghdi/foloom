@@ -283,6 +283,12 @@ LibreOffice가 편집한 파일을 다시 열 수 있도록 각 항목의 CRC와
 part는 유지합니다. 수정된 문단 안 XML의 byte 동일성은 보장하지 않습니다.
 `replace_run_text`와 `replace_cell_text`의 LF는 `w:br`이며 새 문단이 아닙니다.
 
+`페이지`의 `본문 문단 이동`에서 같은 본문 구역의 인접한 일반 문단으로
+`문단 위로` 또는 `문단 아래로`를 적용합니다. 문단의 서식과 문단 안 커서 또는
+선택을 유지합니다. 문단 이동은 먼저 초안에 반영하며, 저장과 실행 취소는 본문
+구조 변경과 같은 이력을 사용합니다. 이 도구는 표·목록·보호된 문단과 페이지·구역
+경계를 가로지르지 않습니다.
+
 ## 연속 선택과 문자 경계
 
 본문의 방향키·Home/End·단어 이동과 드래그 선택은 브라우저의 native 선택을
@@ -1122,9 +1128,12 @@ HTTP·MCP는 필드 run ID에 `reference: { action: "refresh_date_field" }`를
 
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
-적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 각주의 번호와
-쪽 아래 배치는 Word가 계산합니다. 사용자 지정 번호와
-미주는 지원 범위에 포함되지 않습니다.
+적용합니다. 브라우저에는 참조 옆에 각주 내용을 표시합니다. 본문이 한 구역이고
+참조가 일반 자동 번호를 사용하면 각주와 미주의 연속 번호를 각각 미리 봅니다.
+십진수와 대·소문자 로마 숫자의 문서 기본값과 구역별 재정의, 시작값 및 본문 참조 순서를 사용합니다. 문서를
+편집하거나 다시 열면 새 순서에 맞춰 번호가 갱신됩니다. 사용자 지정 표식, 공유 참조,
+쪽별 다시 시작과 복합 구역은 노트 내용만 표시합니다. 쪽 아래 실제 배치는 Word가 처리합니다.
+[Word의 미주 기본 숫자 형식](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/a910e9f7-f95f-49ad-ad23-68ea9a7922cd)을 따릅니다.
 [Word 각주 참조 규칙](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.footnotereferencemark)을 사용합니다.
 
 편집 가능한 본문 문단에서 `미주 삽입`을 선택하면 문단 끝에 미주를 연결합니다.
@@ -1244,6 +1253,13 @@ HTTP·MCP는 현재 앞 문단 ID로 `accept_revision` 또는 `reject_revision`�
 포함된 나눔은 읽기 전용으로 표시합니다.
 [Word의 삽입된 문단 표시](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/1d66ba8a-1eeb-4cff-ab8a-eaa79113cc89)를 따릅니다.
 
+가져온 `문단 나눔 삭제`를 수락하면 양쪽 텍스트를 이어 붙이고 뒤쪽
+문단의 ID와 정렬을 사용합니다. 거절하면 나눔과 각 문단의 속성을 유지합니다.
+양쪽 글자 서식은 두 경우 모두 유지됩니다. 목록이나 다른 복합 속성,
+참조 범위와 쪽·구역 경계가 걸린 경우 읽기 전용으로 표시합니다.
+HTTP·MCP는 검토에 표시된 앞 문단 ID로 기존 수락·거절 작업을 단독 적용합니다.
+[Word의 삭제된 문단 표시](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.deleted)를 따릅니다.
+
 검토의 `텍스트·서식 변경 추적`에서 현재 본문 문단의 일반 텍스트 구간을 골라
 교체 내용을 적용합니다. 새 텍스트를 비우면 삭제만 기록합니다. 저장하면 기존
 텍스트는 삭제 변경으로, 교체 텍스트는 삽입 변경으로 기록되며 두 변경에 원래
@@ -1272,6 +1288,7 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 단순 분수 | 분자·분모와 가로 분수선 | 삽입·분자와 분모 수정 | Word |
 | 행렬·중첩 분수 등 구조 수식 | 유형과 읽기 전용 표시 | 미지원 | Word |
 | 기본 인라인 사각형 | 크기, 채우기와 테두리 | 삽입·색상 및 크기 변경·삭제 | Word 도형 |
+| 기본 인라인 선 | 치수, 기울기와 선 색상 | 좌상단에서 우하단으로 이어지는 선 삽입 | Word 도형 |
 | 도형·그룹·텍스트 상자 | 유형, 지원되는 상자의 텍스트 | 독립 상자의 평문 수정 | Word |
 | 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기, 단일 계열의 직접 수치 | 원형·세로 막대·선 차트 생성, 제목·수치 수정, 크기 변경, 지원 인라인 배치 이동·삭제 | Word 차트 |
 | 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
@@ -1341,6 +1358,14 @@ HTTP·MCP는 `update_chart_value`에 현재 차트의 run ID와
 EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상과 테두리는
 그대로 유지합니다. 위치와 다른 서식은 Word에서
 수정할 수 있습니다. [Word 도형 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/69190647-27d1-4890-8089-a8aca57becb9)를 사용합니다.
+
+삽입의 `도형`에서 선의 너비와 높이를 각각 1~1440 pt로 입력하고
+`인라인 선 삽입`을 누른 뒤 저장합니다. 현재 본문 문단 끝에 좌상단에서
+우하단으로 이어지는 1 pt 두께의 Word 선 도형을 넣습니다. HTTP·MCP의
+`insert_line`은 편집 가능한 본문 문단 ID와 EMU 단위의
+`lineSize: { widthEmu, heightEmu }`를 받습니다. 기존 선 편집, 화살표,
+다른 도형에 연결된 선, 부동 배치는 Word에서 수정합니다.
+[DrawingML 사전 정의 도형](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry)을 사용합니다.
 
 수식의 `제곱근 삽입`에서 단순한 피제곱근을 입력해 Word 수식을 만듭니다.
 `제곱근 바꾸기`는 기존 제곱근의 피제곱근만 바꾸고 수식 자리와 원본 서식을

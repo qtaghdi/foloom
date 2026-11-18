@@ -12,11 +12,11 @@ import { StructureDraft } from './structure-draft';
 import { compareParagraphs } from './paragraphs';
 import { validateDrafts,validateRunText } from './validation';
 import type { ActivityEntry } from '../ui/activity';
-import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type SplitNoteParagraphOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type RectangleOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type Run, type ListDefinition, type CompoundListRestartOperation, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction, type DocumentEvent, type DefaultTabStopOperation } from './contracts';
+import { eventSchema, snapshotSchema, sectionFormatSchema, type SectionFormat, type BoundaryOperation, type ParagraphMoveOperation, type SplitNoteParagraphOperation, type ImageOperation, type ReferenceOperation, type RevisionReviewOperation, type CommentOperation, type ObjectTextOperation, type ShapeOperation, type TrackTextOperation, type MathOperation, type TableOperation, type Snapshot, type Run, type ListDefinition, type CompoundListRestartOperation, type ListSetup, type ParagraphList, type Operation, type TextOperation, type StyleInfo, type StyleDefinition, type ParagraphFormat, type InlineStyle, type DraftFocus, type StructureAction, type DocumentEvent, type DefaultTabStopOperation } from './contracts';
 
 export type HistoryControls = { undo: boolean; redo: boolean; undoLabel: string; redoLabel: string };
 const historyTitle = {undo: '실행 취소', redo: '다시 실행'} as const;
-type StandaloneOperation = ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|RectangleOperation|TrackTextOperation|SplitNoteParagraphOperation|CompoundListRestartOperation|DefaultTabStopOperation;
+type StandaloneOperation = ReferenceOperation|CommentOperation|MathOperation|TableOperation|ParagraphMoveOperation|RevisionReviewOperation|ObjectTextOperation|ShapeOperation|TrackTextOperation|SplitNoteParagraphOperation|CompoundListRestartOperation|DefaultTabStopOperation;
 type DraftCheckpoint = { lists:Array<[string,ListDefinition]>; standalone?:StandaloneOperation; image?:ImageOperation; boundary?: BoundaryOperation; headerParity?: boolean; sections:Array<[string,SectionFormat]>; styles: Array<[string,StyleDefinition]>; structure: string; drafts: Array<[string, TextOperation]>; selection?: TextSelection };
 export interface DocumentView {
   recovery?(status: RecoveryStatus): void;
@@ -108,13 +108,22 @@ export class DocumentController {
     this.updateSave();
   }
 
-  changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string): boolean {
+  canMoveBodyParagraph(direction: -1 | 1, selection: TextSelection): boolean {
+    return !this.blocked && !this.composing && !this.boundaryDraft && !this.imageDraft && !this.standaloneDraft &&
+      Boolean(this.structureDraft?.canMoveBodyParagraph(direction, selection));
+  }
+  moveBodyParagraph(direction: -1 | 1, selection: TextSelection): boolean {
+    if (!this.canMoveBodyParagraph(direction, selection)) return false;
+    const { runId, offset } = selection.focus;
+    return this.changeStructure(direction === -1 ? 'moveUp' : 'moveDown', runId, offset, offset, undefined, selection);
+  }
+  changeStructure(action: StructureAction, runId: string, start: number, end: number, insertion?: string, selection?: TextSelection): boolean {
     if (this.busy || this.loading || this.disposed || this.boundaryDraft || this.imageDraft || this.standaloneDraft) return false;
-    const before = this.structureDraft && this.checkpoint({anchor:{runId,offset:start},focus:{runId,offset:end}});
+    const before = this.structureDraft && this.checkpoint(selection ?? {anchor:{runId,offset:start},focus:{runId,offset:end}});
     const focus = this.structureDraft?.change(action, runId, start, end, insertion);
     if (!focus || !this.structureDraft) return false;
     this.remember(before!);
-    this.view.render(this.preview(), focus);
+    this.view.render(this.preview(), selection ? { ...focus, selection } : focus);
     if (!this.blocked) this.view.status('미저장 변경', 'pending');
     this.updateSave();
     return true;

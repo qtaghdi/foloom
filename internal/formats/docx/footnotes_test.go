@@ -3,6 +3,7 @@ package docx
 import (
 	"bytes"
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -35,6 +36,7 @@ func TestDOCXFootnotesPersistAndPreserveOriginalParts(t *testing.T) {
 		paragraph := snapshot.Blocks[i].Paragraph
 		if len(paragraph.Runs) != 2 || paragraph.Runs[1].Object == nil ||
 			paragraph.Runs[1].Object.Kind != "footnote" || paragraph.Runs[1].Object.Text != expected ||
+			paragraph.Runs[1].Object.Label != strconv.Itoa(i+1) ||
 			paragraph.Runs[1].Editable {
 			t.Fatalf("footnote %d not available after reopen: %+v", i+1, paragraph.Runs)
 		}
