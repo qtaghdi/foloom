@@ -847,7 +847,7 @@ PNG가 들어갔고 편집 도구 문구는 추출 텍스트에 없었습니다.
 
 ### 링크·북마크·각주
 
-`링크·북마크·각주·미주`에서 기존 웹 링크를 고르고 새 HTTP(S) 주소를 적용한 뒤 저장합니다.
+`링크·북마크·각주·미주·목차`에서 기존 웹 링크를 고르고 새 HTTP(S) 주소를 적용한 뒤 저장합니다.
 HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url }`을
 사용합니다. 링크의 표시 문구와 서식, 다른 링크가 공유하는 관계를 유지합니다.
 
@@ -868,7 +868,7 @@ HTTP와 MCP는 현재 링크 run ID와 `reference: { action: "set_link_url", url
 `move_bookmark_up` 또는 `move_bookmark_down`을 적용합니다. 표·페이지·구역
 경계와 문단에 걸쳐 있는 북마크는 보호합니다.
 
-편집기의 `링크·북마크·각주·미주`에서 편집 가능한 본문 문단을 골라 북마크, 웹 링크,
+편집기의 `링크·북마크·각주·미주·목차`에서 편집 가능한 본문 문단을 골라 북마크, 웹 링크,
 북마크 링크를 추가합니다. 적용하고 저장한 뒤 내부 링크를 누르면 해당 본문
 문단으로 이동합니다. 웹 링크는 사용자가 선택할 때 별도 탭에서 열립니다.
 표시 가능한 북마크는 최대 500개이며 중복되거나 쌍이 끊어진 북마크와 안전하지
@@ -896,6 +896,14 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
 참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
 [Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
+
+삽입의 `자동 목차 삽입`을 적용하면 선택한 본문 문단 앞에 제목 수준 1~3을 모아
+Word TOC 필드를 추가합니다. HTTP·MCP는 문단 ID에
+`reference: { action: "insert_toc" }`를 별도 작업으로 보냅니다.
+브라우저는 삽입할 때 수집한 제목을 표시합니다. 제목을 수정한 뒤 Word에서
+목차 전체를 업데이트하면 제목과 페이지 번호를 다시 계산할 수 있습니다.
+문서에 이미 목차가 있으면 새 목차 삽입을 막습니다.
+[Word 목차 삽입과 업데이트](https://support.microsoft.com/en-us/word/training/insert-a-table-of-contents)를 참고하세요.
 
 편집 가능한 본문 문단에서 `각주 삽입`을 선택하면 문단 끝에 각주를 연결합니다.
 HTTP·MCP는 문단 ID에 `reference: { action: "insert_footnote", text }`를
