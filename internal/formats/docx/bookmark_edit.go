@@ -39,7 +39,7 @@ func (p *documentPackage) editBookmark(data []byte, t target, edit ReferenceEdit
 	walk = func(n *node, main bool) error {
 		switch {
 		case n.is("fldChar") || n.is("instrText") || n.is("delInstrText") ||
-			n.is("fldSimple") && !strings.EqualFold(strings.TrimSpace(n.attr("instr")), "PAGE"):
+			n.is("fldSimple") && pageFieldInstruction(n) == "":
 			return fmt.Errorf("DOCX bookmark edit requires a document without opaque fields")
 		case !main && n.is("bookmarkStart") &&
 			(strings.EqualFold(n.attr("name"), edit.Bookmark) || !deleting && strings.EqualFold(n.attr("name"), edit.NewBookmark)):
