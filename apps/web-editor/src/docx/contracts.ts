@@ -115,7 +115,7 @@ export type TextOperation = {
 
 export type StyleInfo=z.infer<typeof styleInfoSchema>;
 export type StyleDefinition={id:string;name?:string;kind:'paragraph'|'character';basedOn?:string;run?:InlineStyle;paragraph?:ParagraphFormat};
-export type InlineStyle = {proofingLanguage?:string; eastAsiaProofingLanguage?:string; styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; eastAsiaFont?: string; sizeHalfPoints?: number };
+export type InlineStyle = {proofingLanguage?:string; eastAsiaProofingLanguage?:string; styleId?:string; reset?: boolean; underline?: boolean; strike?: boolean; highlight?: string; vertical?: string; bold?: boolean; italic?: boolean; color?: string; font?: string; latinFont?: string; eastAsiaFont?: string; sizeHalfPoints?: number };
 export type ParagraphFormat = z.infer<typeof paragraphFormatSchema>;
 export type ParagraphOperation = {
  type: 'replace_paragraphs'; targetId: string; endTargetId: string; expectedText: string; text: '';

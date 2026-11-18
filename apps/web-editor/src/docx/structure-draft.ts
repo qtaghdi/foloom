@@ -263,9 +263,12 @@ export class StructureDraft {
         ...(run.style?.eastAsiaProofingLanguage && {eastAsiaProofingLanguage:run.style.eastAsiaProofingLanguage}),
         ...style,
       }:{...run.style,...style};
-      if(style.font && style.eastAsiaFont===undefined)delete combined.eastAsiaFont;
+      if (style.font) {
+        if (style.latinFont === undefined) delete combined.latinFont;
+        if (style.eastAsiaFont === undefined) delete combined.eastAsiaFont;
+      }
       const baseline=combined.reset ? {bold:false,italic:false,underline:false,strike:false,color:undefined,font:undefined,eastAsiaFont:undefined,sizeHalfPoints:undefined,highlight:undefined,vertical:undefined,...run.baseStyle} : run;
-      const selected:DraftRun={...run,...baseline,...combined,...combined.font?{eastAsiaFont:combined.eastAsiaFont??combined.font}:{},...combined.styleId!==undefined?{characterStyleId:combined.styleId}:{},id:this.id(),text:run.text.slice(start,end),style:combined};
+      const selected:DraftRun={...run,...baseline,...combined,font:combined.latinFont??combined.font??baseline.font,...combined.font?{eastAsiaFont:combined.eastAsiaFont??combined.font}:{},...combined.styleId!==undefined?{characterStyleId:combined.styleId}:{},id:this.id(),text:run.text.slice(start,end),style:combined};
       const pieces:DraftRun[]=[];
       if(start) pieces.push({...run,text:run.text.slice(0,start)});
       pieces.push(selected);
