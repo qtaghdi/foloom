@@ -84,3 +84,40 @@ func formatRevisionPreview(change *node, text string, editable bool) *ObjectInfo
 	}
 	return &ObjectInfo{Kind: "tracked_format", Text: reviewText(text, 1024), Author: reviewText(change.attr("author"), 160), Date: date, Editable: editable}
 }
+
+func trackedBoldEdit(data []byte, t target, op Operation, author, date string, used map[int64]bool, nextID *int64) (replacement, error) {
+	if !t.boldTrackable || t.kind != "replace_run_text" || t.text != op.ExpectedText || op.Bold == nil || op.Text != "" {
+		return replacement{}, fmt.Errorf("invalid or stale DOCX tracked bold formatting")
+	}
+	props := t.run.child("rPr")
+	if props != nil && !safeRunRevisionProperties(props, nil) {
+		return replacement{}, fmt.Errorf("protected DOCX run properties")
+	}
+	current, err := inlineProperties(props, data, &InlineStyle{Bold: op.Bold}, nil)
+	if err != nil {
+		return replacement{}, err
+	}
+	previous := `<dw:rPr xmlns:dw="` + wordNS + `"/>`
+	start, end := t.run.inner, t.run.inner
+	if props != nil {
+		open, close := scopedOpening(props, data, false)
+		content := ""
+		if props.inner < props.endStart {
+			content = string(data[props.inner:props.endStart])
+		}
+		previous = open + content + close
+		start, end = props.start, props.end
+	}
+	for used[*nextID] {
+		(*nextID)++
+	}
+	id := *nextID
+	used[id] = true
+	revision := fmt.Sprintf(`<dwr:rPrChange xmlns:dwr="%s" dwr:id="%d" dwr:author="%s" dwr:date="%s">%s</dwr:rPrChange>`,
+		wordNS, id, author, date, previous)
+	raw, err := appendXMLChild([]byte(current), revision)
+	if err != nil {
+		return replacement{}, err
+	}
+	return replacement{start: start, end: end, data: raw}, nil
+}

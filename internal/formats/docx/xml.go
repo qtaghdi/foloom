@@ -160,6 +160,7 @@ func escapeText(s string) string {
 
 type target struct {
 	trackable        bool
+	boldTrackable    bool
 	textStories      [][]*node
 	moveUp, moveDown *node
 	paragraph, run   *node
@@ -308,6 +309,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				break
 			}
 		}
+		boldTrackableParagraph := trackableParagraph && !p.has("drawing") && !p.has("sectPr") && !p.has("delInstrText")
 		for _, r := range p.children {
 			if r.is("pPr") {
 				continue
@@ -439,6 +441,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				}
 			}
 			run.Trackable = trackableParagraph && editable && trackableRun(r, texts, root.source)
+			run.BoldTrackable = boldTrackableParagraph && run.Trackable && (runProps == nil || safeRunRevisionProperties(runProps, nil))
 			out.Runs = append(out.Runs, run)
 			if allowed && !protected[r] && p.parent == body && run.Object != nil && (run.Object.Kind == "footnote" || run.Object.Kind == "endnote") && run.Object.noteID != "" {
 				targets[run.ID] = target{node: r, run: r, paragraph: p, kind: run.Object.Kind}
@@ -451,7 +454,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				if len(texts) == 1 && !r.has("br") || r.has("tab") {
 					textNode = texts[0]
 				}
-				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r, trackable: run.Trackable}
+				targets[run.ID] = target{node: textNode, text: text, kind: kind, paragraph: p, run: r, trackable: run.Trackable, boldTrackable: run.BoldTrackable}
 			} else {
 				unsupported = true
 			}
