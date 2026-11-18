@@ -71,13 +71,14 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
   };
   return {
     keydown(event: KeyboardEvent) {
+      plainPaste = false;
       if (!eligible(event) || composition || event.isComposing || callbacks.saving()) return;
       const range = selection(); if (!range) return;
       if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey && moveTableCaret(range,event.shiftKey)) {
         event.preventDefault();
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') plainPaste = event.shiftKey;
+      plainPaste = !event.defaultPrevented && event.shiftKey && !event.altKey && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v';
       softBreak = event.key === 'Enter' && event.shiftKey;
       if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey && callbacks.listLevel?.(range,event.shiftKey?-1:1)) { event.preventDefault(); return; }
       if (event.key === 'Enter') { event.preventDefault(); apply(range, '\n', softBreak); return; }
@@ -129,13 +130,15 @@ export function continuousInput(root: () => HTMLElement, callbacks: InputCallbac
       composed = true; queueMicrotask(() => { composed = false; });
       callbacks.composition(false);
     },
+    endPasteShortcut() { plainPaste = false; },
     paste(event: ClipboardEvent) {
+      const pasteAsPlain = plainPaste;
+      plainPaste = false;
       if (!eligible(event)) return;
       event.preventDefault(); if (callbacks.saving() || composition) return;
       const range=selection();if (!range || !event.clipboardData) return;
       const html=event.clipboardData.getData('text/html');
-      const rich=!plainPaste && callbacks.pasteMode()==='basic' && html ? parseClipboardHTML(html,root().ownerDocument) : undefined;
-      plainPaste=false;
+      const rich=!pasteAsPlain && callbacks.pasteMode()==='basic' && html ? parseClipboardHTML(html,root().ownerDocument) : undefined;
       if (rich) {
         if (!callbacks.pasteRich(range,rich.paragraphs)) callbacks.notice('protected');
         else callbacks.notice(rich.stripped?'clipboard':'');

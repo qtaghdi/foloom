@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { parseClipboardHTML, clipboardHTML } from '../src/docx/clipboard';
+import { continuousInput } from '../src/docx/continuous-input';
 import { StructureDraft } from '../src/docx/structure-draft';
 import type { Snapshot } from '../src/docx/contracts';
 
@@ -37,4 +38,49 @@ it('keeps prefix and suffix source formatting separate from pasted character sty
  draft.replaceRich({anchor:{runId:'r',offset:7},focus:{runId:'r',offset:7}},[[{text:'new',style:{bold:false,italic:true,color:'#112233'}}]]);
  const runs=draft.operations()[0]?.paragraphs[0]?.runs;
  expect(runs).toEqual([{sourceId:'r',text:'prefix '},{sourceId:'r',text:'new',style:{bold:false,italic:true,color:'#112233'}},{sourceId:'r',text:'suffix'}]);
+});
+
+it('scopes text-only paste to one active keyboard shortcut', () => {
+ const root=document.createElement('div');
+ root.innerHTML='<span data-docx-run="r">start</span>';
+ document.body.append(root);
+ try {
+  const node=root.firstElementChild!.firstChild!;
+  document.getSelection()!.setBaseAndExtent(node,5,node,5);
+  const replace=vi.fn(()=>true);
+  const pasteRich=vi.fn(()=>true);
+  let saving=false;
+  const input=continuousInput(()=>root,{
+   history:vi.fn(),snapshot:()=>({id:'s',name:'x.docx',revision:1,sequence:0,warnings:[],blocks:[]}),
+   saving:()=>saving,edit:vi.fn(),replace,delete:()=>false,structure:()=>false,
+   composition:vi.fn(),refresh:vi.fn(),text:()=>undefined,focus:vi.fn(),notice:vi.fn(),
+   pasteMode:()=>'basic',pasteRich,richText:()=>undefined,
+  });
+  const shortcut=()=>input.keydown(new KeyboardEvent('keydown',{key:'V',shiftKey:true,metaKey:true}));
+  const paste=()=>{
+   const event=new Event('paste',{cancelable:true});
+   Object.defineProperty(event,'clipboardData',{value:{getData:(kind:string)=>kind==='text/html'?'<b>formatted</b>':'formatted'}});
+   input.paste(event as ClipboardEvent);
+  };
+
+  shortcut();
+  paste();
+  expect(replace).toHaveBeenCalledTimes(1);
+  expect(pasteRich).not.toHaveBeenCalled();
+
+  shortcut();
+  input.endPasteShortcut();
+  paste();
+  expect(pasteRich).toHaveBeenCalledTimes(1);
+
+  shortcut();
+  saving=true;
+  paste();
+  saving=false;
+  paste();
+  expect(pasteRich).toHaveBeenCalledTimes(2);
+  expect(replace).toHaveBeenCalledTimes(1);
+ } finally {
+  root.remove();
+ }
 });
