@@ -140,7 +140,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	s.addPicturePreviews(blocks, targetsByID)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
-			s.pkg.projectNotes(kind, blocks, targetsByID)
+			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)
 		}
 	}
 	bookmarks := s.pkg.projectReferences(root, blocks, targetsByID)
@@ -451,7 +451,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
 			var edit replacement
-			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" {
+			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" {
 				edit, err = s.pkg.pictureUpdateReplacement(target, *op.Image, parts)
 			} else {
 				if drawingID == 0 {

@@ -7,6 +7,11 @@ const romanDigits = [
 
 function formatListNumber(value: number, kind?: string): string | undefined {
   if (kind==='decimal'||kind==='bullet') return String(value);
+  if (kind==='upperLetter'||kind==='lowerLetter') {
+    if(value<1||value>702)return undefined;
+    const base=kind==='upperLetter'?65:97;
+    return String.fromCharCode(base+(value-1)%26).repeat(Math.floor((value-1)/26)+1);
+  }
   if (kind!=='upperRoman'&&kind!=='lowerRoman'||value<1||value>3999) return undefined;
   let remaining=value, result='';
   for (const [number,symbol] of romanDigits) {

@@ -2,7 +2,7 @@ import { For, createSignal } from 'solid-js';
 import type { ListDefinition, Paragraph, ParagraphList, Snapshot } from './contracts';
 import { buttonClass } from '../ui/editor-chrome';
 
-const numberFormats={decimal:'1, 2, 3',upperRoman:'I, II, III',lowerRoman:'i, ii, iii'} as const;
+const numberFormats={decimal:'1, 2, 3',upperRoman:'I, II, III',lowerRoman:'i, ii, iii',upperLetter:'A, B, C',lowerLetter:'a, b, c'} as const;
 type NumberFormat=keyof typeof numberFormats;
 
 export function DocumentListToolbar(props:{
@@ -12,7 +12,7 @@ export function DocumentListToolbar(props:{
 }) {
  const [start,setStart]=createSignal(1);
  const [format,setFormat]=createSignal<NumberFormat>('decimal');
- const maxStart=()=>format()==='decimal'?9999:3999;
+ const maxStart=()=>format()==='decimal'?9999:format()==='upperLetter'||format()==='lowerLetter'?702:3999;
  const available=()=>!props.disabled&&props.paragraphs.length>0;
  const canLevel=(delta:number)=>available()&&props.paragraphs.every(p=>p.list&&(p.list.id||p.list.key)&&(p.list.level??0)+delta>=0&&(p.list.level??0)+delta<=8);
  return <div role="group" aria-label="목록 서식" class="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-1 text-xs">

@@ -52,7 +52,7 @@ type PageLayout struct {
 
 type ListDefinition struct {
 	Key   string `json:"key" jsonschema:"Batch-local reference key for new list paragraphs"`
-	Kind  string `json:"kind" jsonschema:"bullet, decimal, upperRoman, or lowerRoman"`
+	Kind  string `json:"kind" jsonschema:"bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter"`
 	Start int    `json:"start,omitempty" jsonschema:"Start number from 1 to 9999, default 1"`
 }
 

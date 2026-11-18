@@ -3,6 +3,7 @@ package docx
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -87,4 +88,40 @@ func (p *documentPackage) changeEndnote(t target, edit ReferenceEdit, changes ma
 	raw.Write(root.source[offset:])
 	changes[filename] = raw.Bytes()
 	return nil
+}
+
+type endnoteBookmarkSpan struct{ start, end int }
+
+// NOTEREF can point into a bookmark from another story. Index the protected
+// ranges once per story so large imported documents can project notes cheaply.
+func endnoteBookmarkSpans(body *node) []endnoteBookmarkSpan {
+	index := readBookmarks(body)
+	var spans []endnoteBookmarkSpan
+	for id, starts := range index.starts {
+		ends := index.ends[id]
+		for _, start := range starts {
+			end := body.end
+			if len(starts) == 1 && len(ends) == 1 && ends[0].start > start.start {
+				end = ends[0].start
+			}
+			spans = append(spans, endnoteBookmarkSpan{start.start, end})
+		}
+	}
+	for id, ends := range index.ends {
+		if len(index.starts[id]) == 0 {
+			for _, end := range ends {
+				spans = append(spans, endnoteBookmarkSpan{body.start, end.start})
+			}
+		}
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
+	for i := 1; i < len(spans); i++ {
+		spans[i].end = max(spans[i].end, spans[i-1].end)
+	}
+	return spans
+}
+
+func endnoteDeletionAllowed(t target, spans []endnoteBookmarkSpan) bool {
+	end := sort.Search(len(spans), func(i int) bool { return spans[i].start >= t.node.end })
+	return end == 0 || spans[end-1].end < t.node.start
 }

@@ -200,3 +200,55 @@ func TestDOCXEndnotePersistsIndependentlyOfFootnote(t *testing.T) {
 		t.Fatal("undo did not restore original package bytes")
 	}
 }
+
+func TestEndnoteDeletionPreservesOtherNoteParts(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>second</w:t></w:r></w:p>`))
+	v := mustSnapshot(t, s)
+	added, err := s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: v.Blocks[0].ID, Reference: &ReferenceEdit{Action: "insert_footnote", Text: "keep footnote"}},
+		{Type: "update_reference", TargetID: v.Blocks[1].ID, Reference: &ReferenceEdit{Action: "insert_endnote", Text: "remove endnote"}},
+	}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := added.Blocks[1].Paragraph.Runs[1]
+	if !run.Object.DeleteEditable {
+		t.Fatal("single non-bookmarked endnote cannot be removed")
+	}
+	before := fileBytes(t, filename)
+	footnote := bytes.Clone(s.pkg.partData("word/footnotes.xml", nil))
+	relations := bytes.Clone(s.pkg.partData(documentRelationships, nil))
+	if _, err := s.Apply(ctx, ApplyInput{SessionID: added.ID, BaseRevision: added.Revision, Operations: []Operation{
+		{Type: "update_reference", TargetID: run.ID, Reference: &ReferenceEdit{Action: "delete_endnote"}},
+	}}, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, notes, err := reopened.pkg.notesPart("endnote", nil)
+	if err != nil || len(notes.children) != 2 || !bytes.Equal(footnote, reopened.pkg.partData("word/footnotes.xml", nil)) ||
+		!bytes.Equal(relations, reopened.pkg.partData(documentRelationships, nil)) ||
+		len(mustSnapshot(t, reopened).Blocks[1].Paragraph.Runs) != 1 {
+		t.Fatal("deleting the endnote changed other notes or failed to remove its marker")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore original endnote bytes")
+	}
+}
+
+func TestEndnoteDeletionProtectsSpanningBookmark(t *testing.T) {
+	root, err := parseXML([]byte(bodyXML(`<w:p><w:bookmarkStart w:id="5" w:name="Span"/></w:p>` +
+		`<w:p><w:r><w:endnoteReference w:id="2"/></w:r></w:p><w:p><w:bookmarkEnd w:id="5"/></w:p>`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := root.child("body")
+	target := target{node: body.children[1].child("r")}
+	if endnoteDeletionAllowed(target, endnoteBookmarkSpans(body)) {
+		t.Fatal("endnote inside a cross-paragraph bookmark was marked removable")
+	}
+}
