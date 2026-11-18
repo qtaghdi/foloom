@@ -160,6 +160,7 @@ func escapeText(s string) string {
 
 type target struct {
 	tableCaptionInsertable bool
+	refreshableBookmarkRef bool
 	linkAnchorEditable     bool
 	pictureAlign           string
 	alignmentTrackable     bool
@@ -348,8 +349,9 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				if r.is("hyperlink") {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink", linkAnchorEditable: allowed && p.parent == body &&
 						attribute(r, officeRelNS, "id") == "" && strings.TrimSpace(run.Text) != "" && allowPlainHyperlink(r, plainHyperlinkRun)}
-				} else if _, name := bookmarkFieldTarget(r); name != "" {
-					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
+				} else if fieldKind, name := bookmarkFieldTarget(r); name != "" {
+					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name,
+						refreshableBookmarkRef: fieldKind == "REF" && !protected[p] && canRefreshBookmarkReference(r, root.source)}
 				} else if run.Object != nil && run.Object.Kind == "date_field" && !protected[p] && dateFieldCache(r, root.source) != nil {
 					run.Object.Editable = true
 					targets[run.ID] = target{node: r, paragraph: p, kind: "date_field"}

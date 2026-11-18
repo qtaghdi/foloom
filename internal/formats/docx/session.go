@@ -610,8 +610,8 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if (op.Reference.Action == "rename_bookmark" || op.Reference.Action == "delete_bookmark") && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark edit must stand alone")
 			}
-			if op.Reference.Action == "insert_bookmark_number_ref" && len(input.Operations) != 1 {
-				return nil, fmt.Errorf("DOCX bookmark number reference must stand alone")
+			if (op.Reference.Action == "insert_bookmark_number_ref" || op.Reference.Action == "refresh_bookmark_ref") && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX bookmark field edit must stand alone")
 			}
 			switch op.Reference.Action {
 			case "insert_toc", "update_toc", "insert_figure_list", "insert_table_list", "update_caption_list":

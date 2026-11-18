@@ -117,6 +117,8 @@ export function DocumentApp() {
     : [])??[]);
   const documentDateFields = createMemo(() => state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ? block.paragraph.runs.filter(run=>run.object?.kind==='date_field'&&run.object.editable) : [])??[]);
+  const pendingBookmarkReferences = createMemo(() => state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ? block.paragraph.runs.filter(run=>run.link && 'refreshNeeded' in run.link && run.link.refreshNeeded) : [])??[]);
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
   const commentRange = () => {
@@ -415,7 +417,7 @@ export function DocumentApp() {
     <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} referenceLists={documentReferenceLists()} dateFields={documentDateFields()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
+    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} referenceLists={documentReferenceLists()} dateFields={documentDateFields()} pendingReferences={pendingBookmarkReferences()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}

@@ -982,7 +982,11 @@ HTTP·MCP는 북마크 문단 ID와 `reference: { action: "delete_bookmark", boo
 `reference: { action: "insert_bookmark_ref", bookmark }`를 적용합니다.
 브라우저에서 참조의 텍스트를 확인하고 대상 문단으로 이동할 수 있습니다.
 북마크 이름을 바꾸면 지원 REF의 대상도 바뀝니다. 북마크를 지울 때는 해당
-참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다.
+참조의 표시 글자를 남깁니다. 복합 필드나 다른 story의 참조는 보호합니다. 북마크 문구가 바뀌면 브라우저는
+현재 문구를 보여 줍니다. `갱신할 텍스트 상호 참조`에서 변경된 필드를 고른 뒤
+`참조 표시값 갱신`을 적용하고 저장하면 Word 파일에 들어 있는 표시 문구도
+바뀝니다. HTTP·MCP는 해당 필드 run ID에
+`reference: { action: "refresh_bookmark_ref" }`를 단독 작업으로 보냅니다.
 [Word 참조 필드 갱신](https://support.microsoft.com/en-us/word/some-fields-are-updated-while-other-fields-are-not)을 참고할 수 있습니다.
 
 같은 메뉴의 `쪽 번호 상호 참조 삽입`에서 평문 북마크를 선택하면 Word PAGEREF
