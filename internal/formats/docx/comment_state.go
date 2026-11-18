@@ -70,7 +70,7 @@ func commentDone(n *node) (bool, bool) {
 	}
 }
 
-func commentResolutionNodes(comments, extended *node) map[string]*node {
+func commentExtensionNodes(comments, extended *node) map[string]*node {
 	byParagraph := map[string]*node{}
 	seen := map[string]bool{}
 	for _, entry := range extended.children {
@@ -82,7 +82,8 @@ func commentResolutionNodes(comments, extended *node) map[string]*node {
 			continue
 		}
 		_, known := commentDone(entry)
-		if seen[id] || !known || attribute(entry, commentExtNS, "paraIdParent") != "" ||
+		parent := attribute(entry, commentExtNS, "paraIdParent")
+		if seen[id] || !known || parent != "" && (commentParagraphID(parent) == "" || commentParagraphID(parent) == id) ||
 			len(entry.children) != 0 || strings.TrimSpace(entry.text.String()) != "" {
 			delete(byParagraph, id)
 		} else {
@@ -132,8 +133,8 @@ func (p *documentPackage) setCommentDone(id string, done bool, changes map[strin
 	if err != nil || extended == nil {
 		return fmt.Errorf("DOCX extended comments part unavailable")
 	}
-	entry := commentResolutionNodes(comments, extended)[id]
-	if entry == nil || strings.Contains(string(extended.source[entry.start:entry.end]), "<!--") {
+	entry := commentExtensionNodes(comments, extended)[id]
+	if entry == nil || attribute(entry, commentExtNS, "paraIdParent") != "" || strings.Contains(string(extended.source[entry.start:entry.end]), "<!--") {
 		return fmt.Errorf("protected or ambiguous DOCX comment state")
 	}
 	current, _ := commentDone(entry)

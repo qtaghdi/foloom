@@ -8,10 +8,10 @@ export const cropInset=z.number().int().min(0).max(99000);
 const cropSchema=z.object({left:cropInset,top:cropInset,right:cropInset,bottom:cropInset})
   .refine(crop=>crop.left+crop.right<=99000&&crop.top+crop.bottom<=99000);
 const runSchema = z.object({
-  object:z.object({kind:z.enum(['math','control','embedded','textbox','toc','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional()}).optional(),
+  object:z.object({kind:z.enum(['math','control','embedded','textbox','toc','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional(),squareRoot:z.string().max(1024).optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional()})]).optional(),
-  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:z.literal(180).optional(),rotationEditable:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
+  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:z.literal(180).optional(),rotationEditable:z.boolean().optional(),captionEditable:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
   sizeHalfPoints: z.number().int().min(8).max(288).optional(),
@@ -57,7 +57,7 @@ const styleInfoSchema=z.object({outlineLevel,id:z.string().max(120),name:z.strin
 export const snapshotSchema = z.object({
   lists:z.array(listInfoSchema).max(500).optional(),
   trackedChanges:z.boolean().optional(),
-  comments:z.array(z.object({id:z.string(),author:z.string(),date:z.string().optional(),text:z.string(),paragraphId:z.string().optional(),resolved:z.boolean().optional(),resolutionEditable:z.boolean().optional()})).max(100).optional(),
+  comments:z.array(z.object({id:z.string(),author:z.string(),date:z.string().optional(),text:z.string(),paragraphId:z.string().optional(),parentId:z.string().optional(),resolved:z.boolean().optional(),resolutionEditable:z.boolean().optional()})).max(100).optional(),
   bookmarks:z.array(z.object({name:bookmarkName,paragraphId:z.string(),renameEditable:z.boolean().optional(),textReference:z.boolean().optional(),numberReference:z.boolean().optional()})).max(500).optional(),
   evenAndOddHeaders: z.boolean().optional(),
  sections:z.array(sectionSchema).max(128).optional(),
@@ -101,13 +101,13 @@ export type TableEdit = {action:TableAction;rows?:number;columns?:number;index?:
 export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'no_page_after' | 'section_next_page' | 'section_continuous' | 'remove_section' | 'move_section_earlier' | 'move_section_later';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
-export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}|{action:'crop';crop:z.infer<typeof cropSchema>}|{action:'rotate';rotation:0|180}};
+export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}|{action:'crop';crop:z.infer<typeof cropSchema>}|{action:'rotate';rotation:0|180}} | {type:'insert_picture_caption';targetId:string;expectedText:'';text:string};
 export type ReferenceEdit = {action:'insert_toc'|'update_toc'} | {action:'insert_bookmark'|'insert_bookmark_ref'|'insert_bookmark_page_ref'|'insert_bookmark_number_ref';bookmark:string} | {action:'rename_bookmark';bookmark:string;newBookmark:string} | {action:'delete_bookmark';bookmark:string} | {action:'insert_footnote'|'insert_endnote'|'set_footnote_text'|'set_endnote_text';text:string} | {action:'delete_footnote'|'delete_endnote'} |
   {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'unlink'};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};
-export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
-export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}};
+export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'reply_comment';targetId:string;comment:{text:string}} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
+export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete'|'insert_root'|'replace_root';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}};
 export type BookmarkMoveOperation = {type:'move_bookmark_up';targetId:string}|{type:'move_bookmark_down';targetId:string};
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};
 export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string};
