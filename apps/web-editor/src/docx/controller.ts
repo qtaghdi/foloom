@@ -215,12 +215,20 @@ export class DocumentController {
   pendingTable(): boolean { return this.standaloneDraft?.type === 'update_table'; }
   editTable(operation: TableOperation): boolean { return this.editStandalone(operation); }
   pendingStandalone(): boolean { return Boolean(this.standaloneDraft); }
-  pendingNoteSplit(): boolean { return this.standaloneDraft?.type === 'split_note_paragraph'; }
+  pendingParagraphSplit(): boolean {
+    return this.standaloneDraft?.type === 'split_note_paragraph' || this.standaloneDraft?.type === 'track_paragraph_break';
+  }
   splitNoteParagraph(run:Run, offset:number): boolean {
-    if (!run.splitNoteParagraph || offset<=0 || offset>=run.text.length) return false;
+    return Boolean(run.splitNoteParagraph) && this.stageParagraphSplit('split_note_paragraph',run,offset);
+  }
+  trackParagraphBreak(run:Run, offset:number): boolean {
+    return Boolean(run.breakTrackable) && this.stageParagraphSplit('track_paragraph_break',run,offset);
+  }
+  private stageParagraphSplit(type:'split_note_paragraph'|'track_paragraph_break',run:Run,offset:number): boolean {
+    if (offset<=0 || offset>=run.text.length) return false;
     if (typeof Intl.Segmenter==='function' &&
       !Array.from(new Intl.Segmenter().segment(run.text)).some(segment=>segment.index===offset)) return false;
-    return this.editStandalone({type:'split_note_paragraph',targetId:run.id,expectedText:run.text,text:run.text.slice(0,offset)});
+    return this.editStandalone({type,targetId:run.id,expectedText:run.text,text:run.text.slice(0,offset)});
   }
   editStandalone(operation:StandaloneOperation): boolean {
     if(this.blocked||this.loading||this.disposed||!this.structureDraft||this.hasDrafts())return false;
@@ -416,7 +424,8 @@ export class DocumentController {
     if (hasChanges) this.view.activity?.({ id: activityId, actor: 'human', state: 'pending', title: `본문·표 ${this.pendingOperations().length}개 수정` });
     try {
       let snapshot = this.snapshot;
-      const splitId = this.standaloneDraft?.type==='split_note_paragraph' ? this.standaloneDraft.targetId : undefined;
+      const draft = this.standaloneDraft;
+      const splitId = draft?.type==='split_note_paragraph'||draft?.type==='track_paragraph_break' ? draft.targetId : undefined;
       const splitIndex = splitId ? snapshot.blocks.findIndex(block=>block.type==='paragraph'&&block.paragraph.runs.some(run=>run.id===splitId)) : -1;
       if (hasChanges) {
         if (this.recovery) {
