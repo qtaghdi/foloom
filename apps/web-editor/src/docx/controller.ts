@@ -159,6 +159,16 @@ export class DocumentController {
     const snapshot=this.structureDraft!.snapshot([...this.listDrafts.values()]);
     const draft=this.imageDraft;
     let blocks=snapshot.blocks;
+    if(draft?.type==='update_image'&&draft.image.action==='align'){
+      const align=draft.image.align;
+      blocks=blocks.map(block=>{
+        if(block.type!=='paragraph'||!block.paragraph.runs.some(run=>run.id===draft.targetId))return block;
+        const paragraph=block.paragraph;
+        return {...block,paragraph:{...paragraph,layout:{...paragraph.layout,align},runs:paragraph.runs.map(run=>
+          run.id===draft.targetId&&run.picture?{...run,picture:{...run.picture,align}}:run,
+        )}};
+      });
+    }
     if(draft?.type==='move_picture_caption_up'||draft?.type==='move_picture_caption_down'){
       const index=blocks.findIndex(block=>block.type==='paragraph'&&block.paragraph.runs.some(run=>run.id===draft.targetId));
       const image=blocks[index], caption=blocks[index+1];

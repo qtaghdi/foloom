@@ -323,7 +323,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	textBytes := 0
 	structuralBytes := 0
 	var bookmarks *bookmarkIndex
-	var moveTargets map[string]target
+	var layoutTargets map[string]target
 	referenceCount := 0
 	var revisionIDs map[int64]bool
 	var nextRevisionID int64
@@ -421,13 +421,13 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
-			if moveTargets == nil {
-				_, moveTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+			if layoutTargets == nil {
+				_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
 				if err != nil {
 					return nil, err
 				}
 			}
-			edit, err := movePreservedParagraph(s.pkg.document, moveTargets[op.TargetID], op.Type)
+			edit, err := movePreservedParagraph(s.pkg.document, layoutTargets[op.TargetID], op.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -701,8 +701,17 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if imageCount >= 4 {
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
+			if op.Image.Action == "align" {
+				if layoutTargets == nil {
+					_, layoutTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
+					if err != nil {
+						return nil, err
+					}
+				}
+				target = layoutTargets[op.TargetID]
+			}
 			var edit replacement
-			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" {
+			if op.Image.Action == "set_alt" || op.Image.Action == "delete" || op.Image.Action == "resize" || op.Image.Action == "replace" || op.Image.Action == "crop" || op.Image.Action == "rotate" || op.Image.Action == "align" {
 				edit, err = s.pkg.pictureUpdateReplacement(target, *op.Image, parts)
 			} else {
 				id, allocationErr := nextDrawingID()

@@ -24,9 +24,10 @@ const (
 )
 
 type ImageEdit struct {
+	Align    string     `json:"align,omitempty" jsonschema:"start, center, or end for a dedicated inline picture paragraph"`
 	Rotation *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
 	Crop     *ImageCrop `json:"crop,omitempty"`
-	Action   string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, or rotate"`
+	Action   string     `json:"action" jsonschema:"insert, replace, set_alt, delete, resize, crop, rotate, or align"`
 	Base64   string     `json:"base64,omitempty" jsonschema:"PNG or JPEG data without a data URI prefix, up to 512 KiB decoded"`
 	Alt      string     `json:"alt,omitempty"`
 	WidthEMU int        `json:"widthEmu,omitempty"`
@@ -77,7 +78,7 @@ func (p *documentPackage) availableDrawingID() (uint32, error) {
 
 func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageEdit, drawingID uint32, changes map[string][]byte) (replacement, error) {
 	paragraph := target.paragraph
-	if edit.Action != "insert" || edit.Rotation != nil || edit.Crop != nil || target.kind != "replace_paragraphs" || paragraph == nil ||
+	if edit.Action != "insert" || edit.Align != "" || edit.Rotation != nil || edit.Crop != nil || target.kind != "replace_paragraphs" || paragraph == nil ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture insertion")
 	}
@@ -130,6 +131,7 @@ func decodePicture(encoded string) ([]byte, image.Config, string, error) {
 func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, changes map[string][]byte) (replacement, error) {
 	if t.kind != "picture" || t.run == nil || edit.Action != "replace" && edit.Base64 != "" || edit.Action != "resize" && edit.WidthEMU != 0 ||
 		edit.Action != "crop" && edit.Crop != nil || edit.Action != "rotate" && edit.Rotation != nil ||
+		edit.Action != "align" && edit.Align != "" ||
 		len(edit.Alt) > 1024 || !utf8.ValidString(edit.Alt) || !validInlineText(edit.Alt) {
 		return replacement{}, fmt.Errorf("invalid DOCX picture update")
 	}
@@ -158,6 +160,12 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 	part := p.picturePartMap()[relationship]
 	if _, _, err := imageConfig(p.partData(part, nil), maxImageReadBytes); err != nil {
 		return replacement{}, err
+	}
+	if edit.Action == "align" {
+		if edit.Alt != "" {
+			return replacement{}, fmt.Errorf("unexpected DOCX picture description")
+		}
+		return alignPictureParagraph(t, p.document, edit.Align)
 	}
 	if edit.Action == "rotate" {
 		if edit.Alt != "" || edit.Rotation == nil {
@@ -218,6 +226,90 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 	return replacement{props.start, props.end, []byte(raw)}, nil
 }
 
+func plainVisualParagraphProperties(p *node) bool {
+	if countChild(p, "pPr") > 1 {
+		return false
+	}
+	if props := p.child("pPr"); props != nil {
+		if strings.TrimSpace(props.text.String()) != "" {
+			return false
+		}
+		for _, child := range props.children {
+			if child.name.Space != wordNS || len(child.children) != 0 || strings.TrimSpace(child.text.String()) != "" ||
+				!strings.Contains(" jc spacing ind widowControl keepLines ", " "+child.name.Local+" ") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func dedicatedPictureParagraph(t target, data []byte) bool {
+	p := t.paragraph
+	if !t.run.parent.is("p") || !t.run.parent.parent.is("body") || p != t.run.parent ||
+		strings.TrimSpace(p.text.String()) != "" || bytes.Contains(data[p.start:p.end], []byte("<!--")) ||
+		p.has("rPrChange") || countChild(t.run, "drawing") != 1 ||
+		(len(t.run.children) != 1 && (len(t.run.children) != 2 || t.run.child("rPr") == nil)) {
+		return false
+	}
+	drawing := t.run.child("drawing")
+	if len(drawing.children) != 1 || childNS(drawing, drawingWordNS, "inline") == nil {
+		return false
+	}
+	for _, child := range p.children {
+		if child == t.run || child.is("pPr") {
+			continue
+		}
+		if !child.is("r") || strings.TrimSpace(child.text.String()) != "" {
+			return false
+		}
+		if len(child.children) == 0 {
+			continue
+		}
+		text := child.children[0]
+		if len(child.children) != 1 || !text.is("t") || len(text.children) != 0 || text.text.Len() != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func pictureParagraphAlignment(t target, data []byte, layout ParagraphLayout) string {
+	if layout.Bidi || layout.TextDirection != "" || !plainVisualParagraphProperties(t.paragraph) ||
+		!dedicatedPictureParagraph(t, data) || countChild(t.paragraph.child("pPr"), "jc") > 1 {
+		return ""
+	}
+	if alignment := t.paragraph.child("pPr").child("jc"); alignment != nil {
+		switch alignment.attr("val") {
+		case "left", "start", "center", "right", "end":
+		default:
+			return ""
+		}
+	}
+	switch layout.Align {
+	case "":
+		return "start"
+	case "start", "center", "end":
+		return layout.Align
+	}
+	return ""
+}
+
+func alignPictureParagraph(t target, data []byte, align string) (replacement, error) {
+	if t.pictureAlign == "" || align == t.pictureAlign || (align != "start" && align != "center" && align != "end") {
+		return replacement{}, fmt.Errorf("DOCX picture alignment requires a dedicated picture paragraph and a new alignment")
+	}
+	props := t.paragraph.child("pPr")
+	xml, err := paragraphProperties(props, data, &ParagraphFormat{Align: align})
+	if err != nil {
+		return replacement{}, err
+	}
+	if props == nil {
+		return replacement{t.paragraph.inner, t.paragraph.inner, []byte(xml)}, nil
+	}
+	return replacement{props.start, props.end, []byte(xml)}, nil
+}
+
 func resizeInlinePicture(data []byte, inline *node, info *PictureInfo, width int) (replacement, error) {
 	if width < 9525 || width > maxImageExtent {
 		return replacement{}, fmt.Errorf("invalid DOCX picture width")
@@ -254,6 +346,7 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
+	Align            string     `json:"align,omitempty"`
 	Caption          string     `json:"caption,omitempty"`
 	CaptionEditable  bool       `json:"captionEditable,omitempty"`
 	MoveCaptionUp    bool       `json:"moveCaptionUp,omitempty"`
@@ -364,6 +457,7 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				info.Align = source.pictureAlign
 				info.MoveCaptionUp, info.MoveCaptionDown = source.moveUp != nil, source.moveDown != nil
 				_, info.Caption = editablePictureCaption(source, s.pkg.document)
 				if captionParagraph(source) {

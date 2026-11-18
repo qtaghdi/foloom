@@ -844,6 +844,13 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 기존 캡션을 확실히 구분할 수 없는 경우는 보호합니다.
 [Word 캡션 번호](https://support.microsoft.com/en-gb/word/add-format-or-delete-captions-in-word)를 사용합니다.
 
+본문 전용 문단에 인라인 그림이 하나 있으면 `그림 정렬`에서 왼쪽·가운데·오른쪽을
+고른 뒤 `그림 정렬 적용`을 누릅니다. 그림 파일·크기·캡션은 그대로 유지하며
+문단의 정렬 속성만 바꿉니다. HTTP·MCP에서는 현재 그림 run ID를 대상으로
+`update_image`에 `image: { action: "align", align: "center" }`를 보냅니다.
+`start`는 왼쪽, `end`는 오른쪽입니다. 일반 문구·다른 개체·구역 설정이
+함께 있거나 표 안에 있는 문단은 보호합니다.
+
 같은 그림을 다시 고른 뒤 `그림 캡션 변경`으로 기존 설명을 바꿀 수 있습니다.
 Word 번호 필드와 그림은 유지됩니다. HTTP·MCP에서는 그림 run ID,
 현재 설명의 `expectedText`, 새 `text`를 `edit_picture_caption`에 보냅니다.
