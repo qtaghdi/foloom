@@ -36,7 +36,7 @@ func supportedPictureCrop(inline *node, data []byte) (*ImageCrop, *node, *node) 
 	transform := childNS(shape, drawingNS, "xfrm")
 	geometry := childNS(shape, drawingNS, "prstGeom")
 	if blip == nil || len(blip.children) != 0 || stretchRect == nil || len(stretch.children) != 1 ||
-		len(stretchRect.children) != 0 || !onlyNamespaceAttributes(stretchRect) || transform == nil || !onlyNamespaceAttributes(transform) ||
+		len(stretchRect.children) != 0 || !onlyNamespaceAttributes(stretchRect) || transform == nil || basicPictureAngle(transform) < 0 ||
 		len(shape.children) != 2 || attribute(geometry, "", "prst") != "rect" {
 		return nil, nil, nil
 	}

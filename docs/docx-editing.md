@@ -713,6 +713,13 @@ HTTP·MCP의 `image: { action: "crop", crop: { left, top, right, bottom } }`는
 표시 영역의 바깥 크기와 그림 파일·관계·설명은 유지합니다.
 [DrawingML 원본 자르기](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.sourcerectangle)를 사용합니다.
 
+기본 인라인 PNG·JPEG는 `그림 180도 회전`으로 방향을 바꾸고
+`그림 방향 되돌리기`로 복원할 수 있습니다. 크기, 원본 파일과 자르기 범위는 유지합니다.
+HTTP·MCP는 `update_image`에 그림 run ID와 `image: { action: "rotate", rotation: 180 }`을
+보냅니다. `rotation: 0`은 기본 방향으로 되돌립니다. 회전 뒤 자르기 비율은 원본
+이미지를 기준으로 입력합니다. 다른 각도와 떠 있는 그림은 Word에서 편집할 수 있습니다.
+
+
 ### 인쇄와 PDF 저장
 
 파일 작업의 `인쇄·PDF`는 저장된 문서를 브라우저 인쇄 창으로 보냅니다.
