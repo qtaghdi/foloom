@@ -301,6 +301,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	}
 	seen := map[string]bool{}
 	var edits []replacement
+	var usedIDs paragraphIDs
 	headerCount := 0
 	var drawingID uint64
 	nextDrawingID := func() (uint32, error) {
@@ -778,7 +779,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if err != nil {
 				return nil, err
 			}
-			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles)
+			if usedIDs == nil {
+				usedIDs = usedParagraphIDs(root)
+			}
+			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles, usedIDs)
 			if err != nil {
 				return nil, err
 			}
