@@ -635,7 +635,11 @@ HTTP·MCP에서 `define_list`의 `listDefinition: { key, sourceId, level, start 
 정렬과 채움선을 적용합니다. `이 위치 해제`는 상속한 위치도 명시적으로 해제하며,
 다른 위치의 탭과 사용자 정의 속성은 유지합니다. 첫 선택 문단의 위치 목록을
 누르면 편집값을 불러옵니다. 여러 문단을 선택하면 같은 위치의 변경만 적용합니다.
-기본 위치 간격은 36pt이며 사용자 지정 위치는 0~1440pt, 한 번에 최대 32개입니다.
+사용자 지정 위치는 0~1440pt, 한 번에 최대 32개입니다.
+문서 전체의 자동 탭 간격은 같은 도구의 `기본 탭 간격`에서 0.05~1638.35pt로
+바꿉니다. 기존 초안을 저장하거나 실행 취소한 뒤, 간격을 적용하고 문서를 저장하세요.
+명시한 문단 정지점은 유지됩니다. MCP의 `update_default_tab_stop`은
+`defaultTabStop`을 1~32767 트윕 단위로 받는 단일 작업입니다.
 
 `탭 문자 삽입`은 공백 여러 개가 아닌 실제 Word 탭을 넣습니다. 일반 Tab 키는
 초점 이동, 목록의 Tab/Shift+Tab은 수준 변경을 유지합니다. 저장할 때는 `w:tab`
@@ -906,6 +910,14 @@ Word 계열 편집기에서 확인합니다.
 번호 캡션, 페이지 또는 구역 경계가 섞인 본문에서는 사각 배치 작성을 보호합니다.
 HTTP·MCP 값은 `square_left`와 `square_right`입니다. 기존 위아래 감싸기와
 인라인 복귀는 그대로 사용할 수 있습니다.
+
+단일 구역·단일 열 본문의 지원 전용 그림은 `단 왼쪽에서 거리 (pt)`로
+가로 위치를 직접 지정할 수 있습니다. 그림의 전체 너비가 단 안에 들어오는
+범위에서 위아래 감싸기로 저장합니다. 편집 화면은 좁을 때 그림이 보이도록
+가로 거리를 맞춰 표시하고, 저장 파일은 지정한 거리를 유지합니다. 정렬
+프리셋이나 `인라인`을 선택해 배치를 다시 바꿀 수 있습니다. HTTP·MCP에서는
+`placement: "floating_offset"`과 함께 `horizontalOffsetEmu`를 보냅니다.
+1pt는 12700EMU입니다.
 
 [Word DrawingML anchor](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.wordprocessing.anchor)를 사용합니다.
 

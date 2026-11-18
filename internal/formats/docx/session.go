@@ -175,8 +175,8 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if settingsErr == nil {
 		value := headerParity(settings)
 		parity = &value
-		if sectionChildCount(settings, "defaultTabStop") == 1 {
-			defaultTabStop = previewNumber(attribute(settings.child("defaultTabStop"), wordNS, "val"), 1, 32767)
+		if sectionChildCount(settings, defaultTabStopProperty) == 1 {
+			defaultTabStop = previewNumber(attribute(settings.child(defaultTabStopProperty), wordNS, "val"), 1, 32767)
 		}
 	}
 	for index, target := range targets {
@@ -337,6 +337,23 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var controlIDs map[int64]bool
 	nextControlID := int64(1)
 	for _, op := range input.Operations {
+		if op.DefaultTabStop != nil && op.Type != "update_default_tab_stop" {
+			return nil, fmt.Errorf("unexpected DOCX default tab stop")
+		}
+		if op.Type == "update_default_tab_stop" {
+			if len(input.Operations) != 1 || op.DefaultTabStop == nil || *op.DefaultTabStop < 1 || *op.DefaultTabStop > 32767 ||
+				op.TargetID != "" || op.EndTargetID != "" || op.ExpectedText != "" || op.Text != "" || op.Paragraphs != nil ||
+				op.StyleDefinition != nil || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil || op.Boundary != "" ||
+				op.Image != nil || op.Reference != nil || op.Comment != nil || op.Math != nil || op.ListDefinition != nil || op.Table != nil ||
+				op.ListStart != nil || op.Alignment != "" || op.Bold != nil || op.ChartInsert != nil || op.ChartWidthEMU != nil ||
+				op.ChartValue != nil || op.RectangleSize != nil || op.RectangleColors != nil {
+				return nil, fmt.Errorf("DOCX default tab stop requires a single interval between 1 and 32767 twips")
+			}
+			if err := s.pkg.updateDefaultTabStop(*op.DefaultTabStop, parts); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if op.ListStart != nil && op.Type != "restart_compound_sublevel" {
 			return nil, fmt.Errorf("unexpected DOCX compound list start")
 		}
@@ -822,8 +839,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if imageCount >= 4 {
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
-			if op.Image.Action == "set_placement" && strings.HasPrefix(op.Image.Placement, "square_") && len(input.Operations) != 1 {
-				return nil, fmt.Errorf("DOCX square picture placement must stand alone")
+			if op.Image.Action == "set_placement" &&
+				(strings.HasPrefix(op.Image.Placement, "square_") || op.Image.Placement == "floating_offset") && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX square or offset picture placement must stand alone")
 			}
 			if op.Image.Action == "align" || op.Image.Action == "set_placement" {
 				if layoutTargets == nil {
