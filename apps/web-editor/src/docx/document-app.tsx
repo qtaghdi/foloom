@@ -31,7 +31,7 @@ import { DocumentOutline } from './document-outline';
 import { DocumentBookmarkMoveToolbar } from './document-bookmark-move-toolbar';
 import { DocumentReferenceToolbar } from './document-reference-toolbar';
 import { DocumentComments } from './document-comments';
-import { DocumentMathToolbar } from './document-objects';
+import { DocumentMathToolbar, DocumentShapeToolbar } from './document-objects';
 import { DocumentObjectTextToolbar } from './document-object-text-toolbar';
 import { paragraphs, restoreAnchoredPoint } from './paragraphs';
 import { DocumentTableToolbar } from './document-table-toolbar';
@@ -111,6 +111,11 @@ export function DocumentApp() {
     const snapshot = state().snapshot;
     return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) =>
       paragraph.runs.filter(run => (run.object?.kind==='footnote'||run.object?.kind==='endnote')&&run.object.editable)) : [];
+  });
+  const documentTableOfContents = createMemo(() => {
+    const snapshot = state().snapshot;
+    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs)
+      .find(run => run.object?.kind==='toc' && run.object.editable) : undefined;
   });
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
@@ -405,13 +410,16 @@ export function DocumentApp() {
     <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
+    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} toc={documentTableOfContents()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <For each={['control','textbox'] as const}>{kind=>
+    <DocumentShapeToolbar snapshot={state().snapshot} target={referenceParagraph()} pending={standalonePending()}
+      disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
+      onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <For each={['control','textbox','chart'] as const}>{kind=>
       <DocumentObjectTextToolbar kind={kind} target={referenceParagraph()} snapshot={state().snapshot} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>

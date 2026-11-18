@@ -331,8 +331,11 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				}
 				if r.is("hyperlink") {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "hyperlink"}
-				} else if name := bookmarkFieldName(r); name != "" {
+				} else if _, name := bookmarkFieldTarget(r); name != "" {
 					targets[run.ID] = target{node: r, paragraph: p, kind: "bookmark_ref", text: name}
+				} else if run.Object != nil && run.Object.Kind == "toc" && !protected[p] && tocCacheRun(r, root.source) != nil {
+					run.Object.Editable = true
+					targets[run.ID] = target{node: r, paragraph: p, kind: "toc"}
 				} else {
 					unsupported = true
 				}
@@ -377,6 +380,17 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 			run.ID, run.Text, run.Editable = id(), text, editable
 			if !editable {
 				run.Object = objectPreview(r)
+				if run.Object != nil && run.Object.Kind == "chart" && allowed && !protected[r] && p.parent == body &&
+					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) {
+					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "chart"}
+				}
+				if run.Object != nil && run.Object.Rectangle != nil && allowed && !protected[r] && p.parent == body &&
+					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) &&
+					!strings.Contains(string(root.source[r.start:r.end]), "<!--") {
+					run.Object.Editable = true
+					run.Object.RectangleResizeEditable = rectangleForRun(r).canResize(root.source)
+					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "inline_rectangle"}
+				}
 				if stories := textBoxStories(r); len(stories) != 0 {
 					run.Object = &ObjectInfo{Kind: "textbox", Text: reviewText(textContent(stories[0]), 1024)}
 					if allowed && !protected[r] && p.parent == body && !boxesLinked {

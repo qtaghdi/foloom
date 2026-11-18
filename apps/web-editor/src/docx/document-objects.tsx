@@ -1,14 +1,14 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { buttonClass } from '../ui/editor-chrome';
-import type { MathOperation, Paragraph, Run, Snapshot } from './contracts';
+import type { RectangleOperation, MathOperation, Paragraph, Run, Snapshot } from './contracts';
 
 const labels:Record<NonNullable<Run['object']>['kind'],string> = {
-  math:'수식',shape:'도형',textbox:'텍스트 상자',chart:'차트',smartart:'SmartArt',
+  math:'수식',shape:'도형',textbox:'텍스트 상자',toc:'목차',chart:'차트',smartart:'SmartArt',
   control:'콘텐츠 컨트롤',embedded:'내장 개체',drawing:'그리기 개체',footnote:'각주',endnote:'미주',tracked_insert:'추적 삽입',tracked_delete:'추적 삭제',
 };
 
 export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
-  return <span data-docx-opaque contentEditable={false} aria-label={labels[props.object.kind]}
+  return <Show when={props.object.rectangle} fallback={<span data-docx-opaque contentEditable={false} aria-label={labels[props.object.kind]}
     class="inline-block max-w-full break-words rounded border border-slate-300 bg-stone-50 px-1.5 align-middle text-sm">
     <span class="mr-1 text-xs text-slate-600">{labels[props.object.kind]}{props.object.editable?'':' · 읽기 전용'}</span>
     <Show when={props.object.fraction}>{fraction=>
@@ -23,8 +23,108 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
         <span aria-hidden="true">√</span><span class="border-t border-current px-0.5">{text()}</span>
       </span>
     }</Show>
-    <Show when={props.object.text}>{text=><span classList={{'font-serif':props.object.kind==='math'}}>{text()}</span>}</Show>
-  </span>;
+    <Show when={props.object.text}>{text=><span classList={{'font-serif':props.object.kind==='math','block whitespace-pre-wrap':props.object.kind==='toc'}}>{text()}</span>}</Show>
+    <Show when={props.object.smartArt}>{diagram=>
+      <>
+        <span role="list" aria-label="SmartArt 항목" class="block">
+          <For each={diagram().items}>{item=><span role="listitem" class="block">{item}</span>}</For>
+        </span>
+        <Show when={diagram().truncated}><span class="block text-xs text-slate-600">일부 항목이나 문구만 표시됩니다.</span></Show>
+      </>
+    }</Show>
+  </span>}>{rectangle=>
+    <span data-docx-rectangle data-docx-opaque contentEditable={false} role="img" aria-label="인라인 사각형"
+      class="inline-block max-w-full align-middle" style={{
+        width:`${rectangle().widthEmu/9525}px`,'aspect-ratio':`${rectangle().widthEmu}/${rectangle().heightEmu}`,
+        'background-color':`#${rectangle().fill}`,border:`1pt solid #${rectangle().stroke}`,
+      }}/>
+  }</Show>;
+}
+
+export function DocumentShapeToolbar(props:{
+  snapshot?:Snapshot;target?:Paragraph;pending:boolean;disabled:boolean;onApply:(operation:RectangleOperation)=>boolean;
+}) {
+  const [id,setID]=createSignal(''),[error,setError]=createSignal('');
+  const rectangles=createMemo(()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ?block.paragraph.runs.filter(run=>run.object?.editable&&run.object.rectangle):[]).slice(0,200)??[]);
+  const selected=()=>rectangles().find(run=>run.id===id())??rectangles()[0];
+  const disabled=()=>props.disabled||props.pending;
+  return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
+    <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">도형</summary>
+    <div class="flex min-w-0 flex-wrap items-center gap-2 pb-2">
+      <button type="button" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}
+        onClick={()=>{
+          const target=props.target;
+          if(!target?.structureEditable)return;
+          const accepted=props.onApply({type:'insert_rectangle',targetId:target.id});
+          setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+        }}>인라인 사각형 삽입</button>
+      <Show when={rectangles().length}>
+        <select aria-label="편집할 사각형" class="editor-select min-h-11" value={selected()?.id??''}
+          disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setError('');}}>
+          <For each={rectangles()}>{(run,index)=><option value={run.id}>사각형 {index()+1}</option>}</For>
+        </select>
+        <Show when={selected()} keyed>{run=>
+          <>
+          <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+            event.preventDefault();
+            if(disabled())return;
+            const rectangle=run.object?.rectangle;
+            if(!rectangle)return;
+            const inputs=event.currentTarget.elements;
+            const readColor=(name:string)=>(inputs.namedItem(name) as HTMLInputElement).value.slice(1).toUpperCase();
+            const fill=readColor('fill'),stroke=readColor('stroke');
+            if(fill===rectangle.fill.toUpperCase()&&stroke===rectangle.stroke.toUpperCase())return;
+            const accepted=props.onApply({type:'update_rectangle_colors',targetId:run.id,rectangleColors:{fill,stroke}});
+            setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+          }}>
+            <label class="flex flex-col gap-1">채우기 색
+              <input name="fill" type="color" value={`#${run.object!.rectangle!.fill}`} disabled={disabled()}
+                class="min-h-11 w-14 rounded border border-slate-300"/>
+            </label>
+            <label class="flex flex-col gap-1">테두리 색
+              <input name="stroke" type="color" value={`#${run.object!.rectangle!.stroke}`} disabled={disabled()}
+                class="min-h-11 w-14 rounded border border-slate-300"/>
+            </label>
+            <button type="submit" class={buttonClass} disabled={disabled()}>사각형 색 적용</button>
+            <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+              const accepted=props.onApply({type:'delete_rectangle',targetId:run.id});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>사각형 삭제</button>
+          </form>
+          <Show when={run.object?.rectangleResizeEditable && run.object.rectangle}>{rectangle=>
+            <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const inputs=event.currentTarget.elements;
+              const width=(inputs.namedItem('width') as HTMLInputElement).valueAsNumber;
+              const height=(inputs.namedItem('height') as HTMLInputElement).valueAsNumber;
+              const current=rectangle();
+              const widthEmu=width===Number((current.widthEmu/12700).toFixed(2))?current.widthEmu:Math.round(width*12700);
+              const heightEmu=height===Number((current.heightEmu/12700).toFixed(2))?current.heightEmu:Math.round(height*12700);
+              if(![widthEmu,heightEmu].every(size=>Number.isFinite(size)&&size>=12700&&size<=18288000)||
+                widthEmu===current.widthEmu&&heightEmu===current.heightEmu)return;
+              const accepted=props.onApply({type:'resize_rectangle',targetId:run.id,rectangleSize:{widthEmu,heightEmu}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex flex-col gap-1">사각형 너비 (pt)
+                <input name="width" type="number" min="1" max="1440" step="any" required disabled={disabled()}
+                  value={(rectangle().widthEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <label class="flex flex-col gap-1">사각형 높이 (pt)
+                <input name="height" type="number" min="1" max="1440" step="any" required disabled={disabled()}
+                  value={(rectangle().heightEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>사각형 크기 적용</button>
+            </form>
+          }</Show>
+          </>
+        }</Show>
+      </Show>
+      <Show when={props.pending}><p class="basis-full text-slate-600">저장하거나 실행 취소하세요.</p></Show>
+      <Show when={error()}><p role="alert" class="basis-full text-red-700">{error()}</p></Show>
+    </div>
+  </details>;
 }
 
 export function DocumentMathToolbar(props:{
