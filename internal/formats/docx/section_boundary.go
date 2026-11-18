@@ -127,7 +127,7 @@ func relocateSectionBoundary(root *node, data []byte, session string, revision u
 	body := root.child("body")
 	source := paragraph.child("pPr").child("sectPr")
 	if source == nil || sectionChildCount(paragraph.child("pPr"), "sectPr") != 1 ||
-		sectionChildCount(body, "sectPr") > 1 || !structuralParagraphContents(paragraph, data, false, source) {
+		sectionChildCount(body, "sectPr") > 1 || !structuralParagraphContents(paragraph, data, "", source) {
 		return nil, fmt.Errorf("protected DOCX section source boundary")
 	}
 	delta := -1
