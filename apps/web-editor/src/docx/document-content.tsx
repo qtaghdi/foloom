@@ -1,7 +1,7 @@
 import { runFont, splitRunFonts } from './run-fonts';
 import { TabText, layoutTabCharacters } from './tab-layout';
 import { resolveHeaderText } from './document-header-footer';
-import { defaultHeaderFooterDistance, previewPageLayout, sectionPaper, type PreviewPageLayout } from './sections';
+import { defaultHeaderFooterDistance, previewPageLayout, sectionPaper, topBindingSpace, type PreviewPageLayout } from './sections';
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import type { PasteMode, ClipboardParagraph } from './clipboard';
@@ -72,7 +72,7 @@ export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPage
     width:`${p.width/15}px`,'max-width':'100%','min-block-size':scaled(p.height),
     '--paper-insets':[0,p.right,0,p.left].map(scaled).join(' '),
     '--docx-body-top':scaled(p.top),'--docx-body-bottom':scaled(p.bottom),
-    '--docx-header-distance':scaled(info.headerDistance??defaultHeaderFooterDistance),
+    '--docx-header-distance':scaled((info.headerDistance??defaultHeaderFooterDistance)+topBindingSpace(info)),
     '--docx-footer-distance':scaled(info.footerDistance??defaultHeaderFooterDistance),
    };
   };

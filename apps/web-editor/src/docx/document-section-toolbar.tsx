@@ -75,7 +75,7 @@ export function DocumentSectionToolbar(props:{sections:SectionInfo[];disabled:bo
    <select aria-label="용지 방향" class="editor-select min-h-11" disabled={disabled()} value={values().orientation} onChange={e=>{const orientation=e.currentTarget.value as 'portrait'|'landscape',width=values().width!,height=values().height!;update({orientation,width:orientation==='landscape'?Math.max(width,height):Math.min(width,height),height:orientation==='landscape'?Math.min(width,height):Math.max(width,height)});}}><option value="portrait">세로 용지</option><option value="landscape">가로 용지</option></select>
    {field('width','용지 폭')}{field('height','용지 높이')}{field('top','위 여백')}{field('right','오른쪽 여백')}{field('bottom','아래 여백')}{field('left','왼쪽 여백')}{field('headerDistance','위쪽 모서리에서 머리글까지')}{field('footerDistance','아래쪽 모서리에서 바닥글까지')}
    <Show when={selected()?.gutter!==undefined} fallback={<span class="text-slate-600">원본 제본 방식 유지</span>}>
-    {field('gutter','왼쪽 제본 여백')}
+    {field('gutter',selected()?.gutterAtTop?'위쪽 제본 여백':'왼쪽 제본 여백')}
    </Show>
    <label class="flex min-h-11 items-center gap-1">단 수<input type="number" aria-label="단 수" min="1" max="12" class="w-16 min-h-11 rounded border border-slate-300 px-2" value={values().columns} disabled={disabled()} onChange={e=>update({columns:e.currentTarget.valueAsNumber})}/></label>{field('columnSpace','단 간격')}
    <select aria-label="구역 나누기 유형" class="editor-select min-h-11" disabled={disabled()} value={values().breakType} onChange={e=>update({breakType:e.currentTarget.value as SectionFormat['breakType']})}><option value="nextPage">다음 페이지</option><option value="continuous">연속 구역</option><option value="evenPage">짝수 페이지</option><option value="oddPage">홀수 페이지</option><option value="nextColumn">다음 단</option></select>

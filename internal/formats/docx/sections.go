@@ -15,7 +15,7 @@ type SectionFormat struct {
 	// A start of -1 removes the explicit start so numbering continues.
 	PageNumberStart  *int                 `json:"pageNumberStart,omitempty"`
 	PageNumberFormat string               `json:"pageNumberFormat,omitempty"`
-	Gutter           *int                 `json:"gutter,omitempty" jsonschema:"Fixed left binding space in twips, separate from the left page margin"`
+	Gutter           *int                 `json:"gutter,omitempty" jsonschema:"Binding space in twips, separate from page margins, using the existing binding side"`
 	HeaderDistance   *int                 `json:"headerDistance,omitempty" jsonschema:"Distance from the top edge of the page to the header in twips"`
 	FooterDistance   *int                 `json:"footerDistance,omitempty" jsonschema:"Distance from the bottom edge of the page to the footer in twips"`
 	HeaderFooters    []HeaderFooterUpdate `json:"headerFooters,omitempty"`
@@ -35,6 +35,7 @@ type SectionInfo struct {
 	PageNumberStart  *int               `json:"pageNumberStart,omitempty"`
 	PageNumberFormat string             `json:"pageNumberFormat,omitempty"`
 	Gutter           *int               `json:"gutter,omitempty"`
+	GutterAtTop      bool               `json:"gutterAtTop,omitempty"`
 	HeaderDistance   *int               `json:"headerDistance,omitempty"`
 	FooterDistance   *int               `json:"footerDistance,omitempty"`
 	HeaderFooters    []HeaderFooterInfo `json:"headerFooters"`
@@ -181,10 +182,15 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 		}
 	}
 	props := target.props
-	bodyWidth := page.Width - page.Left - page.Right
-	if f.Gutter != nil || f.Width != nil || f.Left != nil || f.Right != nil || f.Columns != nil || f.ColumnSpace != nil {
+	bodyWidth, bodyHeight := page.Width-page.Left-page.Right, page.Height-page.Top-page.Bottom
+	if f.Gutter != nil || f.Width != nil || f.Height != nil || f.Left != nil || f.Right != nil ||
+		f.Top != nil || f.Bottom != nil || f.Columns != nil || f.ColumnSpace != nil {
 		_, _, settings, err := p.pageSettings(changes)
-		gutter := sectionGutter(props, err == nil && fixedLeftGutters(settings))
+		side := ""
+		if err == nil {
+			side = sectionGutterSide(settings)
+		}
+		gutter := sectionGutter(props, side != "")
 		if f.Gutter != nil {
 			if gutter == nil || *f.Gutter < 0 || *f.Gutter > maxSectionGutter {
 				return replacement{}, fmt.Errorf("invalid or protected DOCX binding gutter")
@@ -192,10 +198,14 @@ func (p *documentPackage) sectionReplacement(data []byte, root *node, session st
 			gutter = f.Gutter
 		}
 		if gutter != nil {
-			bodyWidth -= *gutter
+			if side == "top" {
+				bodyHeight -= *gutter
+			} else {
+				bodyWidth -= *gutter
+			}
 		}
 	}
-	if bodyWidth < 1200 || page.Height-page.Top-page.Bottom < 1200 {
+	if bodyWidth < 1200 || bodyHeight < 1200 {
 		return replacement{}, fmt.Errorf("DOCX section margins leave insufficient content space")
 	}
 	if f.Orientation != "" && f.Orientation != "portrait" && f.Orientation != "landscape" {
