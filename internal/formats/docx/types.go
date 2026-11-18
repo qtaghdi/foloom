@@ -56,7 +56,8 @@ type PageLayout struct {
 type ListDefinition struct {
 	Key      string `json:"key" jsonschema:"Batch-local reference key for new list paragraphs"`
 	Kind     string `json:"kind,omitempty" jsonschema:"For a fresh definition: bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter"`
-	SourceID int    `json:"sourceId,omitempty" jsonschema:"Existing list instance ID to restart at level zero. Omit kind"`
+	SourceID int    `json:"sourceId,omitempty" jsonschema:"Existing list instance ID to restart. Omit kind"`
+	Level    int    `json:"level,omitempty" jsonschema:"Zero-based level of the existing list to restart, default 0. A sublevel must only reference its own counter"`
 	Start    int    `json:"start,omitempty" jsonschema:"Start number for the format. Required to restart an existing instance"`
 }
 

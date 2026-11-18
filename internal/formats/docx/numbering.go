@@ -11,6 +11,7 @@ import (
 const numberingRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering"
 
 var listKey = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`)
+var listCounter = regexp.MustCompile(`%[1-9]`)
 
 type listLevel struct {
 	kind    string
@@ -121,6 +122,26 @@ func listStartLimit(kind string) int {
 	}
 }
 
+func restartableListLevel(levels map[int]listLevel, index, start int) bool {
+	level := levels[index]
+	token := "%" + strconv.Itoa(index+1)
+	if level.kind == "bullet" || start > listStartLimit(level.kind) || !strings.Contains(level.text, token) {
+		return false
+	}
+	if index == 0 {
+		return true
+	}
+	if listCounter.MatchString(strings.ReplaceAll(level.text, token, "")) {
+		return false
+	}
+	for child, definition := range levels {
+		if child > index && strings.Contains(definition.text, token) {
+			return false
+		}
+	}
+	return true
+}
+
 // Numbering instances are append-only. Starting a new list never mutates the
 // shared instance or abstract definition of an unrelated paragraph.
 func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][]byte) (map[string]int, numberingCatalog, error) {
@@ -139,12 +160,12 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 			return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list definition")
 		}
 		if d.SourceID != 0 {
-			if d.SourceID < 0 || d.Kind != "" || d.Start < 1 {
+			if d.SourceID < 0 || d.Kind != "" || d.Level < 0 || d.Level > 8 || d.Start < 1 {
 				return nil, numberingCatalog{}, fmt.Errorf("DOCX list restart requires an existing list ID and starting number")
 			}
 		} else {
 			limit := listStartLimit(d.Kind)
-			if limit == 0 || d.Start < 0 || d.Start > limit {
+			if limit == 0 || d.Level != 0 || d.Start < 0 || d.Start > limit {
 				return nil, numberingCatalog{}, fmt.Errorf("invalid DOCX list format or starting number")
 			}
 		}
@@ -210,11 +231,10 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 		keys[d.Key] = id
 		if d.SourceID != 0 {
 			source := catalog.levels[d.SourceID]
-			level := source[0]
-			if level.kind == "bullet" || d.Start > listStartLimit(level.kind) || !strings.Contains(level.text, "%1") {
+			if !restartableListLevel(source, d.Level, d.Start) {
 				return nil, numberingCatalog{}, fmt.Errorf("unsupported DOCX list for restart or invalid starting number")
 			}
-			copiedAbstract, instance, err := copyListWithStart(root, data, d.SourceID, id, abstract, d.Start)
+			copiedAbstract, instance, err := copyListWithStart(root, data, d, id, abstract)
 			if err != nil {
 				return nil, numberingCatalog{}, err
 			}
@@ -222,8 +242,9 @@ func (p *documentPackage) prepareNumbering(ops []Operation, changes map[string][
 			for index, original := range source {
 				levels[index] = original
 			}
+			level := source[d.Level]
 			level.start = d.Start
-			levels[0] = level
+			levels[d.Level] = level
 			catalog.levels[id] = levels
 			if len(data)+abstractXML.Len()+instanceXML.Len()+len(instance)+len(copiedAbstract) > maxPartBytes {
 				return nil, numberingCatalog{}, fmt.Errorf("DOCX numbering part exceeds limit")

@@ -40,7 +40,7 @@ export function previewLists(snapshot: Snapshot, drafts: ListDefinition[] = []):
   for (const d of drafts) {
     if ('sourceId' in d) {
       const source=snapshot.lists?.find(list=>list.id===d.sourceId);
-      if (source) catalog.set(d.key,source.levels.map(level=>level.level===0?{...level,start:d.start}:level));
+      if (source) catalog.set(d.key,source.levels.map(level=>level.level===(d.level??0)?{...level,start:d.start}:level));
       continue;
     }
     catalog.set(d.key, Array.from({length:9}, (_,level)=>({
