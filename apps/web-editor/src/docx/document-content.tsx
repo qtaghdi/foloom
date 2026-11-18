@@ -1,6 +1,6 @@
 import { TabText, layoutTabCharacters } from './tab-layout';
 import { resolveHeaderText } from './document-header-footer';
-import { defaultHeaderFooterDistance, previewHeaderVariants, sectionPaper } from './sections';
+import { defaultHeaderFooterDistance, previewPageLayout, sectionPaper, type PreviewPageLayout } from './sections';
 import { t, localizeMessage, source } from '../i18n';
 import { For, Show, createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import type { PasteMode, ClipboardParagraph } from './clipboard';
@@ -11,30 +11,35 @@ import type { ActivityEntry } from '../ui/activity';
 import { printPaperFor } from './print-layout';
 import { ObjectPreview } from './document-objects';
 import { scopedDocumentURL } from '../transport/document-scope';
-import type { Snapshot, Run, Paragraph, TextOperation, StructureAction } from './contracts';
+import type { Snapshot, Run, Paragraph, TextOperation, StructureAction, SectionInfo } from './contracts';
 
-export type PreviewPage = Array<{ block: Snapshot['blocks'][number]; index: number }>;
+type PageGroup = { blocks: Array<{block:Snapshot['blocks'][number];index:number}>; sectionId?:string };
 
-export function previewPages(blocks: Snapshot['blocks']): PreviewPage[] {
-  let page: PreviewPage = [];
+export function previewPages(blocks:Snapshot['blocks']): PageGroup[] {
+  let page:PageGroup = {blocks:[]};
   const pages = [page];
   let nextPage = false;
-  let previousSection: string | undefined;
-  blocks.forEach((block, index) => {
-    const paragraph = block.type === 'paragraph' ? block.paragraph : undefined;
-    const section = block.type === 'table' ? block.rows[0]?.cells[0]?.paragraphs[0]?.sectionId : paragraph?.sectionId;
-    if ((nextPage || paragraph?.pageBreakBefore || section !== previousSection) && page.length) {
-      page = [];
+  blocks.forEach((block,index)=>{
+    const paragraph = block.type==='paragraph' ? block.paragraph : undefined;
+    const sectionId = block.type==='table' ? block.rows[0]?.cells[0]?.paragraphs[0]?.sectionId : paragraph?.sectionId;
+    if ((nextPage || paragraph?.pageBreakBefore || sectionId !== page.sectionId) && page.blocks.length) {
+      page = {blocks:[],sectionId};
       pages.push(page);
+    } else if (!page.blocks.length) {
+      page.sectionId = sectionId;
     }
-    page.push({ block, index });
+    page.blocks.push({block,index});
     nextPage = Boolean(paragraph?.pageBreakAfter);
-    previousSection = section;
   });
   return pages;
 }
 
-export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
+export function layoutPreviewPages(pages:PageGroup[], sections:SectionInfo[]|undefined, evenAndOddHeaders?:boolean): PreviewPageLayout[] {
+  const byId = new Map(sections?.map(section=>[section.id,section]));
+  return previewPageLayout(pages.map(page=>page.sectionId===undefined?undefined:byId.get(page.sectionId)),evenAndOddHeaders);
+}
+
+export function DocumentContent(props: { pages: PageGroup[]; layout: PreviewPageLayout[]; onListLevel?: (selection:TextSelection,delta:number)=>boolean; onHistory: (direction: 'undo' | 'redo') => void; pasteMode: PasteMode; onPasteRich: (selection: TextSelection, paragraphs: ClipboardParagraph[]) => boolean; richSelection: (selection: TextSelection) => ClipboardParagraph[] | undefined; snapshot: Snapshot; saving: boolean; onRange: (selection: TextSelection, text: string, inline?: boolean) => boolean; onDelete: (selection: TextSelection, direction: 'backward' | 'forward', word: boolean) => boolean; onComposition: (active: boolean) => void; onRefresh: (selection: TextSelection) => void; selectionText: (selection: TextSelection) => string | undefined; onEdit: (operation: TextOperation, selection?: TextSelection) => void; onStructure: (action: StructureAction, runId: string, start: number, end: number, insertion?: string) => boolean; changes: ReadonlyMap<string, ActivityEntry>; selected?: ActivityEntry; onChangeSelect: (entry: ActivityEntry) => void; onFocusRun: (run: Run) => void }) {
   let editor!: HTMLDivElement;
   const [notice, setNotice] = createSignal('');
   let frame=0;
@@ -57,9 +62,8 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
     }
     return result;
   });
-  const pageSection=(page:PreviewPage)=>{const block=page[0]?.block;const id=block?.type==='paragraph'?block.paragraph.sectionId:block?.rows[0]?.cells[0]?.paragraphs[0]?.sectionId;return props.snapshot.sections?.find(section=>section.id===id);};
-  const sectionStyle=(page:PreviewPage)=>{
-   const info=pageSection(page);if(!info)return {'--docx-print-paper':printPaperFor(props.snapshot)};
+  const sectionStyle=(info?:SectionInfo)=>{
+   if(!info)return {'--docx-print-paper':printPaperFor(props.snapshot)};
    const p=sectionPaper(info),width=`min(100cqi, ${p.width/15}px)`;
    const scaled=(twips:number)=>`calc(${width} * ${twips/p.width})`;
    return {
@@ -71,9 +75,8 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
     '--docx-footer-distance':scaled(info.footerDistance??defaultHeaderFooterDistance),
    };
   };
-  const headerVariants=createMemo(()=>previewHeaderVariants(props.pages.map(pageSection),props.snapshot.evenAndOddHeaders));
-  const headerText=(page:PreviewPage,index:number,kind:'header'|'footer')=>{
-   const section=pageSection(page),variant=headerVariants()[index]??'default';
+  const headerText=(layout:PreviewPageLayout|undefined,kind:'header'|'footer')=>{
+   const section=layout?.section,variant=layout?.variant;
    const slot=section?.headerFooters?.find(slot=>slot.kind===kind&&slot.variant===variant);
    const text=resolveHeaderText(props.snapshot.sections??[],slot);
    const fields=slot?.compactPageNumbers?['쪽 번호 / 전체 쪽 수']:[
@@ -149,14 +152,25 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
       onPointerUp={input.focus} onFocusIn={input.focus} onFocusOut={input.endPasteShortcut}
       onBeforeInput={input.beforeinput} onInput={event=>{input.input(event);scheduleTabs();}} onCompositionStart={input.compositionstart} onCompositionEnd={input.compositionend}
       onPaste={input.paste} onCopy={input.copy} onCut={input.cut} onDrop={input.drop}>
-    <For each={props.pages}>{(page,index) => <div class="docx-paper mx-auto flex w-full flex-col border border-slate-200 bg-white shadow-sm" style={sectionStyle(page)} data-docx-section={pageSection(page)?.id} data-docx-page={index()+1} tabindex={-1}>
+    <For each={props.pages}>{(page,index) => {
+      const layout=()=>props.layout[index()];
+      const section=()=>layout()?.section;
+      const paperStyle=()=>sectionStyle(section());
+      return <>
+    <Show when={layout()?.blankBefore}>
+      <div class="docx-paper mx-auto w-full border border-slate-200 bg-white shadow-sm" style={paperStyle()}
+        data-docx-section={section()?.id} data-docx-page={(layout()?.number??0)-1} data-docx-blank-page
+        contentEditable={false} role="group" aria-label="구역 시작을 위한 빈 쪽" tabindex={-1}/>
+    </Show>
+    <div class="docx-paper mx-auto flex w-full flex-col border border-slate-200 bg-white shadow-sm" style={paperStyle()}
+      data-docx-section={section()?.id} data-docx-page={layout()?.number??index()+1} tabindex={-1}>
     <div contentEditable={false} class="docx-page-edge min-h-[var(--docx-body-top,0px)]">
-      <Show when={headerText(page,index(),'header')}>{text=><div aria-label="머리글 미리보기" class="whitespace-pre-wrap border-b border-dashed border-slate-200 pt-[var(--docx-header-distance,0px)] pb-2 text-xs break-words text-stone-600 print:mb-4 print:pt-0">{text()}</div>}</Show>
+      <Show when={headerText(layout(),'header')}>{text=><div aria-label="머리글 미리보기" class="whitespace-pre-wrap border-b border-dashed border-slate-200 pt-[var(--docx-header-distance,0px)] pb-2 text-xs break-words text-stone-600 print:mb-4 print:pt-0">{text()}</div>}</Show>
     </div>
-    <Show when={page.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
-    <Show when={pageSection(page)}>{section=><p contentEditable={false} data-docx-print-hide class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
-    <div style={{'column-count':pageSection(page)?.columns,'column-gap':pageSection(page)?`${pageSection(page)!.columnSpace/20}pt`:undefined}}>
-    <For each={page}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
+    <Show when={page.blocks.length} fallback={<p>{t('noBodyTextCanBeDisplayedTheOriginal')}</p>}>
+    <Show when={section()}>{section=><p contentEditable={false} data-docx-print-hide class="mb-3 select-none text-xs text-stone-500">구역 {(props.snapshot.sections?.findIndex(s=>s.id===section().id)??0)+1} · {section().orientation==='landscape'?'가로 용지':'세로 용지'} · {section().columns}단</p>}</Show>
+    <div style={{'column-count':section()?.columns,'column-gap':section()?`${section()!.columnSpace/20}pt`:undefined}}>
+    <For each={page.blocks}>{({ block, index }) => block.type === 'paragraph' ? paragraph(block.paragraph, 'replace_run_text', `${index}`) :
       <div class="docx-table overflow-x-auto" tabindex={0} aria-label={t('documentTableScrollHorizontallyOnNarrowScreens')}>
         <table class="w-full border-collapse text-left"><tbody><For each={block.rows}>{(row, rowIndex) => <tr style={{height:row.height ? `${row.height/20}pt` : undefined}}><For each={row.cells}>{(cell, cellIndex) =>
           <td class="min-w-24 border border-slate-300 px-2 py-1 align-top"><For each={cell.paragraphs}>{(p, pIndex) => paragraph(p, 'replace_cell_text', `${index}-${rowIndex()}-${cellIndex()}-${pIndex()}`)}</For></td>
@@ -166,9 +180,10 @@ export function DocumentContent(props: { pages: PreviewPage[]; onListLevel?: (se
     </div>
     </Show>
     <div contentEditable={false} class="docx-page-edge mt-auto flex min-h-[var(--docx-body-bottom,0px)] flex-col justify-end">
-      <Show when={headerText(page,index(),'footer')}>{text=><div aria-label="바닥글 미리보기" class="whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 pb-[var(--docx-footer-distance,0px)] text-xs break-words text-stone-600 print:mt-4 print:pb-0">{text()}</div>}</Show>
+      <Show when={headerText(layout(),'footer')}>{text=><div aria-label="바닥글 미리보기" class="whitespace-pre-wrap border-t border-dashed border-slate-200 pt-2 pb-[var(--docx-footer-distance,0px)] text-xs break-words text-stone-600 print:mt-4 print:pb-0">{text()}</div>}</Show>
     </div>
-  </div>}</For></div></>;
+    </div></>;
+    }}</For></div></>;
 }
 
 function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {

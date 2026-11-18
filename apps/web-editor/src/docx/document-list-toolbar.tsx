@@ -13,6 +13,7 @@ export function DocumentListToolbar(props:{
 }) {
  const [start,setStart]=createSignal(1);
  const [format,setFormat]=createSignal<NumberFormat>('decimal');
+ const [compound,setCompound]=createSignal(false);
  const [restartStart,setRestartStart]=createSignal(1);
  const maxStart=()=>maxListStart(format());
  const restartSource=createMemo(()=>{
@@ -31,7 +32,7 @@ export function DocumentListToolbar(props:{
  const canLevel=(delta:number)=>available()&&props.paragraphs.every(p=>p.list&&(p.list.id||p.list.key)&&(p.list.level??0)+delta>=0&&(p.list.level??0)+delta<=8);
  return <div role="group" aria-label="목록 서식" class="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-1 text-xs">
   <button type="button" class={buttonClass} disabled={!available()} onClick={()=>props.onList({kind:'bullet'})}>새 글머리 목록</button>
-  <button type="button" class={buttonClass} disabled={!available()} onClick={()=>props.onList({kind:format(),start:start()})}>새 번호 목록</button>
+  <button type="button" class={buttonClass} disabled={!available()} onClick={()=>props.onList({kind:format(),start:start(),compound:compound()})}>새 번호 목록</button>
   <label class="flex shrink-0 items-center gap-1">번호 형식
    <select aria-label="목록 번호 형식" class="editor-select min-h-11 rounded px-2" disabled={!available()} value={format()}
     onChange={event=>{setFormat(event.currentTarget.value as NumberFormat);setStart(Math.min(start(),maxStart()));}}>
@@ -44,6 +45,11 @@ export function DocumentListToolbar(props:{
      const n=event.currentTarget.valueAsNumber;
      if(Number.isInteger(n)&&n>=1&&n<=maxStart())setStart(n);
     }}/>
+  </label>
+  <label class="flex min-h-11 shrink-0 cursor-pointer items-center gap-1">
+    <input type="checkbox" class="focus-visible:outline-2 focus-visible:outline-teal-700" checked={compound()} disabled={!available()}
+      onChange={event=>setCompound(event.currentTarget.checked)}/>
+    상위 번호 포함
   </label>
   <select aria-label="기존 목록 이어쓰기" class="editor-select min-h-11 shrink-0 rounded px-2" disabled={!available()||!props.lists.length} value="" onChange={e=>{const id=Number(e.currentTarget.value);if(id>0)props.onList({id,level:0});e.currentTarget.value='';}}>
     <option value="">기존 목록 이어쓰기</option><For each={props.lists}>{list=><option value={list.id}>목록 {list.id} ({list.levels[0]?.kind??'기존 서식'})</option>}</For>

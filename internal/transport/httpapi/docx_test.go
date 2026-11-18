@@ -233,7 +233,7 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 	}
 	server := httptest.NewServer(api.Handler())
 	defer server.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, "GET", server.URL+"/api/docx/events?session="+snapshot.ID, nil)
 	if err != nil {
@@ -254,22 +254,41 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanner := bufio.NewScanner(response.Body)
-	found := false
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "data: ") {
-			var event docx.Event
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(scanner.Text(), "data: ")), &event); err != nil {
-				t.Fatal(err)
+	readEvent := func() docx.Event {
+		t.Helper()
+		for scanner.Scan() {
+			if data, ok := strings.CutPrefix(scanner.Text(), "data: "); ok {
+				var event docx.Event
+				if err := json.Unmarshal([]byte(data), &event); err != nil {
+					t.Fatal(err)
+				}
+				return event
 			}
-			if event.Type != "docx.committed" || event.Sequence != 1 || event.Revision != 2 || event.Actor != "ai" {
-				t.Fatalf("invalid event: %+v", event)
-			}
-			found = true
-			break
 		}
+		t.Fatalf("no DOCX SSE event: %v", scanner.Err())
+		return docx.Event{}
 	}
-	if !found {
-		t.Fatalf("no SSE commit: %v", scanner.Err())
+	commit := readEvent()
+	if commit.Type != "docx.committed" || commit.Sequence != 1 || commit.Revision != 2 || commit.Actor != "ai" || !commit.TextOnly || commit.HistoryDirection != "" {
+		t.Fatalf("invalid commit event: %+v", commit)
+	}
+	for _, step := range []struct {
+		direction string
+		actor     string
+		base      uint64
+	}{
+		{"undo", "human", 2},
+		{"redo", "ai", 3},
+	} {
+		input := docx.HistoryInput{SessionID: snapshot.ID, BaseRevision: step.base, Direction: step.direction}
+		if _, err := api.restoreDOCX(ctx, input, step.actor); err != nil {
+			t.Fatal(err)
+		}
+		event := readEvent()
+		if event.Type != "docx.committed" || event.Sequence != step.base || event.Revision != step.base+1 ||
+			event.Actor != step.actor || event.HistoryDirection != step.direction || event.TextOnly {
+			t.Fatalf("invalid history event: %+v", event)
+		}
 	}
 	switchedPath := filepath.Join(t.TempDir(), "switched.docx")
 	content, err := os.ReadFile(path)
@@ -282,20 +301,8 @@ func TestDOCXSSECommitAndSessionResync(t *testing.T) {
 	if _, err = api.OpenDOCX(ctx, switchedPath); err != nil {
 		t.Fatal(err)
 	}
-	found = false
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "data: ") {
-			var event docx.Event
-			json.Unmarshal([]byte(strings.TrimPrefix(scanner.Text(), "data: ")), &event)
-			if event.Type != "docx.reload" {
-				t.Fatalf("session switch did not resync: %+v", event)
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("no SSE resync: %v", scanner.Err())
+	if event := readEvent(); event.Type != "docx.reload" || event.HistoryDirection != "" {
+		t.Fatalf("session switch did not resync: %+v", event)
 	}
 }
 
@@ -503,4 +510,113 @@ func TestDOCXMCPListsSupportedOperationFamilies(t *testing.T) {
 		return
 	}
 	t.Fatal("DOCX operations tool is missing from the MCP list")
+}
+
+func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "controls.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+		SessionID: initial.ID, BaseRevision: initial.Revision,
+		Operations: []docx.Operation{{Type: "insert_control_text", TargetID: initial.Blocks[0].ID, Text: "Control value"}},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP content control insertion: %v %+v", err, result)
+	}
+	after, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := after.Blocks[0].Paragraph.Runs
+	if after.Revision != initial.Revision+1 || len(runs) != 2 || runs[0].Text != "Prefix" ||
+		runs[1].Object == nil || runs[1].Object.Kind != "control" || runs[1].Object.Text != "Control value" || !runs[1].Object.Editable {
+		t.Fatal("shared DOCX session did not expose the inserted control")
+	}
+}
+
+func TestDOCXMCPDefinesCompoundNumbering(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "outline.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Parent"}, {Type: "paragraph", Text: "Child"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, q := initial.Blocks[0].Paragraph, initial.Blocks[1].Paragraph
+	result, err := docxClient(t, api).CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+		SessionID: initial.ID, BaseRevision: initial.Revision,
+		Operations: []docx.Operation{
+			{Type: "define_list", ListDefinition: &docx.ListDefinition{Key: "outline", Kind: "decimal", Start: 3, Compound: true}},
+			{Type: "replace_paragraphs", TargetID: p.ID, EndTargetID: q.ID, ExpectedText: "Parent\nChild",
+				Paragraphs: []docx.ParagraphContent{
+					{SourceID: p.ID, Format: &docx.ParagraphFormat{List: &docx.ParagraphList{Key: "outline"}}, Runs: []docx.RunContent{{SourceID: p.Runs[0].ID, Text: "Parent"}}},
+					{SourceID: q.ID, Format: &docx.ParagraphFormat{List: &docx.ParagraphList{Key: "outline", Level: 1}}, Runs: []docx.RunContent{{SourceID: q.Runs[0].ID, Text: "Child"}}},
+				}},
+		},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP compound list: %v %+v", err, result)
+	}
+	after, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != initial.Revision+1 ||
+		after.Blocks[0].Paragraph.ListLabel != "3." || after.Blocks[1].Paragraph.ListLabel != "3.1." {
+		t.Fatal("the shared DOCX session did not expose the compound list")
+	}
+}
+
+func TestDOCXMCPTracksAndRejectsParagraphAlignment(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "alignment.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Aligned paragraph"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	apply := func(snapshot docx.Snapshot, operation docx.Operation) {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+			SessionID: snapshot.ID, BaseRevision: snapshot.Revision, Operations: []docx.Operation{operation},
+		}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP %s: %v %+v", operation.Type, err, result)
+		}
+	}
+	apply(initial, docx.Operation{Type: "track_paragraph_alignment", TargetID: initial.Blocks[0].ID, Alignment: "center"})
+	pending, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paragraph := pending.Blocks[0].Paragraph
+	if paragraph.AlignmentRevision == nil || !paragraph.AlignmentRevision.Editable || paragraph.Layout.Align != "center" {
+		t.Fatal("shared DOCX session did not expose tracked alignment")
+	}
+	apply(pending, docx.Operation{Type: "reject_revision", TargetID: paragraph.ID})
+	final, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Revision != initial.Revision+2 || final.TrackedChanges || final.Blocks[0].Paragraph.Layout != nil {
+		t.Fatal("shared DOCX session did not restore the original alignment")
+	}
 }

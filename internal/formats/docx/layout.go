@@ -49,6 +49,20 @@ func pageLayout(body *node) *PageLayout {
 	return page
 }
 
+func paragraphAlignmentValue(value string) string {
+	switch value {
+	case "left", "start":
+		return "start"
+	case "right", "end":
+		return "end"
+	case "center":
+		return "center"
+	case "both":
+		return "justify"
+	}
+	return ""
+}
+
 func applyParagraphPreview(layout *ParagraphLayout, props *node) {
 	if tabs := props.child("tabs"); tabs != nil {
 		merged := map[int]TabStop{}
@@ -119,15 +133,8 @@ func applyParagraphPreview(layout *ParagraphLayout, props *node) {
 		}
 	}
 
-	switch props.child("jc").attr("val") {
-	case "left", "start":
-		layout.Align = "start"
-	case "right", "end":
-		layout.Align = "end"
-	case "center":
-		layout.Align = "center"
-	case "both":
-		layout.Align = "justify"
+	if align := paragraphAlignmentValue(props.child("jc").attr("val")); align != "" {
+		layout.Align = align
 	}
 	spacing := props.child("spacing")
 	if before := previewNumber(spacing.attr("before"), 0, 2880); before != nil {

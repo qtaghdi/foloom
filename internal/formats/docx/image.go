@@ -105,15 +105,7 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 	}
 	changes[filename] = raw
 	drawing := inlinePicture(id, rel, edit.Alt, width, height)
-	return appendDrawingRun(data, paragraph, drawing), nil
-}
-
-func appendDrawingRun(data []byte, paragraph *node, drawing string) replacement {
-	if strings.HasSuffix(string(data[paragraph.start:paragraph.inner]), "/>") {
-		open, close := scopedOpening(paragraph, data, false)
-		return replacement{paragraph.start, paragraph.end, []byte(open + drawing + close)}
-	}
-	return replacement{paragraph.endStart, paragraph.endStart, []byte(drawing)}
+	return appendParagraphContent(data, paragraph, drawing), nil
 }
 
 func decodePicture(encoded string) ([]byte, image.Config, string, error) {
@@ -264,6 +256,8 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 type PictureInfo struct {
 	Caption          string     `json:"caption,omitempty"`
 	CaptionEditable  bool       `json:"captionEditable,omitempty"`
+	MoveCaptionUp    bool       `json:"moveCaptionUp,omitempty"`
+	MoveCaptionDown  bool       `json:"moveCaptionDown,omitempty"`
 	Rotation         int        `json:"rotation,omitempty"`
 	RotationEditable bool       `json:"rotationEditable,omitempty"`
 	Crop             *ImageCrop `json:"crop,omitempty"`
@@ -370,6 +364,7 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			}
 			if asset.data != nil {
 				info.Preview = true
+				info.MoveCaptionUp, info.MoveCaptionDown = source.moveUp != nil, source.moveDown != nil
 				_, info.Caption = editablePictureCaption(source, s.pkg.document)
 				if captionParagraph(source) {
 					if !captionFieldsChecked {

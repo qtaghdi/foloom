@@ -19,7 +19,7 @@ import { createDocumentView } from './view';
 import { StatusPanel } from '../ui/status-panel';
 import type { ActivityEntry } from '../ui/activity';
 import { ActivityPanel } from '../ui/activity-panel';
-import { DocumentContent, previewPages } from './document-content';
+import { DocumentContent, layoutPreviewPages, previewPages } from './document-content';
 import { DocumentProofingToolbar } from './document-proofing-toolbar';
 import { DocumentToolbar } from './document-toolbar';
 import type { PasteMode } from './clipboard';
@@ -112,11 +112,11 @@ export function DocumentApp() {
     return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) =>
       paragraph.runs.filter(run => (run.object?.kind==='footnote'||run.object?.kind==='endnote')&&run.object.editable)) : [];
   });
-  const documentTableOfContents = createMemo(() => {
-    const snapshot = state().snapshot;
-    return snapshot ? paragraphs(snapshot).flatMap(({paragraph}) => paragraph.runs)
-      .find(run => run.object?.kind==='toc' && run.object.editable) : undefined;
-  });
+  const documentReferenceLists = createMemo(() => state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ? block.paragraph.runs.filter(run=>run.object?.editable && ['toc','figure_list','table_list'].includes(run.object.kind))
+    : [])??[]);
+  const documentDateFields = createMemo(() => state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ? block.paragraph.runs.filter(run=>run.object?.kind==='date_field'&&run.object.editable) : [])??[]);
   const referenceParagraph = () => boundaryParagraph()?.paragraph ??
     state().snapshot?.blocks.flatMap(block=>block.type==='paragraph'&&block.paragraph.structureEditable?[block.paragraph]:[]).at(-1);
   const commentRange = () => {
@@ -204,6 +204,7 @@ export function DocumentApp() {
   };
   const previewBlocks = createMemo(() => state().snapshot?.blocks);
   const pages = createMemo(() => previewPages(previewBlocks() ?? []));
+  const pageLayout = createMemo(() => layoutPreviewPages(pages(),state().snapshot?.sections,state().snapshot?.evenAndOddHeaders));
   const locatePage = (number: number) => {
     const page = document.querySelector<HTMLElement>(`#document-content [data-docx-page="${number}"]`);
     if (!page) return;
@@ -233,14 +234,17 @@ export function DocumentApp() {
     const runId = formattingSelection()?.focus.runId??focusedRun()?.id;
     return paragraphs.find(paragraph=>paragraph.runs.some(run=>run.id===runId))??paragraphs.at(-1);
   };
-  const controller = new DocumentController({ ...view, recovery: setRecovery, render: (snapshot, focus) => {
+  const controller = new DocumentController({ ...view, recovery: setRecovery, render: (snapshot, focus, preserveRemoteSelection) => {
     setStructuralDraft(controller.hasStructuralDraft() || (Boolean(focus) && controller.hasDrafts()));
     if(focus)setFormattingSelection(focus.selection??{anchor:{runId:focus.runId,offset:focus.start},focus:{runId:focus.runId,offset:focus.end}});
     const article = document.getElementById('document-content');
     const active = document.activeElement;
     const previousEditor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
     const previousSnapshot = state().snapshot;
-    const richSelection = previousEditor && (readTextSelection(previousEditor) ?? (state().snapshot?.id===snapshot.id ? formattingSelection() : undefined));
+    const currentSelection = previousEditor && readTextSelection(previousEditor);
+    const richSelection = preserveRemoteSelection
+      ? active === previousEditor ? currentSelection : undefined
+      : currentSelection ?? (previousSnapshot?.id === snapshot.id ? formattingSelection() : undefined);
     const previousRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
     const fields = [...article?.querySelectorAll('textarea') ?? []];
     const previousField = active instanceof HTMLTextAreaElement ? active
@@ -260,7 +264,7 @@ export function DocumentApp() {
           if (editor) restoreTextSelection(editor, focus.selection ?? { anchor: { runId: focus.runId, offset: focus.start }, focus: { runId: focus.runId, offset: focus.end } });
         }
       });
-    } else if (richSelection && restoringSave) {
+    } else if (richSelection && (restoringSave || preserveRemoteSelection)) {
       queueMicrotask(() => {
         const editor = article?.querySelector<HTMLElement>('[data-continuous-editor]');
         const currentRuns = [...article?.querySelectorAll<HTMLElement>('[data-docx-run]') ?? []];
@@ -269,6 +273,7 @@ export function DocumentApp() {
             const anchored = restoreAnchoredPoint(previousSnapshot,snapshot,point);
             if (anchored !== undefined) return anchored;
           }
+          if (preserveRemoteSelection) return undefined;
           const index = previousRuns.findIndex(run => run.dataset.docxRun === point.runId);
           const run = index >= 0 ? currentRuns[Math.min(index, currentRuns.length - 1)] : undefined;
           return run ? { runId: run.dataset.docxRun!, offset: Math.min(point.offset, run.textContent?.length ?? 0) } : undefined;
@@ -382,7 +387,7 @@ export function DocumentApp() {
     })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentComments snapshot={state().snapshot} target={referenceParagraph()} range={commentRange()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}
-      onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading} pageCount={pages().length} onLocatePage={locatePage}/></>}
+      onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading} pageCount={pageLayout().at(-1)?.number??1} onLocatePage={locatePage}/></>}
     />
     <section aria-label="편집 도구 모음" tabindex={0}
       class="min-h-0 max-h-[45dvh] shrink overflow-y-auto overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-700">
@@ -410,7 +415,7 @@ export function DocumentApp() {
     <DocumentImageToolbar pictures={pictures()} target={imageParagraph()} pending={imagePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editImage(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
-    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} toc={documentTableOfContents()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
+    <DocumentReferenceToolbar links={documentLinks()} notes={documentNotes()} referenceLists={documentReferenceLists()} dateFields={documentDateFields()} target={referenceParagraph()} bookmarks={state().snapshot?.bookmarks??[]} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentMathToolbar snapshot={state().snapshot} target={imageParagraph()} pending={standalonePending()}
@@ -439,6 +444,10 @@ export function DocumentApp() {
       block.type==='paragraph'&&(block.paragraph.moveHyperlinkUp||block.paragraph.moveHyperlinkDown)?[block.paragraph]:[])??[]}
       pending={standalonePending()} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
+    <DocumentParagraphMoveToolbar kind="note" paragraphs={state().snapshot?.blocks.flatMap(block=>
+      block.type==='paragraph'&&(block.paragraph.moveNoteUp||block.paragraph.moveNoteDown)?[block.paragraph]:[])??[]}
+      pending={standalonePending()} disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)}
+      onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}/>
     <DocumentBoundaryToolbar sectionBreaks={sectionBreaks()} target={boundaryParagraph()} trailingBreaks={state().snapshot?.blocks.flatMap(block=>block.type==='paragraph' && block.paragraph.pageBreakAfter ? [block.paragraph] : []) ?? []} pending={boundaryPending()}
       disabled={state().saving||state().loading||Boolean(state().error)||Boolean(state().composing)} onApply={stageBoundary}/>
     </div>
@@ -460,7 +469,7 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending() || imagePending() || standalonePending() || tablePending()} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} layout={pageLayout()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending() || imagePending() || standalonePending() || tablePending()} changes={changes()}
           selected={resolvedEntry(selectedChange())}
           onListLevel={(selection,delta)=>{const changed=controller.changeListLevel(selection,delta);if(changed)setDraftVersion(v=>v+1);return changed;}}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}

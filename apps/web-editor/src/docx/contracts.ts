@@ -18,10 +18,10 @@ const rectangleSchema=z.object({
 });
 const runSchema = z.object({
   proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,
-  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete','tracked_format','toc']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional(),squareRoot:z.string().max(1024).optional(),smartArt:z.object({items:z.array(z.string().max(259)).min(1).max(32),truncated:z.boolean().optional()}).optional(),chartFrame:chartFrameSchema.optional(),rectangle:rectangleSchema.optional(),rectangleResizeEditable:z.boolean().optional()}).optional(),
+  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete','tracked_format','toc','figure_list','table_list','date_field']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),fraction:fractionSchema.optional(),squareRoot:z.string().max(1024).optional(),smartArt:z.object({items:z.array(z.string().max(259)).min(1).max(32),truncated:z.boolean().optional()}).optional(),chartFrame:chartFrameSchema.optional(),chartValues:z.array(z.string().min(1).max(64)).min(1).max(32).optional(),rectangle:rectangleSchema.optional(),rectangleResizeEditable:z.boolean().optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional()})]).optional(),
-  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
+  picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
   characterStyleId:z.string().max(120).optional(),baseStyle:baseStyleSchema.optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional(),
   id: z.string(), text: z.string(), editable: z.boolean(), trackable:z.boolean().optional(), boldTrackable:z.boolean().optional(), bold: z.boolean(), italic: z.boolean(),
   eastAsiaFont: z.string().max(120).regex(/^[^"\\\u0000-\u001f\u007f]+$/u).optional(),
@@ -34,18 +34,23 @@ const paragraphListSchema=z.object({id:z.number().int().min(0).max(2147483647).o
 const listInfoSchema=z.object({id:z.number().int().positive().max(2147483647),levels:z.array(z.object({level:z.number().int().min(0).max(8),kind:z.string(),text:z.string(),start:z.number().int().nonnegative(),legal:z.boolean().optional(),restart:z.number().int().min(0).max(7).optional()})).max(9)});
 const tabStopSchema=z.object({position:z.number().int().min(0).max(28800),align:z.enum(['left','center','right','decimal','bar','clear']),leader:z.enum(['none','dot','hyphen','underscore','heavy','middleDot']).optional()});
 export type TabStop=z.infer<typeof tabStopSchema>;
+const paragraphAlignmentSchema=z.enum(['start','center','end','justify']);
 const paragraphFormatSchema = z.object({tabs:z.array(tabStopSchema).max(32).optional(),list:paragraphListSchema.optional(),styleId:z.string().max(120).optional(),
- align:z.enum(['start','center','end','justify']).optional(),before:spacing,after:spacing,
+ align:paragraphAlignmentSchema.optional(),before:spacing,after:spacing,
  left:z.number().int().min(-14400).max(14400).optional(),right:z.number().int().min(-14400).max(14400).optional(),firstLine:z.number().int().min(0).max(14400).optional(),hanging:z.number().int().min(0).max(14400).optional(),
  line:z.number().int().min(20).max(2880).optional(),lineRule:z.enum(['auto','exact','atLeast']).optional(),bidi:z.boolean().optional(),textDirection:z.string().max(20).optional(),
 });
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
+  alignmentTrackable:z.boolean().optional(),
+  alignmentRevision:z.object({kind:z.literal('tracked_format'),text:z.string().max(1027).optional(),
+    author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
   list:paragraphListSchema.optional(),listLabel:z.string().max(240).optional(),
   anchor:z.string().regex(/^[0-7][0-9A-F]{7}$/).optional(),
   outlineLevel,outlineOverride:outlineLevel,
   sectionId:z.string().optional(),styleId:z.string().max(120).optional(),id: z.string(), runs: z.array(runSchema), structureEditable: z.boolean().optional(),
   pageBreakBefore: z.boolean().optional(), pageBreakAfter: z.boolean().optional(),
+  moveNoteUp:z.boolean().optional(),moveNoteDown:z.boolean().optional(),
   moveHyperlinkUp:z.boolean().optional(),moveHyperlinkDown:z.boolean().optional(),
   moveBookmarkUp:z.boolean().optional(),moveBookmarkDown:z.boolean().optional(),
   layout: paragraphFormatSchema.optional(),
@@ -89,10 +94,12 @@ export const snapshotSchema = z.object({
   ])),
 });
 export const eventSchema = z.object({
+  historyDirection: z.enum(['undo', 'redo']).optional(),
   textOnly:z.boolean().optional(),
   sequence: z.number().int().nonnegative(), revision: z.number().int().nonnegative(),
   type: z.enum(['docx.committed', 'docx.reload']), actor: z.string().optional(),
 });
+export type DocumentEvent = z.infer<typeof eventSchema>;
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type Paragraph = z.infer<typeof paragraphSchema>;
 export type Run = z.infer<typeof runSchema>;
@@ -110,7 +117,8 @@ export type ParagraphOperation = {
 };
 export type StyleOperation={type:'define_style';styleDefinition:StyleDefinition};
 export type ListSetup =
-  | {kind:'bullet'|'decimal'|'upperRoman'|'lowerRoman'|'upperLetter'|'lowerLetter';start?:number}
+  | {kind:'bullet';start?:number}
+  | {kind:'decimal'|'upperRoman'|'lowerRoman'|'upperLetter'|'lowerLetter';start?:number;compound?:boolean}
   | {sourceId:number;level?:number;start:number};
 export type ListDefinition=ListSetup & {key:string};
 export type ListOperation={type:'define_list';listDefinition:ListDefinition};
@@ -120,18 +128,22 @@ export type TableEdit = {action:'insert_body_paragraph_before'} | {action:TableA
 export type TableOperation = {type:'update_table';targetId:string;table:TableEdit};
 export type BoundaryMode = 'page_before' | 'no_page_before' | 'no_page_after' | 'section_next_page' | 'section_continuous' | 'remove_section' | 'move_section_earlier' | 'move_section_later';
 export type BoundaryOperation = {type:'update_boundary'; targetId:string; boundary:BoundaryMode};
-export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}|{action:'crop';crop:z.infer<typeof cropSchema>}|{action:'rotate';rotation:z.infer<typeof pictureRotationSchema>}} | {type:'insert_picture_caption';targetId:string;expectedText:'';text:string} | {type:'edit_picture_caption';targetId:string;expectedText:string;text:string};
-export type ReferenceEdit = {action:'insert_toc'|'update_toc'} | {action:'insert_bookmark'|'insert_bookmark_ref'|'insert_bookmark_page_ref'|'insert_bookmark_number_ref';bookmark:string} | {action:'rename_bookmark';bookmark:string;newBookmark:string} | {action:'delete_bookmark';bookmark:string} | {action:'insert_footnote'|'insert_endnote'|'set_footnote_text'|'set_endnote_text';text:string} | {action:'delete_footnote'|'delete_endnote'} |
+export type ImageOperation = {type:'update_image';targetId:string;image:{action:'insert';base64:string;alt?:string;widthEmu?:number}|{action:'set_alt';alt:string}|{action:'delete'}|{action:'resize';widthEmu:number}|{action:'replace';base64:string}|{action:'crop';crop:z.infer<typeof cropSchema>}|{action:'rotate';rotation:z.infer<typeof pictureRotationSchema>}} | {type:'insert_picture_caption';targetId:string;expectedText:'';text:string} | {type:'edit_picture_caption';targetId:string;expectedText:string;text:string} | {type:'move_picture_caption_up';targetId:string} | {type:'move_picture_caption_down';targetId:string};
+export type ReferenceEdit = {action:'insert_toc'|'update_toc'|'insert_date_field'|'refresh_date_field'|'insert_figure_list'|'insert_table_list'|'update_caption_list'} | {action:'insert_bookmark'|'insert_bookmark_ref'|'insert_bookmark_page_ref'|'insert_bookmark_number_ref';bookmark:string} | {action:'rename_bookmark';bookmark:string;newBookmark:string} | {action:'delete_bookmark';bookmark:string} | {action:'insert_footnote'|'insert_endnote'|'set_footnote_text'|'set_endnote_text';text:string} | {action:'delete_footnote'|'delete_endnote'} |
   {action:'insert_link';text:string;url:string} | {action:'insert_link';text:string;bookmark:string} | {action:'set_link_url';url:string} | {action:'unlink'};
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'reply_comment';targetId:string;comment:{text:string}} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
 export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete'|'insert_root'|'replace_root';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}};
 export type ParagraphMoveOperation = {type:'move_bookmark_up';targetId:string} | {type:'move_bookmark_down';targetId:string} |
-  {type:'move_hyperlink_up';targetId:string} | {type:'move_hyperlink_down';targetId:string};
+  {type:'move_hyperlink_up';targetId:string} | {type:'move_hyperlink_down';targetId:string} |
+  {type:'move_note_up';targetId:string} | {type:'move_note_down';targetId:string};
 export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{type:'reject_revision';targetId:string};
-export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} | {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean};
-export type ObjectTextOperation = {type:'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number};
+export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} |
+  {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean} |
+  {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
+export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
+  {type:'update_chart_value';targetId:string;chartValue:{point:number;expectedValue:string;value:string}};
 export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};

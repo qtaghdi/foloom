@@ -158,14 +158,14 @@ func (s *Server) addDOCXTools(server *mcp.Server) {
 		"Use replace_run_text or replace_cell_text with exact expectedText for text. LF inserts an inline break. " +
 		"Use replace_paragraphs for a contiguous editable sibling range with source IDs and exact paragraph texts joined by LF. " +
 		"Paragraph plans support styles, direction, spacing, tab stops, and list references. Define styles with define_style. " +
-		"Use define_list to create a nine-level list with kind bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter. Restart a supported list level with sourceId, level, and start. " +
+		"Use define_list to create a nine-level list with kind bullet, decimal, upperRoman, lowerRoman, upperLetter, or lowerLetter. Set compound to true on a fresh numbered list to include upper-level counters. Restart a supported list level with sourceId, level, and start. " +
 		"Use list {key, level} to apply a new definition in the same batch, {id, level} to continue a list from snapshot.lists, or {id:0, level:0} to remove numbering. " +
 		"Use update_section for paper settings and supported header or footer text, PAGE, and NUMPAGES fields, including compactPageNumbers to combine the two fields, or update_boundary for supported page and section breaks. " +
 		"Use update_table, update_image, and update_math for supported tables, inline pictures, and equations. " +
-		"Use update_reference for supported links, bookmarks, footnotes, and endnotes. " +
-		"Use insert_rectangle for a basic inline shape, update_rectangle_colors to set its fill and outline, resize_rectangle to set both dimensions, and delete_rectangle to remove a supported rectangle. Use insert_textbox for an inline text box. Use update_control_text or update_textbox_text to edit supported object text, and update_chart_title or resize_chart for supported local charts. " +
+		"Use update_reference for supported links, bookmarks, footnotes, endnotes, and date fields. " +
+		"Use insert_rectangle for a basic inline shape, update_rectangle_colors to set its fill and outline, resize_rectangle to set both dimensions, and delete_rectangle to remove a supported rectangle. Use insert_textbox for an inline text box. Use insert_control_text to append a plain text control to an editable body paragraph. Use update_control_text or update_textbox_text to edit supported object text, and update_chart_title or resize_chart for supported local charts. Use update_chart_value with chartValue {point, expectedValue, value} for a chart with literal chartValues. " +
 		"Use add_comment to annotate text, or resolve_comment and reopen_comment with an eligible imported comment ID. " +
-		"Use track_run_text to record a simple text replacement or deletion, and accept_revision or reject_revision to review supported inline changes. " +
+		"Use track_run_text to record a simple text replacement or deletion, or track_paragraph_alignment with a body paragraph ID and alignment (start, center, end, justify). Use accept_revision or reject_revision on supported tracked changes. " +
 		"Keep edits within the editable targets returned by get_docx. Do not overlap operations. Refresh the document after a conflict.", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}}, func(ctx context.Context, _ *mcp.CallToolRequest, input docx.ApplyInput) (*mcp.CallToolResult, docx.Snapshot, error) {
 		snapshot, err := s.applyDOCX(ctx, input, "ai")
 		return nil, snapshot, err

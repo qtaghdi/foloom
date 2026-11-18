@@ -133,7 +133,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	blocks, targetsByID, unsupported, err := inspectDocument(root, s.id, s.revision, s.pkg.styles)
+	blocks, targetsByID, unsupported, err := s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -240,7 +240,7 @@ func (s *Session) Apply(ctx context.Context, input ApplyInput, actor string) (Sn
 			break
 		}
 	}
-	return s.persistHistory(ctx, content, candidate, m, actor, textOnly)
+	return s.persistHistory(ctx, content, candidate, m, Event{Actor: actor, TextOnly: textOnly})
 }
 
 // RecoveryFile validates a draft against the exact in-memory base. It never
@@ -301,6 +301,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	}
 	seen := map[string]bool{}
 	var edits []replacement
+	var usedIDs paragraphIDs
 	headerCount := 0
 	var drawingID uint64
 	nextDrawingID := func() (uint32, error) {
@@ -328,7 +329,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var nextRevisionID int64
 	var revisionDate string
 	var chartCounts map[string]int
+	var controlIDs map[int64]bool
+	nextControlID := int64(1)
 	for _, op := range input.Operations {
+		if op.Alignment != "" && op.Type != "track_paragraph_alignment" {
+			return nil, fmt.Errorf("unexpected DOCX tracked paragraph alignment")
+		}
 		if op.Bold != nil && op.Type != "track_run_bold" {
 			return nil, fmt.Errorf("unexpected DOCX tracked bold field")
 		}
@@ -341,7 +347,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		if op.ChartWidthEMU != nil && op.Type != "resize_chart" {
 			return nil, fmt.Errorf("unexpected DOCX chart width")
 		}
-		if op.Type == "update_chart_title" || op.Type == "resize_chart" {
+		if op.ChartValue != nil && op.Type != "update_chart_value" {
+			return nil, fmt.Errorf("unexpected DOCX chart value")
+		}
+		if op.Type == "update_chart_title" || op.Type == "resize_chart" || op.Type == "update_chart_value" {
 			t := targets[op.TargetID]
 			if t.kind != "chart" || seen[op.TargetID] ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -353,7 +362,8 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				chartCounts = s.pkg.chartUseCounts(root)
 			}
 			seen[op.TargetID] = true
-			if op.Type == "resize_chart" {
+			switch op.Type {
+			case "resize_chart":
 				if op.ChartWidthEMU == nil || op.Text != "" || op.ExpectedText != "" {
 					return nil, fmt.Errorf("invalid DOCX chart resize fields")
 				}
@@ -362,8 +372,17 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 					return nil, err
 				}
 				edits = append(edits, edit)
-			} else if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
-				return nil, err
+			case "update_chart_value":
+				if op.ChartValue == nil || op.Text != "" || op.ExpectedText != "" {
+					return nil, fmt.Errorf("invalid DOCX chart value fields")
+				}
+				if err := s.pkg.updateChartValue(t, chartCounts, *op.ChartValue, parts); err != nil {
+					return nil, err
+				}
+			default:
+				if err := s.pkg.updateChartTitle(t, chartCounts, op, parts); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}
@@ -395,14 +414,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, updated...)
 			continue
 		}
-		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" {
+		if op.Type == "move_bookmark_up" || op.Type == "move_bookmark_down" || op.Type == "move_hyperlink_up" || op.Type == "move_hyperlink_down" ||
+			op.Type == "move_note_up" || op.Type == "move_note_down" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
 				return nil, fmt.Errorf("invalid DOCX paragraph move fields")
 			}
 			if moveTargets == nil {
-				_, moveTargets, _, err = inspectDocument(root, s.id, s.revision, s.pkg.styles)
+				_, moveTargets, _, err = s.pkg.inspectWithNoteMoves(root, s.id, s.revision)
 				if err != nil {
 					return nil, err
 				}
@@ -418,11 +438,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, edit)
 			continue
 		}
-		if op.Type == "track_run_text" || op.Type == "track_run_bold" {
+		if op.Type == "track_run_text" || op.Type == "track_run_bold" || op.Type == "track_paragraph_alignment" {
 			if op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || referenceCount >= 32 {
-				return nil, fmt.Errorf("invalid DOCX tracked text fields")
+				return nil, fmt.Errorf("invalid DOCX tracked change fields")
 			}
 			if revisionIDs == nil {
 				revisionIDs = s.pkg.revisionIDs(root)
@@ -434,9 +454,12 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			var edit replacement
 			var err error
-			if op.Type == "track_run_bold" {
+			switch op.Type {
+			case "track_paragraph_alignment":
+				edit, err = trackedParagraphAlignment(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
+			case "track_run_bold":
 				edit, err = trackedBoldEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
-			} else {
+			default:
 				edit, err = trackedTextEdit(s.pkg.document, targets[op.TargetID], op, author, revisionDate, revisionIDs, &nextRevisionID)
 			}
 			if err != nil {
@@ -479,6 +502,15 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" || referenceCount >= 32 {
 				return nil, fmt.Errorf("invalid DOCX revision review fields")
+			}
+			if t := targets[op.TargetID]; t.kind == "tracked_alignment" {
+				changes, err := alignmentRevisionReplacement(s.pkg.document, t, op.Type)
+				if err != nil {
+					return nil, err
+				}
+				edits = append(edits, changes...)
+				referenceCount++
+				continue
 			}
 			edit, err := revisionReplacement(s.pkg.document, targets[op.TargetID], op.Type)
 			if err != nil {
@@ -559,8 +591,11 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if op.Reference.Action == "insert_bookmark_number_ref" && len(input.Operations) != 1 {
 				return nil, fmt.Errorf("DOCX bookmark number reference must stand alone")
 			}
-			if (op.Reference.Action == "insert_toc" || op.Reference.Action == "update_toc") && len(input.Operations) != 1 {
-				return nil, fmt.Errorf("DOCX table of contents edit must stand alone")
+			switch op.Reference.Action {
+			case "insert_toc", "update_toc", "insert_figure_list", "insert_table_list", "update_caption_list":
+				if len(input.Operations) != 1 {
+					return nil, fmt.Errorf("DOCX table of contents or caption list edit must stand alone")
+				}
 			}
 			if bookmarks == nil {
 				index := readBookmarks(root)
@@ -576,6 +611,20 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 		}
 		if op.Reference != nil {
 			return nil, fmt.Errorf("unexpected DOCX reference fields")
+		}
+		if op.Type == "move_picture_caption_up" || op.Type == "move_picture_caption_down" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil ||
+				op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("DOCX picture caption movement must stand alone")
+			}
+			edit, err := s.pkg.movePictureCaption(targets[op.TargetID], op.Type)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
 		}
 		if op.Type == "insert_picture_caption" || op.Type == "edit_picture_caption" {
 			if seen[op.Type] || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
@@ -600,19 +649,36 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, added...)
 			continue
 		}
-		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_control_text" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.ExpectedText != "" {
-				return nil, fmt.Errorf("DOCX inline shape requires an editable body paragraph")
+				return nil, fmt.Errorf("DOCX inline object requires an editable body paragraph")
 			}
 			if op.Type == "insert_rectangle" && op.Text != "" {
 				return nil, fmt.Errorf("unexpected DOCX rectangle text")
 			}
 			if op.Type == "insert_textbox" && (len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "") {
 				return nil, fmt.Errorf("DOCX text box requires plain text")
+			}
+			if op.Type == "insert_control_text" {
+				if len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "" {
+					return nil, fmt.Errorf("DOCX content control requires non-empty plain text of up to 1024 bytes")
+				}
+				if controlIDs == nil {
+					controlIDs, err = s.pkg.contentControlIDs()
+					if err != nil {
+						return nil, err
+					}
+				}
+				for controlIDs[nextControlID] {
+					nextControlID++
+				}
+				edits = append(edits, appendParagraphContent(s.pkg.document, t.paragraph, inlinePlainControl(nextControlID, op.Text)))
+				nextControlID++
+				continue
 			}
 			id, err := nextDrawingID()
 			if err != nil {
@@ -624,7 +690,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			} else {
 				drawing = inlineTextBox(id, op.Text)
 			}
-			edits = append(edits, appendDrawingRun(s.pkg.document, t.paragraph, drawing))
+			edits = append(edits, appendParagraphContent(s.pkg.document, t.paragraph, drawing))
 			continue
 		}
 		if op.Type == "update_image" {
@@ -745,7 +811,10 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if err != nil {
 				return nil, err
 			}
-			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles)
+			if usedIDs == nil {
+				usedIDs = usedParagraphIDs(root)
+			}
+			edit, err := paragraphReplacement(s.pkg.document, targets, op, s.pkg.styles, usedIDs)
 			if err != nil {
 				return nil, err
 			}
