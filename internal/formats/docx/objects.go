@@ -19,16 +19,20 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
-	SquareRoot     string `json:"squareRoot,omitempty"`
-	DeleteEditable bool   `json:"deleteEditable,omitempty"`
-	Date           string `json:"date,omitempty"`
-	noteID         string
-	Kind           string        `json:"kind"`
-	Author         string        `json:"author,omitempty"`
-	Label          string        `json:"label,omitempty"`
-	Text           string        `json:"text,omitempty"`
-	Editable       bool          `json:"editable"`
-	Fraction       *MathFraction `json:"fraction,omitempty"`
+	DeleteEditable          bool   `json:"deleteEditable,omitempty"`
+	Date                    string `json:"date,omitempty"`
+	noteID                  string
+	Kind                    string            `json:"kind"`
+	Author                  string            `json:"author,omitempty"`
+	Label                   string            `json:"label,omitempty"`
+	Text                    string            `json:"text,omitempty"`
+	Editable                bool              `json:"editable"`
+	Fraction                *MathFraction     `json:"fraction,omitempty"`
+	SmartArt                *SmartArtPreview  `json:"smartArt,omitempty"`
+	ChartFrame              *ChartFrame       `json:"chartFrame,omitempty"`
+	RectangleResizeEditable bool              `json:"rectangleResizeEditable,omitempty"`
+	Rectangle               *RectanglePreview `json:"rectangle,omitempty"`
+	SquareRoot              string            `json:"squareRoot,omitempty"`
 }
 
 func editableMath(math *node) bool {
@@ -140,15 +144,21 @@ func objectPreview(n *node) *ObjectInfo {
 	}
 	graphic := childNS(childNS(container, drawingNS, "graphic"), drawingNS, "graphicData")
 	switch attribute(graphic, "", "uri") {
-	case drawingNS + "/chart", "http://schemas.openxmlformats.org/drawingml/2006/chart":
+	case drawingNS + "/chart", chartNS:
 		return &ObjectInfo{Kind: "chart"}
-	case drawingNS + "/diagram", "http://schemas.openxmlformats.org/drawingml/2006/diagram":
+	case drawingNS + "/diagram", diagramNS:
 		return &ObjectInfo{Kind: "smartart"}
-	case "http://schemas.microsoft.com/office/word/2010/wordprocessingShape", "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup":
+	case shapeWordNS, "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup":
 		if drawing.has("txbxContent") {
 			return &ObjectInfo{Kind: "textbox", Text: reviewText(textContent(drawing), 1024)}
 		}
-		return &ObjectInfo{Kind: "shape"}
+		out := &ObjectInfo{Kind: "shape"}
+		if attribute(graphic, "", "uri") == shapeWordNS {
+			if rectangle := inspectInlineRectangle(container, graphic); rectangle != nil {
+				out.Rectangle = &rectangle.RectanglePreview
+			}
+		}
+		return out
 	case pictureNS:
 		return nil
 	default:
