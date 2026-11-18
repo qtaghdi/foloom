@@ -66,26 +66,10 @@ func (p *documentPackage) chartTitle(relationship string) (*node, string, []byte
 		return nil, "", nil
 	}
 	chart := onlyChartChild(root, "chart")
-	plot := onlyChartChild(chart, "plotArea")
-	families := 0
-	if plot == nil {
-		return nil, "", nil
-	}
-	for _, child := range plot.children {
-		if child.name.Space != chartNS || !strings.HasSuffix(child.name.Local, "Chart") {
-			continue
-		}
-		switch child.name.Local {
-		case "barChart", "lineChart", "pieChart":
-			families++
-		default:
-			return nil, "", nil
-		}
-	}
 	title := onlyChartChild(chart, "title")
 	tx := onlyChartChild(title, "tx")
 	rich := singlePayload(tx)
-	if families != 1 || rich == nil || rich.name.Space != chartNS || rich.name.Local != "rich" {
+	if chartFamily(onlyChartChild(chart, "plotArea")) == nil || rich == nil || rich.name.Space != chartNS || rich.name.Local != "rich" {
 		return nil, "", nil
 	}
 	paragraph := plainChartTextChild(rich, "p", "bodyPr", "lstStyle")
@@ -96,6 +80,28 @@ func (p *documentPackage) chartTitle(relationship string) (*node, string, []byte
 		return nil, "", nil
 	}
 	return text, filename, data
+}
+
+func chartFamily(plot *node) *node {
+	if plot == nil {
+		return nil
+	}
+	var family *node
+	for _, child := range plot.children {
+		if child.name.Space != chartNS || !strings.HasSuffix(child.name.Local, "Chart") {
+			continue
+		}
+		if family != nil {
+			return nil
+		}
+		switch child.name.Local {
+		case "barChart", "lineChart", "pieChart":
+			family = child
+		default:
+			return nil
+		}
+	}
+	return family
 }
 
 func plainChartTitle(value string) bool {
@@ -181,7 +187,11 @@ func (p *documentPackage) projectChartTitles(root *node, blocks []Block, targets
 		return
 	}
 	var counts map[string]int
-	titles := map[string]string{}
+	type chartPreview struct {
+		title  string
+		values []string
+	}
+	previews := map[string]chartPreview{}
 	for index := range blocks {
 		paragraph := blocks[index].Paragraph
 		if paragraph == nil {
@@ -198,19 +208,26 @@ func (p *documentPackage) projectChartTitles(root *node, blocks []Block, targets
 			}
 			relationship := chartRelationshipID(t.run)
 			filename := p.chartRelationships[relationship]
-			text, cached := titles[filename]
+			preview, cached := previews[filename]
+			editable := p.uniqueChart(relationship, counts)
 			if !cached {
-				title, _, _ := p.chartTitle(relationship)
+				title, _, data := p.chartTitle(relationship)
 				if title != nil {
-					text = title.text.String()
+					preview.title = title.text.String()
+					if editable {
+						for _, point := range literalChartValues(title, data) {
+							preview.values = append(preview.values, point.text.String())
+						}
+					}
 				}
-				titles[filename] = text
+				previews[filename] = preview
 			}
-			if text != "" {
-				run.Object.Text = text
-				run.Object.Editable = p.uniqueChart(relationship, counts)
-				if run.Object.Editable {
+			if preview.title != "" {
+				run.Object.Text = preview.title
+				run.Object.Editable = editable
+				if editable {
 					run.Object.ChartFrame, _ = inlineChartFrame(t.run, p.document)
+					run.Object.ChartValues = preview.values
 				}
 			}
 		}

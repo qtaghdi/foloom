@@ -19,8 +19,9 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
-	DeleteEditable          bool   `json:"deleteEditable,omitempty"`
-	Date                    string `json:"date,omitempty"`
+	ChartValues             []string `json:"chartValues,omitempty"`
+	DeleteEditable          bool     `json:"deleteEditable,omitempty"`
+	Date                    string   `json:"date,omitempty"`
 	noteID                  string
 	Kind                    string            `json:"kind"`
 	Author                  string            `json:"author,omitempty"`
