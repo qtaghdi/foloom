@@ -409,7 +409,7 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 				styleRun(&run, characters[i].child("rPr"))
 			}
 			base := run
-			run.BaseStyle = &InlineStyle{Bold: &base.Bold, Italic: &base.Italic, Underline: &base.Underline, Strike: &base.Strike, Color: base.Color, Font: base.Font, Highlight: base.Highlight, Vertical: base.Vertical}
+			run.BaseStyle = &InlineStyle{Bold: &base.Bold, Italic: &base.Italic, Underline: &base.Underline, Strike: &base.Strike, Color: base.Color, Font: base.Font, EastAsiaFont: base.EastAsiaFont, Highlight: base.Highlight, Vertical: base.Vertical}
 			if base.SizeHalfPoints != 0 {
 				run.BaseStyle.SizeHalfPoints = &base.SizeHalfPoints
 			}
