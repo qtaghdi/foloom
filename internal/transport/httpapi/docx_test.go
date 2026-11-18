@@ -502,7 +502,7 @@ func TestDOCXMCPListsSupportedOperationFamilies(t *testing.T) {
 		if tool.Name != "apply_docx_operations" {
 			continue
 		}
-		for _, term := range []string{"baseRevision", "upperLetter", "NUMPAGES", "resolve_comment", "track_run_text"} {
+		for _, term := range []string{"baseRevision", "upperLetter", "NUMPAGES", "resolve_comment", "track_run_text", "track_paragraph_merge"} {
 			if !strings.Contains(tool.Description, term) {
 				t.Fatalf("DOCX tool description omits %q", term)
 			}

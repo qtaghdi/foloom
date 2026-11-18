@@ -91,6 +91,12 @@ export function DocumentComments(props:{
           <Show when={!props.breakReady}><p class="text-xs text-slate-600">본문 글자 사이에 커서를 놓으세요.</p></Show>
         </div>
       </Show>
+      <Show when={props.target?.mergeTrackable&&props.target} keyed>{paragraph=>
+        <div class="my-2 border-b border-slate-200 pb-2">
+          <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>
+            applyReview({type:'track_paragraph_merge',targetId:paragraph.id})}>다음 문단과 병합 기록</button>
+        </div>
+      }</Show>
       <Show when={props.target?.alignmentTrackable&&props.target} keyed>{paragraph=>
         <form class="my-2 flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2" onSubmit={event=>{
           event.preventDefault();

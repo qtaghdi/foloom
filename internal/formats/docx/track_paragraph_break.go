@@ -44,17 +44,32 @@ func trackParagraphBreak(data []byte, t target, op Operation, ids paragraphIDs, 
 		return replacement{}, fmt.Errorf("protected DOCX tracked paragraph split")
 	}
 	marker := formatRevisionMarkup("ins", "", author, date, revisionIDs, nextID)
-	runProps := `<dwr:rPr xmlns:dwr="` + wordNS + `">` + marker + `</dwr:rPr>`
-	var leftProps []byte
-	if props := t.paragraph.child("pPr"); props != nil {
-		open, close := scopedOpening(props, data, false)
-		content := ""
-		if props.inner < props.endStart {
-			content = string(data[props.inner:props.endStart])
-		}
-		leftProps = []byte(open + content + runProps + close)
-	} else {
-		leftProps = []byte(`<dwr:pPr xmlns:dwr="` + wordNS + `">` + runProps + `</dwr:pPr>`)
+	return splitParagraphText(data, t, op, ids, trackedParagraphMarkProperties(data, t.paragraph, marker))
+}
+
+func trackParagraphMerge(data []byte, t target, op Operation, author, date string, revisionIDs map[int64]bool, nextID *int64) (replacement, error) {
+	if !t.trackableParagraphMerge || op.ExpectedText != "" || op.Text != "" {
+		return replacement{}, fmt.Errorf("protected DOCX tracked paragraph merge or unexpected text")
 	}
-	return splitParagraphText(data, t, op, ids, leftProps)
+	marker := formatRevisionMarkup("del", "", author, date, revisionIDs, nextID)
+	props := t.paragraph.child("pPr")
+	start, end := t.paragraph.inner, t.paragraph.inner
+	if props != nil {
+		start, end = props.start, props.end
+	}
+	return replacement{start: start, end: end, data: trackedParagraphMarkProperties(data, t.paragraph, marker)}, nil
+}
+
+func trackedParagraphMarkProperties(data []byte, paragraph *node, marker string) []byte {
+	props := paragraph.child("pPr")
+	if props == nil {
+		return []byte(`<dwr:pPr xmlns:dwr="` + wordNS + `"><dwr:rPr>` + marker + `</dwr:rPr></dwr:pPr>`)
+	}
+	if runProps := props.child("rPr"); runProps != nil {
+		open, close := scopedOpening(runProps, data, false)
+		return []byte(string(data[props.start:runProps.start]) + open + string(data[runProps.inner:runProps.endStart]) + marker + close + string(data[runProps.end:props.end]))
+	}
+	open, close := scopedOpening(props, data, false)
+	runProps := `<dwr:rPr xmlns:dwr="` + wordNS + `">` + marker + `</dwr:rPr>`
+	return []byte(open + string(data[props.inner:props.endStart]) + runProps + close)
 }

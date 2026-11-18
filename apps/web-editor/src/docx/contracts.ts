@@ -54,7 +54,7 @@ const paragraphFormatSchema = z.object({tabs:z.array(tabStopSchema).max(32).opti
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
   compoundRestart:z.object({parentNumber:z.number().int().min(1).max(9999),terminal:z.boolean().optional()}).optional(),
-  alignmentTrackable:z.boolean().optional(),
+  alignmentTrackable:z.boolean().optional(),mergeTrackable:z.boolean().optional(),
   breakRevision:z.object({kind:z.enum(['tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),
     author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
   alignmentRevision:z.object({kind:z.literal('tracked_format'),text:z.string().max(1027).optional(),
@@ -159,6 +159,7 @@ export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{
 export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} |
   {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean} |
   {type:'track_paragraph_break';targetId:string;expectedText:string;text:string} |
+  {type:'track_paragraph_merge';targetId:string} |
   {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ChartKind='pie'|'bar'|'line';
 export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |

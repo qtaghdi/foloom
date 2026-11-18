@@ -16,11 +16,8 @@ func paragraphBreakMarker(p *node) *node {
 
 func markParagraphBreakRevisions(root *node, paragraphs map[*node]*Paragraph, protected map[*node]bool, targets map[string]target) {
 	body := root.child("body")
-	if !body.has("ins") && !body.has("del") {
-		return
-	}
 	var rangeBlocks map[*node]bool
-	var validRanges, permissionRanges bool
+	var rangesChecked, validRanges, permissionRanges bool
 	var ids map[int64]int
 	for i, left := range body.children {
 		preview := paragraphs[left]
@@ -28,39 +25,40 @@ func markParagraphBreakRevisions(root *node, paragraphs map[*node]*Paragraph, pr
 			continue
 		}
 		marker := paragraphBreakMarker(left)
-		if marker == nil {
-			continue
-		}
-		if ids == nil {
-			ids = countBodyRevisionIDs(root)
-			rangeBlocks, validRanges = bodyRangeBlocks(body)
-			permissionRanges = body.has("permStart") || body.has("permEnd")
-		}
 		var right *node
 		if i+1 < len(body.children) {
 			right = body.children[i+1]
 		}
 		rightPreview := paragraphs[right]
+		if marker == nil && (!preview.StructureEditable || rightPreview == nil || !rightPreview.StructureEditable ||
+			left.child("r") == nil || right.child("r") == nil ||
+			i > 0 && paragraphBreakMarker(body.children[i-1]) != nil) {
+			continue
+		}
+		if !rangesChecked {
+			rangesChecked = true
+			rangeBlocks, validRanges = bodyRangeBlocks(body)
+			permissionRanges = body.has("permStart") || body.has("permEnd")
+		}
+		if marker == nil {
+			if safeParagraphBreakPair(root.source, left, right, nil, preview, rightPreview, protected, rangeBlocks, validRanges, permissionRanges) == "" {
+				preview.MergeTrackable = true
+				t := targets[preview.ID]
+				t.trackableParagraphMerge = true
+				targets[preview.ID] = t
+			}
+			continue
+		}
+		if ids == nil {
+			ids = countBodyRevisionIDs(root)
+		}
 		text := textContent(left)
 		if rightPreview != nil {
 			text += "\n" + textContent(right)
 		}
-		reason := ""
-		id, err := strconv.ParseInt(marker.attr("id"), 10, 32)
-		switch {
-		case err != nil || id < 0 || ids[id] != 1 || !plainParagraphBreakMarker(marker):
+		reason := safeParagraphBreakPair(root.source, left, right, marker, preview, rightPreview, protected, rangeBlocks, validRanges, permissionRanges)
+		if id, err := strconv.ParseInt(marker.attr("id"), 10, 32); err != nil || id < 0 || ids[id] != 1 || !plainParagraphBreakMarker(marker) {
 			reason = "문단 나눔 변경 정보를 고유하게 확인할 수 없습니다."
-		case permissionRanges ||
-			rightPreview == nil || protected[left] || protected[right] || !validRanges || rangeBlocks[left] || rangeBlocks[right] ||
-			preview.PageBreakBefore || preview.PageBreakAfter || rightPreview.PageBreakBefore || rightPreview.PageBreakAfter:
-			reason = "참조 범위나 쪽·구역 경계가 있는 문단은 보호됩니다."
-		case marker.is("del") && (preview.List != nil || rightPreview.List != nil):
-			reason = "목록이 있는 문단 나눔은 보호됩니다."
-		case !whitespaceBetween(root.source, left, right) ||
-			!structuralParagraphContents(left, root.source, "", marker) ||
-			!structuralParagraphContents(right, root.source, "", nil) ||
-			!compatibleBreakParagraphs(left, right, marker, root.source):
-			reason = "앞뒤 문단에 복합 내용이 있거나 문단 서식이 서로 다릅니다."
 		}
 		if reason != "" {
 			text = reason + "\n" + text
@@ -75,6 +73,24 @@ func markParagraphBreakRevisions(root *node, paragraphs map[*node]*Paragraph, pr
 			targets[preview.ID] = target{kind: "tracked_paragraph_break", node: marker, paragraph: left, moveDown: right}
 		}
 	}
+}
+
+func safeParagraphBreakPair(data []byte, left, right, marker *node, leftPreview, rightPreview *Paragraph, protected, rangeBlocks map[*node]bool, validRanges, permissionRanges bool) string {
+	deleting := marker == nil || marker.is("del")
+	switch {
+	case permissionRanges ||
+		rightPreview == nil || protected[left] || protected[right] || !validRanges || rangeBlocks[left] || rangeBlocks[right] ||
+		leftPreview.PageBreakBefore || leftPreview.PageBreakAfter || rightPreview.PageBreakBefore || rightPreview.PageBreakAfter:
+		return "참조 범위나 쪽·구역 경계가 있는 문단은 보호됩니다."
+	case deleting && (leftPreview.List != nil || rightPreview.List != nil):
+		return "목록이 있는 문단 나눔은 보호됩니다."
+	case !whitespaceBetween(data, left, right) ||
+		!structuralParagraphContents(left, data, "", marker) ||
+		!structuralParagraphContents(right, data, "", nil) ||
+		!compatibleBreakParagraphs(left, right, marker, deleting, data):
+		return "앞뒤 문단에 복합 내용이 있거나 문단 서식이 서로 다릅니다."
+	}
+	return ""
 }
 
 func countBodyRevisionIDs(root *node) map[int64]int {
@@ -110,7 +126,7 @@ func plainParagraphBreakMarker(marker *node) bool {
 	return true
 }
 
-func compatibleBreakParagraphs(left, right, marker *node, data []byte) bool {
+func compatibleBreakParagraphs(left, right, marker *node, ignoreAlignment bool, data []byte) bool {
 	propsXML := func(p, skip *node) (string, bool) {
 		props := p.child("pPr")
 		if props == nil {
@@ -119,7 +135,6 @@ func compatibleBreakParagraphs(left, right, marker *node, data []byte) bool {
 		if p.children[0] != props || !onlyNamespaceAttributes(props) || countChild(props, "rPr") > 1 {
 			return "", false
 		}
-		ignoreAlignment := marker.is("del")
 		if ignoreAlignment && countChild(props, "jc") > 1 {
 			return "", false
 		}
