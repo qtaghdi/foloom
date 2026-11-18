@@ -4,6 +4,10 @@ const proofingLanguageSchema = z.string().min(1).max(35).regex(/^[A-Za-z0-9]+(?:
 const baseStyleSchema = z.object({proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,styleId:z.string().max(120).optional(),bold:z.boolean().optional(),italic:z.boolean().optional(),underline:z.boolean().optional(),strike:z.boolean().optional(),color:z.string().regex(/^#[0-9a-f]{6}$/i).optional(),font:z.string().max(120).optional(),eastAsiaFont:z.string().max(120).optional(),sizeHalfPoints:z.number().int().min(8).max(288).optional(),highlight:z.string().max(40).optional(),vertical:z.string().max(20).optional()});
 const bookmarkName=z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
 const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.string().max(1027)});
+const matrixCellSchema=z.string().min(1).max(256);
+const matrixRowSchema=z.tuple([matrixCellSchema,matrixCellSchema]);
+const matrixSchema=z.tuple([matrixRowSchema,matrixRowSchema]);
+export type MathMatrix=z.infer<typeof matrixSchema>;
 
 export const cropInset=z.number().int().min(0).max(99000);
 const cropSchema=z.object({left:cropInset,top:cropInset,right:cropInset,bottom:cropInset})
@@ -24,7 +28,7 @@ const lineSchema=z.object({
 });
 const runSchema = z.object({
   proofingLanguage:proofingLanguageSchema,eastAsiaProofingLanguage:proofingLanguageSchema,
-  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete','tracked_format','toc','figure_list','table_list','date_field']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),unwrapEditable:z.boolean().optional(),dateControl:z.object({value:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),format:z.literal('yyyy-MM-dd')}).optional(),moveChartUp:z.boolean().optional(),moveChartDown:z.boolean().optional(),fraction:fractionSchema.optional(),squareRoot:z.string().max(1024).optional(),smartArt:z.object({items:z.array(z.string().max(259)).min(1).max(32),truncated:z.boolean().optional()}).optional(),chartFrame:chartFrameSchema.optional(),chartValues:z.array(z.string().min(1).max(64)).min(1).max(32).optional(),rectangle:rectangleSchema.optional(),line:lineSchema.optional(),rectangleResizeEditable:z.boolean().optional()}).optional(),
+  object:z.object({kind:z.enum(['math','control','embedded','textbox','shape','chart','smartart','drawing','footnote','endnote','tracked_insert','tracked_delete','tracked_format','toc','figure_list','table_list','date_field']),text:z.string().max(1027).optional(),author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163).optional(),editable:z.boolean(),deleteEditable:z.boolean().optional(),unwrapEditable:z.boolean().optional(),dateControl:z.object({value:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),format:z.literal('yyyy-MM-dd')}).optional(),moveChartUp:z.boolean().optional(),moveChartDown:z.boolean().optional(),fraction:fractionSchema.optional(),matrix:matrixSchema.optional(),squareRoot:z.string().max(1024).optional(),smartArt:z.object({items:z.array(z.string().max(259)).min(1).max(32),truncated:z.boolean().optional()}).optional(),chartFrame:chartFrameSchema.optional(),chartValues:z.array(z.string().min(1).max(64)).min(1).max(32).optional(),rectangle:rectangleSchema.optional(),line:lineSchema.optional(),rectangleResizeEditable:z.boolean().optional()}).optional(),
   link:z.union([z.object({url:z.string().max(2048).regex(/^https?:\/\/\S+$/),bookmark:z.undefined().optional()}),
     z.object({bookmark:bookmarkName,url:z.undefined().optional(),field:z.literal(true).optional(),pageReference:z.literal(true).optional(),bookmarkEditable:z.boolean().optional(),refreshNeeded:z.boolean().optional()})]).optional(),
   picture:z.object({widthEmu:z.number().int().min(1).max(18288000),heightEmu:z.number().int().min(1).max(18288000),alt:z.string().max(1024),preview:z.boolean(),placement:picturePlacementSchema.optional(),horizontalOffsetEmu:z.number().int().min(0).max(31_750_000).optional(),offsetLimitEmu:z.number().int().min(0).max(31_750_000).optional(),verticalOffsetEmu:z.number().int().min(0).max(635_000).optional(),verticalOffsetLimitEmu:z.number().int().min(0).max(635_000).optional(),squareWrap:z.boolean().optional(),align:pictureAlignmentSchema.optional(),rotation:pictureRotationSchema.optional(),rotationEditable:z.boolean().optional(),caption:z.string().max(1024).optional(),captionEditable:z.boolean().optional(),deleteProtected:z.boolean().optional(),captionReference:z.boolean().optional(),moveCaptionUp:z.boolean().optional(),moveCaptionDown:z.boolean().optional(),cropEditable:z.boolean().optional(),crop:cropSchema.optional()}).optional(),
@@ -50,7 +54,7 @@ const paragraphFormatSchema = z.object({tabs:z.array(tabStopSchema).max(32).opti
 const outlineLevel=z.number().int().min(0).max(9).optional();
 const paragraphSchema = z.object({
   compoundRestart:z.object({parentNumber:z.number().int().min(1).max(9999),terminal:z.boolean().optional()}).optional(),
-  alignmentTrackable:z.boolean().optional(),
+  alignmentTrackable:z.boolean().optional(),mergeTrackable:z.boolean().optional(),
   breakRevision:z.object({kind:z.enum(['tracked_insert','tracked_delete']),text:z.string().max(1027).optional(),
     author:z.string().max(163).optional(),date:z.string().max(30).optional(),label:z.string().max(163),editable:z.boolean()}).optional(),
   alignmentRevision:z.object({kind:z.literal('tracked_format'),text:z.string().max(1027).optional(),
@@ -146,7 +150,8 @@ export type ReferenceEdit = {action:'insert_figure_ref';figureId:string} | {acti
 export type ReferenceOperation = {type:'update_reference';targetId:string;reference:ReferenceEdit};
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'reply_comment';targetId:string;comment:{text:string}} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
-export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete'|'insert_root'|'replace_root';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}};
+export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete'|'insert_root'|'replace_root';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}|
+  {action:'insert_matrix';matrix:MathMatrix}|{action:'edit_matrix_cell';matrixCell:{row:number;column:number;expectedText:string;text:string}}};
 export type ParagraphMoveOperation = {type:'move_bookmark_up';targetId:string} | {type:'move_bookmark_down';targetId:string} |
   {type:'move_hyperlink_up';targetId:string} | {type:'move_hyperlink_down';targetId:string} |
   {type:'move_note_up';targetId:string} | {type:'move_note_down';targetId:string};
@@ -154,6 +159,7 @@ export type RevisionReviewOperation = {type:'accept_revision';targetId:string}|{
 export type TrackTextOperation = {type:'track_run_text';targetId:string;expectedText:string;text:string} |
   {type:'track_run_bold';targetId:string;expectedText:string;bold:boolean} |
   {type:'track_paragraph_break';targetId:string;expectedText:string;text:string} |
+  {type:'track_paragraph_merge';targetId:string} |
   {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ChartKind='pie'|'bar'|'line';
 export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_control_date'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |

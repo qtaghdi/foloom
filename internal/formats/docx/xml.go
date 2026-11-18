@@ -163,6 +163,7 @@ type target struct {
 	pictureVerticalOffsetLimit *int
 
 	trackableParagraphBreak bool
+	trackableParagraphMerge bool
 	pictureCellCaption      bool
 	squareWrap              bool
 	splitNoteParagraph      bool

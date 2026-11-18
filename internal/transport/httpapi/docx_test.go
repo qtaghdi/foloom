@@ -502,7 +502,7 @@ func TestDOCXMCPListsSupportedOperationFamilies(t *testing.T) {
 		if tool.Name != "apply_docx_operations" {
 			continue
 		}
-		for _, term := range []string{"baseRevision", "upperLetter", "NUMPAGES", "resolve_comment", "track_run_text"} {
+		for _, term := range []string{"baseRevision", "upperLetter", "NUMPAGES", "resolve_comment", "track_run_text", "track_paragraph_merge"} {
 			if !strings.Contains(tool.Description, term) {
 				t.Fatalf("DOCX tool description omits %q", term)
 			}
@@ -618,5 +618,53 @@ func TestDOCXMCPTracksAndRejectsParagraphAlignment(t *testing.T) {
 	}
 	if final.Revision != initial.Revision+2 || final.TrackedChanges || final.Blocks[0].Paragraph.Layout != nil {
 		t.Fatal("shared DOCX session did not restore the original alignment")
+	}
+}
+
+func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "matrix.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Matrix prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	apply := func(snapshot docx.Snapshot, id string, math map[string]any) docx.Snapshot {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: map[string]any{
+			"sessionId": snapshot.ID, "baseRevision": snapshot.Revision, "operations": []any{
+				map[string]any{"type": "update_math", "targetId": id, "math": math},
+			},
+		}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP matrix operation: %v %+v", err, result)
+		}
+		next, err := api.docxSnapshot(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	saved := apply(initial, initial.Blocks[0].ID, map[string]any{
+		"action": "insert_matrix", "matrix": [][]string{{"11", "22"}, {"33", "44"}},
+	})
+	matrix := saved.Blocks[0].Paragraph.Runs[1]
+	if matrix.Object == nil || !matrix.Object.Editable || matrix.Object.Matrix == nil {
+		t.Fatal("inserted matrix is not addressable")
+	}
+	updated := apply(saved, matrix.ID, map[string]any{
+		"action": "edit_matrix_cell", "matrixCell": map[string]any{
+			"row": 1, "column": 2, "expectedText": "22", "text": "25",
+		},
+	})
+	got := updated.Blocks[0].Paragraph.Runs[1].Object
+	if got == nil || got.Matrix == nil || *got.Matrix != [2][2]string{{"11", "25"}, {"33", "44"}} ||
+		updated.Revision != initial.Revision+2 {
+		t.Fatal("MCP commit did not update just the addressed matrix cell", got)
 	}
 }

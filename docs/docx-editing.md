@@ -1254,7 +1254,12 @@ HTTP·MCP는 현재 앞 문단 ID로 `accept_revision` 또는 `reject_revision`�
 포함된 나눔은 읽기 전용으로 표시합니다.
 [Word의 삽입된 문단 표시](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/1d66ba8a-1eeb-4cff-ab8a-eaa79113cc89)를 따릅니다.
 
-가져온 `문단 나눔 삭제`를 수락하면 양쪽 텍스트를 이어 붙이고 뒤쪽
+앞 문단을 선택하고 검토의 `다음 문단과 병합 기록`을 적용하면 두 문단 사이의
+경계 삭제가 Word 변경 추적으로 저장됩니다. 검토 전에는 두 문단을 그대로
+표시합니다. HTTP·MCP는 지원하는 앞 문단 ID와 `track_paragraph_merge`를
+단독으로 보냅니다. 일반 Delete와 Backspace는 기존 편집 동작을 사용합니다.
+
+`문단 나눔 삭제`를 수락하면 양쪽 텍스트를 이어 붙이고 뒤쪽
 문단의 ID와 정렬을 사용합니다. 거절하면 나눔과 각 문단의 속성을 유지합니다.
 양쪽 글자 서식은 두 경우 모두 유지됩니다. 목록이나 다른 복합 속성,
 참조 범위와 쪽·구역 경계가 걸린 경우 읽기 전용으로 표시합니다.
@@ -1373,6 +1378,17 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 유지합니다. HTTP·MCP는 `update_math`의 `math: { action: "insert_root", expression }` 또는
 `math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
 [Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
+
+수식의 `2×2 행렬 삽입`에서 네 셀을 채우면 일반 Word 인라인 행렬을
+삽입합니다. `행렬 셀 편집`에서 기존 행렬과 행·열을 고르면 해당 셀만
+바꿉니다. 각 셀은 UTF-8 256바이트까지 입력할 수 있습니다.
+HTTP·MCP에서는 `update_math`와
+`math: { action: "insert_matrix", matrix: [["a", "b"], ["c", "d"]] }`를
+사용합니다. 기존 행렬의 run ID와
+`math: { action: "edit_matrix_cell", matrixCell: { row, column, expectedText, text } }`를
+보내면 셀을 편집합니다. 행과 열은 1부터 셉니다. 크기나 속성이 다른
+행렬과 중첩 수식은 원본 구조를 보존합니다.
+[Word OMML 행렬](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.matrix)을 사용합니다.
 
 내부 데이터가 있는 SmartArt는 실제 도형 문구를 원본 데이터 순서에 따라 읽기
 전용 목록으로 표시합니다. 자리표시자와 화면에 그리기 위한 중복 항목은 제외합니다.
