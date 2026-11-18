@@ -22,12 +22,13 @@ type ObjectInfo struct {
 	DeleteEditable bool   `json:"deleteEditable,omitempty"`
 	Date           string `json:"date,omitempty"`
 	noteID         string
-	Kind           string        `json:"kind"`
-	Author         string        `json:"author,omitempty"`
-	Label          string        `json:"label,omitempty"`
-	Text           string        `json:"text,omitempty"`
-	Editable       bool          `json:"editable"`
-	Fraction       *MathFraction `json:"fraction,omitempty"`
+	Kind           string           `json:"kind"`
+	Author         string           `json:"author,omitempty"`
+	Label          string           `json:"label,omitempty"`
+	Text           string           `json:"text,omitempty"`
+	Editable       bool             `json:"editable"`
+	Fraction       *MathFraction    `json:"fraction,omitempty"`
+	SmartArt       *SmartArtPreview `json:"smartArt,omitempty"`
 }
 
 func editableMath(math *node) bool {
@@ -136,7 +137,7 @@ func objectPreview(n *node) *ObjectInfo {
 	switch attribute(graphic, "", "uri") {
 	case drawingNS + "/chart", "http://schemas.openxmlformats.org/drawingml/2006/chart":
 		return &ObjectInfo{Kind: "chart"}
-	case drawingNS + "/diagram", "http://schemas.openxmlformats.org/drawingml/2006/diagram":
+	case drawingNS + "/diagram", diagramNS:
 		return &ObjectInfo{Kind: "smartart"}
 	case "http://schemas.microsoft.com/office/word/2010/wordprocessingShape", "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup":
 		if drawing.has("txbxContent") {

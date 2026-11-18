@@ -138,6 +138,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	s.addPicturePreviews(blocks, targetsByID)
+	s.pkg.projectSmartArt(blocks, targetsByID)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
 			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID)

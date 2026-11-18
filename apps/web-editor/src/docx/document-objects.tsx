@@ -19,6 +19,14 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
       </span>
     }</Show>
     <Show when={props.object.text}>{text=><span classList={{'font-serif':props.object.kind==='math'}}>{text()}</span>}</Show>
+    <Show when={props.object.smartArt}>{diagram=>
+      <>
+        <span role="list" aria-label="SmartArt 항목" class="block">
+          <For each={diagram().items}>{item=><span role="listitem" class="block">{item}</span>}</For>
+        </span>
+        <Show when={diagram().truncated}><span class="block text-xs text-slate-600">일부 항목이나 문구만 표시됩니다.</span></Show>
+      </>
+    }</Show>
   </span>;
 }
 
