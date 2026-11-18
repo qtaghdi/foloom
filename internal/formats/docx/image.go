@@ -99,7 +99,7 @@ func (p *documentPackage) imageInsertion(data []byte, target target, edit ImageE
 	extension := "." + kind
 	filename := p.availablePart(changes, "word/media/foloom-image", extension)
 	id := strconv.FormatUint(uint64(drawingID), 10)
-	rel, err := p.addRelatedPart(changes, filename, "image", "image/"+kind, "rIdFoloomImage"+id)
+	rel, err := p.addRelatedPart(changes, filename, officeRelNS+"/image", "image/"+kind, "rIdFoloomImage"+id)
 	if err != nil {
 		return replacement{}, err
 	}
@@ -194,7 +194,7 @@ func (p *documentPackage) pictureUpdateReplacement(t target, edit ImageEdit, cha
 		}
 		filename := p.availablePart(changes, "word/media/foloom-image", "."+kind)
 		// Existing drawings can share this relationship, so replace only this blip.
-		relation, err := p.addRelatedPart(changes, filename, "image", "image/"+kind, "rIdFoloomReplacement")
+		relation, err := p.addRelatedPart(changes, filename, officeRelNS+"/image", "image/"+kind, "rIdFoloomReplacement")
 		if err != nil {
 			return replacement{}, err
 		}
