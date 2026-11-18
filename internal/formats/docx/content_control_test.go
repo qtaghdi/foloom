@@ -92,3 +92,98 @@ func TestPlainContentControlRetainsUnaffectedRunFormatting(t *testing.T) {
 		t.Fatal("undo changed original package bytes")
 	}
 }
+
+func TestPlainContentControlInsertionRetainsDocumentAndCanBeEdited(t *testing.T) {
+	ctx := context.Background()
+	originalControl := `<w:sdt><w:sdtPr><w:id w:val="1"/><w:text/></w:sdtPr><w:sdtContent><w:r><w:t>Existing</w:t></w:r></w:sdtContent></w:sdt>`
+	originalRun := `<w:r><w:rPr><w:b/></w:rPr><w:t>Prefix</w:t></w:r>`
+	_, filename := withDocument(t, bodyXML(`<w:p>`+originalRun+`</w:p><w:p/>`+
+		`<w:p>`+originalControl+`</w:p>`))
+	rewritePackage(t, filename, func(_ string, data []byte) []byte { return data }, map[string][]byte{
+		"word/header1.xml": []byte(`<h:hdr xmlns:h="` + wordNS + `"><h:p><h:sdt><h:sdtPr><h:id h:val="2"/><h:text/></h:sdtPr><h:sdtContent><h:r><h:t>Header</h:t></h:r></h:sdtContent></h:sdt></h:p></h:hdr>`),
+	})
+	original := fileBytes(t, filename)
+	s, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := mustSnapshot(t, s)
+	value := " 새 콘텐츠 & <값>🙂 "
+	next, err := s.Apply(ctx, ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "insert_control_text", TargetID: v.Blocks[0].ID, Text: value},
+		{Type: "insert_control_text", TargetID: v.Blocks[1].ID, Text: "Second control"},
+	}}, "ai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Revision != v.Revision+1 || next.Sequence != v.Sequence+1 ||
+		len(s.events) != 1 || s.events[0].TextOnly {
+		t.Fatal("insertion did not commit as one structural change")
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := mustSnapshot(t, reopened)
+	run := saved.Blocks[0].Paragraph.Runs[1]
+	if run.Object == nil || !run.Object.Editable || run.Object.Text != value ||
+		!strings.Contains(string(reopened.pkg.document), originalControl) ||
+		!strings.Contains(string(reopened.pkg.document), originalRun) ||
+		!strings.Contains(string(reopened.pkg.document), `<dws:id dws:val="3"/>`) ||
+		!strings.Contains(string(reopened.pkg.document), `<dws:id dws:val="4"/>`) {
+		t.Fatal("insertion failed to preserve source content, unique IDs or initial text")
+	}
+	before, err := loadPackage(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, item := range before.parts {
+		if item.header.Name != "word/document.xml" && !bytes.Equal(item.data, reopened.pkg.parts[i].data) {
+			t.Fatalf("insertion changed unrelated part %s", item.header.Name)
+		}
+	}
+	updated, err := reopened.Apply(ctx, ApplyInput{SessionID: saved.ID, BaseRevision: saved.Revision, Operations: []Operation{
+		{Type: "update_control_text", TargetID: run.ID, ExpectedText: value, Text: "Updated control"},
+	}}, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Blocks[0].Paragraph.Runs[1].Object.Text != "Updated control" {
+		t.Fatal("inserted control could not be edited")
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore original package bytes")
+	}
+}
+
+func TestPlainContentControlInsertionRejectsInvalidBatches(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		block    int
+		text     string
+		expected string
+	}{
+		{name: "tracked paragraph", block: 2, text: "invalid target"},
+		{name: "blank", block: 1, text: " "},
+		{name: "multiline", block: 1, text: "a\nb"},
+		{name: "too long", block: 1, text: strings.Repeat("한", 342)},
+		{name: "unexpected match text", block: 1, text: "valid", expected: "stale"},
+		{name: "duplicate target", block: 0, text: "valid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, filename := withDocument(t, bodyXML(`<w:p/><w:p/>`+
+				`<w:p><w:ins w:id="1"><w:r><w:t>Tracked</w:t></w:r></w:ins></w:p>`))
+			original := fileBytes(t, filename)
+			v := mustSnapshot(t, s)
+			_, err := s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+				{Type: "insert_control_text", TargetID: v.Blocks[0].ID, Text: "Control"},
+				{Type: "insert_control_text", TargetID: v.Blocks[tc.block].ID, Text: tc.text, ExpectedText: tc.expected},
+			}}, "human")
+			if err == nil || mustSnapshot(t, s).Revision != v.Revision || !bytes.Equal(original, fileBytes(t, filename)) {
+				t.Fatal("invalid content control insertion modified the document")
+			}
+		})
+	}
+}
