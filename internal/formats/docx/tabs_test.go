@@ -159,3 +159,81 @@ func TestDefaultTabStopFromRelatedSettingsSurvivesTextSave(t *testing.T) {
 		t.Fatal("text save changed the default tab interval or its source")
 	}
 }
+
+func TestUpdateDefaultTabStop(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		settings string
+	}{
+		{name: "create"},
+		{name: "insert in order", settings: `<w:zoom w:percent="100"/><!-- keep --><w:autoHyphenation/>`},
+		{name: "replace", settings: `<w:defaultTabStop w:val="360"/><!-- keep --><w:compat/>`},
+		{name: "duplicate", settings: `<w:defaultTabStop w:val="360"/><w:defaultTabStop w:val="720"/>`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			s, filename := withDocument(t, bodyXML(`<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="1080"/></w:tabs></w:pPr><w:r><w:tab/><w:t>next</w:t></w:r></w:p>`))
+			if tc.settings != "" {
+				rewritePackage(t, filename, func(_ string, data []byte) []byte { return data }, map[string][]byte{
+					documentRelationships: []byte(`<Relationships xmlns="` + packageRelNS + `"><Relationship Id="custom" Type="` + officeRelNS + `/settings" Target="options.xml"/></Relationships>`),
+					"word/options.xml":    []byte(`<w:settings xmlns:w="` + wordNS + `">` + tc.settings + `</w:settings>`),
+				})
+				var err error
+				s, err = Open(ctx, filename)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			original, document := fileBytes(t, filename), bytes.Clone(s.pkg.document)
+			before := mustSnapshot(t, s)
+			input := ApplyInput{SessionID: before.ID, BaseRevision: before.Revision}
+			invalid, desired := 0, 480
+			for _, ops := range [][]Operation{
+				{{Type: "update_default_tab_stop", DefaultTabStop: &invalid}},
+				{{Type: "update_default_tab_stop", DefaultTabStop: &desired, TargetID: "unexpected"}},
+				{{Type: "update_default_tab_stop", DefaultTabStop: &desired}, {Type: "update_default_tab_stop", DefaultTabStop: &desired}},
+			} {
+				input.Operations = ops
+				if _, err := s.Apply(ctx, input, "human"); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+					t.Fatal("invalid settings operation changed the package")
+				}
+			}
+			input.Operations = []Operation{{Type: "update_default_tab_stop", DefaultTabStop: &desired}}
+			after, err := s.Apply(ctx, input, "human")
+			if tc.name == "duplicate" {
+				if err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+					t.Fatal("duplicate setting must reject the edit")
+				}
+				return
+			}
+			if err != nil || after.DefaultTabStop == nil || *after.DefaultTabStop != desired || !bytes.Equal(document, s.pkg.document) {
+				t.Fatalf("interval update or body preservation failed: %v", err)
+			}
+			reopened, err := Open(ctx, filename)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value := mustSnapshot(t, reopened).DefaultTabStop; value == nil || *value != desired {
+				t.Fatalf("interval was not saved: %v", value)
+			}
+			if tc.settings != "" {
+				raw := string(reopened.pkg.partData("word/options.xml", nil))
+				mark, setting := strings.Index(raw, "<!-- keep -->"), strings.Index(raw, ":defaultTabStop ")
+				switch tc.name {
+				case "insert in order":
+					if mark < 0 || setting <= mark || setting >= strings.Index(raw, "<w:autoHyphenation/>") {
+						t.Fatalf("settings were not preserved in schema order: %s", raw)
+					}
+				case "replace":
+					if setting < 0 || mark <= setting || !strings.Contains(raw, "<!-- keep --><w:compat/>") {
+						t.Fatalf("other settings were not preserved: %s", raw)
+					}
+				}
+			}
+			historyRestore(t, reopened, "undo")
+			if !bytes.Equal(original, fileBytes(t, filename)) {
+				t.Fatal("undo did not restore the exact package")
+			}
+		})
+	}
+}

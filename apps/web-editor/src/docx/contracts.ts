@@ -159,6 +159,7 @@ export type RectangleOperation = {type:'insert_rectangle';targetId:string} | {ty
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};
 export type SplitNoteParagraphOperation = {type:'split_note_paragraph';targetId:string;expectedText:string;text:string};
-export type Operation = CompoundListRestartOperation | SplitNoteParagraphOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
+export type DefaultTabStopOperation = { type: 'update_default_tab_stop'; defaultTabStop: number };
+export type Operation = DefaultTabStopOperation | CompoundListRestartOperation | SplitNoteParagraphOperation | TrackTextOperation | ObjectTextOperation | RevisionReviewOperation | ParagraphMoveOperation | TextOperation | ParagraphOperation | StyleOperation | SectionOperation | { type: 'update_header_parity'; evenAndOddHeaders: boolean } | BoundaryOperation | ImageOperation | ReferenceOperation | CommentOperation | MathOperation | ListOperation | TableOperation | RectangleOperation;
 export type DraftFocus = { runId: string; start: number; end: number; selection?: import('./selection').TextSelection };
 export type StructureAction = 'split' | 'mergeBackward' | 'mergeForward' | 'moveUp' | 'moveDown';
