@@ -471,3 +471,26 @@ func TestDOCXPictureRequiresSessionAndCurrentRevision(t *testing.T) {
 		t.Fatalf("stale picture: %d", response.Code)
 	}
 }
+
+func TestDOCXMCPListsSupportedOperationFamilies(t *testing.T) {
+	ctx := context.Background()
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	client := docxClient(t, api)
+	result, err := client.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range result.Tools {
+		if tool.Name != "apply_docx_operations" {
+			continue
+		}
+		for _, term := range []string{"baseRevision", "upperLetter", "NUMPAGES", "resolve_comment", "track_run_text"} {
+			if !strings.Contains(tool.Description, term) {
+				t.Fatalf("DOCX tool description omits %q", term)
+			}
+		}
+		return
+	}
+	t.Fatal("DOCX operations tool is missing from the MCP list")
+}
