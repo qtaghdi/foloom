@@ -33,28 +33,50 @@ export function validateSection(section:SectionInfo):string {
 }
 
 
-// Only explicit page groups and ordinary next-page section breaks contribute
-// to a continued page number. The browser does not lay out implicit pages.
-export function previewHeaderVariants(
+// Only explicit page groups contribute to this model. A section that starts on
+// an odd or even page can require one blank page before its first body page.
+export type PreviewPageLayout = {
+ section?:SectionInfo;
+ variant:HeaderFooterInfo['variant'];
+ blankBefore:boolean;
+ number:number;
+};
+
+export function previewPageLayout(
  pages: readonly (SectionInfo|undefined)[],
  evenAndOddHeaders?: boolean,
-): HeaderFooterInfo['variant'][] {
+): PreviewPageLayout[] {
  let previous: string|undefined;
  let ordinal=0;
  let nextNumber: number|undefined=1;
+ let continuedWithoutRestart=true;
+ let number=0;
  return pages.map((section,index)=>{
   const first=index===0||section?.id!==previous;
+  let blankBefore=false;
   if(first){
    ordinal=0;
-   if(section?.pageNumberStart!==undefined)nextNumber=section.pageNumberStart;
-   else if(index>0&&section?.breakType!=='nextPage')nextNumber=undefined;
+   const breakType=section?.breakType;
+   if(section?.pageNumberStart!==undefined){
+    continuedWithoutRestart=false;
+    nextNumber=section.pageNumberStart;
+   }else if(index>0&&breakType!=='nextPage'){
+    if(continuedWithoutRestart&&nextNumber!==undefined&&(breakType==='oddPage'||breakType==='evenPage')){
+     const parity=breakType==='oddPage'?1:0;
+     blankBefore=nextNumber%2!==parity;
+     if(blankBefore)nextNumber++;
+    }else{
+     nextNumber=undefined;
+    }
+   }
   }
   previous=section?.id;
   ordinal++;
   const pageNumber=nextNumber??ordinal;
   if(nextNumber!==undefined)nextNumber++;
-  if(first&&section?.firstPage)return 'first';
-  return evenAndOddHeaders&&pageNumber%2===0?'even':'default';
+  const variant=first&&section?.firstPage ? 'first' : evenAndOddHeaders&&pageNumber%2===0 ? 'even' : 'default';
+  number+=blankBefore?2:1;
+  return {section,variant,blankBefore,number};
  });
 }
 
