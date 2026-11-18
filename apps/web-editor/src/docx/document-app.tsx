@@ -19,7 +19,7 @@ import { createDocumentView } from './view';
 import { StatusPanel } from '../ui/status-panel';
 import type { ActivityEntry } from '../ui/activity';
 import { ActivityPanel } from '../ui/activity-panel';
-import { DocumentContent, previewPages } from './document-content';
+import { DocumentContent, layoutPreviewPages, previewPages } from './document-content';
 import { DocumentProofingToolbar } from './document-proofing-toolbar';
 import { DocumentToolbar } from './document-toolbar';
 import type { PasteMode } from './clipboard';
@@ -204,6 +204,7 @@ export function DocumentApp() {
   };
   const previewBlocks = createMemo(() => state().snapshot?.blocks);
   const pages = createMemo(() => previewPages(previewBlocks() ?? []));
+  const pageLayout = createMemo(() => layoutPreviewPages(pages(),state().snapshot?.sections,state().snapshot?.evenAndOddHeaders));
   const locatePage = (number: number) => {
     const page = document.querySelector<HTMLElement>(`#document-content [data-docx-page="${number}"]`);
     if (!page) return;
@@ -386,7 +387,7 @@ export function DocumentApp() {
     })} hint={t('searchBodyTextAndTablesIncludingUnsavedInput')}/><DocumentComments snapshot={state().snapshot} target={referenceParagraph()} range={commentRange()} pending={standalonePending()}
       disabled={state().saving||state().loading||boundaryPending()||imagePending()||Boolean(state().error)||Boolean(state().composing)}
       onApply={operation=>{const changed=controller.editStandalone(operation);if(changed)setDraftVersion(v=>v+1);return changed;}}
-      onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading} pageCount={pages().length} onLocatePage={locatePage}/></>}
+      onLocate={locateHeading}/><DocumentOutline snapshot={state().snapshot} styles={stylesCatalog()} activeRun={formattingSelection()?.focus.runId??focusedRun()?.id} onLocate={locateHeading} pageCount={pageLayout().at(-1)?.number??1} onLocatePage={locatePage}/></>}
     />
     <section aria-label="편집 도구 모음" tabindex={0}
       class="min-h-0 max-h-[45dvh] shrink overflow-y-auto overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-700">
@@ -468,7 +469,7 @@ export function DocumentApp() {
     <main class="editor-primary min-h-0 min-w-0 flex-1 space-y-4 overflow-auto bg-[#e9ebed] px-3 py-4 sm:px-8 sm:py-8">
       <div class="docx-preview mx-auto" style={paperStyle()}>
       <article id="document-content" aria-label={t('docxBodyAndTableEditor')} aria-busy={!state().snapshot} class="space-y-5 text-[11pt] leading-[1.35] text-stone-900" tabindex={-1}>
-        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending() || imagePending() || standalonePending() || tablePending()} changes={changes()}
+        <Show when={state().snapshot}>{(snapshot) => <DocumentContent pages={pages()} layout={pageLayout()} onHistory={restoreHistory} pasteMode={pasteMode()} onPasteRich={(selection, paragraphs) => { const changed=controller.pasteRich(selection,paragraphs);if(changed)setDraftVersion(v=>v+1);return changed; }} richSelection={selection=>controller.richSelection(selection)} snapshot={snapshot()} saving={state().saving || state().loading || boundaryPending() || imagePending() || standalonePending() || tablePending()} changes={changes()}
           selected={resolvedEntry(selectedChange())}
           onListLevel={(selection,delta)=>{const changed=controller.changeListLevel(selection,delta);if(changed)setDraftVersion(v=>v+1);return changed;}}
           onRange={(selection, text, inline) => { const changed = controller.replaceSelection(selection, text, inline); if (changed) setDraftVersion(v => v + 1); return changed; }}

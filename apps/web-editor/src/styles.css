@@ -296,6 +296,7 @@
     print-color-adjust: exact;
   }
   [data-docx-app] .docx-paper + .docx-paper { break-before: page; }
+  [data-docx-app] .docx-paper[data-docx-blank-page] { min-block-size: 1px !important; }
   [data-docx-app] .docx-paper > * { content-visibility: visible; }
   [data-docx-app] .docx-page-edge { min-block-size: 0; }
   [data-docx-app] .docx-table { overflow: visible; }
