@@ -3,6 +3,9 @@ package docx
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 )
@@ -68,5 +71,44 @@ func TestTextBoxProtectsImportWhenCompatibilityStoriesDiffer(t *testing.T) {
 		{Type: "update_textbox_text", TargetID: box.ID, ExpectedText: "modern", Text: "rewritten"},
 	}}, "human"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
 		t.Fatal("mismatched text box stories were overwritten")
+	}
+}
+
+func TestTextBoxInsertionSharesDrawingIDsWithPictures(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>picture</w:t></w:r></w:p><w:p/>`))
+	before := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	var pngBytes bytes.Buffer
+	if err := png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 4, 2))); err != nil {
+		t.Fatal(err)
+	}
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{
+		{Type: "update_image", TargetID: v.Blocks[0].ID,
+			Image: &ImageEdit{Action: "insert", Base64: base64.StdEncoding.EncodeToString(pngBytes.Bytes())}},
+		{Type: "insert_textbox", TargetID: v.Blocks[1].ID, Text: " "},
+	}}
+	if _, err := s.Apply(ctx, input, "human"); err == nil || !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("empty text box allowed part of a mixed batch to commit")
+	}
+	input.Operations[1].Text = "상자 안 & text"
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := mustSnapshot(t, reopened)
+	paragraph := saved.Blocks[1].Paragraph
+	if len(paragraph.Runs) != 1 || paragraph.Runs[0].Object == nil || !paragraph.Runs[0].Object.Editable ||
+		paragraph.Runs[0].Object.Text != "상자 안 & text" ||
+		!strings.Contains(string(reopened.pkg.document), `<wp:docPr id="1" name="Picture 1"`) ||
+		!strings.Contains(string(reopened.pkg.document), `<wp:docPr id="2" name="Text Box 2"`) {
+		t.Fatal("native inline text box and image IDs did not survive reopen")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(before, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore source package")
 	}
 }

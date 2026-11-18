@@ -920,8 +920,10 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
 
-삽입의 `텍스트 상자 편집`에서 일반 본문의 독립 텍스트 상자에 있는 한 문단의
-평문을 수정합니다. HTTP·MCP는 `update_textbox_text`에 상자 run ID, 현재
+삽입의 `텍스트 상자 편집`에서 새 내용을 입력해 현재 본문 문단의 끝에
+기본 인라인 텍스트 상자를 넣습니다. HTTP·MCP는 편집 가능한 본문 문단 ID와
+일반 텍스트를 `insert_textbox`에 보냅니다. 저장한 상자를 같은 도구에서 선택해
+평문을 수정할 수 있습니다. HTTP·MCP는 `update_textbox_text`에 상자 run ID, 현재
 `expectedText`와 새 `text`를 보냅니다. 위치·크기·기존 서식을 유지하며 수정을
 적용할 때 같은 내용의 DrawingML과 VML 호환 표현을 함께 편집합니다.
 상자가 연결돼 있거나 호환 표현의 텍스트가 서로 다르면 읽기 전용으로 표시합니다.
