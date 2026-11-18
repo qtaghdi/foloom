@@ -19,6 +19,7 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
+	UnwrapEditable          bool     `json:"unwrapEditable,omitempty"`
 	MoveChartUp             bool     `json:"moveChartUp,omitempty"`
 	MoveChartDown           bool     `json:"moveChartDown,omitempty"`
 	ChartValues             []string `json:"chartValues,omitempty"`

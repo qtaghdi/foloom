@@ -169,6 +169,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	targets := inspectSections(root, s.id, s.revision)
 	headers := s.pkg.headerFooterCatalog(targets)
 	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
+	projectControlUnwrap(root, blocks, targetsByID, settings, settingsErr)
 	fixedLeft := settingsErr == nil && fixedLeftGutters(settings)
 	var parity *bool
 	var defaultTabStop *int
@@ -482,6 +483,20 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 				return nil, err
 			}
 			edit, err := splitNoteParagraph(s.pkg.document, noteTargets[op.TargetID], op, usedParagraphIDs(root))
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, edit)
+			continue
+		}
+		if op.Type == "unwrap_control" {
+			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
+				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
+				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" ||
+				op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("DOCX content control removal requires one operation with the control run ID")
+			}
+			edit, err := s.pkg.unwrapControl(targets[op.TargetID])
 			if err != nil {
 				return nil, err
 			}

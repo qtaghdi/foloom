@@ -252,9 +252,13 @@ func paragraphReplacement(data []byte, targets map[string]target, op Operation, 
 // the original in-scope bindings with it, including the default namespace.
 // New paragraph identities carry only namespace declarations, never source IDs.
 func scopedOpening(n *node, data []byte, fresh bool) (string, string) {
+	return scopedOpeningWithin(n, nil, data, fresh)
+}
+
+func scopedOpeningWithin(n, parent *node, data []byte, fresh bool) (string, string) {
 	scope := map[string]string{}
 	chain := []*node{}
-	for current := n; current != nil; current = current.parent {
+	for current := n; current != nil && current != parent; current = current.parent {
 		chain = append(chain, current)
 	}
 	for i := len(chain) - 1; i >= 0; i-- {
