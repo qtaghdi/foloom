@@ -804,6 +804,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if imageCount >= 4 {
 				return nil, fmt.Errorf("DOCX batch image limit exceeded")
 			}
+			if op.Image.Action == "set_placement" && strings.HasPrefix(op.Image.Placement, "square_") && len(input.Operations) != 1 {
+				return nil, fmt.Errorf("DOCX square picture placement must stand alone")
+			}
 			if op.Image.Action == "align" || op.Image.Action == "set_placement" {
 				if layoutTargets == nil {
 					_, layoutTargets, _, err = s.pkg.inspectWithNoteParagraphs(root, s.id, s.revision)

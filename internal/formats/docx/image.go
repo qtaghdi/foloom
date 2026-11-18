@@ -24,7 +24,7 @@ const (
 )
 
 type ImageEdit struct {
-	Placement string     `json:"placement,omitempty" jsonschema:"inline, floating_left, floating_center, or floating_right"`
+	Placement string     `json:"placement,omitempty" jsonschema:"inline, floating_left, floating_center, floating_right, square_left, or square_right"`
 	Align     string     `json:"align,omitempty" jsonschema:"start, center, or end for a dedicated inline picture paragraph"`
 	Rotation  *int       `json:"rotation,omitempty" jsonschema:"Degrees clockwise. Supported values are 0, 90, 180, and 270"`
 	Crop      *ImageCrop `json:"crop,omitempty"`
@@ -357,6 +357,7 @@ func inlinePicture(id, relationship, alt string, width, height int) string {
 }
 
 type PictureInfo struct {
+	SquareWrap       bool       `json:"squareWrap,omitempty"`
 	CaptionReference bool       `json:"captionReference,omitempty"`
 	Placement        string     `json:"placement,omitempty"`
 	Align            string     `json:"align,omitempty"`
@@ -480,6 +481,7 @@ func (s *Session) addPicturePreviews(blocks []Block, targets map[string]target) 
 			if asset.data != nil {
 				info.Preview = true
 				info.Placement = source.picturePlacement
+				info.SquareWrap = source.squareWrap
 				info.Align = source.pictureAlign
 				s.pictureAssets[run.ID] = asset
 				if inline == nil {

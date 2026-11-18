@@ -29,3 +29,14 @@ it('restores a point in the same paragraph after history changes its position',(
   expect(restoreAnchoredPoint(original,{...next,blocks:next.blocks.slice(1)},{runId:'b-r',offset:3})).toBeNull();
   expect(restoreAnchoredPoint(original,next,{runId:'plain-r',offset:0})).toBeUndefined();
 });
+
+it('maps a stable anchor to editable text even if paragraph structure is protected', () => {
+  const block = original.blocks[1]!;
+  if (block.type !== 'paragraph') throw new Error('expected a paragraph fixture');
+  const after: Snapshot = {...original, blocks: [
+    {...block, paragraph:{...block.paragraph, structureEditable:false, runs:[
+      {...block.paragraph.runs[0]!, id:'b2-r'},
+    ]}},
+  ]};
+  expect(restoreAnchoredPoint(original, after, {runId:'b-r', offset:2})).toEqual({runId:'b2-r', offset:2});
+});

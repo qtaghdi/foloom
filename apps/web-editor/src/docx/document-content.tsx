@@ -199,6 +199,7 @@ function paragraphAlignment(paragraph:Paragraph) {
 }
 
 function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
+  const wrapSide=()=>props.picture.placement==='square_left'?'left':props.picture.placement==='square_right'?'right':undefined;
   const rotation=()=>props.picture.rotation??0;
   const quarterTurn=()=>rotation()===90||rotation()===270;
   const width=()=>quarterTurn()?props.picture.heightEmu:props.picture.widthEmu;
@@ -207,7 +208,8 @@ function PicturePreview(props:{picture:NonNullable<Run['picture']>;id:string}) {
   const wide=()=>100000-(crop()?.left??0)-(crop()?.right??0);
   const high=()=>100000-(crop()?.top??0)-(crop()?.bottom??0);
   return <span data-docx-picture contentEditable={false} class="relative inline-block max-w-full align-middle"
-    style={{width:`${Math.max(1,Math.round(width()/9525))}px`,'aspect-ratio':`${width()}/${height()}`}}>
+    style={{width:`${Math.max(1,Math.round(width()/9525))}px`,'aspect-ratio':`${width()}/${height()}`,float:wrapSide(),
+      'max-width':wrapSide()?'50%':undefined}}>
     <span data-docx-crop={crop()?'':undefined} class="absolute left-1/2 top-1/2 overflow-hidden"
       style={{width:quarterTurn()?`${100*height()/width()}%`:'100%',height:quarterTurn()?`${100*width()/height()}%`:'100%',
         transform:`translate(-50%, -50%) rotate(${rotation()}deg)`}}>
