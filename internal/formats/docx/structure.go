@@ -285,6 +285,14 @@ func scopedOpening(n *node, data []byte, fresh bool) (string, string) {
 	return opening + ">", "</" + name + ">"
 }
 
+func appendParagraphContent(data []byte, paragraph *node, content string) replacement {
+	if strings.HasSuffix(string(data[paragraph.start:paragraph.inner]), "/>") {
+		open, close := scopedOpening(paragraph, data, false)
+		return replacement{paragraph.start, paragraph.end, []byte(open + content + close)}
+	}
+	return replacement{paragraph.endStart, paragraph.endStart, []byte(content)}
+}
+
 // LF represents a Word line break inside a run. Paragraph boundaries are
 // represented by ParagraphContent, never by a textarea's visual wrapping.
 func validInlineText(text string) bool {

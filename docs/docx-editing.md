@@ -1073,7 +1073,7 @@ HTTP·MCP는 기존 수식 run ID에 `math: { action: "replace_fraction", fracti
 | 기본 막대·선·원형 차트 | 지원 평문 제목, 인라인 프레임 크기 | 제목 수정·크기 변경 | Word 차트 |
 | 그 밖의 차트 | 유형 | 미지원 | Word 또는 원래 연결 편집기 |
 | SmartArt | 내부 데이터에 있는 도형 문구 | 미지원 | Word |
-| 콘텐츠 컨트롤 | 유형과 인라인 평문 | 단순 평문 수정 | Word |
+| 콘텐츠 컨트롤 | 유형과 인라인 평문 | 일반 본문에 평문 컨트롤 삽입 및 평문 수정 | Word |
 | 내장 개체·OLE | 유형 | 미지원 | 파일을 내려받아 신뢰할 수 있는 편집기에서 열기 |
 
 삽입의 `차트 편집`에서 차트를 고르고 평문 제목을 입력합니다.
@@ -1123,7 +1123,10 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 상자가 연결돼 있거나 호환 표현의 텍스트가 서로 다르면 읽기 전용으로 표시합니다.
 [Word 텍스트 상자 구조](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/9ef316cc-3b39-4765-89ac-f8524fab383b)를 사용합니다.
 
-삽입의 `콘텐츠 컨트롤 편집`에서 일반 본문 평문 컨트롤을 골라 텍스트를
+삽입의 `콘텐츠 컨트롤 편집`에서 새 내용을 입력해 편집 가능한 일반 본문 문단
+끝에 평문 콘텐츠 컨트롤을 넣습니다. HTTP·MCP는 `insert_control_text`에
+현재 문단 ID `targetId`와 비어 있지 않은 한 줄의 `text`를 받습니다.
+UTF-8 1 KiB까지 지원합니다. 저장한 개체를 같은 도구에서 골라 텍스트를
 바꿉니다. HTTP·MCP는 `update_control_text`에 컨트롤 run ID, 현재 문자열
 `expectedText`와 새 `text`를 보냅니다. 컨트롤 ID와 원본 속성·서식은 유지합니다.
 여러 텍스트 run이 있으면 공통된 앞뒤 문자열은 기존 서식 구간에 남고, 새로 입력한 부분은
