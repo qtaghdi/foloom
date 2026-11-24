@@ -285,8 +285,10 @@ and expected outputs.
   linked-issue section.
 - Keep the issue and pull request current when scope, risks, verification, or
   follow-up work changes. Create another issue for unrelated work.
-- Do not merge a pull request unless the repository owner explicitly requests
-  the merge. Passing checks and approval are not implicit merge authorization.
+- The repository owner has delegated merge decisions for `develop` and `main`
+  to the agent. Merge verified, in-scope pull requests without asking again.
+  Keep `main` integration and release verification separate from feature work.
+  Do not bypass protections or merge a change with unresolved material failures.
 - Prefer local verification to paid hosted CI. Record the exact commit, toolchain,
   commands, outcomes, and any unavailable checks in the pull request. Preserve
   existing required checks and never imply that an unavailable check passed.
