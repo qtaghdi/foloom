@@ -427,6 +427,15 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 					run.Object.RectangleResizeEditable = rectangleForRun(r).canResize(root.source)
 					targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "inline_rectangle"}
 				}
+				if run.Object != nil && run.Object.Line != nil && allowed && !protected[r] && p.parent == body &&
+					countChild(r, "drawing") == 1 && (len(r.children) == 1 || len(r.children) == 2 && r.child("rPr") != nil) &&
+					!strings.Contains(string(root.source[r.start:r.end]), "<!--") {
+					_, outer, inner := inlineLineSizeNodes(r)
+					if canResizeShape(root.source, outer, inner) {
+						run.Object.Editable = true
+						targets[run.ID] = target{node: r, run: r, paragraph: p, kind: "inline_line"}
+					}
+				}
 				if stories := textBoxStories(r); len(stories) != 0 {
 					run.Object = &ObjectInfo{Kind: "textbox", Text: reviewText(textContent(stories[0]), 1024)}
 					if allowed && !protected[r] && p.parent == body && !boxesLinked {

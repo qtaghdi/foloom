@@ -75,6 +75,10 @@ export function DocumentShapeToolbar(props:{
   const rectangles=createMemo(()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ?block.paragraph.runs.filter(run=>run.object?.editable&&run.object.rectangle):[]).slice(0,200)??[]);
   const selected=()=>rectangles().find(run=>run.id===id())??rectangles()[0];
+  const [lineID,setLineID]=createSignal('');
+  const lines=createMemo(()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ?block.paragraph.runs.filter(run=>run.object?.editable&&run.object.line):[]).slice(0,200)??[]);
+  const selectedLine=()=>lines().find(run=>run.id===lineID())??lines()[0];
   const disabled=()=>props.disabled||props.pending;
   return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
     <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">도형</summary>
@@ -107,6 +111,36 @@ export function DocumentShapeToolbar(props:{
         </label>
         <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>인라인 선 삽입</button>
       </form>
+      <Show when={lines().length}>
+        <select aria-label="편집할 선" class="editor-select min-h-11" disabled={disabled()} value={selectedLine()?.id??''}
+          onChange={event=>{setLineID(event.currentTarget.value);setError('');}}>
+          <For each={lines()}>{(run,index)=><option value={run.id}>선 {index()+1}</option>}</For>
+        </select>
+        <Show when={selectedLine()} keyed>{run=>
+          <Show when={run.object?.line}>{line=>
+            <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const inputs=event.currentTarget.elements,current=line();
+              const width=(inputs.namedItem('resizeLineWidth') as HTMLInputElement).valueAsNumber;
+              const height=(inputs.namedItem('resizeLineHeight') as HTMLInputElement).valueAsNumber;
+              const widthEmu=width===Number((current.widthEmu/12700).toFixed(2))?current.widthEmu:Math.round(width*12700);
+              const heightEmu=height===Number((current.heightEmu/12700).toFixed(2))?current.heightEmu:Math.round(height*12700);
+              if(![widthEmu,heightEmu].every(size=>Number.isFinite(size)&&size>=12700&&size<=18288000)||widthEmu===current.widthEmu&&heightEmu===current.heightEmu)return;
+              const accepted=props.onApply({type:'resize_line',targetId:run.id,lineSize:{widthEmu,heightEmu}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex flex-col gap-1">기존 선 너비 (pt)
+                <input name="resizeLineWidth" type="number" min="1" max="1440" step="any" required disabled={disabled()} value={(line().widthEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <label class="flex flex-col gap-1">기존 선 높이 (pt)
+                <input name="resizeLineHeight" type="number" min="1" max="1440" step="any" required disabled={disabled()} value={(line().heightEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>선 크기 적용</button>
+            </form>
+          }</Show>
+        }</Show>
+      </Show>
       <Show when={rectangles().length}>
         <select aria-label="편집할 사각형" class="editor-select min-h-11" value={selected()?.id??''}
           disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setError('');}}>

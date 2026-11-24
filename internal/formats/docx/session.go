@@ -342,7 +342,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var controlIDs map[int64]bool
 	nextControlID := int64(1)
 	for _, op := range input.Operations {
-		if op.LineSize != nil && op.Type != "insert_line" {
+		if op.LineSize != nil && op.Type != "insert_line" && op.Type != "resize_line" {
 			return nil, fmt.Errorf("unexpected DOCX line size")
 		}
 		if op.DefaultTabStop != nil && op.Type != "update_default_tab_stop" {
@@ -446,6 +446,22 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 					return nil, err
 				}
 			}
+			continue
+		}
+		if op.Type == "resize_line" {
+			t := targets[op.TargetID]
+			if t.kind != "inline_line" || seen[op.TargetID] || op.LineSize == nil ||
+				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
+				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
+				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
+				return nil, fmt.Errorf("invalid DOCX line resize operation")
+			}
+			seen[op.TargetID] = true
+			updated, err := resizeInlineLine(s.pkg.document, t, *op.LineSize)
+			if err != nil {
+				return nil, err
+			}
+			edits = append(edits, updated...)
 			continue
 		}
 		if op.Type == "update_rectangle_colors" || op.Type == "delete_rectangle" || op.Type == "resize_rectangle" {
