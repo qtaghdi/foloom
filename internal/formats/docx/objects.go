@@ -9,7 +9,7 @@ const mathNS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 type MathEdit struct {
 	Action     string              `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, insert_matrix, edit_matrix_cell, or delete"`
-	Matrix     [][]string          `json:"matrix,omitempty" jsonschema:"Exactly two rows of two plain-text matrix entries"`
+	Matrix     [][]string          `json:"matrix,omitempty" jsonschema:"Two through four rows and columns of rectangular plain-text matrix entries"`
 	MatrixCell *MathMatrixCellEdit `json:"matrixCell,omitempty"`
 	Expression string              `json:"expression,omitempty"`
 	Fraction   *MathFraction       `json:"fraction,omitempty"`
@@ -40,7 +40,7 @@ type ObjectInfo struct {
 	RectangleResizeEditable bool              `json:"rectangleResizeEditable,omitempty"`
 	Rectangle               *RectanglePreview `json:"rectangle,omitempty"`
 	Line                    *LinePreview      `json:"line,omitempty"`
-	Matrix                  *[2][2]string     `json:"matrix,omitempty"`
+	Matrix                  [][]string        `json:"matrix,omitempty"`
 	SquareRoot              string            `json:"squareRoot,omitempty"`
 }
 
