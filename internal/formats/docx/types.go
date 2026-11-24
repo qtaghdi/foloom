@@ -247,33 +247,34 @@ type StyleInfo struct {
 	Paragraph    *ParagraphFormat `json:"paragraph,omitempty"`
 }
 type Operation struct {
-	ListStart         *int                `json:"listStart,omitempty" jsonschema:"Starting direct-child number for restart_compound_sublevel, from 1 to 9999"`
-	ChartInsert       *ChartInsert        `json:"chartInsert,omitempty" jsonschema:"Title and literal points for insert_chart"`
-	ChartValue        *ChartValueEdit     `json:"chartValue,omitempty"`
-	Alignment         string              `json:"alignment,omitempty" jsonschema:"Set paragraph alignment with track_paragraph_alignment: start, center, end, or justify"`
-	Bold              *bool               `json:"bold,omitempty" jsonschema:"Set bold for track_run_bold"`
-	ListDefinition    *ListDefinition     `json:"listDefinition,omitempty"`
-	Table             *TableEdit          `json:"table,omitempty"`
-	Math              *MathEdit           `json:"math,omitempty"`
-	Comment           *CommentEdit        `json:"comment,omitempty"`
-	Reference         *ReferenceEdit      `json:"reference,omitempty"`
-	Image             *ImageEdit          `json:"image,omitempty"`
-	Boundary          string              `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, no_page_after, section_next_page, section_continuous, section_even_page, section_odd_page, remove_section, move_section_earlier, or move_section_later"`
-	DefaultTabStop    *int                `json:"defaultTabStop,omitempty" jsonschema:"Document-wide automatic tab interval in twips (1 through 32767) for update_default_tab_stop"`
-	EvenAndOddHeaders *bool               `json:"evenAndOddHeaders,omitempty" jsonschema:"Document-wide odd/even header and footer setting for update_header_parity"`
-	SectionID         string              `json:"sectionId,omitempty"`
-	Section           *SectionFormat      `json:"section,omitempty"`
-	StyleDefinition   *StyleDefinition    `json:"styleDefinition,omitempty"`
-	EndTargetID       string              `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
-	Paragraphs        []ParagraphContent  `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
-	Type              string              `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_default_tab_stop, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, restart_compound_sublevel, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, split_note_paragraph, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_break, track_paragraph_merge, track_paragraph_alignment, insert_control_text, insert_control_date, update_control_text, update_control_date, update_control_choice, unwrap_control, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, insert_chart, update_chart_title, resize_chart, update_chart_value, delete_chart, move_chart_up, move_chart_down, insert_rectangle, insert_line, resize_line, delete_line, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
-	TargetID          string              `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
-	ExpectedText      string              `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
-	Text              string              `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. For split_note_paragraph and track_paragraph_break, send the exact text before the split"`
-	ChartWidthEMU     *int                `json:"chartWidthEmu,omitempty" jsonschema:"New inline chart width in EMUs for resize_chart"`
-	LineSize          *LineSizeEdit       `json:"lineSize,omitempty"`
-	RectangleSize     *RectangleSizeEdit  `json:"rectangleSize,omitempty"`
-	RectangleColors   *RectangleColorEdit `json:"rectangleColors,omitempty"`
+	ListStart         *int                  `json:"listStart,omitempty" jsonschema:"Starting direct-child number for restart_compound_sublevel, from 1 to 9999"`
+	ChartInsert       *ChartInsert          `json:"chartInsert,omitempty" jsonschema:"Title and literal points for insert_chart"`
+	ChartValue        *ChartValueEdit       `json:"chartValue,omitempty"`
+	Alignment         string                `json:"alignment,omitempty" jsonschema:"Set paragraph alignment with track_paragraph_alignment: start, center, end, or justify"`
+	Bold              *bool                 `json:"bold,omitempty" jsonschema:"Set bold for track_run_bold"`
+	ListDefinition    *ListDefinition       `json:"listDefinition,omitempty"`
+	Table             *TableEdit            `json:"table,omitempty"`
+	Math              *MathEdit             `json:"math,omitempty"`
+	Comment           *CommentEdit          `json:"comment,omitempty"`
+	Reference         *ReferenceEdit        `json:"reference,omitempty"`
+	Image             *ImageEdit            `json:"image,omitempty"`
+	Boundary          string                `json:"boundary,omitempty" jsonschema:"page_before, no_page_before, no_page_after, section_next_page, section_continuous, section_even_page, section_odd_page, remove_section, move_section_earlier, or move_section_later"`
+	DefaultTabStop    *int                  `json:"defaultTabStop,omitempty" jsonschema:"Document-wide automatic tab interval in twips (1 through 32767) for update_default_tab_stop"`
+	EvenAndOddHeaders *bool                 `json:"evenAndOddHeaders,omitempty" jsonschema:"Document-wide odd/even header and footer setting for update_header_parity"`
+	SectionID         string                `json:"sectionId,omitempty"`
+	Section           *SectionFormat        `json:"section,omitempty"`
+	StyleDefinition   *StyleDefinition      `json:"styleDefinition,omitempty"`
+	EndTargetID       string                `json:"endTargetId,omitempty" jsonschema:"Last contiguous paragraph ID for replace_paragraphs"`
+	Paragraphs        []ParagraphContent    `json:"paragraphs,omitempty" jsonschema:"Ordered replacement paragraphs with source paragraph and run formatting IDs"`
+	Type              string                `json:"type" jsonschema:"replace_run_text, replace_cell_text, replace_paragraphs, define_style, update_section, update_header_parity, update_default_tab_stop, update_boundary, update_image, update_reference, add_comment, resolve_comment, reopen_comment, update_math, define_list, restart_compound_sublevel, update_table, move_bookmark_up, move_bookmark_down, move_note_up, move_note_down, split_note_paragraph, accept_revision, reject_revision, track_run_text, track_run_bold, track_paragraph_break, track_paragraph_merge, track_paragraph_alignment, insert_control_text, insert_control_date, insert_control_choice, update_control_text, update_control_date, update_control_choice, unwrap_control, update_textbox_text, insert_textbox, reply_comment, insert_picture_caption, move_hyperlink_up, move_hyperlink_down, insert_chart, update_chart_title, resize_chart, update_chart_value, delete_chart, move_chart_up, move_chart_down, insert_rectangle, insert_line, resize_line, delete_line, update_rectangle_colors, delete_rectangle, resize_rectangle, or edit_picture_caption, move_picture_caption_up, move_picture_caption_down"`
+	TargetID          string                `json:"targetId,omitempty" jsonschema:"Editable run or paragraph ID from the current get_docx snapshot"`
+	ExpectedText      string                `json:"expectedText,omitempty" jsonschema:"Exact current text, including whitespace"`
+	Text              string                `json:"text,omitempty" jsonschema:"Replacement text without tabs. LF is an inline Word line break. For split_note_paragraph and track_paragraph_break, send the exact text before the split"`
+	ChartWidthEMU     *int                  `json:"chartWidthEmu,omitempty" jsonschema:"New inline chart width in EMUs for resize_chart"`
+	LineSize          *LineSizeEdit         `json:"lineSize,omitempty"`
+	ChoiceOptions     []ControlChoiceOption `json:"choiceOptions,omitempty" jsonschema:"Two through 32 unique dropdown options for insert_control_choice"`
+	RectangleSize     *RectangleSizeEdit    `json:"rectangleSize,omitempty"`
+	RectangleColors   *RectangleColorEdit   `json:"rectangleColors,omitempty"`
 }
 
 type ApplyInput struct {

@@ -76,3 +76,41 @@ func TestDropdownChoiceProtectsUnsupportedState(t *testing.T) {
 		}
 	}
 }
+
+func TestInsertDropdownChoiceUsesUniqueNativeIDAndExpectedValue(t *testing.T) {
+	ctx := context.Background()
+	s, file := withDocument(t, bodyXML(`<w:p><w:r><w:t>Prefix</w:t></w:r></w:p><w:p>`+strings.Replace(sampleChoiceControl, `w:val="42"`, `w:val="1"`, 1)+`</w:p>`))
+	v := mustSnapshot(t, s)
+	original := fileBytes(t, file)
+	options := []ControlChoiceOption{{Label: "대기", Value: "a"}, {Label: "완료 & 검토", Value: `b"`}}
+	op := Operation{Type: "insert_control_choice", TargetID: v.Blocks[0].ID, Text: options[1].Label, ChoiceOptions: options}
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}
+	for _, bad := range []Operation{{Type: op.Type, TargetID: op.TargetID, Text: "missing", ChoiceOptions: options}, {Type: op.Type, TargetID: op.TargetID, Text: options[0].Label, ChoiceOptions: []ControlChoiceOption{options[0], options[0]}}, {Type: "insert_control_date", TargetID: op.TargetID, Text: "2026-11-25", ChoiceOptions: options}} {
+		invalid := input
+		invalid.Operations = []Operation{bad}
+		if _, err := s.Apply(ctx, invalid, "human"); err == nil || !bytes.Equal(original, fileBytes(t, file)) {
+			t.Fatal("invalid dropdown creation changed source")
+		}
+	}
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := mustSnapshot(t, reopened)
+	run := saved.Blocks[0].Paragraph.Runs[1]
+	if run.Object == nil || run.Object.ChoiceControl == nil || run.Object.ChoiceControl.Value != op.Text || !bytes.Contains(reopened.pkg.document, []byte(`dws:id dws:val="2"`)) {
+		t.Fatal("missing unique native dropdown")
+	}
+	updated, err := reopened.Apply(ctx, ApplyInput{SessionID: saved.ID, BaseRevision: saved.Revision, Operations: []Operation{{Type: "update_control_choice", TargetID: run.ID, ExpectedText: op.Text, Text: options[0].Label}}}, "human")
+	if err != nil || updated.Blocks[0].Paragraph.Runs[1].Object.ChoiceControl.Value != options[0].Label {
+		t.Fatal("new dropdown was not editable", err)
+	}
+	historyRestore(t, reopened, "undo")
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, file)) {
+		t.Fatal("undo did not restore original bytes")
+	}
+}

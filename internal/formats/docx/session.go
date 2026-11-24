@@ -343,6 +343,9 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 	var controlIDs map[int64]bool
 	nextControlID := int64(1)
 	for _, op := range input.Operations {
+		if op.ChoiceOptions != nil && op.Type != "insert_control_choice" {
+			return nil, fmt.Errorf("unexpected DOCX dropdown options")
+		}
 		if op.LineSize != nil && op.Type != "insert_line" && op.Type != "resize_line" {
 			return nil, fmt.Errorf("unexpected DOCX line size")
 		}
@@ -859,7 +862,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, added...)
 			continue
 		}
-		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_line" || op.Type == "insert_control_text" || op.Type == "insert_control_date" || op.Type == "insert_chart" {
+		if op.Type == "insert_textbox" || op.Type == "insert_rectangle" || op.Type == "insert_line" || op.Type == "insert_control_text" || op.Type == "insert_control_date" || op.Type == "insert_control_choice" || op.Type == "insert_chart" {
 			t := targets[op.TargetID]
 			if t.kind != "replace_paragraphs" || t.paragraph == nil || !t.paragraph.parent.is("body") ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
@@ -873,7 +876,7 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			if op.Type == "insert_textbox" && (len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "") {
 				return nil, fmt.Errorf("DOCX text box requires plain text")
 			}
-			if op.Type == "insert_control_text" || op.Type == "insert_control_date" {
+			if op.Type == "insert_control_text" || op.Type == "insert_control_date" || op.Type == "insert_control_choice" {
 				if len(op.Text) > 1024 || !validText(op.Text) || strings.TrimSpace(op.Text) == "" {
 					return nil, fmt.Errorf("DOCX content control requires non-empty plain text of up to 1024 bytes")
 				}
@@ -894,6 +897,17 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 						return nil, fmt.Errorf("invalid or protected DOCX date content control")
 					}
 					control = inlineDateControl(nextControlID, op.Text)
+				}
+				if op.Type == "insert_control_choice" {
+					_, _, settings, settingsErr := s.pkg.pageSettings(nil)
+					ranges, valid := contentControlRanges(t.paragraph.parent)
+					if !allowControlEditsInSettings(settings, settingsErr) || !valid || ranges[t.paragraph] {
+						return nil, fmt.Errorf("protected DOCX dropdown content control")
+					}
+					control, err = inlineChoiceControl(nextControlID, op.Text, op.ChoiceOptions)
+					if err != nil {
+						return nil, err
+					}
 				}
 				edits = append(edits, appendParagraphContent(s.pkg.document, t.paragraph, control))
 				nextControlID++
