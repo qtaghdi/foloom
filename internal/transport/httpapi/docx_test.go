@@ -512,6 +512,41 @@ func TestDOCXMCPListsSupportedOperationFamilies(t *testing.T) {
 	t.Fatal("DOCX operations tool is missing from the MCP list")
 }
 
+func TestDOCXMCPResizesInlineLine(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "line.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	apply := func(view docx.Snapshot, operation docx.Operation) docx.Snapshot {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{SessionID: view.ID, BaseRevision: view.Revision, Operations: []docx.Operation{operation}}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP line operation: %v %+v", err, result)
+		}
+		next, err := api.docxSnapshot(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	inserted := apply(initial, docx.Operation{Type: "insert_line", TargetID: initial.Blocks[0].ID, LineSize: &docx.LineSizeEdit{WidthEMU: 1270000, HeightEMU: 635000}})
+	line := inserted.Blocks[0].Paragraph.Runs[1]
+	want := docx.LineSizeEdit{WidthEMU: 1524000, HeightEMU: 635000}
+	updated := apply(inserted, docx.Operation{Type: "resize_line", TargetID: line.ID, LineSize: &want})
+	got := updated.Blocks[0].Paragraph.Runs[1].Object
+	if got == nil || got.Line == nil || got.Line.LineSizeEdit != want || updated.Revision != initial.Revision+2 {
+		t.Fatal("line resize was not reflected in shared session")
+	}
+}
+
 func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "controls.docx")

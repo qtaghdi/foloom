@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -41,7 +42,7 @@ func TestInsertInlineLinePreservesExistingDrawingsAndPackage(t *testing.T) {
 	for i, want := range []LineSizeEdit{size, secondSize} {
 		runs := v.Blocks[i].Paragraph.Runs
 		line := runs[len(runs)-1].Object
-		if line == nil || line.Kind != "shape" || line.Editable || line.Rectangle != nil || line.Line == nil ||
+		if line == nil || line.Kind != "shape" || !line.Editable || line.Rectangle != nil || line.Line == nil ||
 			*line.Line != (LinePreview{LineSizeEdit: want, Stroke: "0F766E"}) {
 			t.Fatalf("unexpected reopened line: %+v", line)
 		}
@@ -101,5 +102,48 @@ func TestLinePreviewKeepsUnmodeledShapesOpaque(t *testing.T) {
 		if object == nil || object.Kind != "shape" || object.Line != nil {
 			t.Fatalf("unsupported outline was projected as a basic line: %+v", object)
 		}
+	}
+}
+
+func TestResizeInlineLineChangesOnlyExtents(t *testing.T) {
+	ctx := context.Background()
+	old := LineSizeEdit{WidthEMU: 914400, HeightEMU: 457200}
+	next := LineSizeEdit{WidthEMU: 1270000, HeightEMU: 381000}
+	prefix := `<w:r><w:t>Prefix</w:t></w:r>`
+	neighbor := inlineRectangle(2)
+	s, filename := withDocument(t, bodyXML("<w:p>"+prefix+inlineLine(1, old)+neighbor+"</w:p>"))
+	v := mustSnapshot(t, s)
+	original := fileBytes(t, filename)
+	line := v.Blocks[0].Paragraph.Runs[1]
+	if line.Object == nil || !line.Object.Editable {
+		t.Fatal("line offered no resize capability")
+	}
+	op := Operation{Type: "resize_line", TargetID: line.ID, LineSize: &next}
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}
+	for _, bad := range []Operation{{Type: "resize_line", TargetID: line.ID, LineSize: &old}, {Type: "resize_line", TargetID: v.Blocks[0].Paragraph.Runs[2].ID, LineSize: &next}, {Type: "resize_line", TargetID: line.ID, LineSize: &LineSizeEdit{WidthEMU: 0, HeightEMU: 12700}}} {
+		invalid := input
+		invalid.Operations = []Operation{bad}
+		if _, err := s.Apply(ctx, invalid, "human"); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+			t.Fatal("invalid line resize changed source")
+		}
+	}
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	extent := regexp.MustCompile(`<(?:wp:extent|a:ext)\s[^>]*>(?:</(?:wp:extent|a:ext)>)?`)
+	if extent.ReplaceAllString(string(s.pkg.document), "extent") != extent.ReplaceAllString(bodyXML("<w:p>"+prefix+inlineLine(1, next)+neighbor+"</w:p>"), "extent") || !bytes.Contains(s.pkg.document, []byte(neighbor)) {
+		t.Fatal("modified unrelated XML")
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Object
+	if got == nil || got.Line == nil || got.Line.LineSizeEdit != next {
+		t.Fatal("line size did not survive reopen")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore original bytes")
 	}
 }

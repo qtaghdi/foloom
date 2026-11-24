@@ -1369,7 +1369,9 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 `인라인 선 삽입`을 누른 뒤 저장합니다. 현재 본문 문단 끝에 좌상단에서
 우하단으로 이어지는 1 pt 두께의 Word 선 도형을 넣습니다. HTTP·MCP의
 `insert_line`은 편집 가능한 본문 문단 ID와 EMU 단위의
-`lineSize: { widthEmu, heightEmu }`를 받습니다. 기존 선 편집, 화살표,
+`lineSize: { widthEmu, heightEmu }`를 받습니다. `편집할 선`에서 지원 선을
+선택하고 `선 크기 적용`으로 치수를 변경합니다. HTTP·MCP는 지원 선 run ID와
+`resize_line`, 같은 `lineSize`를 사용합니다. 화살표,
 다른 도형에 연결된 선, 부동 배치는 Word에서 수정합니다.
 [DrawingML 사전 정의 도형](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry)을 사용합니다.
 

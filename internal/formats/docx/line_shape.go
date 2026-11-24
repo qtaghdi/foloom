@@ -1,6 +1,9 @@
 package docx
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+)
 
 type LineSizeEdit struct {
 	WidthEMU  int `json:"widthEmu" jsonschema:"Horizontal span in EMUs, from 12700 through 18288000"`
@@ -75,4 +78,24 @@ func inspectInlineLine(inline, graphic *node) *LinePreview {
 		return nil
 	}
 	return &LinePreview{LineSizeEdit: LineSizeEdit{WidthEMU: *width, HeightEMU: *height}, Stroke: attribute(stroke, "", "val")}
+}
+
+func inlineLineSizeNodes(run *node) (*LinePreview, *node, *node) {
+	inline := childNS(run.child("drawing"), drawingWordNS, "inline")
+	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+	preview := inspectInlineLine(inline, graphic)
+	if preview == nil {
+		return nil, nil, nil
+	}
+	shape := singlePayload(graphic)
+	transform := childNS(childNS(shape, shapeWordNS, "spPr"), drawingNS, "xfrm")
+	return preview, childNS(inline, drawingWordNS, "extent"), childNS(transform, drawingNS, "ext")
+}
+
+func resizeInlineLine(data []byte, t target, edit LineSizeEdit) ([]replacement, error) {
+	preview, outer, inner := inlineLineSizeNodes(t.run)
+	if preview == nil || !canResizeShape(data, outer, inner) || !edit.valid() || edit == preview.LineSizeEdit {
+		return nil, fmt.Errorf("invalid or unsupported DOCX line size")
+	}
+	return resizeShape(data, outer, inner, edit.WidthEMU, edit.HeightEMU)
 }

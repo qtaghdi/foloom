@@ -112,8 +112,15 @@ func (info *inlineRectangleInfo) canResize(data []byte) bool {
 	if info == nil {
 		return false
 	}
+	return canResizeShape(data, info.frameSize, info.transformSize)
+}
+
+func canResizeShape(data []byte, frameSize, transformSize *node) bool {
+	if frameSize == nil || transformSize == nil {
+		return false
+	}
 	frames := 0
-	for _, child := range info.frameSize.parent.children {
+	for _, child := range frameSize.parent.children {
 		if child.name.Space != drawingWordNS {
 			continue
 		}
@@ -131,7 +138,7 @@ func (info *inlineRectangleInfo) canResize(data []byte) bool {
 	if frames != 1 {
 		return false
 	}
-	for _, size := range []*node{info.frameSize, info.transformSize} {
+	for _, size := range []*node{frameSize, transformSize} {
 		if len(size.children) != 0 || strings.TrimSpace(string(data[size.inner:size.endStart])) != "" {
 			return false
 		}
@@ -146,9 +153,13 @@ func resizeInlineRectangle(data []byte, t target, edit RectangleSizeEdit) ([]rep
 		edit.WidthEMU == info.WidthEMU && edit.HeightEMU == info.HeightEMU {
 		return nil, fmt.Errorf("invalid or unsupported DOCX rectangle size")
 	}
-	dimensions := map[string]string{"cx": strconv.Itoa(edit.WidthEMU), "cy": strconv.Itoa(edit.HeightEMU)}
+	return resizeShape(data, info.frameSize, info.transformSize, edit.WidthEMU, edit.HeightEMU)
+}
+
+func resizeShape(data []byte, frameSize, transformSize *node, width, height int) ([]replacement, error) {
+	dimensions := map[string]string{"cx": strconv.Itoa(width), "cy": strconv.Itoa(height)}
 	replacements := make([]replacement, 0, 2)
-	for _, size := range []*node{info.frameSize, info.transformSize} {
+	for _, size := range []*node{frameSize, transformSize} {
 		raw, err := patchScalarProperty(size, data, size.name.Local, "", dimensions, nil)
 		if err != nil {
 			return nil, err
