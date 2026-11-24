@@ -796,6 +796,38 @@ func TestDOCXMCPTracksAndRejectsParagraphAlignment(t *testing.T) {
 	}
 }
 
+func TestDOCXMCPNestedMathLeaf(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "nested.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	apply := func(view docx.Snapshot, id string, math docx.MathEdit) docx.Snapshot {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{SessionID: view.ID, BaseRevision: view.Revision, Operations: []docx.Operation{{Type: "update_math", TargetID: id, Math: &math}}}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP nested math: %v %+v", err, result)
+		}
+		next, err := api.docxSnapshot(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	inserted := apply(initial, initial.Blocks[0].ID, docx.MathEdit{Action: "insert_nested", Nested: &docx.MathNested{Kind: "fraction_root_denominator", Numerator: "a", Denominator: "b"}})
+	updated := apply(inserted, inserted.Blocks[0].Paragraph.Runs[1].ID, docx.MathEdit{Action: "edit_nested_leaf", NestedLeaf: &docx.MathNestedLeafEdit{Leaf: "denominator", ExpectedText: "b", Text: "c"}})
+	if got := updated.Blocks[0].Paragraph.Runs[1].Object; got == nil || got.NestedMath == nil || got.NestedMath.Denominator != "c" || got.NestedMath.Kind != "fraction_root_denominator" || updated.Revision != initial.Revision+2 {
+		t.Fatal("nested math was not committed")
+	}
+}
+
 func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "matrix.docx")
