@@ -38,10 +38,10 @@ jobs:
     if: needs.scope.outputs.regression == 'true'
     uses: ./.github/workflows/xlsx-quality.yml
 
-  docx:
-    name: Verify DOCX
+  editor_package:
+    name: Verify editor and package
     needs: scope
-    if: needs.scope.outputs.docx == 'true' && needs.scope.outputs.regression != 'true'
+    if: needs.scope.outputs.package == 'true' || (needs.scope.outputs.regression != 'true' && (needs.scope.outputs.docx == 'true' || needs.scope.outputs.web == 'true'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,23 +55,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.25.0
-      - run: make web-install docx-verify
-
-  web:
-    name: Verify browser editor
-    needs: scope
-    if: needs.scope.outputs.web == 'true' && needs.scope.outputs.regression != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.9.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: make web-install web-test
+        if: needs.scope.outputs.docx == 'true' || needs.scope.outputs.package == 'true'
+      - name: Verify selected editor and package targets
+        env:
+          DOCX: ${{ needs.scope.outputs.docx }}
+          WEB: ${{ needs.scope.outputs.web }}
+          PACKAGE: ${{ needs.scope.outputs.package }}
+          REGRESSION: ${{ needs.scope.outputs.regression }}
+        run: |
+          targets=(web-install)
+          if [[ "$REGRESSION" != true && "$DOCX" == true ]]; then targets+=(docx-verify); fi
+          if [[ "$REGRESSION" != true && "$WEB" == true ]]; then targets+=(web-test); fi
+          if [[ "$PACKAGE" == true ]]; then targets+=(package-verify release-package-test); fi
+          make "${targets[@]}"
 
   safety:
     needs: scope
@@ -83,15 +79,10 @@ jobs:
     if: needs.scope.outputs.performance == 'true'
     uses: ./.github/workflows/xlsx-performance.yml
 
-  package:
-    needs: scope
-    if: needs.scope.outputs.package == 'true'
-    uses: ./.github/workflows/package.yml
-
   result:
     name: Verify selected PR checks
     if: always()
-    needs: [scope, regression, docx, web, safety, performance, package]
+    needs: [scope, regression, editor_package, safety, performance]
     runs-on: ubuntu-latest
     env:
       RESULTS: ${{ toJSON(needs) }}
@@ -105,9 +96,15 @@ jobs:
           if (scope.result !== 'success' || names.some(name => !['true', 'false'].includes(scope.outputs[name]))) {
             throw new Error('CI scope could not be determined');
           }
-          for (const name of names) {
-            const covered = ['docx', 'web'].includes(name) && scope.outputs.regression === 'true';
-            const expected = scope.outputs[name] === 'true' && !covered ? 'success' : 'skipped';
-            if (jobs[name].result !== expected) throw new Error(`${name}: expected ${expected}, got ${jobs[name].result}`);
+          const selected = Object.fromEntries(names.map(name => [name, scope.outputs[name] === 'true']));
+          const expectedJobs = {
+            regression: selected.regression,
+            editor_package: selected.package || (!selected.regression && (selected.docx || selected.web)),
+            safety: selected.safety,
+            performance: selected.performance,
+          };
+          for (const [name, required] of Object.entries(expectedJobs)) {
+            const expected = required ? 'success' : 'skipped';
+            if (jobs[name]?.result !== expected) throw new Error(`${name}: expected ${expected}, got ${jobs[name]?.result}`);
           }
           JS

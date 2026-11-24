@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -681,7 +682,7 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 		return next
 	}
 	saved := apply(initial, initial.Blocks[0].ID, map[string]any{
-		"action": "insert_matrix", "matrix": [][]string{{"11", "22"}, {"33", "44"}},
+		"action": "insert_matrix", "matrix": [][]string{{"11", "22", "23", "24"}, {"33", "44", "45", "46"}, {"51", "52", "53", "54"}},
 	})
 	matrix := saved.Blocks[0].Paragraph.Runs[1]
 	if matrix.Object == nil || !matrix.Object.Editable || matrix.Object.Matrix == nil {
@@ -689,11 +690,11 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 	}
 	updated := apply(saved, matrix.ID, map[string]any{
 		"action": "edit_matrix_cell", "matrixCell": map[string]any{
-			"row": 1, "column": 2, "expectedText": "22", "text": "25",
+			"row": 3, "column": 4, "expectedText": "54", "text": "55",
 		},
 	})
 	got := updated.Blocks[0].Paragraph.Runs[1].Object
-	if got == nil || got.Matrix == nil || *got.Matrix != [2][2]string{{"11", "25"}, {"33", "44"}} ||
+	if got == nil || !reflect.DeepEqual(got.Matrix, [][]string{{"11", "22", "23", "24"}, {"33", "44", "45", "46"}, {"51", "52", "53", "55"}}) ||
 		updated.Revision != initial.Revision+2 {
 		t.Fatal("MCP commit did not update just the addressed matrix cell", got)
 	}

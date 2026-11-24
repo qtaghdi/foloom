@@ -6,10 +6,11 @@ import (
 )
 
 const maxMatrixCellBytes = 256
+const maxMatrixDimension = 4
 
 type MathMatrixCellEdit struct {
-	Row          int    `json:"row" jsonschema:"One-based row number, 1 or 2"`
-	Column       int    `json:"column" jsonschema:"One-based column number, 1 or 2"`
+	Row          int    `json:"row" jsonschema:"One-based row number, 1 through 4"`
+	Column       int    `json:"column" jsonschema:"One-based column number, 1 through 4"`
 	ExpectedText string `json:"expectedText"`
 	Text         string `json:"text"`
 }
@@ -24,15 +25,25 @@ func plainMatrixElement(n *node, name string, children int) bool {
 }
 
 // A text-only matrix with default formatting has an unambiguous cell address.
-func plainMatrixCells(math *node) ([2][2]*node, bool) {
-	var cells [2][2]*node
-	if !plainMatrixElement(math, "oMath", 1) || !plainMatrixElement(math.children[0], "m", 2) {
-		return cells, false
+func plainMatrixCells(math *node) ([][]*node, bool) {
+	if !plainMatrixElement(math, "oMath", 1) {
+		return nil, false
 	}
-	for i, row := range math.children[0].children {
-		if !plainMatrixElement(row, "mr", 2) {
-			return cells, false
+	matrix := math.children[0]
+	rows := len(matrix.children)
+	if rows < 2 || rows > maxMatrixDimension || !plainMatrixElement(matrix, "m", rows) {
+		return nil, false
+	}
+	columns := len(matrix.children[0].children)
+	if columns < 2 || columns > maxMatrixDimension {
+		return nil, false
+	}
+	cells := make([][]*node, rows)
+	for i, row := range matrix.children {
+		if !plainMatrixElement(row, "mr", columns) {
+			return nil, false
 		}
+		cells[i] = make([]*node, columns)
 		for j, cell := range row.children {
 			if !plainMatrixElement(cell, "e", 1) || !plainMatrixElement(cell.children[0], "r", 1) {
 				return cells, false
@@ -53,27 +64,31 @@ func plainMatrixCells(math *node) ([2][2]*node, bool) {
 	return cells, true
 }
 
-func matrixPreview(math *node) *[2][2]string {
+func matrixPreview(math *node) [][]string {
 	nodes, ok := plainMatrixCells(math)
 	if !ok {
 		return nil
 	}
-	var values [2][2]string
+	values := make([][]string, len(nodes))
 	for i, row := range nodes {
+		values[i] = make([]string, len(row))
 		for j, text := range row {
 			values[i][j] = text.text.String()
 		}
 	}
-	return &values
+	return values
 }
 
 func matrixContents(cells [][]string) (string, error) {
-	if len(cells) != 2 || len(cells[0]) != 2 || len(cells[1]) != 2 {
-		return "", fmt.Errorf("DOCX matrix must contain exactly two rows and two columns")
+	if len(cells) < 2 || len(cells) > maxMatrixDimension || len(cells[0]) < 2 || len(cells[0]) > maxMatrixDimension {
+		return "", fmt.Errorf("DOCX matrix must contain two through four rows and columns")
 	}
 	var contents strings.Builder
 	contents.WriteString("<dwm:m>")
 	for _, row := range cells {
+		if len(row) != len(cells[0]) {
+			return "", fmt.Errorf("DOCX matrix rows must have the same number of columns")
+		}
 		contents.WriteString("<dwm:mr>")
 		for _, text := range row {
 			if !validMatrixCellText(text) {
@@ -88,13 +103,13 @@ func matrixContents(cells [][]string) (string, error) {
 }
 
 func matrixCellReplacement(data []byte, target target, edit *MathMatrixCellEdit) (replacement, error) {
-	if target.kind != "math_object" || edit == nil || edit.Row < 1 || edit.Row > 2 ||
-		edit.Column < 1 || edit.Column > 2 || !validMatrixCellText(edit.Text) ||
+	if target.kind != "math_object" || edit == nil || edit.Row < 1 || edit.Row > maxMatrixDimension ||
+		edit.Column < 1 || edit.Column > maxMatrixDimension || !validMatrixCellText(edit.Text) ||
 		strings.Contains(string(data[target.node.start:target.node.end]), "<!--") {
 		return replacement{}, fmt.Errorf("protected or invalid DOCX matrix cell")
 	}
 	cells, ok := plainMatrixCells(target.node)
-	if !ok {
+	if !ok || edit.Row > len(cells) || edit.Column > len(cells[0]) {
 		return replacement{}, fmt.Errorf("protected DOCX matrix structure")
 	}
 	text := cells[edit.Row-1][edit.Column-1]
