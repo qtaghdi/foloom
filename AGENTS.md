@@ -261,13 +261,14 @@ and expected outputs.
 
 - Preserve the initial Python MVP until its behavior is covered by Go tests.
 - Every repository change, including documentation, maintenance, and CI work,
-  must start from a GitHub issue and reach `main` through a linked pull request.
-  Do not commit or push changes directly to `main`.
+  must start from a GitHub issue and reach `develop` through a linked pull request.
+  Use a separate release pull request from `develop` to `main` after integration
+  verification. Do not commit or push changes directly to either long-lived branch.
 - Search open issues before creating one. Reuse an issue only when its problem,
   scope, and acceptance criteria cover the requested work.
 - Record the problem, desired outcome, acceptance criteria, scope, exclusions,
   risks, and required evidence in the issue before implementation.
-- Branch from current `main` using
+- Branch from current `develop` using
   `<type>/<issue-number>-<short-description>`, such as
   `feat/42-ai-presence` or `fix/57-revision-conflict`.
 - Use Conventional Commits with an English imperative subject:
@@ -286,6 +287,9 @@ and expected outputs.
   follow-up work changes. Create another issue for unrelated work.
 - Do not merge a pull request unless the repository owner explicitly requests
   the merge. Passing checks and approval are not implicit merge authorization.
+- Prefer local verification to paid hosted CI. Record the exact commit, toolchain,
+  commands, outcomes, and any unavailable checks in the pull request. Preserve
+  existing required checks and never imply that an unavailable check passed.
 - Split independent features, fixes, and maintenance work into separate commits
   organized by user-visible behavior or engineering responsibility. Do not bundle
   a whole multi-feature task into one commit merely because it shares a request.
