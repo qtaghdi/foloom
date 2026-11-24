@@ -519,13 +519,19 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			edits = append(edits, edit)
 			continue
 		}
-		if op.Type == "update_control_date" {
+		if op.Type == "update_control_date" || op.Type == "update_control_choice" {
 			if len(input.Operations) != 1 || op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil ||
 				op.ListDefinition != nil || op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" ||
 				op.EvenAndOddHeaders != nil || op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil {
 				return nil, fmt.Errorf("DOCX date control editing requires a single operation")
 			}
-			updates, err := s.pkg.updateControlDate(targets[op.TargetID], op.ExpectedText, op.Text)
+			var updates []replacement
+			var err error
+			if op.Type == "update_control_choice" {
+				updates, err = s.pkg.updateControlChoice(targets[op.TargetID], op.ExpectedText, op.Text)
+			} else {
+				updates, err = s.pkg.updateControlDate(targets[op.TargetID], op.ExpectedText, op.Text)
+			}
 			if err != nil {
 				return nil, err
 			}

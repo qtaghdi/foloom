@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"image"
 	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -613,6 +615,80 @@ func TestDOCXMCPInsertsDateControl(t *testing.T) {
 	runs := after.Blocks[0].Paragraph.Runs
 	if after.Revision != initial.Revision+1 || len(runs) != 2 || runs[1].Object == nil || runs[1].Object.DateControl == nil || runs[1].Object.DateControl.Value != "2032-02-29" {
 		t.Fatal("shared session did not expose inserted date")
+	}
+}
+
+func TestDOCXMCPUpdatesDropdownSelection(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "choices.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "choice-marker"}}); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := zip.NewReader(bytes.NewReader(original), int64(len(original)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	for _, part := range reader.File {
+		input, err := part.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := io.ReadAll(input)
+		input.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if part.Name == "word/document.xml" {
+			control := `<w:sdt><w:sdtPr><w:id w:val="42"/><w:dropDownList w:lastValue="a"><w:listItem w:displayText="First" w:value="a"/><w:listItem w:displayText="Second" w:value="b"/></w:dropDownList></w:sdtPr><w:sdtContent><w:r><w:t>First</w:t></w:r></w:sdtContent></w:sdt>`
+			raw := string(payload)
+			start := strings.Index(raw, "<w:r>")
+			end := strings.Index(raw, "</w:r>")
+			if start < 0 || end < start || !strings.Contains(raw[start:end], "choice-marker") {
+				t.Fatal("missing synthetic marker")
+			}
+			payload = []byte(raw[:start] + control + raw[end+len("</w:r>"):])
+		}
+		entry, err := writer.Create(part.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write(payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, output.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := initial.Blocks[0].Paragraph.Runs[0]
+	if run.Object == nil || run.Object.ChoiceControl == nil {
+		t.Fatal("missing dropdown projection")
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{SessionID: initial.ID, BaseRevision: initial.Revision, Operations: []docx.Operation{{Type: "update_control_choice", TargetID: run.ID, ExpectedText: "First", Text: "Second"}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP dropdown edit: %v %+v", err, result)
+	}
+	next, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := next.Blocks[0].Paragraph.Runs[0].Object; got == nil || got.ChoiceControl == nil || got.ChoiceControl.Value != "Second" || next.Revision != initial.Revision+1 {
+		t.Fatal("dropdown selection not committed")
 	}
 }
 

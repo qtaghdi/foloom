@@ -74,6 +74,13 @@ func projectRestrictedControlEdits(root *node, blocks []Block, targets map[strin
 				run.Object.DateControl = &ControlDatePreview{Value: t.text, Format: controlDateFormat}
 				run.Object.Label = reviewText(t.node.child("sdtPr").child("alias").attr("val"), 160)
 			}
+			if t.kind == "update_control_choice" && !ranges[t.paragraph] {
+				if choice := choiceControlNodes(t.node, root.source); choice != nil {
+					run.Object.Editable = true
+					run.Object.ChoiceControl = &choice.ControlChoicePreview
+					run.Object.Label = reviewText(t.node.child("sdtPr").child("alias").attr("val"), 160)
+				}
+			}
 		}
 	}
 }

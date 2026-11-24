@@ -1438,6 +1438,12 @@ UTC 자정의 저장 날짜가 일치하는 독립 본문 컨트롤을 지원합
 원래 날짜 형식, ID와 텍스트 서식을 유지하고 잠금, 바인딩, 표시값과 저장값이
 다른 컨트롤은 보호합니다. [Word 날짜 콘텐츠 컨트롤](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.sdtcontentdate)을 사용합니다.
 
+지원되는 본문 드롭다운은 `콘텐츠 컨트롤 편집`의 선택 목록에서 항목을 변경할
+수 있습니다. 2~32개 항목의 고유 표시값·저장값과 현재 선택을 확인한 상태에서
+`update_control_choice`에 현재 run ID와 `expectedText`, 새 표시값 `text`를
+전달합니다. 기존 목록·ID·서식은 유지하고 표시 run과 `w:lastValue`를 함께
+갱신합니다. 잠금·바인딩·활성 참조와 복합 목록은 보호합니다.
+
 인식하는 인라인 개체는 본문에 표시하고 원본 XML과 관련 part를 보존합니다.
 텍스트 상자와 컨트롤 표시가 원래 배치를 재현하지는 않습니다. 연결 데이터를
 자동으로 읽거나 실행하지 않으며 OLE는 브라우저에서 열지 않습니다.
