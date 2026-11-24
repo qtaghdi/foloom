@@ -55,8 +55,9 @@ make release-verify VERSION=0.1.0-alpha.local
 빌드한 브라우저 및 MCP App 번들과 설치할 `foloom` 스킬을 포함합니다.
 
 `Private alpha package` workflow는 권한 있는 사용자의 수동 실행으로만 동작합니다.
-비공개 저장소 범위의 workflow artifact를 올리고 저장소 내용에는 읽기 권한만
-가집니다. tag로 실행되지 않으며 GitHub Release를 만들 수 없습니다. 공개 배포를
+비공개 저장소에서만 workflow artifact를 올리고 저장소 내용에는 읽기 권한만
+가집니다. 공개 저장소에서는 비활성화하며 로컬 빌드는 유지합니다. tag로 실행되지
+않으며 GitHub Release를 만들 수 없습니다. 공개 배포를
 다시 도입하려면 별도 이슈, 소유자 결정, 배포 조건, 정책 검토가 필요합니다.
 
 알파 결과물은 서명되거나 notarize되지 않았습니다. macOS 및 Windows 설치

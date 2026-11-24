@@ -26,6 +26,9 @@ if (/^\s*push:\s*$/m.test(releaseSource)) {
 if (/contents:\s*write/i.test(releaseSource)) {
   errors.push('release.yml must not request write access to repository contents');
 }
+if (!/^\s{4}if:\s*github\.event\.repository\.private\s*==\s*true\s*$/m.test(releaseSource)) {
+  errors.push('release.yml must restrict artifact builds to a private repository');
+}
 
 const publicationPatterns = [
   /gh\s+release\s+create/i,
@@ -47,4 +50,4 @@ if (errors.length > 0) {
   fail(errors);
 }
 
-console.log('Private alpha policy passed: manual artifacts only, read-only contents, no release publisher');
+console.log('Private alpha policy passed: private manual artifacts only, read-only contents, no release publisher');

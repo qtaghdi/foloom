@@ -52,12 +52,13 @@ commit, conflict, undo, 형식별 안전 저장을 제공합니다.
 
 ### 비공개 알파 종료 조건
 
-다음을 모두 충족할 때까지 저장소와 결과물을 비공개로 유지합니다.
+소스 공개는 소유자가 결정한 Apache-2.0 정책으로 진행합니다. 다음 조건을 모두
+충족할 때까지 공식 바이너리의 공개 배포를 보류합니다.
 
 1. 의도한 candidate의 native Excel fidelity와 수식 증거가 있습니다.
 2. 소유자와 초대 tester 최소 2명이 대표 통합 문서 복사본으로 반복 작업합니다.
 3. 원본 손실, authorization, false success 결함이 남아 있지 않습니다.
-4. source 및 binary 배포 조건과 dependency 의무를 검토합니다.
+4. binary 배포 조건과 dependency 고지·의무를 검토합니다.
 5. 저장소 소유자가 새 이슈와 Pull Request에서 공개 배포를 명시적으로 승인합니다.
 
 landing page, 결제, 호스팅 계정, signed installer, 자동 update는 반복 사용 가치가
@@ -114,7 +115,6 @@ audit, quota, background conversion, privacy 및 retention 정책이 필요합�
 
 ## 배포 판단
 
-현재는 비공개 저장소와 비공개 알파 artifact만 사용합니다. 공개 source, 공개
-binary, 상업 서비스는 서로 별도 결정입니다. 공개 전에는 license, third-party
-notice, signing, update, support, privacy, security response, 비용과 운영 책임을
-명시해야 합니다.
+소스 저장소는 Apache-2.0으로 공개합니다. 공개 바이너리와 상업 서비스는
+별도 결정이며, 공개 배포 전에는 third-party notice, signing, update, support,
+privacy, security response, 비용과 운영 책임을 검토합니다.

@@ -12,7 +12,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-jobs: {}
+jobs:
+  package:
+    if: github.event.repository.private == true
 `;
 
 const run = (releaseSource, extraWorkflow) => {
@@ -43,6 +45,12 @@ test('write permission fails private alpha policy', () => {
   const result = run(validWorkflow.replace('contents: read', 'contents: write'));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /must not request write access/);
+});
+
+test('public repository artifact build fails private alpha policy', () => {
+  const result = run(validWorkflow.replace('github.event.repository.private == true', 'always()'));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /restrict artifact builds to a private repository/);
 });
 
 test('release publisher in any workflow fails private alpha policy', () => {
