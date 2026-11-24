@@ -36,6 +36,15 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
         <span aria-hidden="true">√</span><span class="border-t border-current px-0.5">{text()}</span>
       </span>
     }</Show>
+    <Show when={props.object.nestedMath}>{math=>
+      <span role="math" aria-label={`${math().kind==='root_fraction'?'분수의 제곱근':math().kind==='fraction_root_numerator'?'분자의 제곱근을 포함한 분수':'분모의 제곱근을 포함한 분수'}, 분자 ${math().numerator}, 분모 ${math().denominator}`} class="inline-flex max-w-full items-start align-middle font-serif">
+        <Show when={math().kind==='root_fraction'}><span aria-hidden="true">√</span></Show>
+        <span class="inline-grid max-w-full grid-rows-2 text-center" classList={{'border-t border-current':math().kind==='root_fraction'}}>
+          <span class="border-b border-current px-1"><Show when={math().kind==='fraction_root_numerator'}><span aria-hidden="true">√</span></Show><span classList={{'border-t border-current':math().kind==='fraction_root_numerator'}}>{math().numerator}</span></span>
+          <span class="px-1"><Show when={math().kind==='fraction_root_denominator'}><span aria-hidden="true">√</span></Show><span classList={{'border-t border-current':math().kind==='fraction_root_denominator'}}>{math().denominator}</span></span>
+        </span>
+      </span>
+    }</Show>
     <Show when={props.object.text}>{text=><span classList={{'font-serif':props.object.kind==='math','block whitespace-pre-wrap':['toc','figure_list','table_list'].includes(props.object.kind)}}>{text()}</span>}</Show>
     <Show when={props.object.smartArt}>{diagram=>
       <>
@@ -231,15 +240,30 @@ export function DocumentMathToolbar(props:{
   const resizeMatrix=(rows:number,columns:number)=>setMatrix(previous=>emptyMatrix(rows,columns).map((row,i)=>row.map((_,j)=>previous[i]?.[j]??'')));
   const [matrixPosition,setMatrixPosition]=createSignal({row:0,column:0,label:'1행 1열'});
   const [matrixText,setMatrixText]=createSignal('');
+  const [axisKind,setAxisKind]=createSignal<'row'|'column'>('row'),[axisMode,setAxisMode]=createSignal<'insert'|'delete'>('insert');
+  const [axisIndex,setAxisIndex]=createSignal(1),[axisValues,setAxisValues]=createSignal<string[]>([]);
+  const [nestedKind,setNestedKind]=createSignal<'root_fraction'|'fraction_root_numerator'|'fraction_root_denominator'>('root_fraction');
+  const [nestedLeaf,setNestedLeaf]=createSignal<'numerator'|'denominator'>('numerator'),[nestedText,setNestedText]=createSignal('');
   const objects=createMemo(()=>{
     const paragraphs=props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph]:block.rows.flatMap(row=>row.cells.flatMap(cell=>cell.paragraphs)))??[];
     return paragraphs.flatMap(paragraph=>paragraph.runs.filter(run=>
       run.object?.kind==='math'&&run.object.editable&&
-      (action()==='edit_matrix_cell'?Boolean(run.object.matrix):
-        action()==='replace_root'?Boolean(run.object.squareRoot):action()==='replace_fraction'?Boolean(run.object.fraction):
-        !run.object.squareRoot&&!run.object.fraction&&!run.object.matrix))).slice(0,200);
+      (action()==='edit_matrix_cell'||action()==='edit_matrix_axis'?Boolean(run.object.matrix):
+        action()==='edit_nested_leaf'?Boolean(run.object.nestedMath):action()==='replace_root'?Boolean(run.object.squareRoot):action()==='replace_fraction'?Boolean(run.object.fraction):
+        !run.object.squareRoot&&!run.object.fraction&&!run.object.matrix&&!run.object.nestedMath))).slice(0,200);
   });
   const selected=()=>objects().find(item=>item.id===id())??objects()[0];
+  const storedNestedText=()=>selected()?.object?.nestedMath?.[nestedLeaf()]??'';
+  createEffect(()=>setNestedText(storedNestedText()));
+  const axisSize=()=>axisKind()==='row'?(selected()?.object?.matrix?.length??0):(selected()?.object?.matrix?.[0]?.length??0);
+  const axisCellCount=()=>axisKind()==='row'?(selected()?.object?.matrix?.[0]?.length??0):(selected()?.object?.matrix?.length??0);
+  const axisAllowed=()=>axisMode()==='insert'?axisSize()>=2&&axisSize()<4:axisSize()>2;
+  const axisPositions=()=>Array.from({length:axisSize()+(axisMode()==='insert'?1:0)},(_,i)=>i+1);
+  const axisExpected=()=>{
+    const values=selected()?.object?.matrix??[];
+    return axisKind()==='row'?(values[axisIndex()-1]??[]):values.map(row=>row[axisIndex()-1]??'');
+  };
+  createEffect(()=>{axisCellCount();axisMode();selected();setAxisIndex(1);setAxisValues(Array.from({length:axisCellCount()},()=>''));});
   const storedMatrixText=()=>{
     const {row,column}=matrixPosition();
     return selected()?.object?.matrix?.[row]?.[column]??'';
@@ -255,10 +279,10 @@ export function DocumentMathToolbar(props:{
   });
   createEffect(()=>setMatrixText(storedMatrixText()));
   const disabled=()=>props.pending||props.disabled;
-  const inserting=()=>action()==='insert'||action()==='insert_fraction'||action()==='insert_root'||action()==='insert_matrix';
+  const inserting=()=>action()==='insert'||action()==='insert_fraction'||action()==='insert_root'||action()==='insert_matrix'||action()==='insert_nested';
   const editingRoot=()=>action()==='insert_root'||action()==='replace_root';
-  const editingFraction=()=>action()==='insert_fraction'||action()==='replace_fraction';
-  const editingMatrix=()=>action()==='insert_matrix'||action()==='edit_matrix_cell';
+  const editingFraction=()=>action()==='insert_fraction'||action()==='replace_fraction'||action()==='insert_nested';
+  const editingMatrix=()=>action()==='insert_matrix'||action()==='edit_matrix_cell'||action()==='edit_matrix_axis';
   const targetID=()=>inserting()?props.target?.id:selected()?.id;
   const apply=()=>{
     const id=targetID();
@@ -272,6 +296,17 @@ export function DocumentMathToolbar(props:{
       const {row,column}=matrixPosition(),expectedText=storedMatrixText(),text=matrixText();
       if(!validMatrixEntry(text)||text===expectedText){setError('셀의 새 내용을 UTF-8 256바이트 이하로 입력하세요.');return;}
       math={action:mode,matrixCell:{row:row+1,column:column+1,expectedText,text}};
+    } else if (mode==='edit_matrix_axis') {
+      const values=axisMode()==='insert'?axisValues():axisExpected();
+      if(!axisAllowed()||!axisPositions().includes(axisIndex())||values.length!==axisCellCount()||!values.every(validMatrixEntry)){setError('행렬 크기와 대상 셀을 확인하세요.');return;}
+      math={action:mode,matrixAxis:{axis:axisKind(),mode:axisMode(),index:axisIndex(),values}};
+    } else if(mode==='insert_nested'){
+      if(!numerator().trim()||!denominator().trim()){setError('분자와 분모를 입력하세요.');return;}
+      math={action:mode,nested:{kind:nestedKind(),numerator:numerator(),denominator:denominator()}};
+    } else if(mode==='edit_nested_leaf'){
+      const expectedText=storedNestedText(),text=nestedText();
+      if(!text.trim()||text===expectedText){setError('수식의 새 값을 입력하세요.');return;}
+      math={action:mode,nestedLeaf:{leaf:nestedLeaf(),expectedText,text}};
     } else if (mode==='insert_fraction'||mode==='replace_fraction') {
       if (!numerator().trim()||!denominator().trim()) {setError('분자와 분모를 입력하세요.');return;}
       math={action:mode,fraction:{numerator:numerator(),denominator:denominator()}};
@@ -288,22 +323,27 @@ export function DocumentMathToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="수식 작업" class="editor-select min-h-11" disabled={disabled()} value={action()}
         onChange={event=>setAction(event.currentTarget.value as MathOperation['math']['action'])}>
-        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="insert_root">제곱근 삽입</option><option value="insert_matrix">행렬 삽입</option><option value="edit_matrix_cell">행렬 셀 편집</option><option value="replace_root">제곱근 바꾸기</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
+        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="insert_root">제곱근 삽입</option><option value="insert_matrix">행렬 삽입</option><option value="edit_matrix_cell">행렬 셀 편집</option><option value="edit_matrix_axis">행렬 행·열 편집</option><option value="insert_nested">중첩 수식 삽입</option><option value="edit_nested_leaf">중첩 수식 편집</option><option value="replace_root">제곱근 바꾸기</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
       </select>
       <Show when={!inserting()}><select aria-label="편집할 수식" class="editor-select min-h-11 max-w-48"
         disabled={disabled()} value={selected()?.id??''} onChange={event=>setID(event.currentTarget.value)}>
         <Show when={!objects().length}><option value="">편집할 수식 없음</option></Show>
         <For each={objects()}>{item=><option value={item.id}>{item.object?.matrix?`${item.object.matrix.length}×${item.object.matrix[0]?.length} 행렬 · ${item.object.matrix[0]?.[0]?.slice(0,30)}`:
-          item.object?.fraction?item.object.fraction.numerator+' / '+item.object.fraction.denominator:item.object?.squareRoot||item.object?.text||'수식'}</option>}</For>
+          item.object?.nestedMath?`중첩 수식 · ${item.object.nestedMath.numerator.slice(0,30)} / ${item.object.nestedMath.denominator.slice(0,30)}`:item.object?.fraction?item.object.fraction.numerator+' / '+item.object.fraction.denominator:item.object?.squareRoot||item.object?.text||'수식'}</option>}</For>
       </select></Show>
-      <Show when={action()!=='delete'&&!editingFraction()&&!editingMatrix()}><input type="text" maxlength="256" aria-label={editingRoot()?'피제곱근':'수식 텍스트'} placeholder="x² + y²"
+      <Show when={action()!=='delete'&&action()!=='edit_nested_leaf'&&!editingFraction()&&!editingMatrix()}><input type="text" maxlength="256" aria-label={editingRoot()?'피제곱근':'수식 텍스트'} placeholder="x² + y²"
         class="min-h-11 min-w-24 rounded border border-slate-300 px-2" disabled={disabled()} value={expression()}
         onInput={event=>setExpression(event.currentTarget.value)}/></Show>
       <Show when={editingFraction()}>
+        <Show when={action()==='insert_nested'}><label class="grid gap-1">중첩 구조<select class="editor-select min-h-11" value={nestedKind()} disabled={disabled()} onChange={event=>setNestedKind(event.currentTarget.value as ReturnType<typeof nestedKind>)}><option value="root_fraction">제곱근 안 분수</option><option value="fraction_root_numerator">제곱근 분자</option><option value="fraction_root_denominator">제곱근 분모</option></select></label></Show>
         <input type="text" maxlength="256" aria-label="분자" placeholder="분자" class="min-h-11 w-24 rounded border border-slate-300 px-2"
           value={numerator()} disabled={disabled()} onInput={event=>setNumerator(event.currentTarget.value)}/>
         <input type="text" maxlength="256" aria-label="분모" placeholder="분모" class="min-h-11 w-24 rounded border border-slate-300 px-2"
           value={denominator()} disabled={disabled()} onInput={event=>setDenominator(event.currentTarget.value)}/>
+      </Show>
+      <Show when={action()==='edit_nested_leaf'&&selected()}>
+        <label class="grid gap-1">중첩 수식 위치<select class="editor-select min-h-11" value={nestedLeaf()} disabled={disabled()} onChange={event=>setNestedLeaf(event.currentTarget.value as 'numerator'|'denominator')}><option value="numerator">분자</option><option value="denominator">분모</option></select></label>
+        <label class="grid gap-1">수식 값<input type="text" maxlength="256" value={nestedText()} disabled={disabled()} class="min-h-11 w-32 rounded border border-slate-300 px-2" onInput={event=>setNestedText(event.currentTarget.value)}/></label>
       </Show>
       <Show when={action()==='insert_matrix'}>
         <label class="grid gap-1">행 수<select class="editor-select min-h-11" value={matrixRows()} disabled={disabled()} onChange={event=>resizeMatrix(Number(event.currentTarget.value),matrixColumns())}><For each={[2,3,4]}>{size=><option value={size}>{size}</option>}</For></select></label>
@@ -337,6 +377,18 @@ export function DocumentMathToolbar(props:{
             class="min-h-11 w-32 max-w-full rounded border border-slate-300 px-2"
             onInput={event=>setMatrixText(event.currentTarget.value)}/>
         </label>
+      </Show>
+      <Show when={action()==='edit_matrix_axis'&&selected()}>
+        <label class="grid gap-1">편집 단위<select class="editor-select min-h-11" value={axisKind()} disabled={disabled()} onChange={event=>setAxisKind(event.currentTarget.value as 'row'|'column')}><option value="row">행</option><option value="column">열</option></select></label>
+        <label class="grid gap-1">구조 작업<select class="editor-select min-h-11" value={axisMode()} disabled={disabled()} onChange={event=>setAxisMode(event.currentTarget.value as 'insert'|'delete')}><option value="insert">삽입</option><option value="delete">삭제</option></select></label>
+        <label class="grid gap-1">위치<select class="editor-select min-h-11" value={axisIndex()} disabled={disabled()||!axisAllowed()} onChange={event=>setAxisIndex(Number(event.currentTarget.value))}><For each={axisPositions()}>{index=><option value={index}>{index}</option>}</For></select></label>
+        <Show when={axisAllowed()} fallback={<p class="text-slate-600">행과 열은 각각 2~4개를 유지해야 합니다.</p>}>
+          <Show when={axisMode()==='insert'} fallback={<p>삭제할 셀: {axisExpected().join(', ')}</p>}>
+            <For each={Array.from({length:axisCellCount()},(_,i)=>i)}>{index=><label class="grid gap-1">새 셀 {index+1}
+              <input type="text" maxlength="256" class="min-h-11 w-24 rounded border border-slate-300 px-2" disabled={disabled()} value={axisValues()[index]??''} onInput={event=>setAxisValues(values=>values.map((value,i)=>i===index?event.currentTarget.value:value))}/>
+            </label>}</For>
+          </Show>
+        </Show>
       </Show>
       <button type="button" class={buttonClass} disabled={disabled()||!targetID()} onClick={apply}>수식 적용</button>
       <Show when={props.pending}><p class="basis-full text-slate-600">저장하거나 실행 취소하세요.</p></Show>

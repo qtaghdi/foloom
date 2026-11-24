@@ -1383,6 +1383,13 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 `math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
 [Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
 
+`중첩 수식 삽입`에서 제곱근 안 분수, 제곱근인 분자 또는 제곱근인 분모를
+선택하고 평문 분자·분모를 입력합니다. `insert_nested`와 `nested: { kind,
+numerator, denominator }`를 사용하며 종류는 `root_fraction`,
+`fraction_root_numerator`, `fraction_root_denominator`입니다. `edit_nested_leaf`는
+`nestedLeaf: { leaf, expectedText, text }`로 지정한 분자 또는 분모만 수정합니다.
+다른 중첩 구조와 서식은 보호합니다.
+
 수식의 `행렬 삽입`에서 행과 열을 각각 2~4개로 선택하고 모든 셀을 채우면 일반 Word 인라인 행렬을
 삽입합니다. `행렬 셀 편집`에서 기존 행렬과 행·열을 고르면 해당 셀만
 바꿉니다. 각 셀은 UTF-8 256바이트까지 입력할 수 있습니다.
@@ -1392,6 +1399,12 @@ HTTP·MCP에서는 `update_math`와
 `math: { action: "edit_matrix_cell", matrixCell: { row, column, expectedText, text } }`를
 보내면 셀을 편집합니다. 행과 열은 1부터 셉니다. 지원 범위 밖의 크기나 복합 속성이 있는
 행렬과 중첩 수식은 원본 구조를 보존합니다.
+
+`행렬 행·열 편집`에서는 지원 행렬의 행 또는 열을 선택해 2~4개 범위에서
+삽입하거나 삭제합니다. `edit_matrix_axis`와 `matrixAxis: { axis, mode, index, values }`를
+사용하며 `axis`는 `row` 또는 `column`, `mode`는 `insert` 또는 `delete`입니다.
+위치는 1부터 셉니다. `values`에는 삽입할 셀 또는 삭제할 셀의 현재 값을 순서대로
+보냅니다. 대상 이외의 원본 셀 XML은 유지합니다.
 [Word OMML 행렬](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.matrix)을 사용합니다.
 
 내부 데이터가 있는 SmartArt는 실제 도형 문구를 원본 데이터 순서에 따라 읽기
@@ -1437,6 +1450,17 @@ UTC 자정의 저장 날짜가 일치하는 독립 본문 컨트롤을 지원합
 `expectedText`와 `text`는 각각 현재와 새 `YYYY-MM-DD` 날짜입니다.
 원래 날짜 형식, ID와 텍스트 서식을 유지하고 잠금, 바인딩, 표시값과 저장값이
 다른 컨트롤은 보호합니다. [Word 날짜 콘텐츠 컨트롤](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.sdtcontentdate)을 사용합니다.
+
+지원되는 본문 드롭다운은 `콘텐츠 컨트롤 편집`의 선택 목록에서 항목을 변경할
+수 있습니다. 2~32개 항목의 고유 표시값·저장값과 현재 선택을 확인한 상태에서
+`update_control_choice`에 현재 run ID와 `expectedText`, 새 표시값 `text`를
+전달합니다. 기존 목록·ID·서식은 유지하고 표시 run과 `w:lastValue`를 함께
+갱신합니다. 잠금·바인딩·활성 참조와 복합 목록은 보호합니다.
+
+`새 드롭다운 항목`에 줄마다 하나씩 입력하고 초기 선택을 지정해 본문에
+삽입합니다. MCP의 `insert_control_choice`는 현재 문단 ID, 초기 표시값 `text`,
+`choiceOptions: [{ label, value }]`를 받습니다. 항목은 2~32개, 각 표시값과
+저장값은 고유하며 최대 UTF-8 256바이트입니다.
 
 인식하는 인라인 개체는 본문에 표시하고 원본 XML과 관련 part를 보존합니다.
 텍스트 상자와 컨트롤 표시가 원래 배치를 재현하지는 않습니다. 연결 데이터를

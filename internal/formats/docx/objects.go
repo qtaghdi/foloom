@@ -8,9 +8,12 @@ import (
 const mathNS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 type MathEdit struct {
-	Action     string              `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, insert_matrix, edit_matrix_cell, or delete"`
+	Action     string              `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, insert_matrix, edit_matrix_cell, edit_matrix_axis, insert_nested, edit_nested_leaf, or delete"`
 	Matrix     [][]string          `json:"matrix,omitempty" jsonschema:"Two through four rows and columns of rectangular plain-text matrix entries"`
 	MatrixCell *MathMatrixCellEdit `json:"matrixCell,omitempty"`
+	MatrixAxis *MathMatrixAxisEdit `json:"matrixAxis,omitempty"`
+	Nested     *MathNested         `json:"nested,omitempty"`
+	NestedLeaf *MathNestedLeafEdit `json:"nestedLeaf,omitempty"`
 	Expression string              `json:"expression,omitempty"`
 	Fraction   *MathFraction       `json:"fraction,omitempty"`
 }
@@ -21,13 +24,14 @@ type MathFraction struct {
 }
 
 type ObjectInfo struct {
-	UnwrapEditable          bool                `json:"unwrapEditable,omitempty"`
-	MoveChartUp             bool                `json:"moveChartUp,omitempty"`
-	MoveChartDown           bool                `json:"moveChartDown,omitempty"`
-	ChartValues             []string            `json:"chartValues,omitempty"`
-	DeleteEditable          bool                `json:"deleteEditable,omitempty"`
-	DateControl             *ControlDatePreview `json:"dateControl,omitempty"`
-	Date                    string              `json:"date,omitempty"`
+	UnwrapEditable          bool                  `json:"unwrapEditable,omitempty"`
+	MoveChartUp             bool                  `json:"moveChartUp,omitempty"`
+	MoveChartDown           bool                  `json:"moveChartDown,omitempty"`
+	ChartValues             []string              `json:"chartValues,omitempty"`
+	DeleteEditable          bool                  `json:"deleteEditable,omitempty"`
+	DateControl             *ControlDatePreview   `json:"dateControl,omitempty"`
+	ChoiceControl           *ControlChoicePreview `json:"choiceControl,omitempty"`
+	Date                    string                `json:"date,omitempty"`
 	noteID                  string
 	Kind                    string            `json:"kind"`
 	Author                  string            `json:"author,omitempty"`
@@ -42,6 +46,7 @@ type ObjectInfo struct {
 	Line                    *LinePreview      `json:"line,omitempty"`
 	Matrix                  [][]string        `json:"matrix,omitempty"`
 	SquareRoot              string            `json:"squareRoot,omitempty"`
+	NestedMath              *MathNested       `json:"nestedMath,omitempty"`
 }
 
 func editableMath(math *node) bool {
@@ -126,7 +131,10 @@ func objectPreview(n *node) *ObjectInfo {
 		if out.Matrix = matrixPreview(n); out.Matrix != nil {
 			out.Editable = true
 		}
-		if out.Editable && out.Fraction == nil && out.SquareRoot == "" && out.Matrix == nil {
+		if out.NestedMath = nestedMathPreview(n); out.NestedMath != nil {
+			out.Editable = true
+		}
+		if out.Editable && out.Fraction == nil && out.SquareRoot == "" && out.Matrix == nil && out.NestedMath == nil {
 			out.Text = reviewText(childNS(childNS(n, mathNS, "r"), mathNS, "t").text.String(), 1024)
 		}
 		return out
@@ -192,16 +200,25 @@ func mathTextRun(text string) string {
 }
 
 func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) {
+	if edit.Action != "insert_nested" && edit.Nested != nil || edit.Action != "edit_nested_leaf" && edit.NestedLeaf != nil || (edit.Action == "insert_nested" || edit.Action == "edit_nested_leaf") && edit.Expression != "" {
+		return replacement{}, fmt.Errorf("unexpected DOCX nested math fields")
+	}
 	fractionEdit := edit.Action == "insert_fraction" || edit.Action == "replace_fraction"
 	if !fractionEdit && edit.Fraction != nil {
 		return replacement{}, fmt.Errorf("unexpected DOCX fraction fields")
 	}
-	if (edit.Action != "insert_matrix" && edit.Matrix != nil) || (edit.Action != "edit_matrix_cell" && edit.MatrixCell != nil) ||
-		((edit.Action == "insert_matrix" || edit.Action == "edit_matrix_cell") && edit.Expression != "") {
+	if (edit.Action != "insert_matrix" && edit.Matrix != nil) || (edit.Action != "edit_matrix_cell" && edit.MatrixCell != nil) || (edit.Action != "edit_matrix_axis" && edit.MatrixAxis != nil) ||
+		((edit.Action == "insert_matrix" || edit.Action == "edit_matrix_cell" || edit.Action == "edit_matrix_axis") && edit.Expression != "") {
 		return replacement{}, fmt.Errorf("unexpected DOCX matrix fields")
 	}
 	if edit.Action == "edit_matrix_cell" {
 		return matrixCellReplacement(data, t, edit.MatrixCell)
+	}
+	if edit.Action == "edit_matrix_axis" {
+		return matrixAxisReplacement(data, t, edit.MatrixAxis)
+	}
+	if edit.Action == "edit_nested_leaf" {
+		return nestedLeafReplacement(data, t, edit.NestedLeaf)
 	}
 	if edit.Action == "delete" {
 		if t.kind != "math_object" || !editableMath(t.node) || strings.Contains(string(data[t.node.start:t.node.end]), "<!--") || edit.Expression != "" {
@@ -219,6 +236,12 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 	}
 	var contents string
 	switch {
+	case edit.Action == "insert_nested":
+		var err error
+		contents, err = nestedMathContents(edit.Nested)
+		if err != nil {
+			return replacement{}, err
+		}
 	case edit.Action == "insert_matrix":
 		var err error
 		contents, err = matrixContents(edit.Matrix)
@@ -254,7 +277,7 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 			return replacement{}, fmt.Errorf("protected DOCX fraction")
 		}
 		return replacement{t.node.start, t.node.end, []byte(raw)}, nil
-	case "insert", "insert_fraction", "insert_root", "insert_matrix":
+	case "insert", "insert_fraction", "insert_root", "insert_matrix", "insert_nested":
 		p := t.paragraph
 		if t.kind != "replace_paragraphs" || p == nil {
 			return replacement{}, fmt.Errorf("DOCX equation requires an editable paragraph")

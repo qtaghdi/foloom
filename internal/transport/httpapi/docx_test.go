@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"image"
 	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -616,6 +618,106 @@ func TestDOCXMCPInsertsDateControl(t *testing.T) {
 	}
 }
 
+func TestDOCXMCPUpdatesDropdownSelection(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "choices.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "choice-marker"}}); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := zip.NewReader(bytes.NewReader(original), int64(len(original)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	for _, part := range reader.File {
+		input, err := part.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := io.ReadAll(input)
+		input.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if part.Name == "word/document.xml" {
+			control := `<w:sdt><w:sdtPr><w:id w:val="42"/><w:dropDownList w:lastValue="a"><w:listItem w:displayText="First" w:value="a"/><w:listItem w:displayText="Second" w:value="b"/></w:dropDownList></w:sdtPr><w:sdtContent><w:r><w:t>First</w:t></w:r></w:sdtContent></w:sdt>`
+			raw := string(payload)
+			start := strings.Index(raw, "<w:r>")
+			end := strings.Index(raw, "</w:r>")
+			if start < 0 || end < start || !strings.Contains(raw[start:end], "choice-marker") {
+				t.Fatal("missing synthetic marker")
+			}
+			payload = []byte(raw[:start] + control + raw[end+len("</w:r>"):])
+		}
+		entry, err := writer.Create(part.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write(payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, output.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := initial.Blocks[0].Paragraph.Runs[0]
+	if run.Object == nil || run.Object.ChoiceControl == nil {
+		t.Fatal("missing dropdown projection")
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{SessionID: initial.ID, BaseRevision: initial.Revision, Operations: []docx.Operation{{Type: "update_control_choice", TargetID: run.ID, ExpectedText: "First", Text: "Second"}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP dropdown edit: %v %+v", err, result)
+	}
+	next, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := next.Blocks[0].Paragraph.Runs[0].Object; got == nil || got.ChoiceControl == nil || got.ChoiceControl.Value != "Second" || next.Revision != initial.Revision+1 {
+		t.Fatal("dropdown selection not committed")
+	}
+}
+
+func TestDOCXMCPInsertsDropdownChoice(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "new-choice.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{SessionID: initial.ID, BaseRevision: initial.Revision, Operations: []docx.Operation{{Type: "insert_control_choice", TargetID: initial.Blocks[0].ID, Text: "Second", ChoiceOptions: []docx.ControlChoiceOption{{Label: "First", Value: "a"}, {Label: "Second", Value: "b"}}}}}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP dropdown insertion: %v %+v", err, result)
+	}
+	next, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := next.Blocks[0].Paragraph.Runs[1].Object; got == nil || got.ChoiceControl == nil || got.ChoiceControl.Value != "Second" || next.Revision != initial.Revision+1 {
+		t.Fatal("dropdown insertion not committed")
+	}
+}
+
 func TestDOCXMCPDefinesCompoundNumbering(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "outline.docx")
@@ -694,6 +796,38 @@ func TestDOCXMCPTracksAndRejectsParagraphAlignment(t *testing.T) {
 	}
 }
 
+func TestDOCXMCPNestedMathLeaf(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "nested.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	apply := func(view docx.Snapshot, id string, math docx.MathEdit) docx.Snapshot {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{SessionID: view.ID, BaseRevision: view.Revision, Operations: []docx.Operation{{Type: "update_math", TargetID: id, Math: &math}}}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP nested math: %v %+v", err, result)
+		}
+		next, err := api.docxSnapshot(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	inserted := apply(initial, initial.Blocks[0].ID, docx.MathEdit{Action: "insert_nested", Nested: &docx.MathNested{Kind: "fraction_root_denominator", Numerator: "a", Denominator: "b"}})
+	updated := apply(inserted, inserted.Blocks[0].Paragraph.Runs[1].ID, docx.MathEdit{Action: "edit_nested_leaf", NestedLeaf: &docx.MathNestedLeafEdit{Leaf: "denominator", ExpectedText: "b", Text: "c"}})
+	if got := updated.Blocks[0].Paragraph.Runs[1].Object; got == nil || got.NestedMath == nil || got.NestedMath.Denominator != "c" || got.NestedMath.Kind != "fraction_root_denominator" || updated.Revision != initial.Revision+2 {
+		t.Fatal("nested math was not committed")
+	}
+}
+
 func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "matrix.docx")
@@ -739,5 +873,10 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 	if got == nil || !reflect.DeepEqual(got.Matrix, [][]string{{"11", "22", "23", "24"}, {"33", "44", "45", "46"}, {"51", "52", "53", "55"}}) ||
 		updated.Revision != initial.Revision+2 {
 		t.Fatal("MCP commit did not update just the addressed matrix cell", got)
+	}
+	inserted := apply(updated, updated.Blocks[0].Paragraph.Runs[1].ID, map[string]any{"action": "edit_matrix_axis", "matrixAxis": map[string]any{"axis": "row", "mode": "insert", "index": 2, "values": []string{"a", "b", "c", "d"}}})
+	deleted := apply(inserted, inserted.Blocks[0].Paragraph.Runs[1].ID, map[string]any{"action": "edit_matrix_axis", "matrixAxis": map[string]any{"axis": "column", "mode": "delete", "index": 4, "values": []string{"24", "d", "46", "55"}}})
+	if got := deleted.Blocks[0].Paragraph.Runs[1].Object; got == nil || !reflect.DeepEqual(got.Matrix, [][]string{{"11", "22", "23"}, {"a", "b", "c"}, {"33", "44", "45"}, {"51", "52", "53"}}) || deleted.Revision != initial.Revision+4 {
+		t.Fatal("MCP axis edits failed", got)
 	}
 }

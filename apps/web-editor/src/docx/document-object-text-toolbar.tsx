@@ -21,6 +21,10 @@ export function DocumentObjectTextToolbar(props:{
   const [id,setID]=createSignal(''),[error,setError]=createSignal('');
   const [point,setPoint]=createSignal(0);
   const [chartFormOpened,setChartFormOpened]=createSignal(false);
+  const [choiceDraft,setChoiceDraft]=createSignal(''),[initialChoice,setInitialChoice]=createSignal('');
+  const [choiceFormOpened,setChoiceFormOpened]=createSignal(false);
+  const newChoices=()=>choiceDraft().split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  const currentChoice=()=>newChoices().includes(initialChoice())?initialChoice():newChoices()[0]??'';
   const labels=()=>objectLabels[props.kind];
   const objects=()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ? block.paragraph.runs.filter(run=>run.object?.kind===props.kind&&
@@ -78,6 +82,32 @@ export function DocumentObjectTextToolbar(props:{
             <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>날짜 컨트롤 삽입</button>
           </form>
         </Show>
+        <Show when={props.kind==='control'}>
+          <button type="button" class={buttonClass} aria-expanded={choiceFormOpened()} disabled={disabled()||!props.target?.structureEditable} onClick={()=>setChoiceFormOpened(!choiceFormOpened())}>새 드롭다운</button>
+          <Show when={choiceFormOpened()}>
+          <form class="flex basis-full flex-wrap items-end gap-2" onSubmit={event=>{
+            event.preventDefault();
+            const target=props.target,options=newChoices(),text=currentChoice();
+            if(disabled()||!target?.structureEditable)return;
+            if(options.length<2||options.length>32||new Set(options).size!==options.length||options.some(value=>utf8Length(value)>256)){
+              setError('서로 다른 항목을 2~32개 입력하세요. 각 항목은 UTF-8 256바이트 이하입니다.');return;
+            }
+            const accepted=props.onApply({type:'insert_control_choice',targetId:target.id,expectedText:'',text,choiceOptions:options.map(label=>({label,value:label}))});
+            setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            if(accepted){setChoiceDraft('');setInitialChoice('');setChoiceFormOpened(false);}
+          }}>
+            <label class="flex min-w-0 flex-col gap-1">새 드롭다운 항목 (줄마다 하나)
+              <textarea name="newControlChoices" rows="3" maxlength="8192" class="min-h-11 max-w-full rounded border border-slate-300 px-2 py-1" value={choiceDraft()} onInput={event=>setChoiceDraft(event.currentTarget.value)} disabled={disabled()||!props.target?.structureEditable}/>
+            </label>
+            <label class="flex min-w-0 flex-col gap-1">초기 선택
+              <select name="initialControlChoice" class="editor-select min-h-11 max-w-48" value={currentChoice()} onChange={event=>setInitialChoice(event.currentTarget.value)} disabled={disabled()||!props.target?.structureEditable}>
+                <For each={newChoices()}>{option=><option value={option}>{option}</option>}</For>
+              </select>
+            </label>
+            <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>드롭다운 삽입</button>
+          </form>
+          </Show>
+        </Show>
         <Show when={objects().length}>
         <select aria-label={labels().select} class="editor-select min-h-11 max-w-56"
           value={selected()?.id??''} disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setPoint(0);setError('');}}>
@@ -104,7 +134,24 @@ export function DocumentObjectTextToolbar(props:{
               <button type="submit" class={buttonClass} disabled={disabled()}>날짜 적용</button>
             </form>
           }</Show>
-          <Show when={run.object?.editable&&!run.object.dateControl}>
+          <Show when={run.object?.choiceControl}>{choice=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const text=(event.currentTarget.elements.namedItem('controlChoice') as HTMLSelectElement).value;
+              if(text===choice().value||!choice().options.includes(text))return;
+              const accepted=props.onApply({type:'update_control_choice',targetId:run.id,expectedText:choice().value,text});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">콘텐츠 컨트롤 선택
+                <select name="controlChoice" class="editor-select min-h-11 max-w-56" value={choice().value} disabled={disabled()}>
+                  <For each={choice().options}>{option=><option value={option}>{option}</option>}</For>
+                </select>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>선택 적용</button>
+            </form>
+          }</Show>
+          <Show when={run.object?.editable&&!run.object.dateControl&&!run.object.choiceControl}>
           <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
             event.preventDefault();
             if (disabled()) return;

@@ -358,6 +358,8 @@ func inspectDocument(root *node, sessionID string, revision uint64, styles previ
 						targets[run.ID] = target{node: r, text: value, paragraph: p, kind: "update_control_text", textStories: [][]*node{texts}}
 					} else if _, display := dateControlNodes(r, root.source); display != nil {
 						targets[run.ID] = target{node: r, text: display.text.String(), paragraph: p, kind: "update_control_date"}
+					} else if choice := choiceControlNodes(r, root.source); choice != nil {
+						targets[run.ID] = target{node: r, text: choice.Value, paragraph: p, kind: "update_control_choice"}
 					}
 				}
 				if r.is("hyperlink") {
