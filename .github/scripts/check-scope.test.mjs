@@ -1,6 +1,41 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { classifyChanges, changedPaths } from './check-scope.mjs';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+
+const workflow = readFileSync(new URL('../workflows/pr-ci.yml', import.meta.url), 'utf8');
+const targetsScript = workflow.match(/          targets=\(web-install\)[\s\S]*?          make "\$\{targets\[@\]\}"/)?.[0];
+const gateScript = workflow.match(/          node <<'JS'\n([\s\S]*?)\n          JS/)?.[1];
+
+test('editor and package targets share one Make invocation', () => {
+  assert.ok(targetsScript);
+  const run = (paths) => {
+    const plan = classifyChanges(paths);
+    return execFileSync('bash', ['-c', `make() { printf '%s\\n' "$@"; }\n${targetsScript}`], {
+      encoding: 'utf8', env: { ...process.env, DOCX: String(plan.docx), WEB: String(plan.web), PACKAGE: String(plan.package), REGRESSION: String(plan.regression) },
+    }).trim().split('\n');
+  };
+  assert.deepEqual(run(['internal/formats/docx/create.go']), ['web-install', 'docx-verify', 'package-verify', 'release-package-test']);
+  assert.deepEqual(run(['apps/web-editor/src/ui/app-view.ts']), ['web-install', 'web-test', 'package-verify', 'release-package-test']);
+  assert.deepEqual(run(['go.mod']), ['web-install', 'package-verify', 'release-package-test']);
+});
+
+test('combined required job rejects failures, omissions and invalid scope results', () => {
+  assert.ok(gateScript);
+  const plan = classifyChanges(['internal/formats/docx/create.go']);
+  const jobs = {
+    scope: { result: 'success', outputs: Object.fromEntries(Object.entries(plan).map(([key, value]) => [key, String(value)])) },
+    regression: { result: 'skipped' }, editor_package: { result: 'success' }, safety: { result: 'skipped' }, performance: { result: 'skipped' },
+  };
+  const run = (results) => execFileSync(process.execPath, ['-e', gateScript], { env: { ...process.env, RESULTS: JSON.stringify(results) }, stdio: 'pipe' });
+  assert.doesNotThrow(() => run(jobs));
+  for (const result of ['failure', 'cancelled', 'skipped']) assert.throws(() => run({ ...jobs, editor_package: { result } }));
+  assert.throws(() => run({ ...jobs, scope: { ...jobs.scope, result: 'failure' } }));
+  assert.throws(() => run({ ...jobs, scope: { ...jobs.scope, outputs: {} } }));
+  const full = classifyChanges(['go.mod']);
+  assert.doesNotThrow(() => run({ scope: { result: 'success', outputs: Object.fromEntries(Object.entries(full).map(([key, value]) => [key, String(value)])) }, regression: { result: 'success' }, editor_package: { result: 'success' }, safety: { result: 'success' }, performance: { result: 'success' } }));
+});
 
 test('known documentation edits skip expensive checks', () => {
   for (const path of ['README.md', 'AGENTS.md', 'CHANGELOG.md', 'docs/xlsx-performance.md', '.agents/skills/document-xlsx/SKILL.md', '.github/ISSUE_TEMPLATE/task.yml']) {
