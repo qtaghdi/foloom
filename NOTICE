@@ -1,0 +1,6 @@
+Foloom
+Copyright 2026 Foloom contributors
+
+This project includes independently licensed dependencies identified in go.mod,
+go.sum, pnpm-lock.yaml, and legacy/xlsx-python/requirements.txt. See
+docs/third-party-notices.md for the source distribution policy.
