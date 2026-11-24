@@ -165,6 +165,7 @@ func (s *Session) snapshotLocked() (Snapshot, error) {
 	headers := s.pkg.headerFooterCatalog(targets)
 	_, _, settings, settingsErr := s.pkg.pageSettings(nil)
 	projectRestrictedControlEdits(root, blocks, targetsByID, settings, settingsErr)
+	projectLineDeletes(blocks, targetsByID, settings, settingsErr)
 	for _, kind := range []string{"footnote", "endnote"} {
 		if root.has(kind + "Reference") {
 			s.pkg.projectNotes(kind, root.child("body"), blocks, targetsByID, settings, settingsErr == nil && len(targets) == 1)
@@ -448,15 +449,24 @@ func (s *Session) prepareOperations(input ApplyInput, actor string) ([]byte, err
 			}
 			continue
 		}
-		if op.Type == "resize_line" {
+		if op.Type == "resize_line" || op.Type == "delete_line" {
 			t := targets[op.TargetID]
-			if t.kind != "inline_line" || seen[op.TargetID] || op.LineSize == nil ||
+			if t.kind != "inline_line" || seen[op.TargetID] || op.Type == "resize_line" && op.LineSize == nil ||
 				op.Image != nil || op.Reference != nil || op.Math != nil || op.Comment != nil || op.ListDefinition != nil ||
 				op.Table != nil || op.Boundary != "" || op.Section != nil || op.SectionID != "" || op.EvenAndOddHeaders != nil ||
 				op.StyleDefinition != nil || op.EndTargetID != "" || op.Paragraphs != nil || op.Text != "" || op.ExpectedText != "" {
-				return nil, fmt.Errorf("invalid DOCX line resize operation")
+				return nil, fmt.Errorf("invalid DOCX line operation")
 			}
 			seen[op.TargetID] = true
+			if op.Type == "delete_line" {
+				_, _, settings, settingsErr := s.pkg.pageSettings(nil)
+				ranges, valid := contentControlRanges(t.paragraph.parent)
+				if !allowControlEditsInSettings(settings, settingsErr) || !valid || ranges[t.paragraph] || !simpleLineDeletion(t.run) {
+					return nil, fmt.Errorf("invalid or protected DOCX line deletion")
+				}
+				edits = append(edits, replacement{start: t.run.start, end: t.run.end})
+				continue
+			}
 			updated, err := resizeInlineLine(s.pkg.document, t, *op.LineSize)
 			if err != nil {
 				return nil, err
