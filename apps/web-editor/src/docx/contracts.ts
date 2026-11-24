@@ -162,7 +162,7 @@ export type TrackTextOperation = {type:'track_run_text';targetId:string;expected
   {type:'track_paragraph_merge';targetId:string} |
   {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ChartKind='pie'|'bar'|'line';
-export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_control_date'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
+export type ObjectTextOperation = {type:'insert_control_text'|'insert_control_date'|'update_control_text'|'update_control_date'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
   {type:'update_chart_value';targetId:string;chartValue:{point:number;expectedValue:string;value:string}} |
   {type:'unwrap_control';targetId:string} |
   {type:'delete_chart';targetId:string} | {type:'move_chart_up';targetId:string} | {type:'move_chart_down';targetId:string} |

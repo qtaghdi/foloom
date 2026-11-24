@@ -9,6 +9,10 @@ import (
 const controlDateFormat = "yyyy-MM-dd"
 const controlDateSuffix = "T00:00:00Z"
 
+func inlineDateControl(id int64, value string) string {
+	return fmt.Sprintf(`<dws:sdt xmlns:dws="%s"><dws:sdtPr><dws:id dws:val="%d"/><dws:date dws:fullDate="%s%s"><dws:dateFormat dws:val="%s"/><dws:lid dws:val="en-US"/><dws:storeMappedDataAs dws:val="dateTime"/><dws:calendar dws:val="gregorian"/></dws:date></dws:sdtPr><dws:sdtContent><dws:r><dws:t>%s</dws:t></dws:r></dws:sdtContent></dws:sdt>`, wordNS, id, value, controlDateSuffix, controlDateFormat, value)
+}
+
 type ControlDatePreview struct {
 	Value  string `json:"value"`
 	Format string `json:"format"`

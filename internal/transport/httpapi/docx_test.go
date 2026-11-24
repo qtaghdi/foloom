@@ -543,6 +543,36 @@ func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
 	}
 }
 
+func TestDOCXMCPInsertsDateControl(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "date.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+		SessionID: initial.ID, BaseRevision: initial.Revision,
+		Operations: []docx.Operation{{Type: "insert_control_date", TargetID: initial.Blocks[0].ID, Text: "2032-02-29"}},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP date insertion: %v %+v", err, result)
+	}
+	after, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := after.Blocks[0].Paragraph.Runs
+	if after.Revision != initial.Revision+1 || len(runs) != 2 || runs[1].Object == nil || runs[1].Object.DateControl == nil || runs[1].Object.DateControl.Value != "2032-02-29" {
+		t.Fatal("shared session did not expose inserted date")
+	}
+}
+
 func TestDOCXMCPDefinesCompoundNumbering(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "outline.docx")
