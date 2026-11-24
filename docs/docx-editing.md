@@ -1392,6 +1392,12 @@ HTTP·MCP에서는 `update_math`와
 `math: { action: "edit_matrix_cell", matrixCell: { row, column, expectedText, text } }`를
 보내면 셀을 편집합니다. 행과 열은 1부터 셉니다. 지원 범위 밖의 크기나 복합 속성이 있는
 행렬과 중첩 수식은 원본 구조를 보존합니다.
+
+`행렬 행·열 편집`에서는 지원 행렬의 행 또는 열을 선택해 2~4개 범위에서
+삽입하거나 삭제합니다. `edit_matrix_axis`와 `matrixAxis: { axis, mode, index, values }`를
+사용하며 `axis`는 `row` 또는 `column`, `mode`는 `insert` 또는 `delete`입니다.
+위치는 1부터 셉니다. `values`에는 삽입할 셀 또는 삭제할 셀의 현재 값을 순서대로
+보냅니다. 대상 이외의 원본 셀 XML은 유지합니다.
 [Word OMML 행렬](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.matrix)을 사용합니다.
 
 내부 데이터가 있는 SmartArt는 실제 도형 문구를 원본 데이터 순서에 따라 읽기

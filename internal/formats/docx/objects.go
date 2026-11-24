@@ -8,9 +8,10 @@ import (
 const mathNS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 type MathEdit struct {
-	Action     string              `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, insert_matrix, edit_matrix_cell, or delete"`
+	Action     string              `json:"action" jsonschema:"insert, insert_fraction, replace, replace_fraction, insert_root, replace_root, insert_matrix, edit_matrix_cell, edit_matrix_axis, or delete"`
 	Matrix     [][]string          `json:"matrix,omitempty" jsonschema:"Two through four rows and columns of rectangular plain-text matrix entries"`
 	MatrixCell *MathMatrixCellEdit `json:"matrixCell,omitempty"`
+	MatrixAxis *MathMatrixAxisEdit `json:"matrixAxis,omitempty"`
 	Expression string              `json:"expression,omitempty"`
 	Fraction   *MathFraction       `json:"fraction,omitempty"`
 }
@@ -197,12 +198,15 @@ func mathReplacement(data []byte, t target, edit MathEdit) (replacement, error) 
 	if !fractionEdit && edit.Fraction != nil {
 		return replacement{}, fmt.Errorf("unexpected DOCX fraction fields")
 	}
-	if (edit.Action != "insert_matrix" && edit.Matrix != nil) || (edit.Action != "edit_matrix_cell" && edit.MatrixCell != nil) ||
-		((edit.Action == "insert_matrix" || edit.Action == "edit_matrix_cell") && edit.Expression != "") {
+	if (edit.Action != "insert_matrix" && edit.Matrix != nil) || (edit.Action != "edit_matrix_cell" && edit.MatrixCell != nil) || (edit.Action != "edit_matrix_axis" && edit.MatrixAxis != nil) ||
+		((edit.Action == "insert_matrix" || edit.Action == "edit_matrix_cell" || edit.Action == "edit_matrix_axis") && edit.Expression != "") {
 		return replacement{}, fmt.Errorf("unexpected DOCX matrix fields")
 	}
 	if edit.Action == "edit_matrix_cell" {
 		return matrixCellReplacement(data, t, edit.MatrixCell)
+	}
+	if edit.Action == "edit_matrix_axis" {
+		return matrixAxisReplacement(data, t, edit.MatrixAxis)
 	}
 	if edit.Action == "delete" {
 		if t.kind != "math_object" || !editableMath(t.node) || strings.Contains(string(data[t.node.start:t.node.end]), "<!--") || edit.Expression != "" {
