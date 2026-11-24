@@ -104,7 +104,24 @@ export function DocumentObjectTextToolbar(props:{
               <button type="submit" class={buttonClass} disabled={disabled()}>날짜 적용</button>
             </form>
           }</Show>
-          <Show when={run.object?.editable&&!run.object.dateControl}>
+          <Show when={run.object?.choiceControl}>{choice=>
+            <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const text=(event.currentTarget.elements.namedItem('controlChoice') as HTMLSelectElement).value;
+              if(text===choice().value||!choice().options.includes(text))return;
+              const accepted=props.onApply({type:'update_control_choice',targetId:run.id,expectedText:choice().value,text});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex min-w-0 flex-col gap-1">콘텐츠 컨트롤 선택
+                <select name="controlChoice" class="editor-select min-h-11 max-w-56" value={choice().value} disabled={disabled()}>
+                  <For each={choice().options}>{option=><option value={option}>{option}</option>}</For>
+                </select>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>선택 적용</button>
+            </form>
+          }</Show>
+          <Show when={run.object?.editable&&!run.object.dateControl&&!run.object.choiceControl}>
           <form class="flex flex-wrap items-end gap-2" onSubmit={event=>{
             event.preventDefault();
             if (disabled()) return;
