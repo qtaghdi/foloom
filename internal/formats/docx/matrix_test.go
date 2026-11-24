@@ -3,6 +3,7 @@ package docx
 import (
 	"bytes"
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -20,24 +21,25 @@ func TestPlainMatrixCellsEditOnlySelectedText(t *testing.T) {
 	v := mustSnapshot(t, s)
 	original := fileBytes(t, file)
 	if v.Blocks[1].Paragraph.Runs[0].Object.Editable {
-		t.Fatal("non-2×2 matrix was offered for editing")
+		t.Fatal("unsupported 1×1 matrix was offered for editing")
 	}
 	for _, values := range [][][]string{{{"1", "2", "extra"}, {"3", "4"}}, {{"", "2"}, {"3", "4"}},
+		{{"1", "2", "3", "4", "5"}, {"1", "2", "3", "4", "5"}},
 		{{"1", "2"}, {"3", strings.Repeat("한", 86)}}, {{"1", "2"}, {"3"}}, nil} {
 		if _, err := save(v, op(v.Blocks[0].ID, MathEdit{Action: "insert_matrix", Matrix: values})); err == nil ||
 			!bytes.Equal(original, fileBytes(t, file)) {
 			t.Fatal("invalid matrix changed the document")
 		}
 	}
-	v, err := save(v, op(v.Blocks[0].ID, MathEdit{Action: "insert_matrix", Matrix: [][]string{{"11", "22"}, {"33", "44"}}}))
+	v, err := save(v, op(v.Blocks[0].ID, MathEdit{Action: "insert_matrix", Matrix: [][]string{{"11", "22", "23"}, {"33", "44", "45"}, {"51", "52", "53"}, {"61", "62", "63"}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	initial := fileBytes(t, file)
 	xml := bytes.Clone(s.pkg.document)
 	run := v.Blocks[0].Paragraph.Runs[1]
-	want := [2][2]string{{"11", "22"}, {"33", "44"}}
-	if run.Object == nil || !run.Object.Editable || run.Object.Matrix == nil || *run.Object.Matrix != want ||
+	want := [][]string{{"11", "22", "23"}, {"33", "44", "45"}, {"51", "52", "53"}, {"61", "62", "63"}}
+	if run.Object == nil || !run.Object.Editable || !reflect.DeepEqual(run.Object.Matrix, want) ||
 		!bytes.Contains(xml, []byte(neighbor)) {
 		t.Fatal("missing native matrix preview or preserved complex object", run)
 	}
@@ -47,6 +49,7 @@ func TestPlainMatrixCellsEditOnlySelectedText(t *testing.T) {
 	for _, invalid := range []Operation{
 		op(run.ID, MathEdit{Action: "delete"}),
 		op(run.ID, MathEdit{Action: "edit_matrix_cell", MatrixCell: &MathMatrixCellEdit{Row: 0, Column: 1, ExpectedText: "33", Text: "5"}}),
+		op(run.ID, MathEdit{Action: "edit_matrix_cell", MatrixCell: &MathMatrixCellEdit{Row: 2, Column: 4, ExpectedText: "33", Text: "5"}}),
 		op(run.ID, MathEdit{Action: "edit_matrix_cell", MatrixCell: &MathMatrixCellEdit{Row: 2, Column: 1, ExpectedText: "stale", Text: "5"}}),
 		op(v.Blocks[1].Paragraph.Runs[0].ID, MathEdit{Action: "edit_matrix_cell", MatrixCell: valid.Math.MatrixCell}),
 	} {
@@ -70,7 +73,7 @@ func TestPlainMatrixCellsEditOnlySelectedText(t *testing.T) {
 	}
 	want[1][0] = "A < B"
 	got := mustSnapshot(t, reopened).Blocks[0].Paragraph.Runs[1].Object
-	if got == nil || got.Matrix == nil || *got.Matrix != want {
+	if got == nil || !reflect.DeepEqual(got.Matrix, want) {
 		t.Fatal("matrix cell contents did not survive reopen", got)
 	}
 	historyRestore(t, reopened, "undo")
