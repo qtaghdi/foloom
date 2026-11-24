@@ -15,6 +15,13 @@ type MathMatrixCellEdit struct {
 	Text         string `json:"text"`
 }
 
+type MathMatrixAxisEdit struct {
+	Axis   string   `json:"axis" jsonschema:"row or column"`
+	Mode   string   `json:"mode" jsonschema:"insert or delete"`
+	Index  int      `json:"index" jsonschema:"One-based insertion or deletion position"`
+	Values []string `json:"values" jsonschema:"Inserted cell values or exact expected values for a deletion"`
+}
+
 func validMatrixCellText(text string) bool {
 	return len(text) <= maxMatrixCellBytes && validMathText(text)
 }
@@ -117,4 +124,81 @@ func matrixCellReplacement(data []byte, target target, edit *MathMatrixCellEdit)
 		return replacement{}, fmt.Errorf("DOCX matrix cell is stale or unchanged")
 	}
 	return replaceTextNode(data, text, edit.Text)
+}
+
+func matrixAxisReplacement(data []byte, target target, edit *MathMatrixAxisEdit) (replacement, error) {
+	if target.kind != "math_object" || edit == nil || edit.Index < 1 || strings.Contains(string(data[target.node.start:target.node.end]), "<!--") {
+		return replacement{}, fmt.Errorf("protected or invalid DOCX matrix axis")
+	}
+	cells, ok := plainMatrixCells(target.node)
+	if !ok || edit.Axis != "row" && edit.Axis != "column" || edit.Mode != "insert" && edit.Mode != "delete" {
+		return replacement{}, fmt.Errorf("invalid DOCX matrix structure operation")
+	}
+	rows, columns := len(cells), len(cells[0])
+	size, count := rows, columns
+	if edit.Axis == "column" {
+		size, count = columns, rows
+	}
+	insert := edit.Mode == "insert"
+	if len(edit.Values) != count || insert && (size >= maxMatrixDimension || edit.Index > size+1) || !insert && (size <= 2 || edit.Index > size) {
+		return replacement{}, fmt.Errorf("DOCX matrix axis size or position is outside supported limits")
+	}
+	for _, value := range edit.Values {
+		if !validMatrixCellText(value) {
+			return replacement{}, fmt.Errorf("invalid DOCX matrix axis value")
+		}
+	}
+	matrix := target.node.children[0]
+	var edits []replacement
+	cellXML := func(value string) string {
+		return `<dwm:e xmlns:dwm="` + mathNS + `">` + mathTextRun(value) + `</dwm:e>`
+	}
+	position := func(nodes []*node) int {
+		if edit.Index > len(nodes) {
+			return nodes[len(nodes)-1].end
+		}
+		return nodes[edit.Index-1].start
+	}
+	if edit.Axis == "row" {
+		if insert {
+			var raw strings.Builder
+			raw.WriteString(`<dwm:mr xmlns:dwm="` + mathNS + `">`)
+			for _, value := range edit.Values {
+				raw.WriteString(cellXML(value))
+			}
+			raw.WriteString(`</dwm:mr>`)
+			at := position(matrix.children)
+			edits = append(edits, replacement{at, at, []byte(raw.String())})
+		} else {
+			for j, text := range cells[edit.Index-1] {
+				if text.text.String() != edit.Values[j] {
+					return replacement{}, fmt.Errorf("stale DOCX matrix row")
+				}
+			}
+			row := matrix.children[edit.Index-1]
+			edits = append(edits, replacement{row.start, row.end, nil})
+		}
+	} else {
+		for i, row := range matrix.children {
+			if insert {
+				at := position(row.children)
+				edits = append(edits, replacement{at, at, []byte(cellXML(edit.Values[i]))})
+			} else {
+				if cells[i][edit.Index-1].text.String() != edit.Values[i] {
+					return replacement{}, fmt.Errorf("stale DOCX matrix column")
+				}
+				cell := row.children[edit.Index-1]
+				edits = append(edits, replacement{cell.start, cell.end, nil})
+			}
+		}
+	}
+	var raw strings.Builder
+	at := matrix.start
+	for _, e := range edits {
+		raw.Write(data[at:e.start])
+		raw.Write(e.data)
+		at = e.end
+	}
+	raw.Write(data[at:matrix.end])
+	return replacement{matrix.start, matrix.end, []byte(raw.String())}, nil
 }

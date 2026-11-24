@@ -842,4 +842,9 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 		updated.Revision != initial.Revision+2 {
 		t.Fatal("MCP commit did not update just the addressed matrix cell", got)
 	}
+	inserted := apply(updated, updated.Blocks[0].Paragraph.Runs[1].ID, map[string]any{"action": "edit_matrix_axis", "matrixAxis": map[string]any{"axis": "row", "mode": "insert", "index": 2, "values": []string{"a", "b", "c", "d"}}})
+	deleted := apply(inserted, inserted.Blocks[0].Paragraph.Runs[1].ID, map[string]any{"action": "edit_matrix_axis", "matrixAxis": map[string]any{"axis": "column", "mode": "delete", "index": 4, "values": []string{"24", "d", "46", "55"}}})
+	if got := deleted.Blocks[0].Paragraph.Runs[1].Object; got == nil || !reflect.DeepEqual(got.Matrix, [][]string{{"11", "22", "23"}, {"a", "b", "c"}, {"33", "44", "45"}, {"51", "52", "53"}}) || deleted.Revision != initial.Revision+4 {
+		t.Fatal("MCP axis edits failed", got)
+	}
 }

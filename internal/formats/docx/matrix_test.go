@@ -85,3 +85,54 @@ func TestPlainMatrixCellsEditOnlySelectedText(t *testing.T) {
 		t.Fatal("undo failed to restore the package before matrix insertion")
 	}
 }
+
+func TestMatrixAxisEditsPreserveOtherCells(t *testing.T) {
+	ctx := context.Background()
+	s, file := withDocument(t, bodyXML(`<w:p><w:r><w:t>Prefix</w:t></w:r></w:p>`))
+	v := mustSnapshot(t, s)
+	apply := func(view Snapshot, target string, math MathEdit) (Snapshot, error) {
+		return s.Apply(ctx, ApplyInput{SessionID: view.ID, BaseRevision: view.Revision, Operations: []Operation{{Type: "update_math", TargetID: target, Math: &math}}}, "human")
+	}
+	v, err := apply(v, v.Blocks[0].ID, MathEdit{Action: "insert_matrix", Matrix: [][]string{{"a", "b"}, {"c", "d"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, xml := fileBytes(t, file), bytes.Clone(s.pkg.document)
+	runID := func(view Snapshot) string { return view.Blocks[0].Paragraph.Runs[1].ID }
+	for _, bad := range []MathMatrixAxisEdit{{Axis: "row", Mode: "delete", Index: 1, Values: []string{"a", "b"}}, {Axis: "column", Mode: "insert", Index: 4, Values: []string{"x", "y"}}, {Axis: "row", Mode: "insert", Index: 1, Values: []string{"x"}}} {
+		if _, err := apply(v, runID(v), MathEdit{Action: "edit_matrix_axis", MatrixAxis: &bad}); err == nil || !bytes.Equal(original, fileBytes(t, file)) {
+			t.Fatal("invalid axis edit changed package")
+		}
+	}
+	steps := []struct {
+		edit MathMatrixAxisEdit
+		want [][]string
+	}{
+		{MathMatrixAxisEdit{Axis: "row", Mode: "insert", Index: 2, Values: []string{"x", "y"}}, [][]string{{"a", "b"}, {"x", "y"}, {"c", "d"}}},
+		{MathMatrixAxisEdit{Axis: "column", Mode: "insert", Index: 3, Values: []string{"e", "f", "g"}}, [][]string{{"a", "b", "e"}, {"x", "y", "f"}, {"c", "d", "g"}}},
+		{MathMatrixAxisEdit{Axis: "row", Mode: "delete", Index: 2, Values: []string{"x", "y", "f"}}, [][]string{{"a", "b", "e"}, {"c", "d", "g"}}},
+		{MathMatrixAxisEdit{Axis: "column", Mode: "delete", Index: 3, Values: []string{"e", "g"}}, [][]string{{"a", "b"}, {"c", "d"}}},
+	}
+	for _, step := range steps {
+		v, err = apply(v, runID(v), MathEdit{Action: "edit_matrix_axis", MatrixAxis: &step.edit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(v.Blocks[0].Paragraph.Runs[1].Object.Matrix, step.want) {
+			t.Fatal("unexpected matrix", step)
+		}
+	}
+	if !bytes.Equal(xml, s.pkg.document) {
+		t.Fatal("axis round trip changed original cells")
+	}
+	reopened, err := Open(ctx, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range steps {
+		historyRestore(t, reopened, "undo")
+	}
+	if !bytes.Equal(original, fileBytes(t, file)) {
+		t.Fatal("axis undo did not restore package")
+	}
+}

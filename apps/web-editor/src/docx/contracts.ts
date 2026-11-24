@@ -151,7 +151,8 @@ export type ReferenceOperation = {type:'update_reference';targetId:string;refere
 export type CommentRange = {startRunId:string;endRunId:string;startOffset:number;endOffset:number};
 export type CommentOperation = {type:'add_comment';targetId:string;comment:{text:string} & Partial<CommentRange>} | {type:'reply_comment';targetId:string;comment:{text:string}} | {type:'resolve_comment';targetId:string}|{type:'reopen_comment';targetId:string};
 export type MathOperation = {type:'update_math';targetId:string;math:{action:'insert'|'replace'|'delete'|'insert_root'|'replace_root';expression?:string}|{action:'insert_fraction'|'replace_fraction';fraction:z.infer<typeof fractionSchema>}|
-  {action:'insert_matrix';matrix:MathMatrix}|{action:'edit_matrix_cell';matrixCell:{row:number;column:number;expectedText:string;text:string}}};
+  {action:'insert_matrix';matrix:MathMatrix}|{action:'edit_matrix_cell';matrixCell:{row:number;column:number;expectedText:string;text:string}}|
+  {action:'edit_matrix_axis';matrixAxis:{axis:'row'|'column';mode:'insert'|'delete';index:number;values:string[]}}};
 export type ParagraphMoveOperation = {type:'move_bookmark_up';targetId:string} | {type:'move_bookmark_down';targetId:string} |
   {type:'move_hyperlink_up';targetId:string} | {type:'move_hyperlink_down';targetId:string} |
   {type:'move_note_up';targetId:string} | {type:'move_note_down';targetId:string};

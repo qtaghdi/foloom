@@ -231,15 +231,26 @@ export function DocumentMathToolbar(props:{
   const resizeMatrix=(rows:number,columns:number)=>setMatrix(previous=>emptyMatrix(rows,columns).map((row,i)=>row.map((_,j)=>previous[i]?.[j]??'')));
   const [matrixPosition,setMatrixPosition]=createSignal({row:0,column:0,label:'1행 1열'});
   const [matrixText,setMatrixText]=createSignal('');
+  const [axisKind,setAxisKind]=createSignal<'row'|'column'>('row'),[axisMode,setAxisMode]=createSignal<'insert'|'delete'>('insert');
+  const [axisIndex,setAxisIndex]=createSignal(1),[axisValues,setAxisValues]=createSignal<string[]>([]);
   const objects=createMemo(()=>{
     const paragraphs=props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph]:block.rows.flatMap(row=>row.cells.flatMap(cell=>cell.paragraphs)))??[];
     return paragraphs.flatMap(paragraph=>paragraph.runs.filter(run=>
       run.object?.kind==='math'&&run.object.editable&&
-      (action()==='edit_matrix_cell'?Boolean(run.object.matrix):
+      (action()==='edit_matrix_cell'||action()==='edit_matrix_axis'?Boolean(run.object.matrix):
         action()==='replace_root'?Boolean(run.object.squareRoot):action()==='replace_fraction'?Boolean(run.object.fraction):
         !run.object.squareRoot&&!run.object.fraction&&!run.object.matrix))).slice(0,200);
   });
   const selected=()=>objects().find(item=>item.id===id())??objects()[0];
+  const axisSize=()=>axisKind()==='row'?(selected()?.object?.matrix?.length??0):(selected()?.object?.matrix?.[0]?.length??0);
+  const axisCellCount=()=>axisKind()==='row'?(selected()?.object?.matrix?.[0]?.length??0):(selected()?.object?.matrix?.length??0);
+  const axisAllowed=()=>axisMode()==='insert'?axisSize()>=2&&axisSize()<4:axisSize()>2;
+  const axisPositions=()=>Array.from({length:axisSize()+(axisMode()==='insert'?1:0)},(_,i)=>i+1);
+  const axisExpected=()=>{
+    const values=selected()?.object?.matrix??[];
+    return axisKind()==='row'?(values[axisIndex()-1]??[]):values.map(row=>row[axisIndex()-1]??'');
+  };
+  createEffect(()=>{axisCellCount();axisMode();selected();setAxisIndex(1);setAxisValues(Array.from({length:axisCellCount()},()=>''));});
   const storedMatrixText=()=>{
     const {row,column}=matrixPosition();
     return selected()?.object?.matrix?.[row]?.[column]??'';
@@ -258,7 +269,7 @@ export function DocumentMathToolbar(props:{
   const inserting=()=>action()==='insert'||action()==='insert_fraction'||action()==='insert_root'||action()==='insert_matrix';
   const editingRoot=()=>action()==='insert_root'||action()==='replace_root';
   const editingFraction=()=>action()==='insert_fraction'||action()==='replace_fraction';
-  const editingMatrix=()=>action()==='insert_matrix'||action()==='edit_matrix_cell';
+  const editingMatrix=()=>action()==='insert_matrix'||action()==='edit_matrix_cell'||action()==='edit_matrix_axis';
   const targetID=()=>inserting()?props.target?.id:selected()?.id;
   const apply=()=>{
     const id=targetID();
@@ -272,6 +283,10 @@ export function DocumentMathToolbar(props:{
       const {row,column}=matrixPosition(),expectedText=storedMatrixText(),text=matrixText();
       if(!validMatrixEntry(text)||text===expectedText){setError('셀의 새 내용을 UTF-8 256바이트 이하로 입력하세요.');return;}
       math={action:mode,matrixCell:{row:row+1,column:column+1,expectedText,text}};
+    } else if (mode==='edit_matrix_axis') {
+      const values=axisMode()==='insert'?axisValues():axisExpected();
+      if(!axisAllowed()||!axisPositions().includes(axisIndex())||values.length!==axisCellCount()||!values.every(validMatrixEntry)){setError('행렬 크기와 대상 셀을 확인하세요.');return;}
+      math={action:mode,matrixAxis:{axis:axisKind(),mode:axisMode(),index:axisIndex(),values}};
     } else if (mode==='insert_fraction'||mode==='replace_fraction') {
       if (!numerator().trim()||!denominator().trim()) {setError('분자와 분모를 입력하세요.');return;}
       math={action:mode,fraction:{numerator:numerator(),denominator:denominator()}};
@@ -288,7 +303,7 @@ export function DocumentMathToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="수식 작업" class="editor-select min-h-11" disabled={disabled()} value={action()}
         onChange={event=>setAction(event.currentTarget.value as MathOperation['math']['action'])}>
-        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="insert_root">제곱근 삽입</option><option value="insert_matrix">행렬 삽입</option><option value="edit_matrix_cell">행렬 셀 편집</option><option value="replace_root">제곱근 바꾸기</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
+        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="insert_root">제곱근 삽입</option><option value="insert_matrix">행렬 삽입</option><option value="edit_matrix_cell">행렬 셀 편집</option><option value="edit_matrix_axis">행렬 행·열 편집</option><option value="replace_root">제곱근 바꾸기</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
       </select>
       <Show when={!inserting()}><select aria-label="편집할 수식" class="editor-select min-h-11 max-w-48"
         disabled={disabled()} value={selected()?.id??''} onChange={event=>setID(event.currentTarget.value)}>
@@ -337,6 +352,18 @@ export function DocumentMathToolbar(props:{
             class="min-h-11 w-32 max-w-full rounded border border-slate-300 px-2"
             onInput={event=>setMatrixText(event.currentTarget.value)}/>
         </label>
+      </Show>
+      <Show when={action()==='edit_matrix_axis'&&selected()}>
+        <label class="grid gap-1">편집 단위<select class="editor-select min-h-11" value={axisKind()} disabled={disabled()} onChange={event=>setAxisKind(event.currentTarget.value as 'row'|'column')}><option value="row">행</option><option value="column">열</option></select></label>
+        <label class="grid gap-1">구조 작업<select class="editor-select min-h-11" value={axisMode()} disabled={disabled()} onChange={event=>setAxisMode(event.currentTarget.value as 'insert'|'delete')}><option value="insert">삽입</option><option value="delete">삭제</option></select></label>
+        <label class="grid gap-1">위치<select class="editor-select min-h-11" value={axisIndex()} disabled={disabled()||!axisAllowed()} onChange={event=>setAxisIndex(Number(event.currentTarget.value))}><For each={axisPositions()}>{index=><option value={index}>{index}</option>}</For></select></label>
+        <Show when={axisAllowed()} fallback={<p class="text-slate-600">행과 열은 각각 2~4개를 유지해야 합니다.</p>}>
+          <Show when={axisMode()==='insert'} fallback={<p>삭제할 셀: {axisExpected().join(', ')}</p>}>
+            <For each={Array.from({length:axisCellCount()},(_,i)=>i)}>{index=><label class="grid gap-1">새 셀 {index+1}
+              <input type="text" maxlength="256" class="min-h-11 w-24 rounded border border-slate-300 px-2" disabled={disabled()} value={axisValues()[index]??''} onInput={event=>setAxisValues(values=>values.map((value,i)=>i===index?event.currentTarget.value:value))}/>
+            </label>}</For>
+          </Show>
+        </Show>
       </Show>
       <button type="button" class={buttonClass} disabled={disabled()||!targetID()} onClick={apply}>수식 적용</button>
       <Show when={props.pending}><p class="basis-full text-slate-600">저장하거나 실행 취소하세요.</p></Show>
