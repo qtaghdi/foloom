@@ -1383,6 +1383,13 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 `math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
 [Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
 
+`중첩 수식 삽입`에서 제곱근 안 분수, 제곱근인 분자 또는 제곱근인 분모를
+선택하고 평문 분자·분모를 입력합니다. `insert_nested`와 `nested: { kind,
+numerator, denominator }`를 사용하며 종류는 `root_fraction`,
+`fraction_root_numerator`, `fraction_root_denominator`입니다. `edit_nested_leaf`는
+`nestedLeaf: { leaf, expectedText, text }`로 지정한 분자 또는 분모만 수정합니다.
+다른 중첩 구조와 서식은 보호합니다.
+
 수식의 `행렬 삽입`에서 행과 열을 각각 2~4개로 선택하고 모든 셀을 채우면 일반 Word 인라인 행렬을
 삽입합니다. `행렬 셀 편집`에서 기존 행렬과 행·열을 고르면 해당 셀만
 바꿉니다. 각 셀은 UTF-8 256바이트까지 입력할 수 있습니다.
