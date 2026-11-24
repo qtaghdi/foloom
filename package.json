@@ -1,6 +1,7 @@
 {
   "name": "foloom",
   "private": true,
+  "license": "Apache-2.0",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "web:build": "pnpm --dir apps/web-editor build",
