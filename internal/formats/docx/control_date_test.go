@@ -10,6 +10,53 @@ import (
 
 const sampleDateControl = `<w:sdt><w:sdtPr><w:alias w:val="Delivery date"/><w:tag w:val="delivery"/><w:id w:val="42"/><w:date w:fullDate="2026-11-18T00:00:00Z"><w:dateFormat w:val="yyyy-MM-dd"/><w:lid w:val="en-US"/><w:storeMappedDataAs w:val="dateTime"/><w:calendar w:val="gregorian"/></w:date></w:sdtPr><w:sdtContent><w:r><w:rPr/></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>2026-11-18</w:t></w:r></w:sdtContent></w:sdt>`
 
+func TestDateContentControlInsertion(t *testing.T) {
+	ctx := context.Background()
+	s, filename := withDocument(t, bodyXML(`<w:p><w:r><w:t>Prefix</w:t></w:r></w:p><w:p>`+sampleDateControl+`</w:p>`))
+	original := fileBytes(t, filename)
+	v := mustSnapshot(t, s)
+	op := Operation{Type: "insert_control_date", TargetID: v.Blocks[0].ID, Text: "2032-02-29"}
+	input := ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{op}}
+	for _, invalid := range []string{"2031-02-29", "2026-01-01T00:00:00Z", "", "0000-01-01"} {
+		bad := op
+		bad.Text = invalid
+		batch := input
+		batch.Operations = []Operation{bad}
+		if _, err := s.Apply(ctx, batch, "human"); err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+			t.Fatal("invalid date insertion changed the document")
+		}
+	}
+	if _, err := s.Apply(ctx, input, "human"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := mustSnapshot(t, reopened)
+	object := saved.Blocks[0].Paragraph.Runs[1].Object
+	if object == nil || object.DateControl == nil || object.DateControl.Value != op.Text || !object.Editable || !bytes.Contains(reopened.pkg.document, []byte(sampleDateControl)) {
+		t.Fatal("date insertion did not preserve native representation")
+	}
+	if !bytes.Contains(reopened.pkg.document, []byte(`dws:id dws:val="1"`)) {
+		t.Fatal("new control ID missing")
+	}
+	historyRestore(t, reopened, "undo")
+	if !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("undo did not restore original bytes")
+	}
+}
+
+func TestDateContentControlInsertionRejectsActiveReference(t *testing.T) {
+	s, filename := withDocument(t, bodyXML(`<w:p><w:bookmarkStart w:id="8" w:name="date_range"/></w:p><w:p><w:r><w:t>Protected</w:t></w:r></w:p><w:p><w:bookmarkEnd w:id="8"/></w:p>`))
+	v := mustSnapshot(t, s)
+	original := fileBytes(t, filename)
+	_, err := s.Apply(context.Background(), ApplyInput{SessionID: v.ID, BaseRevision: v.Revision, Operations: []Operation{{Type: "insert_control_date", TargetID: v.Blocks[1].ID, Text: "2032-02-29"}}}, "human")
+	if err == nil || !bytes.Equal(original, fileBytes(t, filename)) {
+		t.Fatal("date insertion modified an active reference range")
+	}
+}
+
 func TestDateContentControlUpdatesNativeDateAndDisplayTogether(t *testing.T) {
 	ctx := context.Background()
 	const old = "2026-11-18"

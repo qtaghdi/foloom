@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -512,6 +513,48 @@ func TestDOCXMCPListsSupportedOperationFamilies(t *testing.T) {
 	t.Fatal("DOCX operations tool is missing from the MCP list")
 }
 
+func TestDOCXMCPResizesInlineLine(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "line.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	apply := func(view docx.Snapshot, operation docx.Operation) docx.Snapshot {
+		t.Helper()
+		result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{SessionID: view.ID, BaseRevision: view.Revision, Operations: []docx.Operation{operation}}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP line operation: %v %+v", err, result)
+		}
+		next, err := api.docxSnapshot(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	inserted := apply(initial, docx.Operation{Type: "insert_line", TargetID: initial.Blocks[0].ID, LineSize: &docx.LineSizeEdit{WidthEMU: 1270000, HeightEMU: 635000}})
+	line := inserted.Blocks[0].Paragraph.Runs[1]
+	want := docx.LineSizeEdit{WidthEMU: 1524000, HeightEMU: 635000}
+	updated := apply(inserted, docx.Operation{Type: "resize_line", TargetID: line.ID, LineSize: &want})
+	got := updated.Blocks[0].Paragraph.Runs[1].Object
+	if got == nil || got.Line == nil || got.Line.LineSizeEdit != want || updated.Revision != initial.Revision+2 {
+		t.Fatal("line resize was not reflected in shared session")
+	}
+	if !got.DeleteEditable {
+		t.Fatal("resized line lost deletion capability")
+	}
+	deleted := apply(updated, docx.Operation{Type: "delete_line", TargetID: updated.Blocks[0].Paragraph.Runs[1].ID})
+	if len(deleted.Blocks[0].Paragraph.Runs) != 1 || deleted.Revision != initial.Revision+3 {
+		t.Fatal("line deletion was not reflected in shared session")
+	}
+}
+
 func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "controls.docx")
@@ -540,6 +583,36 @@ func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
 	if after.Revision != initial.Revision+1 || len(runs) != 2 || runs[0].Text != "Prefix" ||
 		runs[1].Object == nil || runs[1].Object.Kind != "control" || runs[1].Object.Text != "Control value" || !runs[1].Object.Editable {
 		t.Fatal("shared DOCX session did not expose the inserted control")
+	}
+}
+
+func TestDOCXMCPInsertsDateControl(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "date.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+		SessionID: initial.ID, BaseRevision: initial.Revision,
+		Operations: []docx.Operation{{Type: "insert_control_date", TargetID: initial.Blocks[0].ID, Text: "2032-02-29"}},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP date insertion: %v %+v", err, result)
+	}
+	after, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := after.Blocks[0].Paragraph.Runs
+	if after.Revision != initial.Revision+1 || len(runs) != 2 || runs[1].Object == nil || runs[1].Object.DateControl == nil || runs[1].Object.DateControl.Value != "2032-02-29" {
+		t.Fatal("shared session did not expose inserted date")
 	}
 }
 
@@ -651,7 +724,7 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 		return next
 	}
 	saved := apply(initial, initial.Blocks[0].ID, map[string]any{
-		"action": "insert_matrix", "matrix": [][]string{{"11", "22"}, {"33", "44"}},
+		"action": "insert_matrix", "matrix": [][]string{{"11", "22", "23", "24"}, {"33", "44", "45", "46"}, {"51", "52", "53", "54"}},
 	})
 	matrix := saved.Blocks[0].Paragraph.Runs[1]
 	if matrix.Object == nil || !matrix.Object.Editable || matrix.Object.Matrix == nil {
@@ -659,11 +732,11 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 	}
 	updated := apply(saved, matrix.ID, map[string]any{
 		"action": "edit_matrix_cell", "matrixCell": map[string]any{
-			"row": 1, "column": 2, "expectedText": "22", "text": "25",
+			"row": 3, "column": 4, "expectedText": "54", "text": "55",
 		},
 	})
 	got := updated.Blocks[0].Paragraph.Runs[1].Object
-	if got == nil || got.Matrix == nil || *got.Matrix != [2][2]string{{"11", "25"}, {"33", "44"}} ||
+	if got == nil || !reflect.DeepEqual(got.Matrix, [][]string{{"11", "22", "23", "24"}, {"33", "44", "45", "46"}, {"51", "52", "53", "55"}}) ||
 		updated.Revision != initial.Revision+2 {
 		t.Fatal("MCP commit did not update just the addressed matrix cell", got)
 	}

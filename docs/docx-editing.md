@@ -1369,7 +1369,11 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 `인라인 선 삽입`을 누른 뒤 저장합니다. 현재 본문 문단 끝에 좌상단에서
 우하단으로 이어지는 1 pt 두께의 Word 선 도형을 넣습니다. HTTP·MCP의
 `insert_line`은 편집 가능한 본문 문단 ID와 EMU 단위의
-`lineSize: { widthEmu, heightEmu }`를 받습니다. 기존 선 편집, 화살표,
+`lineSize: { widthEmu, heightEmu }`를 받습니다. `편집할 선`에서 지원 선을
+선택하고 `선 크기 적용`으로 치수를 변경합니다. HTTP·MCP는 지원 선 run ID와
+`resize_line`, 같은 `lineSize`를 사용합니다. 삭제를 지원하는 선은 `선 삭제`로
+선택 개체만 제거할 수 있습니다. MCP에서는 `deleteEditable`인 선 run ID에
+`delete_line`을 사용합니다. 화살표,
 다른 도형에 연결된 선, 부동 배치는 Word에서 수정합니다.
 [DrawingML 사전 정의 도형](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry)을 사용합니다.
 
@@ -1379,14 +1383,14 @@ EMU 단위의 `rectangleSize: { widthEmu, heightEmu }`를 받습니다. 색상�
 `math: { action: "replace_root", expression }`을 사용합니다. 제곱근은
 [Word OMML의 숨은 근 차수](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.radicalproperties)를 따릅니다.
 
-수식의 `2×2 행렬 삽입`에서 네 셀을 채우면 일반 Word 인라인 행렬을
+수식의 `행렬 삽입`에서 행과 열을 각각 2~4개로 선택하고 모든 셀을 채우면 일반 Word 인라인 행렬을
 삽입합니다. `행렬 셀 편집`에서 기존 행렬과 행·열을 고르면 해당 셀만
 바꿉니다. 각 셀은 UTF-8 256바이트까지 입력할 수 있습니다.
 HTTP·MCP에서는 `update_math`와
 `math: { action: "insert_matrix", matrix: [["a", "b"], ["c", "d"]] }`를
 사용합니다. 기존 행렬의 run ID와
 `math: { action: "edit_matrix_cell", matrixCell: { row, column, expectedText, text } }`를
-보내면 셀을 편집합니다. 행과 열은 1부터 셉니다. 크기나 속성이 다른
+보내면 셀을 편집합니다. 행과 열은 1부터 셉니다. 지원 범위 밖의 크기나 복합 속성이 있는
 행렬과 중첩 수식은 원본 구조를 보존합니다.
 [Word OMML 행렬](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.matrix)을 사용합니다.
 
@@ -1423,7 +1427,10 @@ HTTP·MCP는 `unwrapEditable`을 표시한 현재 컨트롤 run ID에
 `unwrap_control` 한 건을 보냅니다. 잠금, 바인딩, 자리표시자, 컨트롤 자체 서식,
 활성 참조 범위, 문서 편집 제한은 이 동작에서 보호합니다.
 
-삽입의 `콘텐츠 컨트롤 편집`에서 지원 날짜 컨트롤을 선택하고 새 날짜를
+삽입의 `콘텐츠 컨트롤 편집`에서 새 날짜를 고르고 `날짜 컨트롤 삽입`을 눌러
+현재의 지원 본문 문단에 고유 ID를 가진 실제 날짜 컨트롤을 넣을 수 있습니다.
+HTTP·MCP는 본문 문단 ID에 `insert_control_date`와 `text`로 날짜를 보냅니다.
+기존 지원 날짜 컨트롤을 선택하고 새 날짜를
 고른 뒤 `날짜 적용`을 눌러 저장합니다. 그레고리력 `yyyy-MM-dd` 표시값과
 UTC 자정의 저장 날짜가 일치하는 독립 본문 컨트롤을 지원합니다. HTTP·MCP는
 `dateControl`을 표시한 현재 run ID에 `update_control_date` 한 건을 보냅니다.

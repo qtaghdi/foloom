@@ -25,8 +25,9 @@ export function ObjectPreview(props:{object:NonNullable<Run['object']>}) {
       </span>
     }</Show>
     <Show when={props.object.matrix}>{matrix=>
-      <span role="math" aria-label={`2행 2열 행렬, 첫째 행 ${matrix()[0].join(', ')}, 둘째 행 ${matrix()[1].join(', ')}`}
-        class="inline-grid max-w-full grid-cols-2 gap-x-2 text-center align-middle font-serif">
+      <span role="math" aria-label={`${matrix().length}행 ${matrix()[0]?.length}열 행렬, ${matrix().map((row,i)=>`${i+1}행 ${row.join(', ')}`).join(', ')}`}
+        style={{'grid-template-columns':`repeat(${matrix()[0]?.length}, minmax(0, 1fr))`}}
+        class="inline-grid max-w-full gap-x-2 text-center align-middle font-serif">
         <For each={matrix().flat()}>{value=><span class="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</span>}</For>
       </span>
     }</Show>
@@ -74,6 +75,10 @@ export function DocumentShapeToolbar(props:{
   const rectangles=createMemo(()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
     ?block.paragraph.runs.filter(run=>run.object?.editable&&run.object.rectangle):[]).slice(0,200)??[]);
   const selected=()=>rectangles().find(run=>run.id===id())??rectangles()[0];
+  const [lineID,setLineID]=createSignal('');
+  const lines=createMemo(()=>props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'
+    ?block.paragraph.runs.filter(run=>run.object?.editable&&run.object.line):[]).slice(0,200)??[]);
+  const selectedLine=()=>lines().find(run=>run.id===lineID())??lines()[0];
   const disabled=()=>props.disabled||props.pending;
   return <details class="min-w-0 shrink-0 border-b border-slate-200 bg-stone-50 px-3 text-xs sm:px-6">
     <summary class="min-h-11 cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-teal-700">도형</summary>
@@ -106,6 +111,42 @@ export function DocumentShapeToolbar(props:{
         </label>
         <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>인라인 선 삽입</button>
       </form>
+      <Show when={lines().length}>
+        <select aria-label="편집할 선" class="editor-select min-h-11" disabled={disabled()} value={selectedLine()?.id??''}
+          onChange={event=>{setLineID(event.currentTarget.value);setError('');}}>
+          <For each={lines()}>{(run,index)=><option value={run.id}>선 {index()+1}</option>}</For>
+        </select>
+        <Show when={selectedLine()} keyed>{run=>
+          <Show when={run.object?.line}>{line=>
+            <form class="flex min-w-0 flex-wrap items-end gap-2" onSubmit={event=>{
+              event.preventDefault();
+              if(disabled())return;
+              const inputs=event.currentTarget.elements,current=line();
+              const width=(inputs.namedItem('resizeLineWidth') as HTMLInputElement).valueAsNumber;
+              const height=(inputs.namedItem('resizeLineHeight') as HTMLInputElement).valueAsNumber;
+              const widthEmu=width===Number((current.widthEmu/12700).toFixed(2))?current.widthEmu:Math.round(width*12700);
+              const heightEmu=height===Number((current.heightEmu/12700).toFixed(2))?current.heightEmu:Math.round(height*12700);
+              if(![widthEmu,heightEmu].every(size=>Number.isFinite(size)&&size>=12700&&size<=18288000)||widthEmu===current.widthEmu&&heightEmu===current.heightEmu)return;
+              const accepted=props.onApply({type:'resize_line',targetId:run.id,lineSize:{widthEmu,heightEmu}});
+              setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            }}>
+              <label class="flex flex-col gap-1">기존 선 너비 (pt)
+                <input name="resizeLineWidth" type="number" min="1" max="1440" step="any" required disabled={disabled()} value={(line().widthEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <label class="flex flex-col gap-1">기존 선 높이 (pt)
+                <input name="resizeLineHeight" type="number" min="1" max="1440" step="any" required disabled={disabled()} value={(line().heightEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
+              </label>
+              <button type="submit" class={buttonClass} disabled={disabled()}>선 크기 적용</button>
+              <Show when={run.object?.deleteEditable}>
+                <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+                  const accepted=props.onApply({type:'delete_line',targetId:run.id});
+                  setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+                }}>선 삭제</button>
+              </Show>
+            </form>
+          }</Show>
+        }</Show>
+      </Show>
       <Show when={rectangles().length}>
         <select aria-label="편집할 사각형" class="editor-select min-h-11" value={selected()?.id??''}
           disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setError('');}}>
@@ -174,11 +215,8 @@ export function DocumentShapeToolbar(props:{
   </details>;
 }
 
-const emptyMatrix=():MathMatrix=>[['',''],['','']];
-const matrixPositions=[
-  {row:0,column:0,label:'1행 1열'},{row:0,column:1,label:'1행 2열'},
-  {row:1,column:0,label:'2행 1열'},{row:1,column:1,label:'2행 2열'},
-] as const;
+const emptyMatrix=(rows=2,columns=2):MathMatrix=>Array.from({length:rows},()=>Array.from({length:columns},()=>''));
+const matrixPositions=(matrix:MathMatrix)=>matrix.flatMap((row,i)=>row.map((_,j)=>({row:i,column:j,label:`${i+1}행 ${j+1}열`})));
 const validMatrixEntry=(value:string)=>Boolean(value.trim())&&utf8Length(value)<=256;
 
 export function DocumentMathToolbar(props:{
@@ -188,7 +226,10 @@ export function DocumentMathToolbar(props:{
   const [id,setID]=createSignal(''),[expression,setExpression]=createSignal(''),[error,setError]=createSignal('');
   const [numerator,setNumerator]=createSignal(''),[denominator,setDenominator]=createSignal('');
   const [matrix,setMatrix]=createSignal<MathMatrix>(emptyMatrix());
-  const [matrixPosition,setMatrixPosition]=createSignal<(typeof matrixPositions)[number]>(matrixPositions[0]);
+  const matrixRows=createMemo(()=>matrix().length),matrixColumns=createMemo(()=>matrix()[0]?.length??2);
+  const insertionPositions=createMemo(()=>matrixPositions(emptyMatrix(matrixRows(),matrixColumns())));
+  const resizeMatrix=(rows:number,columns:number)=>setMatrix(previous=>emptyMatrix(rows,columns).map((row,i)=>row.map((_,j)=>previous[i]?.[j]??'')));
+  const [matrixPosition,setMatrixPosition]=createSignal({row:0,column:0,label:'1행 1열'});
   const [matrixText,setMatrixText]=createSignal('');
   const objects=createMemo(()=>{
     const paragraphs=props.snapshot?.blocks.flatMap(block=>block.type==='paragraph'?[block.paragraph]:block.rows.flatMap(row=>row.cells.flatMap(cell=>cell.paragraphs)))??[];
@@ -201,7 +242,7 @@ export function DocumentMathToolbar(props:{
   const selected=()=>objects().find(item=>item.id===id())??objects()[0];
   const storedMatrixText=()=>{
     const {row,column}=matrixPosition();
-    return selected()?.object?.matrix?.[row][column]??'';
+    return selected()?.object?.matrix?.[row]?.[column]??'';
   };
   createEffect(()=>{
     const kind=action(),math=selected()?.object;
@@ -209,6 +250,7 @@ export function DocumentMathToolbar(props:{
     setNumerator(kind==='replace_fraction' ? math?.fraction?.numerator??'' : '');
     setDenominator(kind==='replace_fraction' ? math?.fraction?.denominator??'' : '');
     setMatrix(emptyMatrix());
+    setMatrixPosition({row:0,column:0,label:'1행 1열'});
     setError('');
   });
   createEffect(()=>setMatrixText(storedMatrixText()));
@@ -224,7 +266,7 @@ export function DocumentMathToolbar(props:{
     const mode=action();
     let math: MathOperation['math'];
     if (mode==='insert_matrix'){
-      if(!matrix().flat().every(validMatrixEntry)){setError('네 셀에 각각 UTF-8 256바이트 이하로 입력하세요.');return;}
+      if(!matrix().flat().every(validMatrixEntry)){setError('모든 셀에 각각 UTF-8 256바이트 이하로 입력하세요.');return;}
       math={action:mode,matrix:matrix()};
     } else if (mode==='edit_matrix_cell'){
       const {row,column}=matrixPosition(),expectedText=storedMatrixText(),text=matrixText();
@@ -246,12 +288,12 @@ export function DocumentMathToolbar(props:{
     <div class="flex max-h-[35dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto pb-2">
       <select aria-label="수식 작업" class="editor-select min-h-11" disabled={disabled()} value={action()}
         onChange={event=>setAction(event.currentTarget.value as MathOperation['math']['action'])}>
-        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="insert_root">제곱근 삽입</option><option value="insert_matrix">2×2 행렬 삽입</option><option value="edit_matrix_cell">행렬 셀 편집</option><option value="replace_root">제곱근 바꾸기</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
+        <option value="insert">단순 수식 삽입</option><option value="insert_fraction">분수 삽입</option><option value="insert_root">제곱근 삽입</option><option value="insert_matrix">행렬 삽입</option><option value="edit_matrix_cell">행렬 셀 편집</option><option value="replace_root">제곱근 바꾸기</option><option value="replace_fraction">분수 바꾸기</option><option value="replace">단순 수식 바꾸기</option><option value="delete">단순 수식 삭제</option>
       </select>
       <Show when={!inserting()}><select aria-label="편집할 수식" class="editor-select min-h-11 max-w-48"
         disabled={disabled()} value={selected()?.id??''} onChange={event=>setID(event.currentTarget.value)}>
         <Show when={!objects().length}><option value="">편집할 수식 없음</option></Show>
-        <For each={objects()}>{item=><option value={item.id}>{item.object?.matrix?`2×2 행렬 · ${item.object.matrix[0][0].slice(0,30)}`:
+        <For each={objects()}>{item=><option value={item.id}>{item.object?.matrix?`${item.object.matrix.length}×${item.object.matrix[0]?.length} 행렬 · ${item.object.matrix[0]?.[0]?.slice(0,30)}`:
           item.object?.fraction?item.object.fraction.numerator+' / '+item.object.fraction.denominator:item.object?.squareRoot||item.object?.text||'수식'}</option>}</For>
       </select></Show>
       <Show when={action()!=='delete'&&!editingFraction()&&!editingMatrix()}><input type="text" maxlength="256" aria-label={editingRoot()?'피제곱근':'수식 텍스트'} placeholder="x² + y²"
@@ -264,13 +306,17 @@ export function DocumentMathToolbar(props:{
           value={denominator()} disabled={disabled()} onInput={event=>setDenominator(event.currentTarget.value)}/>
       </Show>
       <Show when={action()==='insert_matrix'}>
-        <div role="group" aria-label="2×2 행렬 값" class="grid max-w-full grid-cols-2 gap-2">
-          <For each={matrixPositions}>{position=><label class="grid min-w-0 gap-1">{position.label}
-            <input type="text" maxlength="256" value={matrix()[position.row][position.column]} disabled={disabled()}
+        <label class="grid gap-1">행 수<select class="editor-select min-h-11" value={matrixRows()} disabled={disabled()} onChange={event=>resizeMatrix(Number(event.currentTarget.value),matrixColumns())}><For each={[2,3,4]}>{size=><option value={size}>{size}</option>}</For></select></label>
+        <label class="grid gap-1">열 수<select class="editor-select min-h-11" value={matrixColumns()} disabled={disabled()} onChange={event=>resizeMatrix(matrixRows(),Number(event.currentTarget.value))}><For each={[2,3,4]}>{size=><option value={size}>{size}</option>}</For></select></label>
+        <div role="group" aria-label="행렬 값" style={{'grid-template-columns':`repeat(${matrixColumns()}, minmax(0, 1fr))`}} class="grid max-w-full gap-2">
+          <For each={insertionPositions()}>{position=><label class="grid min-w-0 gap-1">{position.label}
+            <input type="text" maxlength="256" value={matrix()[position.row]?.[position.column]??''} disabled={disabled()}
               class="min-h-11 w-24 max-w-full rounded border border-slate-300 px-2"
               onInput={event=>{
-                const next:MathMatrix=[[...matrix()[0]],[...matrix()[1]]];
-                next[position.row][position.column]=event.currentTarget.value;
+                const next:MathMatrix=matrix().map(row=>[...row]);
+                const row=next[position.row];
+                if(!row)return;
+                row[position.column]=event.currentTarget.value;
                 setMatrix(next);
               }}/>
           </label>}</For>
@@ -280,10 +326,10 @@ export function DocumentMathToolbar(props:{
         <label class="grid gap-1">행렬 셀
           <select class="editor-select min-h-11" value={matrixPosition().label} disabled={disabled()}
             onChange={event=>{
-              const position=matrixPositions.find(item=>item.label===event.currentTarget.value);
+              const position=matrixPositions(selected()?.object?.matrix??[]).find(item=>item.label===event.currentTarget.value);
               if(position)setMatrixPosition(position);
             }}>
-            <For each={matrixPositions}>{position=><option value={position.label}>{position.label}</option>}</For>
+            <For each={matrixPositions(selected()?.object?.matrix??[])}>{position=><option value={position.label}>{position.label}</option>}</For>
           </select>
         </label>
         <label class="grid gap-1">셀 내용

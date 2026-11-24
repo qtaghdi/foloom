@@ -1,6 +1,10 @@
 package docx
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 type LineSizeEdit struct {
 	WidthEMU  int `json:"widthEmu" jsonschema:"Horizontal span in EMUs, from 12700 through 18288000"`
@@ -75,4 +79,102 @@ func inspectInlineLine(inline, graphic *node) *LinePreview {
 		return nil
 	}
 	return &LinePreview{LineSizeEdit: LineSizeEdit{WidthEMU: *width, HeightEMU: *height}, Stroke: attribute(stroke, "", "val")}
+}
+
+func inlineLineSizeNodes(run *node) (*LinePreview, *node, *node) {
+	inline := childNS(run.child("drawing"), drawingWordNS, "inline")
+	graphic := childNS(childNS(inline, drawingNS, "graphic"), drawingNS, "graphicData")
+	preview := inspectInlineLine(inline, graphic)
+	if preview == nil {
+		return nil, nil, nil
+	}
+	shape := singlePayload(graphic)
+	transform := childNS(childNS(shape, shapeWordNS, "spPr"), drawingNS, "xfrm")
+	return preview, childNS(inline, drawingWordNS, "extent"), childNS(transform, drawingNS, "ext")
+}
+
+func resizeInlineLine(data []byte, t target, edit LineSizeEdit) ([]replacement, error) {
+	preview, outer, inner := inlineLineSizeNodes(t.run)
+	if preview == nil || !canResizeShape(data, outer, inner) || !edit.valid() || edit == preview.LineSizeEdit {
+		return nil, fmt.Errorf("invalid or unsupported DOCX line size")
+	}
+	return resizeShape(data, outer, inner, edit.WidthEMU, edit.HeightEMU)
+}
+
+func simpleLineDeletion(run *node) bool {
+	preview, outer, _ := inlineLineSizeNodes(run)
+	if preview == nil || len(run.children) != 1 || !onlyNamespaceAttributes(run) {
+		return false
+	}
+	docPr := childNS(outer.parent, drawingWordNS, "docPr")
+	id, err := strconv.ParseUint(attribute(docPr, "", "id"), 10, 32)
+	if err != nil || id == 0 {
+		return false
+	}
+	canonical, err := parseXML([]byte(strings.Replace(inlineLine(uint32(id), preview.LineSizeEdit), "0F766E", preview.Stroke, 1)))
+	if err != nil {
+		return false
+	}
+	var same func(*node, *node) bool
+	same = func(actual, expected *node) bool {
+		if actual.name != expected.name || strings.TrimSpace(actual.text.String()) != strings.TrimSpace(expected.text.String()) || len(actual.children) != len(expected.children) {
+			return false
+		}
+		attrs := 0
+		for _, attr := range actual.attrs {
+			if isNamespaceAttribute(attr) {
+				continue
+			}
+			attrs++
+			found := false
+			for _, other := range expected.attrs {
+				if attr == other && !isNamespaceAttribute(other) {
+					found = true
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		for _, attr := range expected.attrs {
+			if !isNamespaceAttribute(attr) {
+				attrs--
+			}
+		}
+		if attrs != 0 {
+			return false
+		}
+		for i, child := range actual.children {
+			if !same(child, expected.children[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return same(run, canonical)
+}
+
+func projectLineDeletes(blocks []Block, targets map[string]target, settings *node, settingsErr error) {
+	if !allowControlEditsInSettings(settings, settingsErr) {
+		return
+	}
+	var ranges map[*node]bool
+	var valid, inspected bool
+	for _, block := range blocks {
+		if block.Paragraph == nil {
+			continue
+		}
+		for i := range block.Paragraph.Runs {
+			run := &block.Paragraph.Runs[i]
+			t := targets[run.ID]
+			if t.kind != "inline_line" || run.Object == nil || !simpleLineDeletion(t.run) {
+				continue
+			}
+			if !inspected {
+				ranges, valid = contentControlRanges(t.paragraph.parent)
+				inspected = true
+			}
+			run.Object.DeleteEditable = valid && !ranges[t.paragraph]
+		}
+	}
 }
