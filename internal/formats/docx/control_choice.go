@@ -10,6 +10,31 @@ type ControlChoicePreview struct {
 	Options []string `json:"options"`
 }
 
+type ControlChoiceOption struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+func inlineChoiceControl(id int64, selected string, options []ControlChoiceOption) (string, error) {
+	if len(options) < 2 || len(options) > 32 {
+		return "", fmt.Errorf("DOCX dropdown requires 2 through 32 options")
+	}
+	labels, values := map[string]string{}, map[string]bool{}
+	var items strings.Builder
+	for _, option := range options {
+		if !validControlChoiceText(option.Label) || !validControlChoiceText(option.Value) || labels[option.Label] != "" || values[option.Value] {
+			return "", fmt.Errorf("DOCX dropdown labels and values must be unique plain text")
+		}
+		labels[option.Label], values[option.Value] = option.Value, true
+		fmt.Fprintf(&items, `<dws:listItem dws:displayText="%s" dws:value="%s"/>`, escapeText(option.Label), escapeText(option.Value))
+	}
+	value := labels[selected]
+	if value == "" {
+		return "", fmt.Errorf("DOCX dropdown initial selection is not a listed option")
+	}
+	return fmt.Sprintf(`<dws:sdt xmlns:dws="%s"><dws:sdtPr><dws:id dws:val="%d"/><dws:dropDownList dws:lastValue="%s">%s</dws:dropDownList></dws:sdtPr><dws:sdtContent><dws:r><dws:t>%s</dws:t></dws:r></dws:sdtContent></dws:sdt>`, wordNS, id, escapeText(value), items.String(), escapeText(selected)), nil
+}
+
 type controlChoiceInfo struct {
 	ControlChoicePreview
 	values        map[string]string
