@@ -60,6 +60,24 @@ export function DocumentObjectTextToolbar(props:{
             <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>{insertionLabel()} 삽입</button>
           </form>
         </Show>
+        <Show when={props.kind==='control'}>
+          <form class="flex basis-full flex-wrap items-end gap-2" onSubmit={event=>{
+            event.preventDefault();
+            const target=props.target;
+            if(disabled()||!target?.structureEditable)return;
+            const input=event.currentTarget.elements.namedItem('newControlDate') as HTMLInputElement;
+            if(!input.value||!input.checkValidity())return;
+            const accepted=props.onApply({type:'insert_control_date',targetId:target.id,expectedText:'',text:input.value});
+            setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+            if(accepted)input.value='';
+          }}>
+            <label class="flex min-w-0 flex-col gap-1">새 날짜 콘텐츠 컨트롤
+              <input name="newControlDate" type="date" min="0001-01-01" max="9999-12-31" required
+                class="min-h-11 rounded border border-slate-300 px-2" disabled={disabled()||!props.target?.structureEditable}/>
+            </label>
+            <button type="submit" class={buttonClass} disabled={disabled()||!props.target?.structureEditable}>날짜 컨트롤 삽입</button>
+          </form>
+        </Show>
         <Show when={objects().length}>
         <select aria-label={labels().select} class="editor-select min-h-11 max-w-56"
           value={selected()?.id??''} disabled={disabled()} onChange={event=>{setID(event.currentTarget.value);setPoint(0);setError('');}}>

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -578,6 +579,36 @@ func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {
 	}
 }
 
+func TestDOCXMCPInsertsDateControl(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "date.docx")
+	if _, err := docx.Create(ctx, path, []docx.InitialBlock{{Type: "paragraph", Text: "Prefix"}}); err != nil {
+		t.Fatal(err)
+	}
+	api := NewWithTokens(nil, "browser-token", "mcp-token")
+	defer api.Close()
+	initial, err := api.OpenDOCX(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := docxClient(t, api)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "apply_docx_operations", Arguments: docx.ApplyInput{
+		SessionID: initial.ID, BaseRevision: initial.Revision,
+		Operations: []docx.Operation{{Type: "insert_control_date", TargetID: initial.Blocks[0].ID, Text: "2032-02-29"}},
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("MCP date insertion: %v %+v", err, result)
+	}
+	after, err := api.docxSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := after.Blocks[0].Paragraph.Runs
+	if after.Revision != initial.Revision+1 || len(runs) != 2 || runs[1].Object == nil || runs[1].Object.DateControl == nil || runs[1].Object.DateControl.Value != "2032-02-29" {
+		t.Fatal("shared session did not expose inserted date")
+	}
+}
+
 func TestDOCXMCPDefinesCompoundNumbering(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "outline.docx")
@@ -686,7 +717,7 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 		return next
 	}
 	saved := apply(initial, initial.Blocks[0].ID, map[string]any{
-		"action": "insert_matrix", "matrix": [][]string{{"11", "22"}, {"33", "44"}},
+		"action": "insert_matrix", "matrix": [][]string{{"11", "22", "23", "24"}, {"33", "44", "45", "46"}, {"51", "52", "53", "54"}},
 	})
 	matrix := saved.Blocks[0].Paragraph.Runs[1]
 	if matrix.Object == nil || !matrix.Object.Editable || matrix.Object.Matrix == nil {
@@ -694,11 +725,11 @@ func TestDOCXMCPInsertsMatrixAndEditsAddressedCell(t *testing.T) {
 	}
 	updated := apply(saved, matrix.ID, map[string]any{
 		"action": "edit_matrix_cell", "matrixCell": map[string]any{
-			"row": 1, "column": 2, "expectedText": "22", "text": "25",
+			"row": 3, "column": 4, "expectedText": "54", "text": "55",
 		},
 	})
 	got := updated.Blocks[0].Paragraph.Runs[1].Object
-	if got == nil || got.Matrix == nil || *got.Matrix != [2][2]string{{"11", "25"}, {"33", "44"}} ||
+	if got == nil || !reflect.DeepEqual(got.Matrix, [][]string{{"11", "22", "23", "24"}, {"33", "44", "45", "46"}, {"51", "52", "53", "55"}}) ||
 		updated.Revision != initial.Revision+2 {
 		t.Fatal("MCP commit did not update just the addressed matrix cell", got)
 	}

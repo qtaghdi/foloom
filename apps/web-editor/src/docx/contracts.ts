@@ -5,8 +5,8 @@ const baseStyleSchema = z.object({proofingLanguage:proofingLanguageSchema,eastAs
 const bookmarkName=z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
 const fractionSchema = z.object({numerator:z.string().max(1027),denominator:z.string().max(1027)});
 const matrixCellSchema=z.string().min(1).max(256);
-const matrixRowSchema=z.tuple([matrixCellSchema,matrixCellSchema]);
-const matrixSchema=z.tuple([matrixRowSchema,matrixRowSchema]);
+const matrixRowSchema=z.array(matrixCellSchema).min(2).max(4);
+const matrixSchema=z.array(matrixRowSchema).min(2).max(4).refine(rows=>rows.every(row=>row.length===rows[0]?.length));
 export type MathMatrix=z.infer<typeof matrixSchema>;
 
 export const cropInset=z.number().int().min(0).max(99000);
@@ -162,7 +162,7 @@ export type TrackTextOperation = {type:'track_run_text';targetId:string;expected
   {type:'track_paragraph_merge';targetId:string} |
   {type:'track_paragraph_alignment';targetId:string;alignment:z.infer<typeof paragraphAlignmentSchema>};
 export type ChartKind='pie'|'bar'|'line';
-export type ObjectTextOperation = {type:'insert_control_text'|'update_control_text'|'update_control_date'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
+export type ObjectTextOperation = {type:'insert_control_text'|'insert_control_date'|'update_control_text'|'update_control_date'|'update_textbox_text'|'insert_textbox'|'update_chart_title';targetId:string;expectedText:string;text:string} | {type:'resize_chart';targetId:string;chartWidthEmu:number} |
   {type:'update_chart_value';targetId:string;chartValue:{point:number;expectedValue:string;value:string}} |
   {type:'unwrap_control';targetId:string} |
   {type:'delete_chart';targetId:string} | {type:'move_chart_up';targetId:string} | {type:'move_chart_down';targetId:string} |
