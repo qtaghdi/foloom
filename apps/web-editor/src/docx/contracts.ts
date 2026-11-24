@@ -169,6 +169,7 @@ export type ObjectTextOperation = {type:'insert_control_text'|'insert_control_da
   {type:'insert_chart';targetId:string;chartInsert:{kind?:ChartKind;title:string;points:{label:string;value:string}[]}};
 export type ShapeOperation = {type:'insert_line';targetId:string;lineSize:{widthEmu:number;heightEmu:number}} |
   {type:'resize_line';targetId:string;lineSize:{widthEmu:number;heightEmu:number}} |
+  {type:'delete_line';targetId:string} |
   {type:'insert_rectangle';targetId:string} | {type:'delete_rectangle';targetId:string} |
   {type:'update_rectangle_colors';targetId:string;rectangleColors:{fill:string;stroke:string}} |
   {type:'resize_rectangle';targetId:string;rectangleSize:{widthEmu:number;heightEmu:number}};

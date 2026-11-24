@@ -546,6 +546,13 @@ func TestDOCXMCPResizesInlineLine(t *testing.T) {
 	if got == nil || got.Line == nil || got.Line.LineSizeEdit != want || updated.Revision != initial.Revision+2 {
 		t.Fatal("line resize was not reflected in shared session")
 	}
+	if !got.DeleteEditable {
+		t.Fatal("resized line lost deletion capability")
+	}
+	deleted := apply(updated, docx.Operation{Type: "delete_line", TargetID: updated.Blocks[0].Paragraph.Runs[1].ID})
+	if len(deleted.Blocks[0].Paragraph.Runs) != 1 || deleted.Revision != initial.Revision+3 {
+		t.Fatal("line deletion was not reflected in shared session")
+	}
 }
 
 func TestDOCXMCPInsertsPlainContentControl(t *testing.T) {

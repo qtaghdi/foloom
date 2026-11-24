@@ -137,6 +137,12 @@ export function DocumentShapeToolbar(props:{
                 <input name="resizeLineHeight" type="number" min="1" max="1440" step="any" required disabled={disabled()} value={(line().heightEmu/12700).toFixed(2)} class="min-h-11 w-24 rounded border border-slate-300 px-2"/>
               </label>
               <button type="submit" class={buttonClass} disabled={disabled()}>선 크기 적용</button>
+              <Show when={run.object?.deleteEditable}>
+                <button type="button" class={buttonClass} disabled={disabled()} onClick={()=>{
+                  const accepted=props.onApply({type:'delete_line',targetId:run.id});
+                  setError(accepted?'':'다른 초안을 먼저 저장하거나 실행 취소하세요.');
+                }}>선 삭제</button>
+              </Show>
             </form>
           }</Show>
         }</Show>
